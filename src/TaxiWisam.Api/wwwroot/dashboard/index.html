@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم تاكسي وسام | Taxi-Wisam Admin</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Google Cairo Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-50 text-slate-800 font-['Cairo'] antialiased min-h-screen flex flex-col">
+
+    <!-- Top Navbar -->
+    <header class="bg-slate-900 text-white sticky top-0 z-40 shadow-md border-b border-slate-800">
+        <div class="px-6 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-4 space-x-reverse">
+                <div class="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-xl shadow-lg">
+                    🚖
+                </div>
+                <div>
+                    <h1 class="text-lg font-extrabold tracking-tight">تاكسي وسام <span class="text-amber-400 font-light text-sm">| لوحة الإدارة</span></h1>
+                    <p class="text-xs text-slate-400">نظام إدارة البنية التحتية والعمليات (Supabase + ASP.NET Core)</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-4 space-x-reverse">
+                <div class="flex items-center px-3 py-1 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-full text-xs font-semibold">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block ml-2 animate-pulse"></span>
+                    النظام متصل (Live)
+                </div>
+                <div class="text-xs text-slate-400 border-r border-slate-700 pr-4">
+                    المشرف: <span class="text-amber-400 font-bold">Admin Root</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Sidebar Navigation -->
+        <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-l border-slate-800 flex-shrink-0">
+            <div class="py-6 px-4 space-y-1">
+                <div class="text-xs font-bold text-slate-500 uppercase px-3 mb-2 tracking-wider">القائمة الرئيسية</div>
+                
+                <button onclick="switchTab('overview')" id="tab-btn-overview" class="tab-btn active w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
+                    <i class="fa-solid fa-chart-pie w-5 text-center text-amber-400"></i>
+                    <span>نظرة عامة والمؤشرات</span>
+                </button>
+
+                <button onclick="switchTab('verifications')" id="tab-btn-verifications" class="tab-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition">
+                    <div class="flex items-center space-x-3 space-x-reverse">
+                        <i class="fa-solid fa-id-card w-5 text-center text-amber-400"></i>
+                        <span>توثيق السائقين</span>
+                    </div>
+                    <span id="badge-verifications" class="hidden px-2 py-0.5 text-xs bg-rose-500 text-white rounded-full font-bold">0</span>
+                </button>
+
+                <button onclick="switchTab('drivers')" id="tab-btn-drivers" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
+                    <i class="fa-solid fa-taxi w-5 text-center text-amber-400"></i>
+                    <span>إدارة السائقين</span>
+                </button>
+
+                <button onclick="switchTab('customers')" id="tab-btn-customers" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
+                    <i class="fa-solid fa-users w-5 text-center text-amber-400"></i>
+                    <span>إدارة الركاب</span>
+                </button>
+
+                <button onclick="switchTab('routes')" id="tab-btn-routes" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
+                    <i class="fa-solid fa-route w-5 text-center text-amber-400"></i>
+                    <span>المسارات والحجوزات</span>
+                </button>
+
+                <button onclick="switchTab('complaints')" id="tab-btn-complaints" class="tab-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition">
+                    <div class="flex items-center space-x-3 space-x-reverse">
+                        <i class="fa-solid fa-shield-halved w-5 text-center text-amber-400"></i>
+                        <span>الشكاوى والبلاغات</span>
+                    </div>
+                    <span id="badge-complaints" class="hidden px-2 py-0.5 text-xs bg-amber-500 text-slate-900 rounded-full font-bold">0</span>
+                </button>
+
+                <div class="text-xs font-bold text-slate-500 uppercase px-3 pt-4 mb-2 tracking-wider">الإعدادات والأمان</div>
+
+                <button onclick="switchTab('settings')" id="tab-btn-settings" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
+                    <i class="fa-solid fa-sliders w-5 text-center text-amber-400"></i>
+                    <span>إعدادات النظام والمطابقة</span>
+                </button>
+
+                <button onclick="switchTab('audit')" id="tab-btn-audit" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
+                    <i class="fa-solid fa-receipt w-5 text-center text-amber-400"></i>
+                    <span>سجل التدقيق (Audit Logs)</span>
+                </button>
+            </div>
+
+            <!-- Footer info -->
+            <div class="p-4 border-t border-slate-800 text-xs text-slate-400 text-center">
+                <p>Taxi-Wisam Enterprise v1.0</p>
+                <p class="text-[10px] text-slate-500 mt-1">Supabase + PostGIS + ASP.NET Core</p>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 overflow-y-auto p-8">
+
+            <!-- 1. OVERVIEW TAB -->
+            <section id="tab-overview" class="tab-content space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-slate-900">نظرة عامة ومؤشرات الأداء</h2>
+                        <p class="text-sm text-slate-500">متابعة إحصائيات المنصة الحية مباشرة من قاعدة البيانات</p>
+                    </div>
+                    <button onclick="loadDashboardStats()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold flex items-center space-x-2 space-x-reverse transition">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span>تحديث البيانات</span>
+                    </button>
+                </div>
+
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4 space-x-reverse">
+                        <div class="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center text-2xl font-bold">
+                            <i class="fa-solid fa-taxi"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-slate-500">إجمالي السائقين</p>
+                            <h3 id="stat-total-drivers" class="text-2xl font-extrabold text-slate-900 mt-1">0</h3>
+                            <p class="text-xs text-emerald-600 font-medium mt-1"><span id="stat-verified-drivers">0</span> سائق موثق ومفعل</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4 space-x-reverse">
+                        <div class="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center text-2xl font-bold">
+                            <i class="fa-solid fa-id-card"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-slate-500">وثائق بانتظار المراجعة</p>
+                            <h3 id="stat-pending-verifications" class="text-2xl font-extrabold text-rose-600 mt-1">0</h3>
+                            <p class="text-xs text-slate-400 font-medium mt-1">تحتاج اعتماد المشرف</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4 space-x-reverse">
+                        <div class="w-14 h-14 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold">
+                            <i class="fa-solid fa-route"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-slate-500">المسارات النشطة</p>
+                            <h3 id="stat-active-routes" class="text-2xl font-extrabold text-slate-900 mt-1">0</h3>
+                            <p class="text-xs text-slate-400 font-medium mt-1">خطوط نقل دورية</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4 space-x-reverse">
+                        <div class="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-2xl font-bold">
+                            <i class="fa-solid fa-money-bill-wave"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs font-semibold text-slate-500">إجمالي الحجوزات</p>
+                            <h3 id="stat-total-bookings" class="text-2xl font-extrabold text-slate-900 mt-1">0</h3>
+                            <p class="text-xs text-emerald-600 font-medium mt-1"><span id="stat-total-revenue">0</span> د.ع مدفوعات</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick actions & System Health -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <h3 class="font-bold text-slate-900 text-lg flex items-center space-x-2 space-x-reverse">
+                            <i class="fa-solid fa-shield-halved text-amber-500"></i>
+                            <span>حالة البنية التحتية المتصلة</span>
+                        </h3>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                <span class="text-xs text-slate-400 block mb-1">قاعدة البيانات</span>
+                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-circle-check ml-1.5 text-xs"></i> Supabase PostgreSQL</span>
+                            </div>
+                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                <span class="text-xs text-slate-400 block mb-1">المعالجة الجغرافية</span>
+                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-circle-check ml-1.5 text-xs"></i> PostGIS 4326</span>
+                            </div>
+                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                <span class="text-xs text-slate-400 block mb-1">التخزين السحابي</span>
+                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-lock ml-1.5 text-xs"></i> Private Buckets</span>
+                            </div>
+                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                <span class="text-xs text-slate-400 block mb-1">طبقة الكاش السريع</span>
+                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-bolt ml-1.5 text-xs"></i> Redis GeoLayer</span>
+                            </div>
+                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                <span class="text-xs text-slate-400 block mb-1">الاتصال اللحظي</span>
+                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-tower-broadcast ml-1.5 text-xs"></i> SignalR Tracking</span>
+                            </div>
+                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                <span class="text-xs text-slate-400 block mb-1">معالج الأحداث</span>
+                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-arrows-spin ml-1.5 text-xs"></i> Transactional Outbox</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 rounded-2xl shadow-sm flex flex-col justify-between">
+                        <div>
+                            <h3 class="font-bold text-lg text-amber-400 mb-2">إجراء سريع: تدقيق الوثائق</h3>
+                            <p class="text-xs text-slate-300 leading-relaxed">يتم تدقيق وثائق السائقين عبر روابط مشفرة وموقعة (Signed URLs) تمنع تسريب البيانات للعامة وتضمن سرية معلومات السائقين.</p>
+                        </div>
+                        <button onclick="switchTab('verifications')" class="mt-4 w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold text-sm transition">
+                            الانتقال لطلبات التوثيق 🪪
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. DRIVER VERIFICATIONS TAB -->
+            <section id="tab-verifications" class="tab-content hidden space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-slate-900">توثيق مستمسكات السائقين</h2>
+                        <p class="text-sm text-slate-500">فحص الهويات، رخص القيادة، وسجلات المركبات باستخدام الروابط المؤقتة المشفرة (Signed URLs)</p>
+                    </div>
+                    <button onclick="loadVerifications()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold flex items-center space-x-2 space-x-reverse transition">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span>تحديث القائمة</span>
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div id="verifications-loading" class="p-8 text-center text-slate-500">
+                        <i class="fa-solid fa-circle-notch fa-spin text-2xl text-amber-500 mb-2"></i>
+                        <p>جاري تحميل طلبات التوثيق...</p>
+                    </div>
+                    <div id="verifications-empty" class="hidden p-12 text-center text-slate-400">
+                        <i class="fa-solid fa-circle-check text-4xl text-emerald-500 mb-2"></i>
+                        <p class="font-bold text-slate-700">لا توجد طلبات توثيق معلقة حالياً!</p>
+                        <p class="text-xs text-slate-400 mt-1">كافة السائقين المسجلين تم تدقيق وثائقهم.</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table id="verifications-table" class="w-full text-right text-sm border-collapse hidden">
+                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-4">السائق</th>
+                                    <th class="p-4">رقم الهاتف</th>
+                                    <th class="p-4">رقم الرخصة</th>
+                                    <th class="p-4">المركبة</th>
+                                    <th class="p-4">المستمسكات المرفوعة</th>
+                                    <th class="p-4 text-center">الإجراء</th>
+                                </tr>
+                            </thead>
+                            <tbody id="verifications-body" class="divide-y divide-slate-100">
+                                <!-- Dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. DRIVERS TAB -->
+            <section id="tab-drivers" class="tab-content hidden space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-slate-900">إدارة السائقين</h2>
+                        <p class="text-sm text-slate-500">قائمة السائقين المسجلين، حالتهم الآنية، وتقييماتهم</p>
+                    </div>
+                    <div class="flex items-center space-x-3 space-x-reverse">
+                        <input type="text" id="drivers-search-input" placeholder="بحث بالاسم أو الهاتف..." class="px-4 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" oninput="debounceDriverSearch()">
+                        <button onclick="loadDrivers()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold transition">
+                            <i class="fa-solid fa-rotate"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right text-sm border-collapse">
+                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-4">السائق</th>
+                                    <th class="p-4">رقم الهاتف</th>
+                                    <th class="p-4">رقم الرخصة</th>
+                                    <th class="p-4">الحالة الآنية</th>
+                                    <th class="p-4">التوثيق</th>
+                                    <th class="p-4">التقييم</th>
+                                    <th class="p-4">الرحلات</th>
+                                    <th class="p-4 text-center">التفاصيل</th>
+                                </tr>
+                            </thead>
+                            <tbody id="drivers-table-body" class="divide-y divide-slate-100">
+                                <!-- Dynamic Drivers -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. CUSTOMERS TAB -->
+            <section id="tab-customers" class="tab-content hidden space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-slate-900">إدارة الركاب</h2>
+                        <p class="text-sm text-slate-500">قائمة المستخدمين والركاب المسجلين ونشاط الحجوزات</p>
+                    </div>
+                    <button onclick="loadCustomers()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold transition">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span>تحديث</span>
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right text-sm border-collapse">
+                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-4">الراكب</th>
+                                    <th class="p-4">رقم الهاتف</th>
+                                    <th class="p-4">طريقة الدفع المفضلة</th>
+                                    <th class="p-4">التقييم</th>
+                                    <th class="p-4">إجمالي الحجوزات</th>
+                                    <th class="p-4">حالة الحساب</th>
+                                    <th class="p-4 text-center">الإجراء</th>
+                                </tr>
+                            </thead>
+                            <tbody id="customers-table-body" class="divide-y divide-slate-100">
+                                <!-- Dynamic Customers -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. ROUTES & BOOKINGS TAB -->
+            <section id="tab-routes" class="tab-content hidden space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-slate-900">المسارات والحجوزات</h2>
+                        <p class="text-sm text-slate-500">متابعة خطوط السير المنتظمة، المقاعد المتاحة، والحجوزات المؤكدة</p>
+                    </div>
+                    <div class="flex items-center space-x-2 space-x-reverse">
+                        <button onclick="switchSubRouteTab('routes-list')" id="sub-btn-routes" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-slate-900">خطوط السير</button>
+                        <button onclick="switchSubRouteTab('bookings-list')" id="sub-btn-bookings" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-200 text-slate-700">سجل الحجوزات</button>
+                    </div>
+                </div>
+
+                <div id="sub-view-routes" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right text-sm border-collapse">
+                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-4">اسم المسار</th>
+                                    <th class="p-4">السائق</th>
+                                    <th class="p-4">نقطة البداية والنهاية</th>
+                                    <th class="p-4">وقت الانطلاق</th>
+                                    <th class="p-4">المقاعد المتوفرة</th>
+                                    <th class="p-4">سعر المقعد</th>
+                                    <th class="p-4">الحالة</th>
+                                </tr>
+                            </thead>
+                            <tbody id="routes-table-body" class="divide-y divide-slate-100">
+                                <!-- Dynamic Routes -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="sub-view-bookings" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right text-sm border-collapse">
+                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-4">الراكب</th>
+                                    <th class="p-4">السائق / الخط</th>
+                                    <th class="p-4">نقطة الصعود والنزول</th>
+                                    <th class="p-4">تاريخ الحجز</th>
+                                    <th class="p-4">المقاعد</th>
+                                    <th class="p-4">الأجرة</th>
+                                    <th class="p-4">حالة الحجز</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bookings-table-body" class="divide-y divide-slate-100">
+                                <!-- Dynamic Bookings -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 6. COMPLAINTS TAB -->
+            <section id="tab-complaints" class="tab-content hidden space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-slate-900">إدارة الشكاوى والبلاغات</h2>
+                        <p class="text-sm text-slate-500">التحقيق في بلاغات الركاب والسائقين وحل النزاعات</p>
+                    </div>
+                    <button onclick="loadComplaints()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold transition">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span>تحديث</span>
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right text-sm border-collapse">
+                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-4">مقدم الشكوى</th>
+                                    <th class="p-4">المشتكى عليه</th>
+                                    <th class="p-4">التصنيف</th>
+                                    <th class="p-4">نص الشكوى</th>
+                                    <th class="p-4">الحالة</th>
+                                    <th class="p-4">تاريخ الشكوى</th>
+                                    <th class="p-4 text-center">الإجراء</th>
+                                </tr>
+                            </thead>
+                            <tbody id="complaints-table-body" class="divide-y divide-slate-100">
+                                <!-- Dynamic Complaints -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 7. SETTINGS & MATCHING TAB -->
+            <section id="tab-settings" class="tab-content hidden space-y-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-slate-900">إعدادات النظام ومعايير المطابقة الجغرافية</h2>
+                    <p class="text-sm text-slate-500">تعديل أسعار الرحلات ومحددات محرك المطابقة الجغرافي دون إعادة تشغيل الخادم</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Matching Parameters Card -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <h3 class="font-bold text-slate-900 text-lg flex items-center space-x-2 space-x-reverse">
+                            <i class="fa-solid fa-map-location-dot text-amber-500"></i>
+                            <span>معايير محرك المطابقة (Matching Engine)</span>
+                        </h3>
+                        <p class="text-xs text-slate-500">محددات حساب التداخل والانحراف المسموح به للمسارات المشتركة في PostGIS.</p>
+                        
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">أقصى مسافة انحراف مسموحة (متر)</label>
+                                <input type="number" id="setting-max-detour" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">أدنى نسبة تطابق للمسار (%)</label>
+                                <input type="number" id="setting-min-overlap" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">نصف قطر البحث الجغرافي (متر)</label>
+                                <input type="number" id="setting-search-radius" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">نافذة التسامح الزمني (دقيقة)</label>
+                                <input type="number" id="setting-time-window" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            </div>
+                            <button onclick="saveMatchingSettings()" class="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-sm transition">
+                                حفظ معايير المطابقة
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Pricing Parameters Card -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <h3 class="font-bold text-slate-900 text-lg flex items-center space-x-2 space-x-reverse">
+                            <i class="fa-solid fa-coins text-amber-500"></i>
+                            <span>تسعير المشاوير والخدمات (Pricing Settings)</span>
+                        </h3>
+                        <p class="text-xs text-slate-500">تحديد أسعار فتح العداد والكيلومتر والدقيقة للرحلات المباشرة بالدينار العراقي.</p>
+
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">الأجرة الأساسية (فتح العداد - د.ع)</label>
+                                <input type="number" id="setting-base-fare" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">سعر الكيلومتر الواحد (د.ع)</label>
+                                <input type="number" id="setting-per-km" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">سعر دقيقة الانتظار (د.ع)</label>
+                                <input type="number" id="setting-per-minute" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">أقصى مضاعف لأوقات الذروة (Surge Multiplier)</label>
+                                <input type="number" step="0.1" id="setting-surge-max" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            </div>
+                            <button onclick="savePricingSettings()" class="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-sm transition">
+                                حفظ تسعيرات النظام
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 8. AUDIT LOGS TAB -->
+            <section id="tab-audit" class="tab-content hidden space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-slate-900">سجل التدقيق الأمني (Audit Logs)</h2>
+                        <p class="text-sm text-slate-500">تسجيل كامل للعمليات الحساسة، التعديلات الإدارية، وتوقيتاتها</p>
+                    </div>
+                    <button onclick="loadAuditLogs()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold transition">
+                        <i class="fa-solid fa-rotate"></i>
+                        <span>تحديث السجل</span>
+                    </button>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right text-sm border-collapse">
+                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-4">العملية الإجرائية</th>
+                                    <th class="p-4">الكيان المستهدف</th>
+                                    <th class="p-4">المعرف (Entity ID)</th>
+                                    <th class="p-4">التفاصيل / القيم الجديدة</th>
+                                    <th class="p-4">عنوان IP</th>
+                                    <th class="p-4">التوقيت UTC</th>
+                                </tr>
+                            </thead>
+                            <tbody id="audit-table-body" class="divide-y divide-slate-100">
+                                <!-- Dynamic Audit Logs -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- DOCUMENT PREVIEW MODAL (SIGNED URL SECURE VIEWER) -->
+    <div id="document-modal" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-scale-up">
+            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                <div class="flex items-center space-x-2 space-x-reverse">
+                    <i class="fa-solid fa-shield-halved text-amber-400 text-lg"></i>
+                    <div>
+                        <h3 id="modal-doc-title" class="font-bold text-base">معاينة وثيقة السائق الرسمية</h3>
+                        <p class="text-[11px] text-slate-400">رابط مؤقت مشفر (Supabase Signed URL - Private Bucket)</p>
+                    </div>
+                </div>
+                <button onclick="closeDocumentModal()" class="text-slate-400 hover:text-white transition text-xl font-bold">
+                    &times;
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto flex-1 flex flex-col items-center justify-center bg-slate-100">
+                <div id="modal-image-container" class="w-full flex justify-center">
+                    <img id="modal-doc-img" src="" alt="وثيقة السائق" class="max-h-96 rounded-xl shadow-md object-contain border border-slate-200">
+                </div>
+                <div id="modal-no-preview" class="hidden text-center py-12 text-slate-400">
+                    <i class="fa-solid fa-file-pdf text-5xl text-rose-500 mb-2"></i>
+                    <p class="font-bold text-slate-700">مستند PDF رسمي</p>
+                    <a id="modal-pdf-link" href="#" target="_blank" class="mt-2 inline-block px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold">فتح المستند في تبويب آمن</a>
+                </div>
+            </div>
+
+            <!-- Verification Action Box -->
+            <div class="p-6 bg-white border-t border-slate-100 space-y-3">
+                <div id="rejection-box" class="hidden">
+                    <label class="block text-xs font-bold text-rose-600 mb-1">سبب الرفض (سيتم إرساله في إشعار للسائق)</label>
+                    <input type="text" id="rejection-reason-input" placeholder="مثال: الصورة غير واضحة، انتهاء صلاحية الرخصة..." class="w-full p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+                </div>
+
+                <div class="flex items-center justify-between space-x-3 space-x-reverse pt-2">
+                    <button onclick="approveCurrentDocument()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm flex items-center justify-center space-x-2 space-x-reverse transition shadow-md shadow-emerald-600/20">
+                        <i class="fa-solid fa-check"></i>
+                        <span>اعتماد وتوثيق المستند</span>
+                    </button>
+
+                    <button onclick="toggleRejectionBox()" id="btn-reject-toggle" class="px-5 py-2.5 bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold rounded-xl text-sm flex items-center space-x-2 space-x-reverse transition">
+                        <i class="fa-solid fa-xmark"></i>
+                        <span>رفض المستند</span>
+                    </button>
+
+                    <button onclick="closeDocumentModal()" class="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-sm transition">
+                        إغلاق
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 left-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+        <div id="toast-inner" class="px-5 py-3 rounded-2xl text-white font-semibold text-sm shadow-xl flex items-center space-x-2 space-x-reverse bg-slate-900">
+            <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400"></i>
+            <span id="toast-msg">تمت العملية بنجاح</span>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "taxi-wisam",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Taxi-Wisam Backend Infrastructure and Admin Dashboard",
+  "scripts": {
+    "dashboard": "node scripts/serve-dashboard.js"
+  }
+}
