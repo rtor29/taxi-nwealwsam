@@ -32,4 +32,12 @@ class AppConfig {
 
   // Architectural enforcement: Client never connects to Supabase database directly
   static const bool isDirectDatabaseAccessForbidden = true;
+
+  // Google OAuth 2.0 Client Configuration (منصة جوجل كلاود المعتمدة)
+  static const String googleClientId = String.fromEnvironment(
+    'GOOGLE_CLIENT_ID',
+    defaultValue: '483987924711-' '2935qs8ilglnen6jispd1u1t2fd0m2e6.' 'apps.googleusercontent.com',
+  );
+  static const String googleRedirectUri =
+      'http://173.212.206.86.nip.io/app/';
 }

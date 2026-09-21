@@ -16,6 +16,8 @@ Thumbs.db
 .env.test.local
 .env.production.local
 .supabase/
+google_client_secret*.json
+*.secret.json
 
 # Node.js
 node_modules/

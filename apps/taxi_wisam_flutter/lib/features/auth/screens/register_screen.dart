@@ -3,6 +3,8 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/utils/iraqi_phone_validator.dart';
+import '../../../core/services/google_auth_service.dart';
+import '../widgets/google_sign_in_button.dart';
 import '../../customer/screens/customer_home_screen.dart';
 import '../../driver/screens/driver_home_screen.dart';
 import '../widgets/iraqi_phone_input_field.dart';
@@ -29,7 +31,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   String _selectedRole = 'Customer'; // 'Customer' or 'Driver'
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
   String? _errorMessage;
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _isGoogleLoading = true;
+      _errorMessage = null;
+    });
+
+    final authService = GoogleAuthService(
+      apiClient: widget.apiClient,
+      storageService: widget.storageService,
+    );
+
+    try {
+      await authService.launchGoogleSignInFlow();
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'تعذر فتح نافذة تسجيل الدخول بحساب Google: $e';
+        _isGoogleLoading = false;
+      });
+    }
+  }
   IraqiPhoneValidationResult _phoneValidation = const IraqiPhoneValidationResult(
     isValid: false,
     operator: IraqiTelecomOperator.unknown,
@@ -330,6 +354,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       )
                     : const Text('تسجيل الحساب والمتابعة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
+              const SizedBox(height: 14),
+
+              // Divider OR
+              Row(
+                children: [
+                  Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('أو التسجيل السريع عبر', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                  ),
+                  Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+                ],
+              ),
+              const SizedBox(height: 14),
+
+              // Google Sign-In Official Button
+              GoogleSignInButton(
+                isLoading: _isGoogleLoading,
+                onPressed: _handleGoogleSignIn,
+                text: 'التسجيل المباشر بحساب Google',
+              ),
+              const SizedBox(height: 10),
             ],
           ),
         ),

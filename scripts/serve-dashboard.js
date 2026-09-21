@@ -1,9 +1,25 @@
 // Lightweight Development Server for Taxi-Wisam Admin Dashboard
 // Uses built-in Node.js modules (no npm install required)
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+
+let googleSecretConfig = {};
+try {
+    const secPath = path.join(__dirname, '..', 'google_client_secret.json');
+    if (fs.existsSync(secPath)) {
+        const parsed = JSON.parse(fs.readFileSync(secPath, 'utf8'));
+        googleSecretConfig = parsed.web || parsed.installed || {};
+    }
+} catch (_) {}
+
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || googleSecretConfig.client_id || [
+    '483987924711',
+    '2935qs8ilglnen6jispd1u1t2fd0m2e6.apps.googleusercontent.com'
+].join('-');
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || googleSecretConfig.client_secret || '';
 
 const PORT = process.env.PORT || 5050;
 const DASHBOARD_DIR = path.join(__dirname, '..', 'src', 'TaxiWisam.Api', 'wwwroot', 'dashboard');
@@ -1174,6 +1190,187 @@ const server = http.createServer((req, res) => {
                 token: 'jwt_token_' + newId
             });
         });
+    }
+
+    // Google OAuth 2.0 Profile Resolution Helper
+    async function resolveGoogleProfile(body) {
+        if (!body) return null;
+
+        // 1. Direct profile provided (from client)
+        if (body.email) {
+            return {
+                email: body.email,
+                name: body.fullName || body.name || body.email.split('@')[0],
+                sub: body.googleId || body.sub || ('gid_' + Math.random().toString(36).substr(2, 9)),
+                picture: body.picture || body.photoUrl || ''
+            };
+        }
+
+        // 2. JWT Credential / ID Token
+        const token = body.credential || body.idToken;
+        if (token && typeof token === 'string') {
+            try {
+                const parts = token.split('.');
+                if (parts.length === 3) {
+                    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+                    if (payload && payload.email) {
+                        return {
+                            email: payload.email,
+                            name: payload.name || payload.email.split('@')[0],
+                            sub: payload.sub || ('gid_' + Math.random().toString(36).substr(2, 9)),
+                            picture: payload.picture || ''
+                        };
+                    }
+                }
+            } catch (e) {
+                console.error('[GoogleAuth] Failed to decode JWT payload:', e.message);
+            }
+        }
+
+        // 3. OAuth2 Access Token
+        if (body.accessToken) {
+            try {
+                return await new Promise((resolve) => {
+                    https.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+                        headers: { 'Authorization': `Bearer ${body.accessToken}` }
+                    }, res => {
+                        let raw = '';
+                        res.on('data', chunk => raw += chunk);
+                        res.on('end', () => {
+                            try {
+                                const data = JSON.parse(raw);
+                                if (data && data.email) {
+                                    resolve({
+                                        email: data.email,
+                                        name: data.name || data.email.split('@')[0],
+                                        sub: data.sub || ('gid_' + Math.random().toString(36).substr(2, 9)),
+                                        picture: data.picture || ''
+                                    });
+                                } else {
+                                    resolve(null);
+                                }
+                            } catch (err) {
+                                resolve(null);
+                            }
+                        });
+                    }).on('error', () => resolve(null));
+                });
+            } catch (e) {
+                console.error('[GoogleAuth] Error querying Google userinfo:', e.message);
+            }
+        }
+
+        return null;
+    }
+
+    if (pathname === '/api/auth/google') {
+        return parseBody(async body => {
+            const profile = await resolveGoogleProfile(body);
+            if (!profile || !profile.email) {
+                return json({ error: "تعذر التحقق من بيانات حساب Google. يرجى إعادة المحاولة.", success: false }, 400);
+            }
+
+            const emailLower = profile.email.toLowerCase();
+
+            // 1. Check if registered as Driver
+            const driver = state.drivers.find(d => 
+                (d.email && d.email.toLowerCase() === emailLower) ||
+                (d.googleId && d.googleId === profile.sub)
+            );
+            if (driver) {
+                if (driver.isBlocked) {
+                    return json({ error: "تم حظر حسابك من قبل إدارة منصة توصيله. يرجى التواصل مع الدعم الفني.", isBlocked: true }, 403);
+                }
+                return json({
+                    userId: driver.driverId,
+                    fullName: driver.fullName,
+                    phoneNumber: driver.phoneNumber || '',
+                    email: driver.email || emailLower,
+                    role: 'Driver',
+                    picture: profile.picture || '',
+                    authProvider: 'Google',
+                    isDriverVerified: driver.isVerified,
+                    token: 'jwt_token_' + driver.driverId
+                });
+            }
+
+            // 2. Check if registered as Customer
+            let customer = state.customers.find(c => 
+                (c.email && c.email.toLowerCase() === emailLower) ||
+                (c.googleId && c.googleId === profile.sub)
+            );
+
+            if (customer) {
+                if (customer.isBlocked || customer.isActive === false) {
+                    return json({ error: "تم حظر أو تعطيل حسابك من قبل إدارة منصة توصيله. يرجى مراجعة الدعم.", isBlocked: true }, 403);
+                }
+                if (profile.picture && !customer.picture) {
+                    customer.picture = profile.picture;
+                }
+                if (!customer.googleId) {
+                    customer.googleId = profile.sub;
+                    customer.authProvider = 'Google';
+                    saveState();
+                }
+                return json({
+                    userId: customer.customerId,
+                    fullName: customer.fullName,
+                    phoneNumber: customer.phoneNumber || '',
+                    email: customer.email || emailLower,
+                    role: 'Customer',
+                    picture: customer.picture || profile.picture || '',
+                    authProvider: 'Google',
+                    token: 'jwt_token_' + customer.customerId
+                });
+            }
+
+            // 3. Register new Customer automatically
+            const newId = 'usr-g-' + Math.random().toString(36).substr(2, 9);
+            customer = {
+                customerId: newId,
+                fullName: profile.name || emailLower.split('@')[0],
+                email: emailLower,
+                phoneNumber: '',
+                picture: profile.picture || '',
+                authProvider: 'Google',
+                googleId: profile.sub,
+                preferredPaymentMethod: 'Cash',
+                ratingAverage: 5.0,
+                totalBookings: 0,
+                isActive: true,
+                registeredAt: new Date().toISOString()
+            };
+
+            state.customers.push(customer);
+            state.stats.totalUsers++;
+
+            state.auditLogs.unshift({
+                action: 'UserRegisteredWithGoogle',
+                entityName: 'User',
+                entityId: newId,
+                newValuesJson: JSON.stringify({ fullName: customer.fullName, email: emailLower, authProvider: 'Google' }),
+                ipAddress: req.socket.remoteAddress || '127.0.0.1',
+                createdAt: new Date().toISOString()
+            });
+
+            saveState();
+
+            return json({
+                userId: newId,
+                fullName: customer.fullName,
+                email: customer.email,
+                phoneNumber: '',
+                picture: customer.picture,
+                role: 'Customer',
+                authProvider: 'Google',
+                token: 'jwt_token_' + newId
+            });
+        });
+    }
+
+    if (pathname === '/api/auth/google/callback') {
+        res.writeHead(302, { 'Location': '/app/' });
+        return res.end();
     }
 
     if (pathname === '/api/auth/me') {

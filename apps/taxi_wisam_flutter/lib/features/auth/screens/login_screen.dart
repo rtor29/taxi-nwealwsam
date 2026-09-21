@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/utils/iraqi_phone_validator.dart';
+import '../../../core/services/google_auth_service.dart';
+import '../widgets/google_sign_in_button.dart';
 import '../../customer/screens/customer_home_screen.dart';
 import '../../driver/screens/driver_home_screen.dart';
 import 'phone_otp_verification_screen.dart';
@@ -25,7 +27,86 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _identifierController = TextEditingController();
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkIncomingGoogleAuth();
+    });
+  }
+
+  Future<void> _checkIncomingGoogleAuth() async {
+    final authService = GoogleAuthService(
+      apiClient: widget.apiClient,
+      storageService: widget.storageService,
+    );
+    final tokens = authService.extractTokensFromCurrentUrl();
+    if (tokens.isNotEmpty && (tokens.containsKey('id_token') || tokens.containsKey('access_token'))) {
+      setState(() => _isGoogleLoading = true);
+      final res = await authService.authenticateWithBackend(
+        idToken: tokens['id_token'],
+        accessToken: tokens['access_token'],
+      );
+      if (mounted) {
+        setState(() => _isGoogleLoading = false);
+        if (res.success && res.userData != null) {
+          _navigateAfterLogin(res.userData!);
+        } else if (res.errorMessage != null) {
+          setState(() => _errorMessage = res.errorMessage);
+        }
+      }
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _isGoogleLoading = true;
+      _errorMessage = null;
+    });
+
+    final authService = GoogleAuthService(
+      apiClient: widget.apiClient,
+      storageService: widget.storageService,
+    );
+
+    try {
+      await authService.launchGoogleSignInFlow();
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'تعذر فتح نافذة تسجيل الدخول بحساب Google: $e';
+        _isGoogleLoading = false;
+      });
+    }
+  }
+
+  void _navigateAfterLogin(Map<String, dynamic> data) {
+    final role = data['role'] ?? 'Customer';
+    if (!mounted) return;
+    if (role == 'Driver') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DriverHome(
+            apiClient: widget.apiClient,
+            storageService: widget.storageService,
+          ),
+        ),
+      );
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CustomerHome(
+            apiClient: widget.apiClient,
+            storageService: widget.storageService,
+          ),
+        ),
+      );
+    }
+  }
 
   final List<String> _emailDomains = [
     '@gmail.com',
@@ -292,6 +373,27 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
                         : const Text('تسجيل الدخول', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Divider OR
+                  Row(
+                    children: [
+                      Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text('أو المتابعة عبر', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                      ),
+                      Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Google Sign-In Official Button
+                  GoogleSignInButton(
+                    isLoading: _isGoogleLoading,
+                    onPressed: _handleGoogleSignIn,
+                    text: 'المتابعة باستخدام حساب Google',
                   ),
                   const SizedBox(height: 12),
 

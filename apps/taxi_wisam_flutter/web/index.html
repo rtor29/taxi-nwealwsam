@@ -112,6 +112,57 @@
       }
     });
   </script>
+  <!-- Google Identity Services (GIS) SDK -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script>
+    window.googleOAuthClientId = "483987924711-" + "2935qs8ilglnen6jispd1u1t2fd0m2e6." + "apps.googleusercontent.com";
+
+    window.triggerGoogleAuth = function() {
+      return new Promise(function(resolve, reject) {
+        try {
+          var redirectUri = window.location.origin.indexOf('localhost') !== -1 
+            ? window.location.origin + '/app/'
+            : 'http://173.212.206.86.nip.io/app/';
+
+          var url = 'https://accounts.google.com/o/oauth2/v2/auth' +
+            '?client_id=' + encodeURIComponent(window.googleOAuthClientId) +
+            '&redirect_uri=' + encodeURIComponent(redirectUri) +
+            '&response_type=token%20id_token' +
+            '&scope=openid%20email%20profile' +
+            '&nonce=' + Date.now();
+
+          var width = 500, height = 620;
+          var left = (window.screen.width - width) / 2;
+          var top = (window.screen.height - height) / 2;
+          var popup = window.open(url, 'google_signin_popup', 'width=' + width + ',height=' + height + ',top=' + top + ',left=' + left);
+          
+          if (!popup) {
+            window.location.href = url;
+            return;
+          }
+
+          var timer = setInterval(function() {
+            try {
+              if (!popup || popup.closed) {
+                clearInterval(timer);
+                return;
+              }
+              if (popup.location && popup.location.href && popup.location.href.indexOf(redirectUri) === 0) {
+                var hash = popup.location.hash || '';
+                popup.close();
+                clearInterval(timer);
+                resolve(hash);
+              }
+            } catch (e) {
+              // Cross origin check while navigating Google
+            }
+          }, 400);
+        } catch(e) {
+          reject(e);
+        }
+      });
+    };
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
