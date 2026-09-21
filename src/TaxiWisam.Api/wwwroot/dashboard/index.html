@@ -103,12 +103,20 @@
             </div>
 
             <!-- Action Buttons -->
-            <div class="flex items-center space-x-2 md:space-x-4 space-x-reverse">
+            <div class="flex items-center space-x-2 md:space-x-3 space-x-reverse">
+                <!-- Web App Button -->
+                <a href="/app/" target="_blank" title="فتح تطبيق توصيله على الويب (الهواتف، الآيبادات، الحواسيب)"
+                   class="flex items-center px-2.5 md:px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition shadow-sm shadow-blue-600/20">
+                    <i class="fa-solid fa-mobile-screen-button ml-1.5 text-sm md:text-base"></i>
+                    <span class="hidden sm:inline">تطبيق الويب 📱</span>
+                    <span class="sm:hidden text-[11px]">الويب</span>
+                </a>
+
                 <!-- APK Direct Download Button -->
                 <a href="/downloads/tawseela.apk" download="tawseela.apk" title="تحميل أحدث نسخة لتطبيق الأندرويد"
                    class="flex items-center px-2.5 md:px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-sm shadow-emerald-600/20">
                     <i class="fa-brands fa-android ml-1.5 text-sm md:text-base"></i>
-                    <span class="hidden sm:inline">تحميل APK أندرويد</span>
+                    <span class="hidden sm:inline">تحميل APK</span>
                     <span class="sm:hidden text-[11px]">APK</span>
                 </a>
 
@@ -210,11 +218,16 @@
                     <span>سجل التدقيق (Audit Logs)</span>
                 </button>
 
-                <!-- APK Download Card inside Sidebar -->
-                <div class="pt-4">
+                <!-- Web App & APK Download Cards inside Sidebar -->
+                <div class="pt-4 space-y-2">
+                    <a href="/app/" target="_blank"
+                       class="w-full flex items-center justify-center space-x-2 space-x-reverse p-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl text-xs font-bold hover:brightness-110 transition shadow-md">
+                        <i class="fa-solid fa-globe text-base"></i>
+                        <span>📱 فتح تطبيق الويب (للأجهزة)</span>
+                    </a>
                     <a href="/downloads/tawseela.apk" download="tawseela.apk"
-                       class="w-full flex items-center justify-center space-x-2 space-x-reverse p-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl text-xs font-bold hover:brightness-110 transition shadow-md">
-                        <i class="fa-brands fa-android text-lg"></i>
+                       class="w-full flex items-center justify-center space-x-2 space-x-reverse p-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl text-xs font-bold hover:brightness-110 transition shadow-md">
+                        <i class="fa-brands fa-android text-base"></i>
                         <span>تحميل تطبيق أندرويد (APK)</span>
                     </a>
                 </div>

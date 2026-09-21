@@ -136,6 +136,31 @@ class MapboxService {
     return [];
   }
 
+  /// Reverse geocode coordinates to get a readable Arabic address
+  Future<String?> reverseGeocode(LatLng point) async {
+    final url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/${point.longitude},${point.latitude}.json';
+    try {
+      final response = await _dio.get(url, queryParameters: {
+        'access_token': AppConfig.mapboxPublicToken,
+        'country': 'IQ',
+        'language': 'ar',
+        'types': 'poi,neighborhood,locality,address',
+      });
+      if (response.statusCode == 200 && response.data['features'] != null) {
+        final features = response.data['features'] as List;
+        if (features.isNotEmpty) {
+          final first = features.first;
+          final placeName = first['place_name_ar'] ?? first['place_name'] ?? first['text_ar'] ?? first['text'];
+          if (placeName != null && placeName.toString().trim().isNotEmpty) {
+            return placeName.toString();
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+
   MapboxRouteResult _generateFallbackRoute(LatLng origin, LatLng destination) {
     final midLat = (origin.latitude + destination.latitude) / 2.0;
     final midLon = (origin.longitude + destination.longitude) / 2.0;

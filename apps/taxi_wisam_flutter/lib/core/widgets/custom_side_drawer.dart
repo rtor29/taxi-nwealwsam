@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,7 +11,6 @@ import '../../features/support/screens/contact_support_screen.dart';
 import '../network/api_client.dart';
 import '../network/api_endpoints.dart';
 import '../services/storage_service.dart';
-import '../theme/app_theme.dart';
 import 'tawseela_logo.dart';
 
 /// القائمة الجانبية المخصصة لتطبيقي السائق والزبون (Custom Side Drawer)
@@ -34,7 +34,7 @@ class _CustomSideDrawerState extends State<CustomSideDrawer> {
   String _fullName = 'مستخدم توصيله';
   String _phoneNumber = '07800000000';
   String _role = 'Customer';
-  String? _avatarPath;
+  Uint8List? _avatarBytes;
   final ImagePicker _picker = ImagePicker();
 
   @override
@@ -49,14 +49,20 @@ class _CustomSideDrawerState extends State<CustomSideDrawer> {
     final role = await widget.storageService.getUserRole();
     final prefs = await SharedPreferences.getInstance();
     final phone = prefs.getString('user_phone') ?? '07801234567';
-    final savedAvatar = prefs.getString('user_avatar_path');
+    final savedAvatarBase64 = prefs.getString('user_avatar_base64');
+    Uint8List? bytes;
+    if (savedAvatarBase64 != null && savedAvatarBase64.isNotEmpty) {
+      try {
+        bytes = base64Decode(savedAvatarBase64);
+      } catch (_) {}
+    }
 
     if (mounted) {
       setState(() {
         if (name != null && name.isNotEmpty) _fullName = name;
         if (role != null && role.isNotEmpty) _role = role;
         _phoneNumber = phone;
-        _avatarPath = savedAvatar;
+        _avatarBytes = bytes;
       });
     }
   }
@@ -100,11 +106,13 @@ class _CustomSideDrawerState extends State<CustomSideDrawer> {
       );
 
       if (picked != null) {
+        final bytes = await picked.readAsBytes();
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user_avatar_path', picked.path);
+        await prefs.setString('user_avatar_base64', base64Encode(bytes));
 
         setState(() {
-          _avatarPath = picked.path;
+          _avatarBytes = bytes;
         });
 
         if (!mounted) return;
@@ -209,10 +217,10 @@ class _CustomSideDrawerState extends State<CustomSideDrawer> {
                     child: CircleAvatar(
                       radius: 36,
                       backgroundColor: Colors.amber,
-                      backgroundImage: _avatarPath != null
-                          ? FileImage(File(_avatarPath!))
+                      backgroundImage: _avatarBytes != null
+                          ? MemoryImage(_avatarBytes!)
                           : null,
-                      child: _avatarPath == null
+                      child: _avatarBytes == null
                           ? Text(
                               _fullName.isNotEmpty ? _fullName[0] : 'ت',
                               style: const TextStyle(
@@ -432,7 +440,7 @@ class _CustomSideDrawerState extends State<CustomSideDrawer> {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 2),
       decoration: BoxDecoration(
-        color: isActive ? Colors.amber.withOpacity(0.12) : Colors.transparent,
+        color: isActive ? Colors.amber.withValues(alpha: 0.12) : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
       ),
       child: ListTile(
@@ -471,12 +479,4 @@ class _CustomSideDrawerState extends State<CustomSideDrawer> {
       ),
     );
   }
-}
-
-extension on Colors {
-  static get slate => _SlateColors();
-}
-
-class _SlateColors {
-  Color get shade700 => const Color(0xFF334155);
 }

@@ -6,6 +6,7 @@ const path = require('path');
 
 const PORT = process.env.PORT || 5050;
 const DASHBOARD_DIR = path.join(__dirname, '..', 'src', 'TaxiWisam.Api', 'wwwroot', 'dashboard');
+const FLUTTER_WEB_DIR = process.env.FLUTTER_WEB_DIR || path.join(__dirname, '..', 'apps', 'taxi_wisam_flutter', 'build', 'web');
 
 // Clean state database focused on Najaf Governorate (محافظة النجف الأشرف)
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, '..', 'data', 'state.json');
@@ -80,10 +81,17 @@ const mimeTypes = {
     '.html': 'text/html; charset=utf-8',
     '.css': 'text/css; charset=utf-8',
     '.js': 'application/javascript; charset=utf-8',
+    '.mjs': 'application/javascript; charset=utf-8',
     '.json': 'application/json; charset=utf-8',
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
-    '.svg': 'image/svg+xml'
+    '.jpeg': 'image/jpeg',
+    '.svg': 'image/svg+xml',
+    '.wasm': 'application/wasm',
+    '.ttf': 'font/ttf',
+    '.otf': 'font/otf',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2'
 };
 
 const server = http.createServer((req, res) => {
@@ -1088,6 +1096,56 @@ const server = http.createServer((req, res) => {
         } else {
             res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
             return res.end('جاري تجهيز حزمة APK، يرجى إعادة المحاولة بعد اكتمال البناء.');
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Flutter Web App Serving (/app, /app/*)
+    // -------------------------------------------------------------------------
+    if (pathname === '/app' || pathname === '/app/' || pathname.startsWith('/app/')) {
+        let relativePath = pathname.replace(/^\/app\/?/, '');
+        if (!relativePath || relativePath === '') {
+            relativePath = 'index.html';
+        }
+
+        // Check primary build directory and fallback directories
+        const candidates = [
+            path.join(FLUTTER_WEB_DIR, relativePath),
+            path.join(__dirname, '..', 'build', 'web', relativePath),
+            path.join('/var/www/taxi-wisam/build/web', relativePath)
+        ];
+
+        let targetFile = candidates.find(c => fs.existsSync(c));
+
+        if (targetFile && fs.statSync(targetFile).isDirectory()) {
+            const indexInside = path.join(targetFile, 'index.html');
+            if (fs.existsSync(indexInside)) targetFile = indexInside;
+        }
+
+        // SPA routing fallback to index.html if file not found
+        if (!targetFile || !fs.existsSync(targetFile)) {
+            const indexCandidates = [
+                path.join(FLUTTER_WEB_DIR, 'index.html'),
+                path.join(__dirname, '..', 'build', 'web', 'index.html'),
+                path.join('/var/www/taxi-wisam/build/web', 'index.html')
+            ];
+            targetFile = indexCandidates.find(c => fs.existsSync(c));
+        }
+
+        if (targetFile && fs.existsSync(targetFile)) {
+            const ext = path.extname(targetFile).toLowerCase();
+            const contentType = mimeTypes[ext] || 'application/octet-stream';
+            return fs.readFile(targetFile, (err, content) => {
+                if (err) {
+                    res.writeHead(500);
+                    return res.end('Error reading web app file');
+                }
+                res.writeHead(200, { 'Content-Type': contentType });
+                res.end(content);
+            });
+        } else {
+            res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+            return res.end('تطبيق الويب قيد التجهيز...');
         }
     }
 

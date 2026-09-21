@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -23,7 +22,6 @@ class DocumentUploadScreen extends StatefulWidget {
 
 class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
   String _selectedDocType = 'DrivingLicense';
-  File? _imageFile;
   Uint8List? _fileBytes;
   String _fileName = '';
   bool _isUploading = false;
@@ -49,7 +47,6 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
       if (picked != null) {
         final bytes = await picked.readAsBytes();
         setState(() {
-          _imageFile = File(picked.path);
           _fileBytes = bytes;
           _fileName = picked.name;
           _uploadStatus = null;
@@ -72,7 +69,6 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
       if (picked != null) {
         final bytes = await picked.readAsBytes();
         setState(() {
-          _imageFile = File(picked.path);
           _fileBytes = bytes;
           _fileName = picked.name;
           _uploadStatus = null;
@@ -219,7 +215,7 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: _selectedDocType,
+              initialValue: _selectedDocType,
               items: _docTypes.entries.map((e) {
                 return DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 14)));
               }).toList(),
@@ -248,7 +244,7 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
+                      color: Colors.black.withValues(alpha: 0.04),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -256,21 +252,15 @@ class _DocumentUploadScreenState extends State<DocumentUploadScreen> {
                 ),
                 child: Column(
                   children: [
-                    if (_imageFile != null)
+                    if (_fileBytes != null)
                       ClipRRect(
                         borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-                        child: Image.file(
-                          _imageFile!,
+                        child: Image.memory(
+                          _fileBytes!,
                           height: 220,
                           width: double.infinity,
                           fit: BoxFit.cover,
                         ),
-                      )
-                    else if (_fileBytes != null)
-                      Container(
-                        height: 140,
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.picture_as_pdf_rounded, size: 64, color: Colors.redAccent),
                       )
                     else
                       Padding(
