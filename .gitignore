@@ -61,3 +61,5 @@ obj/
 
 # Logs
 *.log
+*.apk
+data/uploads/

@@ -67,6 +67,8 @@ class StorageService {
     }
   }
 
+  Future<String?> getUserName() => getFullName();
+
   Future<void> clearSession() async {
     try {
       await _storage.deleteAll();

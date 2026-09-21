@@ -3,6 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static const Color primaryAmber = Color(0xFFF59E0B); // Amber 500
+  static const Color primaryColor = primaryAmber;
+  static const Color emerald = Color(0xFF10B981);
+  static const Color rose = Color(0xFFF43F5E);
   static const Color darkSlate = Color(0xFF0F172A);   // Slate 900
   static const Color cardBg = Color(0xFFFFFFFF);
   static const Color surfaceBg = Color(0xFFF8FAFC);  // Slate 50

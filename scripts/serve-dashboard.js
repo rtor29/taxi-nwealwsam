@@ -9,6 +9,10 @@ const DASHBOARD_DIR = path.join(__dirname, '..', 'src', 'TaxiWisam.Api', 'wwwroo
 
 // Clean state database focused on Najaf Governorate (محافظة النجف الأشرف)
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, '..', 'data', 'state.json');
+const UPLOADS_DIR = path.join(__dirname, '..', 'data', 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
 
 let state = {
     stats: {
@@ -27,6 +31,7 @@ let state = {
     routes: [],
     bookings: [],
     complaints: [],
+    vacancyAds: [],
     settings: [
         {
             key: "city_coverage",
@@ -152,10 +157,20 @@ const server = http.createServer((req, res) => {
     if (pathname.startsWith('/api/documents/') && pathname.endsWith('/signed-url')) {
         const parts = pathname.split('/');
         const docId = parts[3];
+        const doc = state.verifications.find(v => v.documentId === docId || v.documentId === 'doc-' + docId);
+        
+        let signedUrl = "https://images.unsplash.com/photo-1633265486064-086b219458ec?w=800&auto=format&fit=crop&q=80";
+        if (doc && doc.fileUrl) {
+            signedUrl = doc.fileUrl;
+        } else if (fs.existsSync(path.join(UPLOADS_DIR, `${docId}.jpg`))) {
+            signedUrl = `/uploads/${docId}.jpg`;
+        }
+
         return json({
             documentId: docId || "doc-preview",
-            documentType: "DrivingLicense",
-            signedUrl: "https://images.unsplash.com/photo-1633265486064-086b219458ec?w=800&auto=format&fit=crop&q=80",
+            documentType: doc ? (doc.documentType || 'DrivingLicense') : "DrivingLicense",
+            signedUrl: signedUrl,
+            driverId: doc ? doc.driverId : null,
             expiresInSeconds: 3600
         });
     }
@@ -165,17 +180,31 @@ const server = http.createServer((req, res) => {
             const docId = 'doc-' + Math.random().toString(36).substr(2, 8);
             const driverId = body.driverId || 'usr-sample';
             const docType = body.documentType || 'DrivingLicense';
+            let fileUrl = '';
+
+            if (body.fileBase64) {
+                try {
+                    const buffer = Buffer.from(body.fileBase64, 'base64');
+                    const fileName = `${docId}.jpg`;
+                    fs.writeFileSync(path.join(UPLOADS_DIR, fileName), buffer);
+                    fileUrl = `/uploads/${fileName}`;
+                } catch (e) {
+                    console.error('Error saving uploaded file:', e.message);
+                }
+            }
+
             state.verifications.push({
                 documentId: docId,
                 driverId: driverId,
                 documentType: docType,
-                filePath: 'licenses/' + docId + '.jpg',
+                filePath: fileUrl || ('licenses/' + docId + '.jpg'),
+                fileUrl: fileUrl,
                 status: 'Pending',
                 submittedAt: new Date().toISOString()
             });
             state.stats.pendingVerifications++;
             saveState();
-            return json({ success: true, documentId: docId, status: 'Pending' });
+            return json({ success: true, documentId: docId, fileUrl, status: 'Pending' });
         });
     }
 
@@ -488,6 +517,23 @@ const server = http.createServer((req, res) => {
         });
     }
 
+    if (pathname.startsWith('/api/admin/drivers/') && req.method === 'GET') {
+        const driverId = pathname.replace('/api/admin/drivers/', '').trim();
+        const driver = state.drivers.find(d => d.driverId === driverId);
+        if (driver) {
+            const docs = state.verifications.filter(v => v.driverId === driverId);
+            const vehicles = [
+                { make: 'تويوتا', model: 'كورولا', plateNumber: 'النجف - ' + (driver.licenseNumber ? (driver.licenseNumber.match(/\d+/) || ['1029'])[0] : '1029') }
+            ];
+            return json({ ...driver, vehicles, documents: docs.length > 0 ? docs : [{
+                documentId: 'doc-' + driver.driverId,
+                documentType: 'DrivingLicense',
+                status: driver.isVerified ? 'Approved' : 'Pending',
+                fileUrl: fs.existsSync(path.join(UPLOADS_DIR, `doc-${driver.driverId}.jpg`)) ? `/uploads/doc-${driver.driverId}.jpg` : "https://images.unsplash.com/photo-1633265486064-086b219458ec?w=800&auto=format&fit=crop&q=80"
+            }] });
+        }
+    }
+
     if (pathname === '/api/admin/drivers') {
         return json({ total: state.drivers.length, drivers: state.drivers });
     }
@@ -678,7 +724,127 @@ const server = http.createServer((req, res) => {
             return json({ id: customer.customerId, fullName: customer.fullName, role: 'Customer' });
         }
 
-        return json({ id: queryId || 'usr-default', fullName: 'مستخدم وسام', role: 'Customer' });
+        return json({ id: queryId || 'usr-default', fullName: 'مستخدم توصيله', role: 'Customer' });
+    }
+
+    // Trip Approval Flow (Accept / Decline Booking)
+    if (pathname.startsWith('/api/bookings/') && (pathname.endsWith('/accept') || pathname.endsWith('/decline'))) {
+        const parts = pathname.split('/');
+        const bookingId = parts[3];
+        const isAccept = pathname.endsWith('/accept');
+        const booking = state.bookings.find(b => b.bookingId === bookingId || b.id === bookingId);
+        if (booking) {
+            booking.status = isAccept ? 'Confirmed' : 'Declined';
+            saveState();
+        }
+        return json({ success: true, bookingId, status: isAccept ? 'Confirmed' : 'Declined' });
+    }
+
+    // Vacancy Ads System (إعلانات الرحلات الشاغرة)
+    if (pathname === '/api/ads/vacancies') {
+        if (req.method === 'GET') {
+            const defaultAds = [
+                {
+                    id: 'ad-njf-101',
+                    driverId: 'drv-ali-najaf',
+                    driverName: 'علي الكعبي',
+                    driverPhone: '07812345678',
+                    vehicleModel: 'تويوتا كورولا 2023',
+                    plateNumber: 'النجف 14502',
+                    rating: 4.95,
+                    fromLocation: 'ساحة ثورة العشرين - المركز',
+                    toLocation: 'جامعة الكوفة - مجمع الكليات',
+                    departureDate: 'اليوم',
+                    departureTime: '08:15 ص',
+                    availableSeats: 3,
+                    totalSeats: 4,
+                    pricePerSeatIqd: 3000,
+                    notes: 'تكييف بارد ومقاعد مريحة والانطلاق فوري عند اكتمال الركاب.',
+                    status: 'Open'
+                },
+                {
+                    id: 'ad-njf-102',
+                    driverId: 'drv-hassan-najaf',
+                    driverName: 'حسين الخفاجي',
+                    driverPhone: '07809876543',
+                    vehicleModel: 'هيونداي إلنترا 2021',
+                    plateNumber: 'النجف 8921',
+                    rating: 4.88,
+                    fromLocation: 'مرقد الإمام علي (ع) - المدينة القديمة',
+                    toLocation: 'مطار النجف الدولي',
+                    departureDate: 'اليوم',
+                    departureTime: '10:00 ص',
+                    availableSeats: 2,
+                    totalSeats: 4,
+                    pricePerSeatIqd: 5000,
+                    notes: 'خاص للمسافرين ولدينا مساحة واسعة للحقائب.',
+                    status: 'Open'
+                }
+            ];
+            return json(state.vacancyAds && state.vacancyAds.length > 0 ? state.vacancyAds : defaultAds);
+        }
+
+        if (req.method === 'POST') {
+            return parseBody(body => {
+                const newAd = {
+                    id: 'ad-' + Math.random().toString(36).substr(2, 8),
+                    driverId: body.driverId || 'drv-sample',
+                    driverName: body.driverName || 'كابتن توصيله',
+                    driverPhone: body.driverPhone || '07801234567',
+                    vehicleModel: body.vehicleModel || 'تويوتا كورولا',
+                    plateNumber: body.plateNumber || 'النجف 1029',
+                    rating: 4.9,
+                    fromLocation: body.fromLocation || 'مركز النجف',
+                    toLocation: body.toLocation || 'الكوفة',
+                    departureDate: body.departureDate || 'اليوم',
+                    departureTime: body.departureTime || '08:00 ص',
+                    availableSeats: body.availableSeats || 3,
+                    totalSeats: body.totalSeats || 4,
+                    pricePerSeatIqd: body.pricePerSeatIqd || 3000,
+                    notes: body.notes || '',
+                    status: 'Open',
+                    createdAt: new Date().toISOString()
+                };
+                if (!state.vacancyAds) state.vacancyAds = [];
+                state.vacancyAds.unshift(newAd);
+                saveState();
+                return json(newAd);
+            });
+        }
+    }
+
+    // Serve Uploaded Driver Documents
+    if (pathname.startsWith('/uploads/')) {
+        const uploadFile = path.join(UPLOADS_DIR, pathname.replace(/^\/uploads\//, ''));
+        if (fs.existsSync(uploadFile)) {
+            const ext = path.extname(uploadFile).toLowerCase();
+            const contentType = mimeTypes[ext] || 'image/jpeg';
+            return fs.readFile(uploadFile, (err, content) => {
+                if (err) {
+                    res.writeHead(404);
+                    return res.end('File not found');
+                }
+                res.writeHead(200, { 'Content-Type': contentType });
+                res.end(content);
+            });
+        }
+    }
+
+    // Android APK Direct Download Route
+    if (pathname === '/downloads/tawseela.apk' || pathname === '/tawseela.apk') {
+        const apkPath = path.join(__dirname, '..', 'apps', 'taxi_wisam_flutter', 'build', 'app', 'outputs', 'flutter-apk', 'app-release.apk');
+        const altApkPath = path.join(__dirname, '..', 'data', 'tawseela.apk');
+        const target = fs.existsSync(apkPath) ? apkPath : (fs.existsSync(altApkPath) ? altApkPath : null);
+        if (target) {
+            res.writeHead(200, {
+                'Content-Type': 'application/vnd.android.package-archive',
+                'Content-Disposition': 'attachment; filename="tawseela.apk"'
+            });
+            return fs.createReadStream(target).pipe(res);
+        } else {
+            res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+            return res.end('جاري تجهيز حزمة APK، يرجى إعادة المحاولة بعد اكتمال البناء.');
+        }
     }
 
     // -------------------------------------------------------------------------

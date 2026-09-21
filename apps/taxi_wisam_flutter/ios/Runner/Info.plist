@@ -68,5 +68,16 @@
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>يحتاج تطبيق توصيله لمعرفة موقعك لتحديد نقطة الركوب والوجهة بدقة</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>يحتاج تطبيق توصيله للوصول إلى الاستوديو لاختيار الوثائق وتحديث الصورة الشخصية</string>
+	<key>NSCameraUsageDescription</key>
+	<string>يحتاج تطبيق توصيله للوصول إلى الكاميرا لتصوير مستمسكات السائق والصورة الشخصية</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>whatsapp</string>
+		<string>https</string>
+		<string>http</string>
+	</array>
 </dict>
 </plist>

@@ -37,6 +37,12 @@ class ApiClient {
     );
   }
 
+  Future<Response> get(String path, {Map<String, dynamic>? queryParameters}) =>
+      dio.get(path, queryParameters: queryParameters);
+
+  Future<Response> post(String path, {dynamic data}) =>
+      dio.post(path, data: data);
+
   // File Upload Helper (Used for Driver Documents -> Private Supabase Bucket)
   Future<Response> uploadFile({
     required String path,

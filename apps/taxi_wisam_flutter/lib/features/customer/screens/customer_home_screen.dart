@@ -4,7 +4,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/services/storage_service.dart';
-import '../../auth/screens/login_screen.dart';
+import '../../../core/widgets/custom_side_drawer.dart';
 import 'live_tracking_screen.dart';
 import 'route_search_screen.dart';
 
@@ -127,22 +127,18 @@ class _CustomerHomeState extends State<CustomerHome> {
         title: Text('مرحباً، $_customerName'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await widget.storageService.clearSession();
-              if (!context.mounted) return;
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => LoginScreen(
-                    apiClient: widget.apiClient,
-                    storageService: widget.storageService,
-                  ),
-                ),
-              );
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              _loadBookings();
+              _loadNearbyDrivers();
             },
           ),
         ],
+      ),
+      drawer: CustomSideDrawer(
+        apiClient: widget.apiClient,
+        storageService: widget.storageService,
+        currentRoute: 'home',
       ),
       body: RefreshIndicator(
         onRefresh: _loadBookings,

@@ -2,8 +2,12 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة تحكم تاكسي وسام | Taxi-Wisam Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="توصيله">
+    <title>توصيله | لوحة تحكم وإدارة المنصة</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
@@ -11,42 +15,144 @@
     <!-- Google Cairo Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-slate-50 text-slate-800 font-['Cairo'] antialiased min-h-screen flex flex-col">
+<body class="bg-slate-50 text-slate-800 font-['Cairo'] antialiased min-h-screen flex flex-col select-none">
 
-    <!-- Top Navbar -->
-    <header class="bg-slate-900 text-white sticky top-0 z-40 shadow-md border-b border-slate-800">
-        <div class="px-6 py-3 flex items-center justify-between">
-            <div class="flex items-center space-x-4 space-x-reverse">
-                <div class="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-xl shadow-lg">
+    <!-- ===================================================================== -->
+    <!-- 0. ADMIN LOGIN OVERLAY (Gated Access: admin / 1122 or ١١٢٢)             -->
+    <!-- ===================================================================== -->
+    <div id="login-overlay" class="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl text-center animate-scale-up space-y-6">
+            <!-- Brand Logo -->
+            <div class="mx-auto w-20 h-20 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center text-4xl font-black shadow-lg shadow-amber-500/20">
+                🚖
+            </div>
+
+            <div>
+                <h2 class="text-3xl font-black text-white tracking-wide">توصيله</h2>
+                <p class="text-amber-400 font-bold text-sm mt-1">بوابة إدارة العمليات والتحكم المركزي</p>
+                <p class="text-xs text-slate-400 mt-1">منصة النقل الذكي الموحدة - النجف الأشرف</p>
+            </div>
+
+            <!-- Login Form -->
+            <form id="login-form" onsubmit="handleAdminLogin(event)" class="space-y-4 text-right">
+                <div id="login-error" class="hidden p-3 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-300 text-xs font-bold text-center">
+                    اسم المستخدم أو كلمة المرور غير صحيحة!
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">اسم المستخدم</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-user absolute right-3 top-3.5 text-slate-500 text-sm"></i>
+                        <input type="text" id="login-username" required placeholder="admin" autocomplete="username"
+                               class="w-full pr-10 pl-4 py-3 bg-slate-800/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 font-sans">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">كلمة المرور</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-lock absolute right-3 top-3.5 text-slate-500 text-sm"></i>
+                        <input type="password" id="login-password" required placeholder="••••" autocomplete="current-password"
+                               class="w-full pr-10 pl-4 py-3 bg-slate-800/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 font-sans">
+                    </div>
+                    <div class="text-[11px] text-slate-500 mt-1 flex justify-between">
+                        <span>الافتراضي: admin / 1122</span>
+                        <span class="text-slate-400">يدعم الأرقام: ١١٢٢</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full py-3.5 bg-amber-500 hover:bg-amber-400 active:scale-[0.98] text-slate-950 font-black rounded-xl text-base transition shadow-lg shadow-amber-500/25 flex items-center justify-center space-x-2 space-x-reverse">
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                    <span>تسجيل الدخول للنظام</span>
+                </button>
+            </form>
+
+            <div class="pt-2 border-t border-slate-800/80 text-[11px] text-slate-500">
+                منصة توصيله v2.0 • حماية مشفرة ومصادقة إدارية
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- TOP NAVIGATION BAR (Responsive: Mobile + Desktop)                     -->
+    <!-- ===================================================================== -->
+    <header class="bg-slate-900 text-white sticky top-0 z-30 shadow-md border-b border-slate-800">
+        <div class="px-4 md:px-6 py-2.5 flex items-center justify-between">
+            <!-- Brand & Mobile Menu Toggle -->
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <button onclick="toggleMobileSidebar()" class="md:hidden w-10 h-10 rounded-xl bg-slate-800 text-amber-400 flex items-center justify-center hover:bg-slate-700 transition">
+                    <i class="fa-solid fa-bars text-lg"></i>
+                </button>
+
+                <div class="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xl shadow-lg shadow-amber-500/20">
                     🚖
                 </div>
                 <div>
-                    <h1 class="text-lg font-extrabold tracking-tight">تاكسي وسام <span class="text-amber-400 font-light text-sm">| لوحة الإدارة</span></h1>
-                    <p class="text-xs text-slate-400">نظام إدارة البنية التحتية والعمليات (Supabase + ASP.NET Core)</p>
+                    <h1 class="text-base md:text-lg font-black tracking-tight flex items-center gap-1">
+                        توصيله
+                        <span class="text-amber-400 font-bold text-xs bg-slate-800 px-2 py-0.5 rounded-full">الإدارة</span>
+                    </h1>
+                    <p class="text-[10px] md:text-xs text-slate-400 hidden sm:block">منصة النقل الذكي الموحدة - النجف الأشرف</p>
                 </div>
             </div>
 
-            <div class="flex items-center space-x-4 space-x-reverse">
-                <div class="flex items-center px-3 py-1 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-full text-xs font-semibold">
+            <!-- Action Buttons -->
+            <div class="flex items-center space-x-2 md:space-x-4 space-x-reverse">
+                <!-- APK Direct Download Button -->
+                <a href="/downloads/tawseela.apk" download="tawseela.apk" title="تحميل أحدث نسخة لتطبيق الأندرويد"
+                   class="flex items-center px-2.5 md:px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-sm shadow-emerald-600/20">
+                    <i class="fa-brands fa-android ml-1.5 text-sm md:text-base"></i>
+                    <span class="hidden sm:inline">تحميل APK أندرويد</span>
+                    <span class="sm:hidden text-[11px]">APK</span>
+                </a>
+
+                <!-- Connection status -->
+                <div class="hidden lg:flex items-center px-3 py-1 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-full text-xs font-semibold">
                     <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block ml-2 animate-pulse"></span>
-                    النظام متصل (Live)
+                    متصل (Live)
                 </div>
-                <div class="text-xs text-slate-400 border-r border-slate-700 pr-4">
-                    المشرف: <span class="text-amber-400 font-bold">Admin Root</span>
+
+                <!-- Admin Profile & Logout -->
+                <div class="flex items-center space-x-2 space-x-reverse border-r border-slate-700 pr-3">
+                    <span class="text-xs font-bold text-amber-400 hidden sm:inline">Admin</span>
+                    <button onclick="logoutAdmin()" title="تسجيل الخروج"
+                            class="px-2.5 py-1.5 bg-slate-800 hover:bg-rose-900/80 text-slate-300 hover:text-white rounded-xl text-xs font-bold transition flex items-center gap-1">
+                        <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+                        <span class="hidden sm:inline">خروج</span>
+                    </button>
                 </div>
             </div>
         </div>
     </header>
 
-    <!-- Main Workspace -->
-    <div class="flex flex-1 overflow-hidden">
-        <!-- Sidebar Navigation -->
-        <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-l border-slate-800 flex-shrink-0">
-            <div class="py-6 px-4 space-y-1">
-                <div class="text-xs font-bold text-slate-500 uppercase px-3 mb-2 tracking-wider">القائمة الرئيسية</div>
+    <!-- ===================================================================== -->
+    <!-- MAIN WORKSPACE                                                        -->
+    <!-- ===================================================================== -->
+    <div class="flex flex-1 overflow-hidden relative">
+
+        <!-- Mobile Drawer Backdrop -->
+        <div id="mobile-sidebar-backdrop" onclick="toggleMobileSidebar(false)" 
+             class="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm hidden md:hidden transition-opacity"></div>
+
+        <!-- Sidebar Navigation (Desktop sticky, Mobile off-canvas drawer) -->
+        <aside id="sidebar-drawer" 
+               class="fixed md:static inset-y-0 right-0 z-40 w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-l border-slate-800 transform translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out flex-shrink-0">
+            
+            <div class="py-4 md:py-6 px-4 space-y-1 overflow-y-auto">
+                <div class="flex items-center justify-between md:hidden pb-3 mb-2 border-b border-slate-800">
+                    <div class="flex items-center space-x-2 space-x-reverse font-bold text-white text-sm">
+                        <span>🚖</span>
+                        <span>قائمة توصيله</span>
+                    </div>
+                    <button onclick="toggleMobileSidebar(false)" class="text-slate-400 hover:text-white text-lg p-1">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="text-[11px] font-bold text-slate-500 uppercase px-3 mb-2 tracking-wider">القائمة الرئيسية</div>
                 
                 <button onclick="switchTab('overview')" id="tab-btn-overview" class="tab-btn active w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
                     <i class="fa-solid fa-chart-pie w-5 text-center text-amber-400"></i>
@@ -84,130 +190,143 @@
                     <span id="badge-complaints" class="hidden px-2 py-0.5 text-xs bg-amber-500 text-slate-900 rounded-full font-bold">0</span>
                 </button>
 
-                <div class="text-xs font-bold text-slate-500 uppercase px-3 pt-4 mb-2 tracking-wider">الإعدادات والأمان</div>
+                <div class="text-[11px] font-bold text-slate-500 uppercase px-3 pt-4 mb-2 tracking-wider">الإعدادات والأمان</div>
 
                 <button onclick="switchTab('settings')" id="tab-btn-settings" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
                     <i class="fa-solid fa-sliders w-5 text-center text-amber-400"></i>
-                    <span>إعدادات النظام والمطابقة</span>
+                    <span>إعدادات التسعير والمطابقة</span>
                 </button>
 
                 <button onclick="switchTab('audit')" id="tab-btn-audit" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
                     <i class="fa-solid fa-receipt w-5 text-center text-amber-400"></i>
                     <span>سجل التدقيق (Audit Logs)</span>
                 </button>
+
+                <!-- APK Download Card inside Sidebar -->
+                <div class="pt-4">
+                    <a href="/downloads/tawseela.apk" download="tawseela.apk"
+                       class="w-full flex items-center justify-center space-x-2 space-x-reverse p-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl text-xs font-bold hover:brightness-110 transition shadow-md">
+                        <i class="fa-brands fa-android text-lg"></i>
+                        <span>تحميل تطبيق أندرويد (APK)</span>
+                    </a>
+                </div>
             </div>
 
             <!-- Footer info -->
             <div class="p-4 border-t border-slate-800 text-xs text-slate-400 text-center">
-                <p>Taxi-Wisam Enterprise v1.0</p>
-                <p class="text-[10px] text-slate-500 mt-1">Supabase + PostGIS + ASP.NET Core</p>
+                <p class="font-bold text-amber-400">توصيله v2.0</p>
+                <p class="text-[10px] text-slate-500 mt-0.5">النجف الأشرف • PostGIS + Supabase</p>
             </div>
         </aside>
 
         <!-- Main Content Area -->
-        <main class="flex-1 overflow-y-auto p-8">
+        <main class="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8">
 
             <!-- 1. OVERVIEW TAB -->
             <section id="tab-overview" class="tab-content space-y-6">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                        <h2 class="text-2xl font-bold text-slate-900">نظرة عامة ومؤشرات الأداء</h2>
-                        <p class="text-sm text-slate-500">متابعة إحصائيات المنصة الحية مباشرة من قاعدة البيانات</p>
+                        <h2 class="text-2xl font-black text-slate-900">نظرة عامة ومؤشرات الأداء</h2>
+                        <p class="text-xs md:text-sm text-slate-500">متابعة إحصائيات منصة توصيله الحية في محافظة النجف</p>
                     </div>
-                    <button onclick="loadDashboardStats()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold flex items-center space-x-2 space-x-reverse transition">
-                        <i class="fa-solid fa-rotate"></i>
-                        <span>تحديث البيانات</span>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button onclick="loadDashboardStats()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold flex items-center space-x-2 space-x-reverse transition">
+                            <i class="fa-solid fa-rotate"></i>
+                            <span>تحديث</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- KPI Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4 space-x-reverse">
-                        <div class="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center text-2xl font-bold">
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                    <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3 md:space-x-4 space-x-reverse">
+                        <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center text-xl md:text-2xl font-bold flex-shrink-0">
                             <i class="fa-solid fa-taxi"></i>
                         </div>
                         <div>
-                            <p class="text-xs font-semibold text-slate-500">إجمالي السائقين</p>
-                            <h3 id="stat-total-drivers" class="text-2xl font-extrabold text-slate-900 mt-1">0</h3>
-                            <p class="text-xs text-emerald-600 font-medium mt-1"><span id="stat-verified-drivers">0</span> سائق موثق ومفعل</p>
+                            <p class="text-[11px] md:text-xs font-semibold text-slate-500">إجمالي السائقين</p>
+                            <h3 id="stat-total-drivers" class="text-xl md:text-2xl font-extrabold text-slate-900 mt-0.5">0</h3>
+                            <p class="text-[10px] md:text-xs text-emerald-600 font-medium mt-0.5"><span id="stat-verified-drivers">0</span> موثق</p>
                         </div>
                     </div>
 
-                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4 space-x-reverse">
-                        <div class="w-14 h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center text-2xl font-bold">
+                    <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3 md:space-x-4 space-x-reverse">
+                        <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center text-xl md:text-2xl font-bold flex-shrink-0">
                             <i class="fa-solid fa-id-card"></i>
                         </div>
                         <div>
-                            <p class="text-xs font-semibold text-slate-500">وثائق بانتظار المراجعة</p>
-                            <h3 id="stat-pending-verifications" class="text-2xl font-extrabold text-rose-600 mt-1">0</h3>
-                            <p class="text-xs text-slate-400 font-medium mt-1">تحتاج اعتماد المشرف</p>
+                            <p class="text-[11px] md:text-xs font-semibold text-slate-500">بانتظار التدقيق</p>
+                            <h3 id="stat-pending-verifications" class="text-xl md:text-2xl font-extrabold text-rose-600 mt-0.5">0</h3>
+                            <p class="text-[10px] md:text-xs text-slate-400 font-medium mt-0.5">بحاجة فحص</p>
                         </div>
                     </div>
 
-                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4 space-x-reverse">
-                        <div class="w-14 h-14 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold">
+                    <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3 md:space-x-4 space-x-reverse">
+                        <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center text-xl md:text-2xl font-bold flex-shrink-0">
                             <i class="fa-solid fa-route"></i>
                         </div>
                         <div>
-                            <p class="text-xs font-semibold text-slate-500">المسارات النشطة</p>
-                            <h3 id="stat-active-routes" class="text-2xl font-extrabold text-slate-900 mt-1">0</h3>
-                            <p class="text-xs text-slate-400 font-medium mt-1">خطوط نقل دورية</p>
+                            <p class="text-[11px] md:text-xs font-semibold text-slate-500">المسارات النشطة</p>
+                            <h3 id="stat-active-routes" class="text-xl md:text-2xl font-extrabold text-slate-900 mt-0.5">0</h3>
+                            <p class="text-[10px] md:text-xs text-slate-400 font-medium mt-0.5">خطوط نقل دورية</p>
                         </div>
                     </div>
 
-                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4 space-x-reverse">
-                        <div class="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-2xl font-bold">
+                    <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3 md:space-x-4 space-x-reverse">
+                        <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-xl md:text-2xl font-bold flex-shrink-0">
                             <i class="fa-solid fa-money-bill-wave"></i>
                         </div>
                         <div>
-                            <p class="text-xs font-semibold text-slate-500">إجمالي الحجوزات</p>
-                            <h3 id="stat-total-bookings" class="text-2xl font-extrabold text-slate-900 mt-1">0</h3>
-                            <p class="text-xs text-emerald-600 font-medium mt-1"><span id="stat-total-revenue">0</span> د.ع مدفوعات</p>
+                            <p class="text-[11px] md:text-xs font-semibold text-slate-500">إجمالي الحجوزات</p>
+                            <h3 id="stat-total-bookings" class="text-xl md:text-2xl font-extrabold text-slate-900 mt-0.5">0</h3>
+                            <p class="text-[10px] md:text-xs text-emerald-600 font-medium mt-0.5"><span id="stat-total-revenue">0</span> د.ع</p>
                         </div>
                     </div>
                 </div>
 
                 <!-- Quick actions & System Health -->
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                        <h3 class="font-bold text-slate-900 text-lg flex items-center space-x-2 space-x-reverse">
+                    <div class="lg:col-span-2 bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <h3 class="font-bold text-slate-900 text-base md:text-lg flex items-center space-x-2 space-x-reverse">
                             <i class="fa-solid fa-shield-halved text-amber-500"></i>
-                            <span>حالة البنية التحتية المتصلة</span>
+                            <span>حالة البنية التحتية لمنصة توصيله</span>
                         </h3>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
-                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                                <span class="text-xs text-slate-400 block mb-1">قاعدة البيانات</span>
-                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-circle-check ml-1.5 text-xs"></i> Supabase PostgreSQL</span>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4 text-xs md:text-sm">
+                            <div class="p-3 md:p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                <span class="text-[10px] md:text-xs text-slate-400 block mb-1">قاعدة البيانات</span>
+                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-circle-check ml-1.5 text-xs"></i> Supabase / PG16</span>
                             </div>
-                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                                <span class="text-xs text-slate-400 block mb-1">المعالجة الجغرافية</span>
-                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-circle-check ml-1.5 text-xs"></i> PostGIS 4326</span>
+                            <div class="p-3 md:p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                <span class="text-[10px] md:text-xs text-slate-400 block mb-1">المعالجة المكانية</span>
+                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-circle-check ml-1.5 text-xs"></i> PostGIS النجف</span>
                             </div>
-                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                                <span class="text-xs text-slate-400 block mb-1">التخزين السحابي</span>
-                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-lock ml-1.5 text-xs"></i> Private Buckets</span>
+                            <div class="p-3 md:p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                <span class="text-[10px] md:text-xs text-slate-400 block mb-1">المستودع السحابي</span>
+                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-lock ml-1.5 text-xs"></i> Secure Storage</span>
                             </div>
-                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                                <span class="text-xs text-slate-400 block mb-1">طبقة الكاش السريع</span>
-                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-bolt ml-1.5 text-xs"></i> Redis GeoLayer</span>
+                            <div class="p-3 md:p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                <span class="text-[10px] md:text-xs text-slate-400 block mb-1">نظام المسارات</span>
+                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-bolt ml-1.5 text-xs"></i> Smart Routing</span>
                             </div>
-                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                                <span class="text-xs text-slate-400 block mb-1">الاتصال اللحظي</span>
-                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-tower-broadcast ml-1.5 text-xs"></i> SignalR Tracking</span>
+                            <div class="p-3 md:p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                <span class="text-[10px] md:text-xs text-slate-400 block mb-1">التواصل المباشر</span>
+                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-phone ml-1.5 text-xs"></i> Direct Call & WA</span>
                             </div>
-                            <div class="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                                <span class="text-xs text-slate-400 block mb-1">معالج الأحداث</span>
-                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-arrows-spin ml-1.5 text-xs"></i> Transactional Outbox</span>
+                            <div class="p-3 md:p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                <span class="text-[10px] md:text-xs text-slate-400 block mb-1">حزمة الأندرويد</span>
+                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-brands fa-android ml-1.5 text-xs"></i> APK v2.0 Ready</span>
                             </div>
                         </div>
                     </div>
 
                     <div class="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 rounded-2xl shadow-sm flex flex-col justify-between">
                         <div>
-                            <h3 class="font-bold text-lg text-amber-400 mb-2">إجراء سريع: تدقيق الوثائق</h3>
-                            <p class="text-xs text-slate-300 leading-relaxed">يتم تدقيق وثائق السائقين عبر روابط مشفرة وموقعة (Signed URLs) تمنع تسريب البيانات للعامة وتضمن سرية معلومات السائقين.</p>
+                            <h3 class="font-bold text-lg text-amber-400 mb-2">إجراء سريع: فحص المستمسكات</h3>
+                            <p class="text-xs text-slate-300 leading-relaxed">
+                                تدقيق وثائق السائقين الجدد (الهوية، رخصة القيادة، السنوية) مع إمكانية حفظ الوثيقة وطباعتها بضغطة زر واحدة.
+                            </p>
                         </div>
-                        <button onclick="switchTab('verifications')" class="mt-4 w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold text-sm transition">
+                        <button onclick="switchTab('verifications')" class="mt-4 w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold text-sm transition shadow-lg">
                             الانتقال لطلبات التوثيق 🪪
                         </button>
                     </div>
@@ -216,12 +335,12 @@
 
             <!-- 2. DRIVER VERIFICATIONS TAB -->
             <section id="tab-verifications" class="tab-content hidden space-y-6">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                        <h2 class="text-2xl font-bold text-slate-900">توثيق مستمسكات السائقين</h2>
-                        <p class="text-sm text-slate-500">فحص الهويات، رخص القيادة، وسجلات المركبات باستخدام الروابط المؤقتة المشفرة (Signed URLs)</p>
+                        <h2 class="text-2xl font-black text-slate-900">توثيق مستمسكات السائقين</h2>
+                        <p class="text-xs md:text-sm text-slate-500">فحص الهويات، رخص القيادة، ومستمسكات السائقين مع إمكانية التحميل والطباعة</p>
                     </div>
-                    <button onclick="loadVerifications()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold flex items-center space-x-2 space-x-reverse transition">
+                    <button onclick="loadVerifications()" class="self-start sm:self-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold flex items-center space-x-2 space-x-reverse transition">
                         <i class="fa-solid fa-rotate"></i>
                         <span>تحديث القائمة</span>
                     </button>
@@ -238,7 +357,7 @@
                         <p class="text-xs text-slate-400 mt-1">كافة السائقين المسجلين تم تدقيق وثائقهم.</p>
                     </div>
                     <div class="overflow-x-auto">
-                        <table id="verifications-table" class="w-full text-right text-sm border-collapse hidden">
+                        <table id="verifications-table" class="w-full text-right text-sm border-collapse hidden min-w-[700px]">
                             <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                                 <tr>
                                     <th class="p-4">السائق</th>
@@ -259,14 +378,14 @@
 
             <!-- 3. DRIVERS TAB -->
             <section id="tab-drivers" class="tab-content hidden space-y-6">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                        <h2 class="text-2xl font-bold text-slate-900">إدارة السائقين</h2>
-                        <p class="text-sm text-slate-500">قائمة السائقين المسجلين، حالتهم الآنية، وتقييماتهم</p>
+                        <h2 class="text-2xl font-black text-slate-900">إدارة السائقين</h2>
+                        <p class="text-xs md:text-sm text-slate-500">قائمة السائقين المسجلين في النجف الأشرف، حالتهم الآنية ومستمسكاتهم</p>
                     </div>
-                    <div class="flex items-center space-x-3 space-x-reverse">
-                        <input type="text" id="drivers-search-input" placeholder="بحث بالاسم أو الهاتف..." class="px-4 py-2 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" oninput="debounceDriverSearch()">
-                        <button onclick="loadDrivers()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold transition">
+                    <div class="flex items-center space-x-2 space-x-reverse">
+                        <input type="text" id="drivers-search-input" placeholder="بحث بالاسم أو الهاتف..." class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" oninput="debounceDriverSearch()">
+                        <button onclick="loadDrivers()" class="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-semibold transition">
                             <i class="fa-solid fa-rotate"></i>
                         </button>
                     </div>
@@ -274,7 +393,7 @@
 
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-right text-sm border-collapse">
+                        <table class="w-full text-right text-sm border-collapse min-w-[750px]">
                             <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                                 <tr>
                                     <th class="p-4">السائق</th>
@@ -284,7 +403,7 @@
                                     <th class="p-4">التوثيق</th>
                                     <th class="p-4">التقييم</th>
                                     <th class="p-4">الرحلات</th>
-                                    <th class="p-4 text-center">التفاصيل</th>
+                                    <th class="p-4 text-center">المستمسكات</th>
                                 </tr>
                             </thead>
                             <tbody id="drivers-table-body" class="divide-y divide-slate-100">
@@ -297,12 +416,12 @@
 
             <!-- 4. CUSTOMERS TAB -->
             <section id="tab-customers" class="tab-content hidden space-y-6">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                        <h2 class="text-2xl font-bold text-slate-900">إدارة الركاب</h2>
-                        <p class="text-sm text-slate-500">قائمة المستخدمين والركاب المسجلين ونشاط الحجوزات</p>
+                        <h2 class="text-2xl font-black text-slate-900">إدارة الركاب</h2>
+                        <p class="text-xs md:text-sm text-slate-500">قائمة المستخدمين والركاب المسجلين ونشاط الحجوزات</p>
                     </div>
-                    <button onclick="loadCustomers()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold transition">
+                    <button onclick="loadCustomers()" class="self-start sm:self-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold transition">
                         <i class="fa-solid fa-rotate"></i>
                         <span>تحديث</span>
                     </button>
@@ -310,7 +429,7 @@
 
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-right text-sm border-collapse">
+                        <table class="w-full text-right text-sm border-collapse min-w-[700px]">
                             <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                                 <tr>
                                     <th class="p-4">الراكب</th>
@@ -332,10 +451,10 @@
 
             <!-- 5. ROUTES & BOOKINGS TAB -->
             <section id="tab-routes" class="tab-content hidden space-y-6">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                        <h2 class="text-2xl font-bold text-slate-900">المسارات والحجوزات</h2>
-                        <p class="text-sm text-slate-500">متابعة خطوط السير المنتظمة، المقاعد المتاحة، والحجوزات المؤكدة</p>
+                        <h2 class="text-2xl font-black text-slate-900">المسارات والحجوزات</h2>
+                        <p class="text-xs md:text-sm text-slate-500">متابعة خطوط السير المنتظمة، المقاعد المتاحة، والحجوزات المؤكدة</p>
                     </div>
                     <div class="flex items-center space-x-2 space-x-reverse">
                         <button onclick="switchSubRouteTab('routes-list')" id="sub-btn-routes" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-slate-900">خطوط السير</button>
@@ -345,7 +464,7 @@
 
                 <div id="sub-view-routes" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-right text-sm border-collapse">
+                        <table class="w-full text-right text-sm border-collapse min-w-[700px]">
                             <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                                 <tr>
                                     <th class="p-4">اسم المسار</th>
@@ -366,7 +485,7 @@
 
                 <div id="sub-view-bookings" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-right text-sm border-collapse">
+                        <table class="w-full text-right text-sm border-collapse min-w-[700px]">
                             <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                                 <tr>
                                     <th class="p-4">الراكب</th>
@@ -388,12 +507,12 @@
 
             <!-- 6. COMPLAINTS TAB -->
             <section id="tab-complaints" class="tab-content hidden space-y-6">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                        <h2 class="text-2xl font-bold text-slate-900">إدارة الشكاوى والبلاغات</h2>
-                        <p class="text-sm text-slate-500">التحقيق في بلاغات الركاب والسائقين وحل النزاعات</p>
+                        <h2 class="text-2xl font-black text-slate-900">إدارة الشكاوى والبلاغات</h2>
+                        <p class="text-xs md:text-sm text-slate-500">التحقيق في بلاغات الركاب والسائقين وحل النزاعات</p>
                     </div>
-                    <button onclick="loadComplaints()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold transition">
+                    <button onclick="loadComplaints()" class="self-start sm:self-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold transition">
                         <i class="fa-solid fa-rotate"></i>
                         <span>تحديث</span>
                     </button>
@@ -401,7 +520,7 @@
 
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-right text-sm border-collapse">
+                        <table class="w-full text-right text-sm border-collapse min-w-[750px]">
                             <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                                 <tr>
                                     <th class="p-4">مقدم الشكوى</th>
@@ -424,14 +543,14 @@
             <!-- 7. SETTINGS & MATCHING TAB -->
             <section id="tab-settings" class="tab-content hidden space-y-6">
                 <div>
-                    <h2 class="text-2xl font-bold text-slate-900">إعدادات النظام ومعايير المطابقة الجغرافية</h2>
-                    <p class="text-sm text-slate-500">تعديل أسعار الرحلات ومحددات محرك المطابقة الجغرافي دون إعادة تشغيل الخادم</p>
+                    <h2 class="text-2xl font-black text-slate-900">إعدادات النظام ومعايير المطابقة الجغرافية</h2>
+                    <p class="text-xs md:text-sm text-slate-500">تعديل أسعار الرحلات ومحددات محرك المطابقة الجغرافي دون إعادة تشغيل الخادم</p>
                 </div>
 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <!-- Matching Parameters Card -->
-                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                        <h3 class="font-bold text-slate-900 text-lg flex items-center space-x-2 space-x-reverse">
+                    <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <h3 class="font-bold text-slate-900 text-base md:text-lg flex items-center space-x-2 space-x-reverse">
                             <i class="fa-solid fa-map-location-dot text-amber-500"></i>
                             <span>معايير محرك المطابقة (Matching Engine)</span>
                         </h3>
@@ -454,15 +573,15 @@
                                 <label class="block text-xs font-semibold text-slate-700 mb-1">نافذة التسامح الزمني (دقيقة)</label>
                                 <input type="number" id="setting-time-window" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                             </div>
-                            <button onclick="saveMatchingSettings()" class="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-sm transition">
+                            <button onclick="saveMatchingSettings()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-sm transition">
                                 حفظ معايير المطابقة
                             </button>
                         </div>
                     </div>
 
                     <!-- Pricing Parameters Card -->
-                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                        <h3 class="font-bold text-slate-900 text-lg flex items-center space-x-2 space-x-reverse">
+                    <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <h3 class="font-bold text-slate-900 text-base md:text-lg flex items-center space-x-2 space-x-reverse">
                             <i class="fa-solid fa-coins text-amber-500"></i>
                             <span>تسعير المشاوير والخدمات (Pricing Settings)</span>
                         </h3>
@@ -485,7 +604,7 @@
                                 <label class="block text-xs font-semibold text-slate-700 mb-1">أقصى مضاعف لأوقات الذروة (Surge Multiplier)</label>
                                 <input type="number" step="0.1" id="setting-surge-max" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                             </div>
-                            <button onclick="savePricingSettings()" class="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-sm transition">
+                            <button onclick="savePricingSettings()" class="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-sm transition">
                                 حفظ تسعيرات النظام
                             </button>
                         </div>
@@ -495,12 +614,12 @@
 
             <!-- 8. AUDIT LOGS TAB -->
             <section id="tab-audit" class="tab-content hidden space-y-6">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                        <h2 class="text-2xl font-bold text-slate-900">سجل التدقيق الأمني (Audit Logs)</h2>
-                        <p class="text-sm text-slate-500">تسجيل كامل للعمليات الحساسة، التعديلات الإدارية، وتوقيتاتها</p>
+                        <h2 class="text-2xl font-black text-slate-900">سجل التدقيق الأمني (Audit Logs)</h2>
+                        <p class="text-xs md:text-sm text-slate-500">تسجيل كامل للعمليات الحساسة، التعديلات الإدارية، وتوقيتاتها</p>
                     </div>
-                    <button onclick="loadAuditLogs()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-sm font-semibold transition">
+                    <button onclick="loadAuditLogs()" class="self-start sm:self-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold transition">
                         <i class="fa-solid fa-rotate"></i>
                         <span>تحديث السجل</span>
                     </button>
@@ -508,7 +627,7 @@
 
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-right text-sm border-collapse">
+                        <table class="w-full text-right text-sm border-collapse min-w-[750px]">
                             <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                                 <tr>
                                     <th class="p-4">العملية الإجرائية</th>
@@ -530,25 +649,83 @@
         </main>
     </div>
 
-    <!-- DOCUMENT PREVIEW MODAL (SIGNED URL SECURE VIEWER) -->
-    <div id="document-modal" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-scale-up">
-            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
-                <div class="flex items-center space-x-2 space-x-reverse">
-                    <i class="fa-solid fa-shield-halved text-amber-400 text-lg"></i>
+    <!-- ===================================================================== -->
+    <!-- MOBILE BOTTOM NAVIGATION BAR (Feels like a Native App)                -->
+    <!-- ===================================================================== -->
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-2 py-1.5 flex justify-around items-center">
+        <button onclick="switchTab('overview')" class="flex flex-col items-center justify-center p-1.5 text-slate-400 hover:text-amber-400 focus:text-amber-400 transition">
+            <i class="fa-solid fa-chart-pie text-base"></i>
+            <span class="text-[10px] mt-1 font-bold">الرئيسية</span>
+        </button>
+
+        <button onclick="switchTab('verifications')" class="flex flex-col items-center justify-center p-1.5 text-slate-400 hover:text-amber-400 focus:text-amber-400 transition relative">
+            <i class="fa-solid fa-id-card text-base"></i>
+            <span class="text-[10px] mt-1 font-bold">التوثيق</span>
+            <span id="mobile-badge-verif" class="hidden absolute top-0.5 right-2 w-2 h-2 rounded-full bg-rose-500"></span>
+        </button>
+
+        <button onclick="switchTab('drivers')" class="flex flex-col items-center justify-center p-1.5 text-slate-400 hover:text-amber-400 focus:text-amber-400 transition">
+            <i class="fa-solid fa-taxi text-base"></i>
+            <span class="text-[10px] mt-1 font-bold">السائقين</span>
+        </button>
+
+        <button onclick="switchTab('routes')" class="flex flex-col items-center justify-center p-1.5 text-slate-400 hover:text-amber-400 focus:text-amber-400 transition">
+            <i class="fa-solid fa-route text-base"></i>
+            <span class="text-[10px] mt-1 font-bold">المسارات</span>
+        </button>
+
+        <button onclick="toggleMobileSidebar(true)" class="flex flex-col items-center justify-center p-1.5 text-slate-400 hover:text-amber-400 focus:text-amber-400 transition">
+            <i class="fa-solid fa-bars text-base"></i>
+            <span class="text-[10px] mt-1 font-bold">المزيد</span>
+        </button>
+    </nav>
+
+    <!-- ===================================================================== -->
+    <!-- DOCUMENT PREVIEW MODAL (INSPECT, DOWNLOAD, PRINT, APPROVE/REJECT)     -->
+    <!-- ===================================================================== -->
+    <div id="document-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-2 sm:p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[95vh] animate-scale-up border border-slate-200">
+            
+            <!-- Modal Header -->
+            <div class="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-lg">
+                        🚖
+                    </div>
                     <div>
-                        <h3 id="modal-doc-title" class="font-bold text-base">معاينة وثيقة السائق الرسمية</h3>
-                        <p class="text-[11px] text-slate-400">رابط مؤقت مشفر (Supabase Signed URL - Private Bucket)</p>
+                        <h3 id="modal-doc-title" class="font-bold text-base leading-tight">معاينة وثيقة السائق</h3>
+                        <p class="text-[11px] text-amber-400 font-semibold">منصة توصيله - النجف الأشرف</p>
                     </div>
                 </div>
-                <button onclick="closeDocumentModal()" class="text-slate-400 hover:text-white transition text-xl font-bold">
+                <button onclick="closeDocumentModal()" class="text-slate-400 hover:text-white transition text-2xl font-bold p-1 leading-none">
                     &times;
                 </button>
             </div>
 
-            <div class="p-6 overflow-y-auto flex-1 flex flex-col items-center justify-center bg-slate-100">
-                <div id="modal-image-container" class="w-full flex justify-center">
-                    <img id="modal-doc-img" src="" alt="وثيقة السائق" class="max-h-96 rounded-xl shadow-md object-contain border border-slate-200">
+            <!-- Driver Meta Summary Bar inside Modal -->
+            <div id="modal-driver-meta" class="px-5 py-3 bg-slate-100 border-b border-slate-200 text-xs text-slate-700 flex flex-wrap gap-x-4 gap-y-2 justify-between items-center">
+                <div>
+                    <span class="text-slate-500">السائق:</span>
+                    <strong id="modal-driver-name" class="text-slate-900 font-bold ml-1">-</strong>
+                </div>
+                <div>
+                    <span class="text-slate-500">الهاتف:</span>
+                    <strong id="modal-driver-phone" class="text-slate-900 font-mono ml-1">-</strong>
+                </div>
+                <div>
+                    <span class="text-slate-500">المركبة:</span>
+                    <strong id="modal-driver-vehicle" class="text-slate-900 ml-1">-</strong>
+                </div>
+                <div>
+                    <span class="text-slate-500">رقم الرخصة:</span>
+                    <strong id="modal-driver-license" class="text-slate-900 font-mono ml-1">-</strong>
+                </div>
+            </div>
+
+            <!-- Modal Body (Image display) -->
+            <div class="p-4 sm:p-6 overflow-y-auto flex-1 flex flex-col items-center justify-center bg-slate-900/5">
+                <div id="modal-image-container" class="w-full flex justify-center max-h-[50vh] overflow-hidden rounded-2xl border border-slate-300 bg-white p-2 shadow-inner">
+                    <img id="modal-doc-img" src="" alt="وثيقة السائق" class="max-h-[48vh] rounded-xl object-contain">
                 </div>
                 <div id="modal-no-preview" class="hidden text-center py-12 text-slate-400">
                     <i class="fa-solid fa-file-pdf text-5xl text-rose-500 mb-2"></i>
@@ -557,34 +734,59 @@
                 </div>
             </div>
 
-            <!-- Verification Action Box -->
-            <div class="p-6 bg-white border-t border-slate-100 space-y-3">
+            <!-- Document Actions: Download, Print, Approve, Reject -->
+            <div class="p-4 sm:p-5 bg-white border-t border-slate-200 space-y-3">
+                <!-- Rejection input box -->
                 <div id="rejection-box" class="hidden">
                     <label class="block text-xs font-bold text-rose-600 mb-1">سبب الرفض (سيتم إرساله في إشعار للسائق)</label>
-                    <input type="text" id="rejection-reason-input" placeholder="مثال: الصورة غير واضحة، انتهاء صلاحية الرخصة..." class="w-full p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+                    <div class="flex gap-2">
+                        <input type="text" id="rejection-reason-input" placeholder="مثال: الصورة غير واضحة، انتهاء صلاحية الرخصة..." class="flex-1 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+                        <button onclick="rejectCurrentDocument()" class="px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs transition">تأكيد الرفض</button>
+                    </div>
                 </div>
 
-                <div class="flex items-center justify-between space-x-3 space-x-reverse pt-2">
-                    <button onclick="approveCurrentDocument()" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm flex items-center justify-center space-x-2 space-x-reverse transition shadow-md shadow-emerald-600/20">
-                        <i class="fa-solid fa-check"></i>
-                        <span>اعتماد وتوثيق المستند</span>
-                    </button>
+                <!-- Action Button Toolbar -->
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    
+                    <!-- Utility Buttons: Download & Print -->
+                    <div class="flex items-center gap-2">
+                        <button onclick="downloadDocument()" title="حفظ الوثيقة على جهازك"
+                                class="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-sm">
+                            <i class="fa-solid fa-download text-amber-400"></i>
+                            <span>حفظ الوثيقة</span>
+                        </button>
 
-                    <button onclick="toggleRejectionBox()" id="btn-reject-toggle" class="px-5 py-2.5 bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold rounded-xl text-sm flex items-center space-x-2 space-x-reverse transition">
-                        <i class="fa-solid fa-xmark"></i>
-                        <span>رفض المستند</span>
-                    </button>
+                        <button onclick="printDocument()" title="طباعة الوثيقة الرسمية"
+                                class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center gap-1.5 transition border border-slate-300 shadow-sm">
+                            <i class="fa-solid fa-print text-slate-700"></i>
+                            <span>طباعة الوثيقة</span>
+                        </button>
+                    </div>
 
-                    <button onclick="closeDocumentModal()" class="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-sm transition">
-                        إغلاق
-                    </button>
+                    <!-- Approval Buttons -->
+                    <div class="flex items-center gap-2">
+                        <button onclick="approveCurrentDocument()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-md shadow-emerald-600/20">
+                            <i class="fa-solid fa-check"></i>
+                            <span>اعتماد وتوثيق</span>
+                        </button>
+
+                        <button onclick="toggleRejectionBox()" id="btn-reject-toggle" class="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition border border-rose-200">
+                            <i class="fa-solid fa-xmark"></i>
+                            <span>رفض</span>
+                        </button>
+
+                        <button onclick="closeDocumentModal()" class="px-3.5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">
+                            إغلاق
+                        </button>
+                    </div>
+
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Toast Notification -->
-    <div id="toast" class="fixed bottom-6 left-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+    <div id="toast" class="fixed bottom-16 md:bottom-6 left-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
         <div id="toast-inner" class="px-5 py-3 rounded-2xl text-white font-semibold text-sm shadow-xl flex items-center space-x-2 space-x-reverse bg-slate-900">
             <i id="toast-icon" class="fa-solid fa-circle-check text-emerald-400"></i>
             <span id="toast-msg">تمت العملية بنجاح</span>

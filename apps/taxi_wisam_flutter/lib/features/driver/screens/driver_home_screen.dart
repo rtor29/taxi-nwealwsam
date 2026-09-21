@@ -3,7 +3,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/services/signalr_service.dart';
 import '../../../core/services/storage_service.dart';
-import '../../auth/screens/login_screen.dart';
+import '../../../core/widgets/custom_side_drawer.dart';
 import 'create_route_screen.dart';
 import 'document_upload_screen.dart';
 
@@ -95,25 +95,20 @@ class _DriverHomeState extends State<DriverHome> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('بوابة السائق | $_driverName'),
+        title: Text('بوابة الكابتن | $_driverName'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await widget.storageService.clearSession();
-              if (!context.mounted) return;
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => LoginScreen(
-                    apiClient: widget.apiClient,
-                    storageService: widget.storageService,
-                  ),
-                ),
-              );
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              _loadProfile();
             },
           ),
         ],
+      ),
+      drawer: CustomSideDrawer(
+        apiClient: widget.apiClient,
+        storageService: widget.storageService,
+        currentRoute: 'home',
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
