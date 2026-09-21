@@ -411,7 +411,7 @@
                                     <th class="p-4">التوثيق</th>
                                     <th class="p-4">التقييم</th>
                                     <th class="p-4">الرحلات</th>
-                                    <th class="p-4 text-center">المستمسكات</th>
+                                    <th class="p-4 text-center">الإجراءات والتحكم</th>
                                 </tr>
                             </thead>
                             <tbody id="drivers-table-body" class="divide-y divide-slate-100">
@@ -429,15 +429,18 @@
                         <h2 class="text-2xl font-black text-slate-900">إدارة الركاب</h2>
                         <p class="text-xs md:text-sm text-slate-500">قائمة المستخدمين والركاب المسجلين ونشاط الحجوزات</p>
                     </div>
-                    <button onclick="loadCustomers()" class="self-start sm:self-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold transition">
-                        <i class="fa-solid fa-rotate"></i>
-                        <span>تحديث</span>
-                    </button>
+                    <div class="flex items-center space-x-2 space-x-reverse">
+                        <input type="text" id="customers-search-input" placeholder="بحث بالاسم أو الهاتف..." class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" oninput="debounceCustomerSearch()">
+                        <button onclick="loadCustomers()" class="self-start sm:self-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold transition">
+                            <i class="fa-solid fa-rotate"></i>
+                            <span>تحديث</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-right text-sm border-collapse min-w-[700px]">
+                        <table class="w-full text-right text-sm border-collapse min-w-[750px]">
                             <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                                 <tr>
                                     <th class="p-4">الراكب</th>
@@ -446,7 +449,7 @@
                                     <th class="p-4">التقييم</th>
                                     <th class="p-4">إجمالي الحجوزات</th>
                                     <th class="p-4">حالة الحساب</th>
-                                    <th class="p-4 text-center">الإجراء</th>
+                                    <th class="p-4 text-center">الإجراءات والتحكم</th>
                                 </tr>
                             </thead>
                             <tbody id="customers-table-body" class="divide-y divide-slate-100">

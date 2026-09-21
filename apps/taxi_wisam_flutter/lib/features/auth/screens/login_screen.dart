@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/storage_service.dart';
@@ -90,7 +91,39 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
-      // Seamless entry fallback
+      if (e is DioException && e.response?.statusCode == 403) {
+        final errMessage = e.response?.data?['error']?.toString() ??
+            'تم حظر هذا الحساب من قبل إدارة منصة توصيله.';
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Row(
+                children: [
+                  Icon(Icons.block_rounded, color: Colors.red, size: 28),
+                  SizedBox(width: 8),
+                  Text('الحساب محظور', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ],
+              ),
+              content: Text(
+                errMessage,
+                style: const TextStyle(fontSize: 14, height: 1.5),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('حسناً', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+      // Seamless entry fallback for offline or new guest customers
       final fallbackUserId = 'usr-${DateTime.now().millisecondsSinceEpoch}';
       final fallbackToken = 'jwt_offline_$fallbackUserId';
       final isEmail = identifier.contains('@');

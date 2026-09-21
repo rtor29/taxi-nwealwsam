@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +8,7 @@ import '../../features/driver/screens/document_upload_screen.dart';
 import '../../features/driver/screens/driver_requests_screen.dart';
 import '../../features/support/screens/contact_support_screen.dart';
 import '../network/api_client.dart';
+import '../network/api_endpoints.dart';
 import '../services/storage_service.dart';
 import '../theme/app_theme.dart';
 import 'tawseela_logo.dart';
@@ -39,6 +41,7 @@ class _CustomSideDrawerState extends State<CustomSideDrawer> {
   void initState() {
     super.initState();
     _loadUserData();
+    _verifyAccountActiveStatus();
   }
 
   Future<void> _loadUserData() async {
@@ -56,6 +59,34 @@ class _CustomSideDrawerState extends State<CustomSideDrawer> {
         _avatarPath = savedAvatar;
       });
     }
+  }
+
+  Future<void> _verifyAccountActiveStatus() async {
+    try {
+      final userId = await widget.storageService.getUserId();
+      if (userId == null) return;
+
+      final res = await widget.apiClient.dio.get('${ApiEndpoints.profile}?userId=$userId');
+      if (res.data != null && res.data['isBlocked'] == true) {
+        _handleBlockedSession();
+      }
+    } catch (e) {
+      if (e is DioException && (e.response?.statusCode == 403 || e.response?.statusCode == 404)) {
+        _handleBlockedSession();
+      }
+    }
+  }
+
+  void _handleBlockedSession() async {
+    await widget.storageService.clearSession();
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil('/', (route) => false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('تم حظر أو إيقاف هذا الحساب من قبل إدارة المنصة.'),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 
   /// اختيار صورة شخصية جديدة من الاستوديو أو الكاميرا

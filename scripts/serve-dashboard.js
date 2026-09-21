@@ -352,7 +352,7 @@ const server = http.createServer((req, res) => {
         ];
 
         // Include any online registered driver
-        state.drivers.filter(d => d.isVerified).forEach((d, idx) => {
+        state.drivers.filter(d => d.isVerified && !d.isBlocked).forEach((d, idx) => {
             nearby.push({
                 driverId: d.driverId,
                 fullName: d.fullName,
@@ -417,7 +417,7 @@ const server = http.createServer((req, res) => {
         ];
 
         // Also append all registered drivers
-        state.drivers.forEach((d, idx) => {
+        state.drivers.filter(d => !d.isBlocked).forEach((d, idx) => {
             fleet.push({
                 driverId: d.driverId,
                 driverName: d.fullName,
@@ -651,12 +651,127 @@ const server = http.createServer((req, res) => {
         }
     }
 
+    // Driver Management: Block / Unblock / Delete
+    if (pathname.startsWith('/api/admin/drivers/') && pathname.endsWith('/block') && req.method === 'POST') {
+        const parts = pathname.split('/');
+        const driverId = parts[parts.length - 2];
+        const driver = state.drivers.find(d => d.driverId === driverId);
+        if (!driver) return json({ error: "Driver not found" }, 404);
+
+        return parseBody(body => {
+            const block = body.block !== undefined ? body.block : !driver.isBlocked;
+            driver.isBlocked = block;
+            if (block) {
+                driver.status = 'Blocked';
+            } else {
+                driver.status = 'Offline';
+            }
+            state.auditLogs.unshift({
+                action: block ? "DriverBlocked" : "DriverUnblocked",
+                entityName: "Driver",
+                entityId: driverId,
+                newValuesJson: JSON.stringify({ isBlocked: block, reason: body.reason || "إجراء إداري من لوحة التحكم" }),
+                ipAddress: req.socket.remoteAddress || "127.0.0.1",
+                createdAt: new Date().toISOString()
+            });
+            saveState();
+            return json({ success: true, isBlocked: driver.isBlocked, status: driver.status });
+        });
+    }
+
+    if (pathname.startsWith('/api/admin/drivers/') && req.method === 'DELETE') {
+        const driverId = pathname.replace('/api/admin/drivers/', '').trim();
+        const initialLength = state.drivers.length;
+        state.drivers = state.drivers.filter(d => d.driverId !== driverId);
+        state.verifications = state.verifications.filter(v => v.driverId !== driverId);
+        state.routes = state.routes.filter(r => r.driverId !== driverId);
+        
+        if (state.drivers.length < initialLength) {
+            state.stats.totalDrivers = Math.max(0, state.stats.totalDrivers - 1);
+            state.auditLogs.unshift({
+                action: "DriverDeletedPermanently",
+                entityName: "Driver",
+                entityId: driverId,
+                newValuesJson: JSON.stringify({ deletedAt: new Date().toISOString() }),
+                ipAddress: req.socket.remoteAddress || "127.0.0.1",
+                createdAt: new Date().toISOString()
+            });
+            saveState();
+            return json({ success: true, message: "تم حذف السائق وبياناته نهائياً من النظام" });
+        }
+        return json({ error: "Driver not found" }, 404);
+    }
+
+    // Customer Management: Block / Unblock / Delete
+    if (pathname.startsWith('/api/admin/customers/') && pathname.endsWith('/block') && req.method === 'POST') {
+        const parts = pathname.split('/');
+        const customerId = parts[parts.length - 2];
+        const customer = state.customers.find(c => c.customerId === customerId);
+        if (!customer) return json({ error: "Customer not found" }, 404);
+
+        return parseBody(body => {
+            const block = body.block !== undefined ? body.block : !customer.isBlocked;
+            customer.isBlocked = block;
+            customer.isActive = !block;
+            state.auditLogs.unshift({
+                action: block ? "CustomerBlocked" : "CustomerUnblocked",
+                entityName: "Customer",
+                entityId: customerId,
+                newValuesJson: JSON.stringify({ isBlocked: block, reason: body.reason || "إجراء إداري من لوحة التحكم" }),
+                ipAddress: req.socket.remoteAddress || "127.0.0.1",
+                createdAt: new Date().toISOString()
+            });
+            saveState();
+            return json({ success: true, isBlocked: customer.isBlocked, isActive: customer.isActive });
+        });
+    }
+
+    if (pathname.startsWith('/api/admin/customers/') && req.method === 'DELETE') {
+        const customerId = pathname.replace('/api/admin/customers/', '').trim();
+        const initialLength = state.customers.length;
+        state.customers = state.customers.filter(c => c.customerId !== customerId);
+        state.bookings = state.bookings.filter(b => b.customerId !== customerId);
+
+        if (state.customers.length < initialLength) {
+            state.stats.totalUsers = Math.max(0, state.stats.totalUsers - 1);
+            state.auditLogs.unshift({
+                action: "CustomerDeletedPermanently",
+                entityName: "Customer",
+                entityId: customerId,
+                newValuesJson: JSON.stringify({ deletedAt: new Date().toISOString() }),
+                ipAddress: req.socket.remoteAddress || "127.0.0.1",
+                createdAt: new Date().toISOString()
+            });
+            saveState();
+            return json({ success: true, message: "تم حذف الراكب وبياناته نهائياً من النظام" });
+        }
+        return json({ error: "Customer not found" }, 404);
+    }
+
     if (pathname === '/api/admin/drivers') {
-        return json({ total: state.drivers.length, drivers: state.drivers });
+        const search = (url.searchParams.get('search') || '').toLowerCase().trim();
+        let list = state.drivers;
+        if (search) {
+            list = list.filter(d => 
+                (d.fullName && d.fullName.toLowerCase().includes(search)) ||
+                (d.phoneNumber && d.phoneNumber.includes(search)) ||
+                (d.licenseNumber && d.licenseNumber.includes(search))
+            );
+        }
+        return json({ total: list.length, drivers: list });
     }
 
     if (pathname === '/api/admin/customers') {
-        return json({ total: state.customers.length, customers: state.customers });
+        const search = (url.searchParams.get('search') || '').toLowerCase().trim();
+        let list = state.customers;
+        if (search) {
+            list = list.filter(c => 
+                (c.fullName && c.fullName.toLowerCase().includes(search)) ||
+                (c.phoneNumber && c.phoneNumber.includes(search)) ||
+                (c.email && c.email.toLowerCase().includes(search))
+            );
+        }
+        return json({ total: list.length, customers: list });
     }
 
     if (pathname === '/api/admin/routes') {
@@ -785,6 +900,9 @@ const server = http.createServer((req, res) => {
                 (d.email && d.email.toLowerCase() === identifier)
             );
             if (driver) {
+                if (driver.isBlocked) {
+                    return json({ error: "تم حظر حسابك من قبل إدارة منصة توصيله. يرجى التواصل مع الدعم الفني.", isBlocked: true }, 403);
+                }
                 return json({
                     userId: driver.driverId,
                     fullName: driver.fullName,
@@ -802,6 +920,9 @@ const server = http.createServer((req, res) => {
                 (c.email && c.email.toLowerCase() === identifier)
             );
             if (customer) {
+                if (customer.isBlocked || customer.isActive === false) {
+                    return json({ error: "تم حظر أو تعطيل حسابك من قبل إدارة منصة توصيله. يرجى مراجعة الدعم.", isBlocked: true }, 403);
+                }
                 return json({
                     userId: customer.customerId,
                     fullName: customer.fullName,
@@ -833,12 +954,18 @@ const server = http.createServer((req, res) => {
 
         const driver = state.drivers.find(d => d.driverId === queryId || d.phoneNumber === queryPhone || d.email === queryEmail);
         if (driver) {
-            return json({ id: driver.driverId, fullName: driver.fullName, role: 'Driver', isDriverVerified: driver.isVerified });
+            if (driver.isBlocked) {
+                return json({ error: "حساب الكابتن محظور حالياً", isBlocked: true }, 403);
+            }
+            return json({ id: driver.driverId, fullName: driver.fullName, role: 'Driver', isDriverVerified: driver.isVerified, isBlocked: false });
         }
 
         const customer = state.customers.find(c => c.customerId === queryId || c.phoneNumber === queryPhone || c.email === queryEmail);
         if (customer) {
-            return json({ id: customer.customerId, fullName: customer.fullName, role: 'Customer' });
+            if (customer.isBlocked || customer.isActive === false) {
+                return json({ error: "حساب الراكب محظور حالياً", isBlocked: true }, 403);
+            }
+            return json({ id: customer.customerId, fullName: customer.fullName, role: 'Customer', isBlocked: false });
         }
 
         return json({ id: queryId || 'usr-default', fullName: 'مستخدم توصيله', role: 'Customer' });

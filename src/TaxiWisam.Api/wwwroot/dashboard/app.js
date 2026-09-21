@@ -621,30 +621,106 @@ async function loadDrivers(search = '') {
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-50 transition';
 
-            const statusClass = d.status === 'Online' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600';
+            let statusClass = 'bg-slate-100 text-slate-600';
+            if (d.isBlocked) {
+                statusClass = 'bg-rose-100 text-rose-800 font-bold';
+            } else if (d.status === 'Online') {
+                statusClass = 'bg-emerald-100 text-emerald-800 font-bold';
+            }
+
             const verifBadge = d.isVerified 
                 ? '<span class="px-2.5 py-1 text-xs bg-emerald-100 text-emerald-800 rounded-full font-bold"><i class="fa-solid fa-circle-check ml-1"></i> موثق</span>'
                 : '<span class="px-2.5 py-1 text-xs bg-amber-100 text-amber-800 rounded-full font-bold">بانتظار الفحص</span>';
 
+            const blockBtn = d.isBlocked
+                ? `<button onclick="toggleDriverBlock('${d.driverId}', false, '${d.fullName}')" title="إلغاء حظر الكابتن" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1">
+                     <i class="fa-solid fa-unlock text-xs"></i>
+                     <span>فك الحظر</span>
+                   </button>`
+                : `<button onclick="toggleDriverBlock('${d.driverId}', true, '${d.fullName}')" title="حظر الكابتن من استخدام التطبيق" class="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-bold transition flex items-center gap-1">
+                     <i class="fa-solid fa-ban text-xs"></i>
+                     <span>حظر</span>
+                   </button>`;
+
             tr.innerHTML = `
-                <td class="p-4 font-bold text-slate-900">${d.fullName}</td>
+                <td class="p-4 font-bold text-slate-900 flex items-center gap-1.5">
+                    ${d.fullName}
+                    ${d.isBlocked ? '<span class="px-1.5 py-0.5 text-[10px] bg-rose-600 text-white rounded font-black">محظور</span>' : ''}
+                </td>
                 <td class="p-4 text-slate-600 font-mono text-xs"><a href="tel:${d.phoneNumber}" class="hover:text-amber-600 underline">${d.phoneNumber}</a></td>
                 <td class="p-4 text-slate-600 font-mono text-xs">${d.licenseNumber}</td>
-                <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full font-bold ${statusClass}">${d.status}</span></td>
+                <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full font-bold ${statusClass}">${d.isBlocked ? 'محظور (Blocked)' : d.status}</span></td>
                 <td class="p-4">${verifBadge}</td>
                 <td class="p-4 font-bold text-amber-600"><i class="fa-solid fa-star ml-1 text-xs"></i>${(d.ratingAverage || 5.0).toFixed(1)}</td>
                 <td class="p-4 text-slate-700 font-mono text-xs">${d.totalTrips || 0}</td>
-                <td class="p-4 text-center">
-                    <button onclick="viewFullDriver('${d.driverId}')" class="px-3.5 py-1.5 bg-slate-900 text-amber-400 hover:bg-slate-800 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 mx-auto shadow-sm">
-                        <i class="fa-solid fa-id-card text-xs"></i>
-                        <span>فحص المستمسكات</span>
-                    </button>
+                <td class="p-4">
+                    <div class="flex items-center justify-center gap-1.5">
+                        <button onclick="viewFullDriver('${d.driverId}')" title="فحص المستمسكات والوثائق" class="px-2.5 py-1.5 bg-slate-900 text-amber-400 hover:bg-slate-800 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                            <i class="fa-solid fa-id-card text-xs"></i>
+                            <span class="hidden xl:inline">فحص</span>
+                        </button>
+                        ${blockBtn}
+                        <button onclick="deleteDriverPermanently('${d.driverId}', '${d.fullName}')" title="حذف السائق نهائياً من قاعدة البيانات" class="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                            <span class="hidden xl:inline">حذف نهائي</span>
+                        </button>
+                    </div>
                 </td>
             `;
             tbody.appendChild(tr);
         });
     } catch (err) {
         tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-rose-500">فشل في الاتصال بقاعدة البيانات</td></tr>';
+    }
+}
+
+async function toggleDriverBlock(driverId, block, driverName) {
+    const actionText = block ? 'حظر' : 'إلغاء حظر';
+    if (!confirm(`هل أنت متأكد من ${actionText} الكابتن "${driverName}" ومنعه من دخول التطبيق واستقبال المشاوير؟`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/drivers/${driverId}/block`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ block })
+        });
+
+        if (res.ok) {
+            showToast(`تم ${actionText} الكابتن بنجاح`);
+            loadDrivers();
+            loadDashboardStats();
+            if (fleetMap) refreshFleetLocations();
+        } else {
+            showToast(`فشل في ${actionText} الكابتن`, true);
+        }
+    } catch (e) {
+        showToast('خطأ في الاتصال بالخادم', true);
+    }
+}
+
+async function deleteDriverPermanently(driverId, driverName) {
+    if (!confirm(`تحذير نهائي:\nهل أنت متأكد من حذف الكابتن "${driverName}" نهائياً من النظام؟\nسيتم مسح حسابه ووثائقه ومساراته ولا يمكن استرجاعها!`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/drivers/${driverId}`, {
+            method: 'DELETE'
+        });
+
+        if (res.ok) {
+            showToast(`تم حذف الكابتن "${driverName}" نهائياً من النظام ✅`);
+            loadDrivers();
+            loadVerifications();
+            loadDashboardStats();
+            if (fleetMap) refreshFleetLocations();
+        } else {
+            showToast('فشل حذف السائق من الخادم', true);
+        }
+    } catch (e) {
+        showToast('خطأ في الاتصال بالخادم', true);
     }
 }
 
@@ -660,13 +736,13 @@ function debounceDriverSearch() {
 // -----------------------------------------------------------------------------
 // 4. Customers Directory
 // -----------------------------------------------------------------------------
-async function loadCustomers() {
+async function loadCustomers(search = '') {
     const tbody = document.getElementById('customers-table-body');
     if (!tbody) return;
     tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400">جاري التحميل...</td></tr>';
 
     try {
-        const res = await fetch(`${API_BASE}/customers`);
+        const res = await fetch(`${API_BASE}/customers?search=${encodeURIComponent(search)}`);
         const data = await res.json();
         tbody.innerHTML = '';
 
@@ -679,21 +755,43 @@ async function loadCustomers() {
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-50 transition';
 
-            const activeBadge = c.isActive 
-                ? '<span class="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 rounded font-bold">نشط</span>'
-                : '<span class="px-2 py-0.5 text-xs bg-rose-100 text-rose-800 rounded font-bold">معطل</span>';
+            let activeBadge;
+            if (c.isBlocked) {
+                activeBadge = '<span class="px-2.5 py-1 text-xs bg-rose-100 text-rose-800 rounded-full font-bold"><i class="fa-solid fa-ban ml-1"></i> محظور</span>';
+            } else if (c.isActive) {
+                activeBadge = '<span class="px-2.5 py-1 text-xs bg-emerald-100 text-emerald-800 rounded-full font-bold"><i class="fa-solid fa-circle-check ml-1"></i> نشط</span>';
+            } else {
+                activeBadge = '<span class="px-2.5 py-1 text-xs bg-slate-100 text-slate-700 rounded-full font-bold">معطل</span>';
+            }
+
+            const blockBtn = c.isBlocked
+                ? `<button onclick="toggleCustomerBlock('${c.customerId}', false, '${c.fullName}')" title="فك حظر الراكب" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1">
+                     <i class="fa-solid fa-unlock text-xs"></i>
+                     <span>فك الحظر</span>
+                   </button>`
+                : `<button onclick="toggleCustomerBlock('${c.customerId}', true, '${c.fullName}')" title="حظر الراكب ومنعه من حجز الرحلات" class="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-bold transition flex items-center gap-1">
+                     <i class="fa-solid fa-ban text-xs"></i>
+                     <span>حظر</span>
+                   </button>`;
 
             tr.innerHTML = `
-                <td class="p-4 font-bold text-slate-900">${c.fullName}</td>
+                <td class="p-4 font-bold text-slate-900 flex items-center gap-1.5">
+                    ${c.fullName}
+                    ${c.isBlocked ? '<span class="px-1.5 py-0.5 text-[10px] bg-rose-600 text-white rounded font-black">محظور</span>' : ''}
+                </td>
                 <td class="p-4 text-slate-600 font-mono text-xs"><a href="tel:${c.phoneNumber}" class="hover:text-amber-600 underline">${c.phoneNumber}</a></td>
                 <td class="p-4 text-slate-700 text-xs">${c.preferredPaymentMethod || 'نقداً'}</td>
                 <td class="p-4 text-amber-600 font-bold"><i class="fa-solid fa-star ml-1 text-xs"></i>${(c.ratingAverage || 5.0).toFixed(1)}</td>
                 <td class="p-4 font-mono text-xs">${c.totalBookings || 0}</td>
                 <td class="p-4">${activeBadge}</td>
-                <td class="p-4 text-center">
-                    <button onclick="toggleCustomerStatus('${c.customerId}')" class="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition">
-                        ${c.isActive ? 'تعطيل الحساب' : 'تفعيل الحساب'}
-                    </button>
+                <td class="p-4">
+                    <div class="flex items-center justify-center gap-1.5">
+                        ${blockBtn}
+                        <button onclick="deleteCustomerPermanently('${c.customerId}', '${c.fullName}')" title="حذف الراكب وسجلاته نهائياً" class="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                            <span class="hidden xl:inline">حذف نهائي</span>
+                        </button>
+                    </div>
                 </td>
             `;
             tbody.appendChild(tr);
@@ -703,9 +801,60 @@ async function loadCustomers() {
     }
 }
 
-async function toggleCustomerStatus(customerId) {
-    showToast('تم تحديث حالة حساب الراكب');
-    loadCustomers();
+async function toggleCustomerBlock(customerId, block, customerName) {
+    const actionText = block ? 'حظر' : 'إلغاء حظر';
+    if (!confirm(`هل أنت متأكد من ${actionText} الراكب "${customerName}" ومنعه من تسجيل الدخول وحجز المشاوير؟`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/customers/${customerId}/block`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ block })
+        });
+
+        if (res.ok) {
+            showToast(`تم ${actionText} الراكب بنجاح`);
+            loadCustomers();
+            loadDashboardStats();
+        } else {
+            showToast(`فشل في ${actionText} الراكب`, true);
+        }
+    } catch (e) {
+        showToast('خطأ في الاتصال بالخادم', true);
+    }
+}
+
+async function deleteCustomerPermanently(customerId, customerName) {
+    if (!confirm(`تحذير نهائي:\nهل أنت متأكد من حذف الراكب "${customerName}" نهائياً من النظام؟\nسيتم مسح حسابه وسجل حجوزاته ولا يمكن استرجاعها!`)) {
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API_BASE}/customers/${customerId}`, {
+            method: 'DELETE'
+        });
+
+        if (res.ok) {
+            showToast(`تم حذف الراكب "${customerName}" نهائياً من النظام ✅`);
+            loadCustomers();
+            loadDashboardStats();
+        } else {
+            showToast('فشل حذف الراكب من الخادم', true);
+        }
+    } catch (e) {
+        showToast('خطأ في الاتصال بالخادم', true);
+    }
+}
+
+let customerSearchTimer;
+function debounceCustomerSearch() {
+    clearTimeout(customerSearchTimer);
+    customerSearchTimer = setTimeout(() => {
+        const query = document.getElementById('customers-search-input').value;
+        loadCustomers(query);
+    }, 300);
 }
 
 // -----------------------------------------------------------------------------
