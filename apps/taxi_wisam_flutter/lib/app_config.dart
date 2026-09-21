@@ -6,8 +6,8 @@ class AppConfig {
   // Android Emulator uses 10.0.2.2
   // iOS Simulator & Web use localhost
   static String get baseUrl {
-    // Cloudflare live secure tunnel allows real iPhone device connection from any network
-    return 'https://collective-journal-engineers-alot.trycloudflare.com';
+    // Dedicated Production VPS Cloud Server
+    return 'http://173.212.206.86';
   }
 
   static String get apiBaseUrl => '$baseUrl/api';
