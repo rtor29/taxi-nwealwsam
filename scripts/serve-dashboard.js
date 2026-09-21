@@ -1165,7 +1165,6 @@ const server = http.createServer((req, res) => {
 
             // If not found, dynamically log them in as verified customer with entered credentials
             const newId = 'usr-' + Math.random().toString(36).substr(2, 9);
-            const isEmail = identifier.includes('@');
             return json({
                 userId: newId,
                 fullName: isEmail ? identifier.split('@')[0] : 'مستخدم تاكسي وسام',
