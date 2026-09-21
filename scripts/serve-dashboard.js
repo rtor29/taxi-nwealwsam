@@ -8,6 +8,8 @@ const PORT = process.env.PORT || 5050;
 const DASHBOARD_DIR = path.join(__dirname, '..', 'src', 'TaxiWisam.Api', 'wwwroot', 'dashboard');
 
 // Clean state database focused on Najaf Governorate (محافظة النجف الأشرف)
+const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, '..', 'data', 'state.json');
+
 let state = {
     stats: {
         totalUsers: 0,
@@ -46,6 +48,28 @@ let state = {
         { action: "SystemInitialized", entityName: "System", entityId: "Najaf-Core", newValuesJson: '{"city":"النجف الأشرف","status":"Active"}', ipAddress: "127.0.0.1", createdAt: new Date().toISOString() }
     ]
 };
+
+try {
+    const dataDir = path.dirname(DATA_FILE);
+    if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+    }
+    if (fs.existsSync(DATA_FILE)) {
+        const saved = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        state = { ...state, ...saved };
+        console.log(`[State] Loaded persisted state from ${DATA_FILE}`);
+    }
+} catch (e) {
+    console.warn(`[State] Error loading state: ${e.message}`);
+}
+
+function saveState() {
+    try {
+        fs.writeFileSync(DATA_FILE, JSON.stringify(state, null, 2), 'utf8');
+    } catch (e) {
+        console.warn(`[State] Error saving state: ${e.message}`);
+    }
+}
 
 const mimeTypes = {
     '.html': 'text/html; charset=utf-8',
@@ -150,6 +174,7 @@ const server = http.createServer((req, res) => {
                 submittedAt: new Date().toISOString()
             });
             state.stats.pendingVerifications++;
+            saveState();
             return json({ success: true, documentId: docId, status: 'Pending' });
         });
     }
@@ -247,6 +272,7 @@ const server = http.createServer((req, res) => {
                 createdAt: new Date().toISOString()
             });
 
+            saveState();
             return json({ success: true, approved: isApproved });
         });
     }
@@ -415,6 +441,7 @@ const server = http.createServer((req, res) => {
                 createdAt: new Date().toISOString()
             });
 
+            saveState();
             return json(newBooking);
         });
     }
@@ -443,6 +470,7 @@ const server = http.createServer((req, res) => {
             };
             state.routes.unshift(newRoute);
             state.stats.activeRoutes++;
+            saveState();
             return json(newRoute);
         });
     }
@@ -454,6 +482,7 @@ const server = http.createServer((req, res) => {
             const driver = state.drivers.find(d => d.driverId === driverId);
             if (driver) {
                 driver.status = body.status || 'Online';
+                saveState();
             }
             return json({ success: true, status: body.status });
         });
@@ -482,6 +511,7 @@ const server = http.createServer((req, res) => {
     if (pathname.startsWith('/api/admin/complaints/')) {
         return parseBody(body => {
             state.stats.pendingComplaints = Math.max(0, state.stats.pendingComplaints - 1);
+            saveState();
             return json({ success: true });
         });
     }
@@ -501,6 +531,7 @@ const server = http.createServer((req, res) => {
             } else {
                 state.settings.push({ key, valueJson: body.valueJson, description: body.description });
             }
+            saveState();
             return json({ success: true, key });
         });
     }
@@ -567,6 +598,8 @@ const server = http.createServer((req, res) => {
                 ipAddress: '127.0.0.1',
                 createdAt: new Date().toISOString()
             });
+
+            saveState();
 
             return json({
                 userId,
