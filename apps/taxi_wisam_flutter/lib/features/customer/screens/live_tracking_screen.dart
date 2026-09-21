@@ -2,19 +2,23 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../../app_config.dart';
 import '../../../core/services/signalr_service.dart';
 import '../../../core/services/storage_service.dart';
+import '../../../core/widgets/smooth_vehicle_marker.dart';
 
 class LiveTrackingScreen extends StatefulWidget {
   final String bookingId;
   final String driverName;
   final StorageService storageService;
+  final List<LatLng>? initialRoutePoints;
 
   const LiveTrackingScreen({
     super.key,
     required this.bookingId,
     required this.driverName,
     required this.storageService,
+    this.initialRoutePoints,
   });
 
   @override
@@ -24,17 +28,22 @@ class LiveTrackingScreen extends StatefulWidget {
 class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   late final SignalRService _signalRService;
   StreamSubscription? _locationSub;
+  StreamSubscription? _routeSub;
   final MapController _mapController = MapController();
 
   // Najaf Center baseline (مرقد الإمام علي ع)
   double _driverLat = 31.9961;
   double _driverLon = 44.3168;
   double _heading = 0.0;
+  List<LatLng> _routePoints = [];
   final String _status = 'السائق في طريقه إليك';
 
   @override
   void initState() {
     super.initState();
+    if (widget.initialRoutePoints != null) {
+      _routePoints = List.from(widget.initialRoutePoints!);
+    }
     _signalRService = SignalRService(widget.storageService);
     _startLiveTracking();
   }
@@ -50,7 +59,23 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
           _driverLon = (data['longitude'] as num?)?.toDouble() ?? _driverLon;
           _heading = (data['heading'] as num?)?.toDouble() ?? _heading;
         });
-        _mapController.move(LatLng(_driverLat, _driverLon), 15.5);
+        _mapController.move(LatLng(_driverLat, _driverLon), 16.0);
+      }
+    });
+
+    // Listen for live route broadcast from admin dashboard or driver
+    _routeSub = _signalRService.routeBroadcastStream.listen((data) {
+      if (mounted && data['points'] != null) {
+        final pts = data['points'] as List;
+        final decoded = pts.map((p) {
+          final lat = (p['latitude'] as num).toDouble();
+          final lon = (p['longitude'] as num).toDouble();
+          return LatLng(lat, lon);
+        }).toList();
+
+        setState(() {
+          _routePoints = decoded;
+        });
       }
     });
   }
@@ -58,6 +83,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   @override
   void dispose() {
     _locationSub?.cancel();
+    _routeSub?.cancel();
     _signalRService.leaveTrip(widget.bookingId);
     _signalRService.dispose();
     super.dispose();
@@ -73,40 +99,39 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
       ),
       body: Stack(
         children: [
-          // Real OpenStreetMap Layer
+          // Mapbox Maps SDK Tile Layer
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
               initialCenter: LatLng(_driverLat, _driverLon),
-              initialZoom: 15.0,
+              initialZoom: 15.5,
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: AppConfig.mapboxNavigationTileUrl,
                 userAgentPackageName: 'com.taxiwisam.taxiWisamFlutter',
               ),
+              // Route Polyline Layer
+              if (_routePoints.isNotEmpty)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _routePoints,
+                      strokeWidth: 5.0,
+                      color: const Color(0xFF2563EB),
+                    ),
+                  ],
+                ),
               MarkerLayer(
                 markers: [
                   Marker(
                     point: LatLng(_driverLat, _driverLon),
-                    width: 52,
-                    height: 52,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF59E0B),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.35),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Transform.rotate(
-                        angle: (_heading * (3.141592653589793 / 180.0)),
-                        child: const Icon(Icons.navigation, color: Colors.white, size: 28),
-                      ),
+                    width: 70,
+                    height: 70,
+                    child: SmoothVehicleMarker(
+                      targetPosition: LatLng(_driverLat, _driverLon),
+                      targetHeading: _heading,
+                      title: widget.driverName,
                     ),
                   ),
                 ],

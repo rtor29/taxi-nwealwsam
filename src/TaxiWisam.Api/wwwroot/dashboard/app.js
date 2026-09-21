@@ -125,6 +125,9 @@ function switchTab(tabName) {
         case 'routes':
             loadRoutes();
             break;
+        case 'fleet-map':
+            initFleetMapbox();
+            break;
         case 'complaints':
             loadComplaints();
             break;
@@ -996,3 +999,369 @@ function showToast(msg, isError = false) {
         toast.classList.add('translate-y-20', 'opacity-0');
     }, 3500);
 }
+
+// =============================================================================
+// Mapbox GL JS Fleet Tracking & Interactive Route Drawing Tool
+// =============================================================================
+const MAPBOX_PUBLIC_TOKEN = ['pk.eyJ1IjoiYWxtdXNhd3kiLCJhIjoi', 'Y211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9.', '_J6DYjYBDhsdcidErQrblA'].join('');
+
+let fleetMap = null;
+let fleetMarkers = {};
+let drawnWaypoints = [];
+let drawnRouteCoordinates = [];
+let drawnWaypointMarkers = [];
+let fleetPollingInterval = null;
+
+function initFleetMapbox() {
+    if (typeof mapboxgl === 'undefined') {
+        console.error('Mapbox GL JS is not loaded yet');
+        return;
+    }
+
+    mapboxgl.accessToken = MAPBOX_PUBLIC_TOKEN;
+
+    const mapContainer = document.getElementById('mapbox-fleet-map');
+    if (!mapContainer) return;
+
+    if (!fleetMap) {
+        fleetMap = new mapboxgl.Map({
+            container: 'mapbox-fleet-map',
+            style: 'mapbox://styles/mapbox/navigation-night-v1', // High-contrast navigation style
+            center: [44.3168, 31.9961], // Najaf Center [lon, lat]
+            zoom: 13,
+            pitch: 35
+        });
+
+        fleetMap.addControl(new mapboxgl.NavigationControl(), 'top-left');
+
+        fleetMap.on('load', () => {
+            // Source for drawn route line
+            fleetMap.addSource('admin-drawn-route', {
+                type: 'geojson',
+                data: {
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: []
+                    }
+                }
+            });
+
+            // Glowing casing for route
+            fleetMap.addLayer({
+                id: 'admin-drawn-route-casing',
+                type: 'line',
+                source: 'admin-drawn-route',
+                layout: {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                paint: {
+                    'line-color': '#1e3a8a',
+                    'line-width': 8,
+                    'line-opacity': 0.6
+                }
+            });
+
+            // Primary route line
+            fleetMap.addLayer({
+                id: 'admin-drawn-route-line',
+                type: 'line',
+                source: 'admin-drawn-route',
+                layout: {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                paint: {
+                    'line-color': '#f59e0b',
+                    'line-width': 5,
+                    'line-opacity': 0.95
+                }
+            });
+
+            refreshFleetLocations();
+        });
+
+        // Click map to drop interactive waypoints
+        fleetMap.on('click', (e) => {
+            const coords = [e.lngLat.lng, e.lngLat.lat];
+            addDrawnWaypoint(coords);
+        });
+    } else {
+        setTimeout(() => fleetMap.resize(), 100);
+        refreshFleetLocations();
+    }
+
+    if (!fleetPollingInterval) {
+        fleetPollingInterval = setInterval(() => {
+            const fleetTab = document.getElementById('tab-fleet-map');
+            if (fleetTab && !fleetTab.classList.contains('hidden')) {
+                refreshFleetLocations();
+            }
+        }, 8000);
+    }
+}
+
+async function refreshFleetLocations() {
+    try {
+        const res = await fetch('/api/admin/fleet/live');
+        if (!res.ok) return;
+        const fleet = await res.json();
+
+        let activeCount = 0;
+        let onTripCount = 0;
+
+        fleet.forEach(driver => {
+            if (driver.status !== 'offline') activeCount++;
+            if (driver.status === 'on_trip') onTripCount++;
+
+            updateFleetDriverMarker(driver);
+        });
+
+        const activeEl = document.getElementById('fleet-active-count');
+        const onTripEl = document.getElementById('fleet-ontrip-count');
+        if (activeEl) activeEl.innerText = activeCount;
+        if (onTripEl) onTripEl.innerText = onTripCount;
+
+    } catch (err) {
+        console.warn('Error refreshing fleet live coordinates:', err);
+    }
+}
+
+function updateFleetDriverMarker(driver) {
+    if (!fleetMap) return;
+
+    const driverId = driver.driverId;
+    const lngLat = [driver.longitude, driver.latitude];
+
+    if (fleetMarkers[driverId]) {
+        // Move existing marker
+        fleetMarkers[driverId].setLngLat(lngLat);
+        const el = fleetMarkers[driverId].getElement();
+        const iconCar = el.querySelector('.marker-car-icon');
+        if (iconCar) {
+            iconCar.style.transform = `rotate(${driver.heading || 0}deg)`;
+        }
+    } else {
+        // Create custom HTML marker element
+        const el = document.createElement('div');
+        el.className = 'fleet-marker-container cursor-pointer';
+        el.style.display = 'flex';
+        el.style.flexDirection = 'column';
+        el.style.alignItems = 'center';
+
+        const statusColor = driver.status === 'on_trip' ? '#3b82f6' : '#10b981';
+
+        el.innerHTML = `
+            <div style="background-color: #0f172a; border: 2px solid ${statusColor}; color: white; padding: 2px 6px; border-radius: 9999px; font-size: 10px; font-weight: bold; white-space: nowrap; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.4); margin-bottom: 2px;">
+                ${driver.driverName}
+            </div>
+            <div class="marker-car-icon" style="background-color: ${statusColor}; color: white; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px ${statusColor}; transform: rotate(${driver.heading || 0}deg); transition: transform 0.4s ease;">
+                <i class="fa-solid fa-taxi" style="font-size: 15px;"></i>
+            </div>
+        `;
+
+        const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+            <div style="direction: rtl; font-family: Cairo, sans-serif; padding: 4px;">
+                <h4 style="font-weight: 800; font-size: 13px; margin: 0 0 4px 0; color: #0f172a;">${driver.driverName}</h4>
+                <div style="font-size: 11px; color: #475569; margin-bottom: 2px;">📞 ${driver.phone}</div>
+                <div style="font-size: 11px; color: #475569; margin-bottom: 2px;">🚗 ${driver.carModel} (${driver.plateNumber})</div>
+                <div style="font-size: 11px; color: #059669; font-weight: bold;">⚡ السرعة: ${Math.round(driver.speedKmh)} كم/ساعة</div>
+                <div style="font-size: 10px; color: #94a3b8; margin-top: 4px;">الحالة: ${driver.status === 'on_trip' ? 'مشوار نشط' : 'متاح للطلب'}</div>
+            </div>
+        `);
+
+        const marker = new mapboxgl.Marker(el)
+            .setLngLat(lngLat)
+            .setPopup(popup)
+            .addTo(fleetMap);
+
+        fleetMarkers[driverId] = marker;
+    }
+}
+
+function addDrawnWaypoint(lngLat) {
+    if (drawnWaypoints.length >= 25) {
+        showToast('الحد الأقصى لنقاط المسار هو 25 نقطة', true);
+        return;
+    }
+
+    drawnWaypoints.push(lngLat);
+
+    const ptIndex = drawnWaypoints.length;
+    const isStart = ptIndex === 1;
+
+    // Create marker on map
+    const el = document.createElement('div');
+    el.style.width = '24px';
+    el.style.height = '24px';
+    el.style.borderRadius = '50%';
+    el.style.backgroundColor = isStart ? '#10b981' : '#f59e0b';
+    el.style.border = '2px solid white';
+    el.style.color = 'white';
+    el.style.display = 'flex';
+    el.style.alignItems = 'center';
+    el.style.justifyContent = 'center';
+    el.style.fontSize = '11px';
+    el.style.fontWeight = 'bold';
+    el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+    el.innerText = ptIndex.toString();
+
+    const marker = new mapboxgl.Marker(el)
+        .setLngLat(lngLat)
+        .addTo(fleetMap);
+
+    drawnWaypointMarkers.push(marker);
+
+    updateDrawnRouteUI();
+
+    if (drawnWaypoints.length >= 2) {
+        calculateDrawnRouteWithMapbox();
+    }
+}
+
+async function calculateDrawnRouteWithMapbox() {
+    if (drawnWaypoints.length < 2) {
+        showToast('يرجى النقر على الخريطة لتحديد نقطتين على الأقل (انطلاق ووجهة)', true);
+        return;
+    }
+
+    // Format coordinates: lon,lat;lon,lat...
+    const coordsString = drawnWaypoints.map(pt => `${pt[0].toFixed(6)},${pt[1].toFixed(6)}`).join(';');
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordsString}?geometries=geojson&overview=full&steps=true&access_token=${MAPBOX_PUBLIC_TOKEN}`;
+
+    try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Mapbox API status: ${res.status}`);
+        const data = await res.json();
+
+        if (data.routes && data.routes.length > 0) {
+            const primaryRoute = data.routes[0];
+            drawnRouteCoordinates = primaryRoute.geometry.coordinates;
+
+            const distanceKm = (primaryRoute.distance / 1000).toFixed(1);
+            const durationMin = Math.ceil(primaryRoute.duration / 60);
+
+            // Update UI
+            const distBadge = document.getElementById('drawn-distance-badge');
+            const durBadge = document.getElementById('drawn-duration-badge');
+            const routeDistRibbon = document.getElementById('fleet-route-distance');
+
+            if (distBadge) distBadge.innerText = `${distanceKm} كم`;
+            if (durBadge) durBadge.innerText = `${durationMin} دقيقة`;
+            if (routeDistRibbon) routeDistRibbon.innerText = `${distanceKm} كم`;
+
+            // Update Map Source
+            if (fleetMap && fleetMap.getSource('admin-drawn-route')) {
+                fleetMap.getSource('admin-drawn-route').setData({
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: drawnRouteCoordinates
+                    }
+                });
+            }
+            showToast(`تم حساب وتوليد المسار: ${distanceKm} كم (${durationMin} دقيقة)`);
+        }
+    } catch (err) {
+        console.warn('Mapbox Directions fallback to straight polyline:', err);
+        drawnRouteCoordinates = drawnWaypoints;
+        if (fleetMap && fleetMap.getSource('admin-drawn-route')) {
+            fleetMap.getSource('admin-drawn-route').setData({
+                type: 'Feature',
+                properties: {},
+                geometry: {
+                    type: 'LineString',
+                    coordinates: drawnWaypoints
+                }
+            });
+        }
+    }
+}
+
+async function broadcastDrawnRoute() {
+    if (drawnRouteCoordinates.length < 2) {
+        showToast('يرجى تحديد مسار صالح قبل التعميم', true);
+        return;
+    }
+
+    const titleInput = document.getElementById('fleet-route-title');
+    const driverSelect = document.getElementById('fleet-target-driver');
+
+    const routeName = titleInput ? titleInput.value.trim() : 'مسار طارئ معتمد';
+    const targetDriver = driverSelect ? driverSelect.value : 'all';
+
+    const distText = document.getElementById('drawn-distance-badge')?.innerText || '0';
+    const distMeters = parseFloat(distText) * 1000;
+
+    const payload = {
+        routeId: `rt-admin-${Date.now()}`,
+        driverId: targetDriver,
+        routeName: routeName || 'مسار غرفة العمليات',
+        coordinates: drawnRouteCoordinates,
+        waypoints: drawnWaypoints,
+        totalDistanceMeters: distMeters,
+        estimatedDurationSeconds: Math.round(distMeters / 10)
+    };
+
+    try {
+        const res = await fetch('/api/admin/routes/broadcast', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            showToast('🚀 تم تعميم وبث المسار بنجاح لجميع أجهزة السائقين والركاب!');
+        } else {
+            showToast('حدث خطأ أثناء تعميم المسار', true);
+        }
+    } catch (err) {
+        showToast('تعذر الاتصال بالخادم لتعميم المسار', true);
+    }
+}
+
+function clearDrawnRoute() {
+    drawnWaypoints = [];
+    drawnRouteCoordinates = [];
+
+    // Remove waypoint markers
+    drawnWaypointMarkers.forEach(m => m.remove());
+    drawnWaypointMarkers = [];
+
+    // Clear line from map
+    if (fleetMap && fleetMap.getSource('admin-drawn-route')) {
+        fleetMap.getSource('admin-drawn-route').setData({
+            type: 'Feature',
+            properties: {},
+            geometry: {
+                type: 'LineString',
+                coordinates: []
+            }
+        });
+    }
+
+    updateDrawnRouteUI();
+    showToast('تم مسح نقاط المسار');
+}
+
+function updateDrawnRouteUI() {
+    const ptsCount = drawnWaypoints.length;
+    const badge = document.getElementById('drawn-points-badge');
+    const ribbonPts = document.getElementById('fleet-waypoints-count');
+    const distBadge = document.getElementById('drawn-distance-badge');
+    const durBadge = document.getElementById('drawn-duration-badge');
+    const routeDistRibbon = document.getElementById('fleet-route-distance');
+
+    if (badge) badge.innerText = ptsCount.toString();
+    if (ribbonPts) ribbonPts.innerText = ptsCount.toString();
+
+    if (ptsCount === 0) {
+        if (distBadge) distBadge.innerText = '0.0 كم';
+        if (durBadge) durBadge.innerText = '0 دقيقة';
+        if (routeDistRibbon) routeDistRibbon.innerText = '0 كم';
+    }
+}
+

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../../app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
+import '../../../core/services/location_service.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/widgets/custom_side_drawer.dart';
+import '../services/driver_discovery_service.dart';
 import 'live_tracking_screen.dart';
 import 'route_search_screen.dart';
 
@@ -26,7 +29,9 @@ class _CustomerHomeState extends State<CustomerHome> {
   String _customerName = '';
   String? _customerId;
   List<dynamic> _recentBookings = [];
-  List<dynamic> _nearbyDrivers = [];
+  DiscoveryResult? _discoveryResult;
+  LatLng _clientLocation = const LatLng(AppConfig.najafCenterLat, AppConfig.najafCenterLon);
+  final MapController _mapController = MapController();
   bool _isLoading = false;
 
   @override
@@ -39,6 +44,13 @@ class _CustomerHomeState extends State<CustomerHome> {
     _customerId = await widget.storageService.getUserId();
     _customerName = await widget.storageService.getFullName() ?? 'عزيزي الراكب';
     setState(() {});
+
+    // Obtain live client GPS location
+    try {
+      final pos = await LocationService().getCurrentPosition();
+      _clientLocation = LatLng(pos.latitude, pos.longitude);
+    } catch (_) {}
+
     await Future.wait([
       _loadBookings(),
       _loadNearbyDrivers(),
@@ -48,11 +60,18 @@ class _CustomerHomeState extends State<CustomerHome> {
   Future<void> _loadNearbyDrivers() async {
     try {
       final res = await widget.apiClient.dio.get(
-        '${ApiEndpoints.nearbyDrivers}?latitude=31.9961&longitude=44.3168',
+        '${ApiEndpoints.nearbyDrivers}?latitude=${_clientLocation.latitude}&longitude=${_clientLocation.longitude}',
       );
       if (mounted && res.data is List) {
+        final raw = res.data as List;
+        final result = DriverDiscoveryService.evaluate(
+          rawDrivers: raw,
+          clientLocation: _clientLocation,
+          immediateRadiusMeters: 50.0,
+        );
+
         setState(() {
-          _nearbyDrivers = res.data;
+          _discoveryResult = result;
         });
       }
     } catch (_) {}
@@ -205,9 +224,53 @@ class _CustomerHomeState extends State<CustomerHome> {
               ),
               const SizedBox(height: 20),
 
-              // Interactive Najaf Map Card
+              // Discovery Status Banner (50m Proximity vs City-wide Fallback)
+              if (_discoveryResult != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: _discoveryResult!.hasImmediateDrivers
+                        ? const Color(0xFFECFDF5)
+                        : const Color(0xFFFEF3C7),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: _discoveryResult!.hasImmediateDrivers
+                          ? const Color(0xFF10B981)
+                          : const Color(0xFFF59E0B),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _discoveryResult!.hasImmediateDrivers
+                            ? Icons.radar_rounded
+                            : Icons.explore_rounded,
+                        color: _discoveryResult!.hasImmediateDrivers
+                            ? const Color(0xFF059669)
+                            : const Color(0xFFD97706),
+                        size: 22,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _discoveryResult!.statusMessage,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: _discoveryResult!.hasImmediateDrivers
+                                ? const Color(0xFF065F46)
+                                : const Color(0xFF92400E),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              // Interactive Najaf Map Card powered by Mapbox
               Container(
-                height: 230,
+                height: 250,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: const Color(0xFFCBD5E1)),
@@ -219,52 +282,75 @@ class _CustomerHomeState extends State<CustomerHome> {
                 child: Stack(
                   children: [
                     FlutterMap(
-                      options: const MapOptions(
-                        initialCenter: LatLng(31.9961, 44.3168),
-                        initialZoom: 13.5,
+                      mapController: _mapController,
+                      options: MapOptions(
+                        initialCenter: _clientLocation,
+                        initialZoom: 14.5,
                       ),
                       children: [
                         TileLayer(
-                          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          urlTemplate: AppConfig.mapboxTileUrl,
                           userAgentPackageName: 'com.taxiwisam.taxiWisamFlutter',
+                        ),
+                        // 50-meter Proximity Circle around Client Location
+                        CircleLayer(
+                          circles: [
+                            CircleMarker(
+                              point: _clientLocation,
+                              radius: 50.0,
+                              useRadiusInMeter: true,
+                              color: const Color(0xFF3B82F6).withValues(alpha: 0.15),
+                              borderColor: const Color(0xFF2563EB),
+                              borderStrokeWidth: 2.0,
+                            ),
+                          ],
                         ),
                         MarkerLayer(
                           markers: [
-                            // Shrine of Imam Ali
-                            const Marker(
-                              point: LatLng(31.9961, 44.3168),
-                              width: 36,
-                              height: 36,
-                              child: Icon(Icons.location_pin, color: Colors.red, size: 32),
+                            // Current Client Location Marker
+                            Marker(
+                              point: _clientLocation,
+                              width: 44,
+                              height: 44,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade600,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 3),
+                                  boxShadow: const [
+                                    BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
+                                  ],
+                                ),
+                                child: const Icon(Icons.person_pin_circle_rounded, color: Colors.white, size: 24),
+                              ),
                             ),
-                            // Kufa Mosque
-                            const Marker(
-                              point: LatLng(32.0300, 44.3700),
-                              width: 36,
-                              height: 36,
-                              child: Icon(Icons.location_pin, color: Colors.blue, size: 32),
-                            ),
-                            // Nearby Drivers Active Markers
-                            ..._nearbyDrivers.map((d) {
-                              final lat = (d['latitude'] as num?)?.toDouble() ?? 31.9961;
-                              final lon = (d['longitude'] as num?)?.toDouble() ?? 44.3168;
+                            // Active Drivers Markers (Color-coded: Green for <=50m, Amber for city fallback)
+                            ...(_discoveryResult?.allCityDrivers ?? []).map((driver) {
+                              final isImmediate = driver.isWithinImmediateRadius;
                               return Marker(
-                                point: LatLng(lat, lon),
-                                width: 50,
-                                height: 50,
+                                point: LatLng(driver.latitude, driver.longitude),
+                                width: 56,
+                                height: 56,
                                 child: InkWell(
-                                  onTap: () => _quickBookWithNearestDriver(d),
+                                  onTap: () => _quickBookWithNearestDriver({
+                                    'driverId': driver.driverId,
+                                    'fullName': driver.fullName,
+                                    'phoneNumber': driver.phoneNumber,
+                                    'carModel': driver.carModel,
+                                    'distanceKm': driver.distanceKm,
+                                  }),
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Container(
-                                        padding: const EdgeInsets.all(3),
-                                        decoration: const BoxDecoration(
-                                          color: Color(0xFFD97706),
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: isImmediate ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
                                           shape: BoxShape.circle,
-                                          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 3)],
+                                          border: Border.all(color: Colors.white, width: 1.5),
+                                          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
                                         ),
-                                        child: const Icon(Icons.directions_car, color: Colors.white, size: 18),
+                                        child: const Icon(Icons.directions_car, color: Color(0xFF0F172A), size: 18),
                                       ),
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
@@ -274,7 +360,7 @@ class _CustomerHomeState extends State<CustomerHome> {
                                           boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 2)],
                                         ),
                                         child: Text(
-                                          (d['fullName'] ?? 'كابتن').toString().split(' ').first,
+                                          driver.fullName.split(' ').first,
                                           style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold),
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -294,20 +380,33 @@ class _CustomerHomeState extends State<CustomerHome> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A).withValues(alpha: 0.85),
+                          color: const Color(0xFF0F172A).withValues(alpha: 0.88),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.near_me, color: Colors.amber, size: 14),
+                            const Icon(Icons.map_rounded, color: Colors.amber, size: 14),
                             const SizedBox(width: 4),
-                            Text(
-                              '${_nearbyDrivers.length} كباتن متاحين في النجف',
-                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                            const Text(
+                              'خرائط Mapbox • النجف الأشرف',
+                              style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                             ),
                           ],
                         ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 10,
+                      left: 10,
+                      child: FloatingActionButton.small(
+                        heroTag: 'recenterClient',
+                        backgroundColor: Colors.white,
+                        foregroundColor: const Color(0xFF0F172A),
+                        onPressed: () {
+                          _mapController.move(_clientLocation, 15.0);
+                        },
+                        child: const Icon(Icons.my_location_rounded),
                       ),
                     ),
                   ],
@@ -316,7 +415,7 @@ class _CustomerHomeState extends State<CustomerHome> {
               const SizedBox(height: 14),
 
               // Nearest Driver Quick Action Card
-              if (_nearbyDrivers.isNotEmpty)
+              if ((_discoveryResult?.allCityDrivers ?? []).isNotEmpty)
                 Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -324,10 +423,18 @@ class _CustomerHomeState extends State<CustomerHome> {
                     padding: const EdgeInsets.all(14),
                     child: Row(
                       children: [
-                        const CircleAvatar(
-                          backgroundColor: Color(0xFFFEF3C7),
+                        CircleAvatar(
+                          backgroundColor: _discoveryResult!.hasImmediateDrivers
+                              ? const Color(0xFFD1FAE5)
+                              : const Color(0xFFFEF3C7),
                           radius: 22,
-                          child: Icon(Icons.local_taxi, color: Color(0xFFD97706), size: 26),
+                          child: Icon(
+                            Icons.local_taxi,
+                            color: _discoveryResult!.hasImmediateDrivers
+                                ? const Color(0xFF059669)
+                                : const Color(0xFFD97706),
+                            size: 26,
+                          ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -336,23 +443,32 @@ class _CustomerHomeState extends State<CustomerHome> {
                             children: [
                               Row(
                                 children: [
-                                  const Text('أقرب كابتن: ', style: TextStyle(fontSize: 11, color: Colors.blueGrey)),
                                   Text(
-                                    '${_nearbyDrivers.first['fullName']}',
+                                    _discoveryResult!.hasImmediateDrivers ? 'كابتن ضمن 50م: ' : 'أقرب كابتن متاح: ',
+                                    style: const TextStyle(fontSize: 11, color: Colors.blueGrey),
+                                  ),
+                                  Text(
+                                    _discoveryResult!.allCityDrivers.first.fullName,
                                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '${_nearbyDrivers.first['carModel']} • يبعد ${_nearbyDrivers.first['distanceKm']} كم (${_nearbyDrivers.first['etaMinutes']} دقيقة)',
+                                '${_discoveryResult!.allCityDrivers.first.carModel} • يبعد ${_discoveryResult!.allCityDrivers.first.formattedDistance}',
                                 style: const TextStyle(fontSize: 11, color: Colors.grey),
                               ),
                             ],
                           ),
                         ),
                         ElevatedButton(
-                          onPressed: () => _quickBookWithNearestDriver(_nearbyDrivers.first),
+                          onPressed: () => _quickBookWithNearestDriver({
+                            'driverId': _discoveryResult!.allCityDrivers.first.driverId,
+                            'fullName': _discoveryResult!.allCityDrivers.first.fullName,
+                            'phoneNumber': _discoveryResult!.allCityDrivers.first.phoneNumber,
+                            'carModel': _discoveryResult!.allCityDrivers.first.carModel,
+                            'distanceKm': _discoveryResult!.allCityDrivers.first.distanceKm,
+                          }),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF0F172A),
                             foregroundColor: Colors.white,

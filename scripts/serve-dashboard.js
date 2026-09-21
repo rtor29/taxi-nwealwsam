@@ -370,6 +370,123 @@ const server = http.createServer((req, res) => {
         return json(nearby);
     }
 
+    // Real-time Fleet Tracking API
+    if (pathname === '/api/admin/fleet/live') {
+        const baseLat = 31.9961;
+        const baseLon = 44.3168;
+        const fleet = [
+            {
+                driverId: "drv-njf-1",
+                driverName: "كابتن حيدر النجفي",
+                phone: "07801122334",
+                latitude: baseLat + 0.0035,
+                longitude: baseLon + 0.0020,
+                heading: 45.0,
+                speedKmh: 38.5,
+                status: "on_trip",
+                carModel: "كيا أوبتيما (أجرة)",
+                plateNumber: "النجف 45212",
+                lastPing: new Date().toISOString()
+            },
+            {
+                driverId: "drv-njf-2",
+                driverName: "كابتن علي الغري",
+                phone: "07805566778",
+                latitude: baseLat - 0.0040,
+                longitude: baseLon - 0.0025,
+                heading: 180.0,
+                speedKmh: 42.0,
+                status: "available",
+                carModel: "تويوتا كورولا",
+                plateNumber: "النجف 19830",
+                lastPing: new Date().toISOString()
+            },
+            {
+                driverId: "drv-njf-3",
+                driverName: "كابتن سجاد الكوفي",
+                phone: "07812233445",
+                latitude: baseLat + 0.0060,
+                longitude: baseLon + 0.0050,
+                heading: 90.0,
+                speedKmh: 0.0,
+                status: "waiting",
+                carModel: "هيونداي إلنترا",
+                plateNumber: "النجف 88102",
+                lastPing: new Date().toISOString()
+            }
+        ];
+
+        // Also append all registered drivers
+        state.drivers.forEach((d, idx) => {
+            fleet.push({
+                driverId: d.driverId,
+                driverName: d.fullName,
+                phone: d.phoneNumber,
+                latitude: baseLat + 0.0018 * (idx + 1),
+                longitude: baseLon + 0.0018 * (idx + 1),
+                heading: (idx * 60) % 360,
+                speedKmh: 30.0 + (idx * 5),
+                status: d.isVerified ? "available" : "offline",
+                carModel: "تاكسي وسام المعتمد",
+                plateNumber: d.licenseNumber || `النجف ${1000 + idx}`,
+                lastPing: new Date().toISOString()
+            });
+        });
+
+        return json(fleet);
+    }
+
+    // Broadcast Route to Active Driver & Passengers
+    if (pathname === '/api/admin/routes/broadcast' && req.method === 'POST') {
+        return parseBody(body => {
+            const { routeId, driverId, routeName, coordinates, waypoints, totalDistanceMeters, estimatedDurationSeconds } = body;
+            
+            if (!coordinates || !Array.isArray(coordinates) || coordinates.length < 2) {
+                return json({ error: "Coordinates array with at least 2 points is required." }, 400);
+            }
+
+            const broadcastId = `bcast-${Date.now()}`;
+            const broadcastPayload = {
+                broadcastId,
+                routeId: routeId || `route-${Date.now()}`,
+                driverId: driverId || "all",
+                routeName: routeName || "مسار معتمد من إدارة العمليات",
+                coordinates,
+                waypoints: waypoints || [],
+                totalDistanceMeters: totalDistanceMeters || 0,
+                estimatedDurationSeconds: estimatedDurationSeconds || 0,
+                broadcastedAt: new Date().toISOString(),
+                status: "active"
+            };
+
+            if (!state.broadcastedRoutes) {
+                state.broadcastedRoutes = [];
+            }
+            state.broadcastedRoutes.unshift(broadcastPayload);
+            if (state.broadcastedRoutes.length > 50) state.broadcastedRoutes.pop();
+
+            state.auditLogs.unshift({
+                action: "RouteBroadcasted",
+                entityName: "Route",
+                entityId: broadcastPayload.routeId,
+                newValuesJson: JSON.stringify({ driverId: broadcastPayload.driverId, pointsCount: coordinates.length, distance: totalDistanceMeters }),
+                ipAddress: req.socket.remoteAddress || "127.0.0.1",
+                createdAt: new Date().toISOString()
+            });
+            saveState();
+
+            return json({
+                success: true,
+                message: "تم تعميم المسار بنجاح إلى أجهزة السائقين والركاب",
+                data: broadcastPayload
+            }, 201);
+        });
+    }
+
+    if (pathname === '/api/admin/routes/broadcast' && req.method === 'GET') {
+        return json(state.broadcastedRoutes || []);
+    }
+
     // Matching Regular Routes Endpoint (Najaf Governorate)
     if (pathname === '/api/matching/find-routes') {
         return parseBody(body => {

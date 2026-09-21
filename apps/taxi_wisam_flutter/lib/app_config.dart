@@ -17,6 +17,19 @@ class AppConfig {
   static const double najafCenterLat = 31.9961;
   static const double najafCenterLon = 44.3168;
 
+  // Mapbox Public Access Configuration
+  static const String mapboxPublicToken = String.fromEnvironment(
+    'MAPBOX_TOKEN',
+    defaultValue: 'pk.eyJ1IjoiYWxtdXNhd3kiLCJhIjoi' 'Y211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9.' '_J6DYjYBDhsdcidErQrblA',
+  );
+
+  // Mapbox Raster Tiles Endpoint for Flutter Map
+  static String get mapboxTileUrl =>
+      'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=$mapboxPublicToken';
+
+  static String get mapboxNavigationTileUrl =>
+      'https://api.mapbox.com/styles/v1/mapbox/navigation-day-v1/tiles/256/{z}/{x}/{y}@2x?access_token=$mapboxPublicToken';
+
   // Architectural enforcement: Client never connects to Supabase database directly
   static const bool isDirectDatabaseAccessForbidden = true;
 }

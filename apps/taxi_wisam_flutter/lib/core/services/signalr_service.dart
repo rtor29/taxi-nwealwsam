@@ -14,9 +14,11 @@ class SignalRService {
   // Stream Controllers for Reactive UI
   final _driverLocationController = StreamController<Map<String, dynamic>>.broadcast();
   final _tripStatusController = StreamController<Map<String, dynamic>>.broadcast();
+  final _routeBroadcastController = StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get driverLocationStream => _driverLocationController.stream;
   Stream<Map<String, dynamic>> get tripStatusStream => _tripStatusController.stream;
+  Stream<Map<String, dynamic>> get routeBroadcastStream => _routeBroadcastController.stream;
 
   SignalRService(this._storageService);
 
@@ -32,7 +34,7 @@ class SignalRService {
             accessTokenFactory: () async => token ?? '',
           ),
         )
-        .withAutomaticReconnect()
+        .withAutomaticReconnect(retryDelays: [2000, 5000, 10000, 20000])
         .build();
 
     // Listen to DriverLocationUpdated event
@@ -49,6 +51,16 @@ class SignalRService {
           'longitude': lon,
           'heading': heading,
         });
+      }
+    });
+
+    // Listen to RouteBroadcasted event (admin interactive route plot)
+    _hubConnection?.on('RouteBroadcasted', (arguments) {
+      if (arguments != null && arguments.isNotEmpty) {
+        final data = arguments[0];
+        if (data is Map) {
+          _routeBroadcastController.add(Map<String, dynamic>.from(data));
+        }
       }
     });
 
@@ -76,6 +88,13 @@ class SignalRService {
     }
   }
 
+  // Broadcast route points
+  Future<void> broadcastRouteUpdate(Map<String, dynamic> routeData) async {
+    if (isConnected) {
+      await _hubConnection?.invoke('BroadcastRoute', args: [routeData]);
+    }
+  }
+
   // Passenger action: Subscribe to live tracking of a specific trip
   Future<void> joinTrip(String tripId) async {
     if (isConnected) {
@@ -93,5 +112,6 @@ class SignalRService {
     await _hubConnection?.stop();
     await _driverLocationController.close();
     await _tripStatusController.close();
+    await _routeBroadcastController.close();
   }
 }

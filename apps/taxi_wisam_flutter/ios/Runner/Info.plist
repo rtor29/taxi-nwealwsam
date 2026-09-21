@@ -67,7 +67,11 @@
 		<true/>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>يحتاج تطبيق توصيله لمعرفة موقعك لتحديد نقطة الركوب والوجهة بدقة</string>
+	<string>يحتاج تطبيق توصيله لمعرفة موقعك لتحديد نقطة الركوب والوجهة بدقة ومتابعة الرحلة</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>يحتاج تطبيق توصيله للوصول لموقع السائق لتحديث موقعه على الخريطة أثناء تتبع الرحلات</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>يحتاج تطبيق توصيله للوصول لموقع السائق لتحديث موقعه على الخريطة أثناء تتبع الرحلات</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>يحتاج تطبيق توصيله للوصول إلى الاستوديو لاختيار الوثائق وتحديث الصورة الشخصية</string>
 	<key>NSCameraUsageDescription</key>

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
+import '../../../core/services/location_service.dart';
 import '../../../core/services/signalr_service.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/widgets/custom_side_drawer.dart';
@@ -23,6 +24,7 @@ class DriverHome extends StatefulWidget {
 
 class _DriverHomeState extends State<DriverHome> {
   late final SignalRService _signalRService;
+  final LocationService _locationService = LocationService();
   bool _isOnline = false;
   bool _isVerified = false;
   String _driverName = '';
@@ -75,10 +77,26 @@ class _DriverHomeState extends State<DriverHome> {
         data: {'status': value ? 'Online' : 'Offline'},
       );
 
-      // Broadcast initial location over SignalR if online
+      // Broadcast live GPS coordinates over SignalR/WebSocket when online
       if (value) {
-        // Najaf coordinates baseline
-        await _signalRService.broadcastLocation(31.9961, 44.3168, 0.0);
+        try {
+          await _locationService.startLocationTracking(
+            onPosition: (pos) {
+              if (_isOnline) {
+                _signalRService.broadcastLocation(
+                  pos.latitude,
+                  pos.longitude,
+                  pos.heading,
+                );
+              }
+            },
+          );
+        } catch (_) {
+          // If permission fails, broadcast Najaf Center baseline
+          await _signalRService.broadcastLocation(31.9961, 44.3168, 0.0);
+        }
+      } else {
+        await _locationService.stopLocationTracking();
       }
     } catch (e) {
       setState(() => _isOnline = !value);
@@ -87,6 +105,7 @@ class _DriverHomeState extends State<DriverHome> {
 
   @override
   void dispose() {
+    _locationService.stopLocationTracking();
     _signalRService.dispose();
     super.dispose();
   }
