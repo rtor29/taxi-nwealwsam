@@ -3,6 +3,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 
 const PORT = process.env.PORT || 5050;
 const DASHBOARD_DIR = path.join(__dirname, '..', 'src', 'TaxiWisam.Api', 'wwwroot', 'dashboard');
@@ -93,6 +94,104 @@ const mimeTypes = {
     '.woff': 'font/woff',
     '.woff2': 'font/woff2'
 };
+
+// Strict Iraqi Phone Validation (Zain & Asiacell ONLY)
+function validateIraqiPhone(rawPhone) {
+    if (!rawPhone || typeof rawPhone !== 'string') {
+        return { isValid: false, error: "يرجى إدخال رقم هاتف عراقي صالح (زين أو آسيا سيل فقط)" };
+    }
+
+    let cleaned = rawPhone.replace(/[\s\-\(\)\.]/g, '').trim();
+
+    // Standardize Arabic/Indic numerals
+    const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+    for (let i = 0; i < arabicDigits.length; i++) {
+        cleaned = cleaned.replace(new RegExp(arabicDigits[i], 'g'), i);
+    }
+
+    const localRegex = /^(077|078|079)[0-9]{8}$/;
+    const intlRegex = /^(\+?964)(77|78|79)[0-9]{8}$/;
+
+    if (!localRegex.test(cleaned) && !intlRegex.test(cleaned)) {
+        return {
+            isValid: false,
+            error: "يرجى إدخال رقم هاتف عراقي صالح (زين أو آسيا سيل فقط)",
+            rejectedPrefix: cleaned.slice(0, 4)
+        };
+    }
+
+    let core = cleaned;
+    if (core.startsWith('+964')) core = core.slice(4);
+    else if (core.startsWith('964')) core = core.slice(3);
+    else if (core.startsWith('0')) core = core.slice(1);
+
+    const prefix = core.slice(0, 2);
+    const operator = (prefix === '77') ? 'Asiacell' : 'Zain';
+
+    return {
+        isValid: true,
+        operator,
+        normalizedLocal: '0' + core,
+        normalizedE164: '+964' + core
+    };
+}
+
+// In-memory Gzip Cache for blazing fast web app delivery
+const gzipCache = new Map();
+
+function serveCompressedFile(filePath, req, res, defaultMime = 'application/octet-stream') {
+    const ext = path.extname(filePath).toLowerCase();
+    const contentType = mimeTypes[ext] || defaultMime;
+    const acceptGzip = req.headers['accept-encoding'] && req.headers['accept-encoding'].includes('gzip');
+
+    const isStaticAsset = ['.js', '.mjs', '.wasm', '.png', '.jpg', '.jpeg', '.svg', '.ttf', '.otf', '.woff', '.woff2', '.css'].includes(ext);
+    const headers = {
+        'Content-Type': contentType,
+        'Vary': 'Accept-Encoding'
+    };
+
+    if (isStaticAsset) {
+        headers['Cache-Control'] = 'public, max-age=86400';
+    } else {
+        headers['Cache-Control'] = 'no-cache';
+    }
+
+    const shouldGzip = acceptGzip && ['.html', '.js', '.mjs', '.css', '.json', '.wasm', '.svg'].includes(ext);
+
+    if (shouldGzip) {
+        if (gzipCache.has(filePath)) {
+            headers['Content-Encoding'] = 'gzip';
+            res.writeHead(200, headers);
+            return res.end(gzipCache.get(filePath));
+        }
+
+        fs.readFile(filePath, (err, raw) => {
+            if (err) {
+                res.writeHead(404);
+                return res.end('File not found');
+            }
+            zlib.gzip(raw, (gzErr, compressed) => {
+                if (gzErr || compressed.length >= raw.length) {
+                    res.writeHead(200, headers);
+                    return res.end(raw);
+                }
+                gzipCache.set(filePath, compressed);
+                headers['Content-Encoding'] = 'gzip';
+                res.writeHead(200, headers);
+                res.end(compressed);
+            });
+        });
+    } else {
+        fs.readFile(filePath, (err, content) => {
+            if (err) {
+                res.writeHead(404);
+                return res.end('File not found');
+            }
+            res.writeHead(200, headers);
+            res.end(content);
+        });
+    }
+}
 
 const server = http.createServer((req, res) => {
     // Enable CORS
@@ -829,6 +928,112 @@ const server = http.createServer((req, res) => {
     // -------------------------------------------------------------------------
     // Mobile App Authentication Routes (/api/auth/...)
     // -------------------------------------------------------------------------
+    if (pathname === '/api/auth/send-otp' && req.method === 'POST') {
+        return parseBody(body => {
+            const rawPhone = body.phoneNumber || body.phone || body.e164Number || '';
+            const validation = validateIraqiPhone(rawPhone);
+
+            if (!validation.isValid) {
+                // Strict 422 Unprocessable Entity - Halts SMS gateway dispatch immediately
+                return json({
+                    error: validation.error,
+                    valid: false,
+                    statusCode: 422
+                }, 422);
+            }
+
+            const otpCode = '1234';
+            if (!state.otps) state.otps = {};
+            state.otps[validation.normalizedLocal] = {
+                code: otpCode,
+                operator: validation.operator,
+                expiresAt: Date.now() + 5 * 60 * 1000
+            };
+
+            const opNameAr = validation.operator === 'Asiacell' ? 'آسيا سيل (Asiacell)' : 'زين العراق (Zain Iraq)';
+            return json({
+                success: true,
+                message: `تم إرسال رمز التحقق بنجاح إلى شبكة ${opNameAr}.`,
+                phoneNumber: validation.normalizedLocal,
+                e164Number: validation.normalizedE164,
+                operator: validation.operator,
+                debugOtp: otpCode
+            }, 200);
+        });
+    }
+
+    if (pathname === '/api/auth/verify-otp' && req.method === 'POST') {
+        return parseBody(body => {
+            const rawPhone = body.phoneNumber || body.phone || '';
+            const code = (body.otp || body.code || '').trim();
+            const validation = validateIraqiPhone(rawPhone);
+
+            if (!validation.isValid) {
+                return json({ error: validation.error, valid: false, statusCode: 422 }, 422);
+            }
+
+            const phone = validation.normalizedLocal;
+            const record = state.otps ? state.otps[phone] : null;
+
+            const isValidOtp = code === '1234' || (record && record.code === code && record.expiresAt > Date.now());
+            if (!isValidOtp) {
+                return json({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته." }, 400);
+            }
+
+            const requestedRole = body.role || 'Customer';
+            let user = (requestedRole === 'Driver')
+                ? state.drivers.find(d => d.phoneNumber === phone)
+                : state.customers.find(c => c.phoneNumber === phone);
+
+            if (!user) {
+                user = state.drivers.find(d => d.phoneNumber === phone) || state.customers.find(c => c.phoneNumber === phone);
+            }
+
+            if (user && user.isBlocked) {
+                return json({ error: "تم حظر هذا الحساب من قبل إدارة المنصة.", isBlocked: true }, 403);
+            }
+
+            const userId = user ? (user.driverId || user.customerId) : ('usr-' + Math.random().toString(36).substr(2, 9));
+            const role = user ? (user.driverId ? 'Driver' : 'Customer') : requestedRole;
+            const fullName = user ? user.fullName : (role === 'Driver' ? 'كابتن توصيله' : 'مستخدم توصيله');
+
+            if (!user) {
+                if (role === 'Driver') {
+                    state.drivers.push({
+                        driverId: userId,
+                        fullName,
+                        phoneNumber: phone,
+                        status: 'Offline',
+                        isVerified: false,
+                        ratingAverage: 5.0,
+                        totalTrips: 0
+                    });
+                    state.stats.totalDrivers++;
+                } else {
+                    state.customers.push({
+                        customerId: userId,
+                        fullName,
+                        phoneNumber: phone,
+                        isActive: true,
+                        ratingAverage: 5.0,
+                        totalBookings: 0
+                    });
+                    state.stats.totalUsers++;
+                }
+                saveState();
+            }
+
+            return json({
+                success: true,
+                userId,
+                fullName,
+                phoneNumber: phone,
+                role,
+                token: 'jwt_otp_token_' + userId
+            });
+        });
+    }
+
     if (pathname === '/api/auth/register') {
         return parseBody(body => {
             const userId = 'usr-' + Math.random().toString(36).substr(2, 9);
@@ -836,6 +1041,13 @@ const server = http.createServer((req, res) => {
             const fullName = body.fullName || 'مستخدم جديد';
             const email = body.email || '';
             const phone = body.phoneNumber || '';
+
+            if (phone) {
+                const phoneVal = validateIraqiPhone(phone);
+                if (!phoneVal.isValid) {
+                    return json({ error: phoneVal.error, valid: false, statusCode: 422 }, 422);
+                }
+            }
 
             if (role === 'Driver') {
                 const licenseNo = body.licenseNumber || 'IRQ-NJF-' + Math.floor(1000 + Math.random() * 9000);
@@ -900,12 +1112,22 @@ const server = http.createServer((req, res) => {
 
     if (pathname === '/api/auth/login') {
         return parseBody(body => {
-            const identifier = (body.identifier || body.email || body.phoneNumber || '').trim().toLowerCase();
+            const identifier = (body.identifier || body.email || body.phoneNumber || '').trim();
+            const isEmail = identifier.includes('@');
+
+            if (!isEmail && identifier.length > 0) {
+                const phoneVal = validateIraqiPhone(identifier);
+                if (!phoneVal.isValid) {
+                    return json({ error: phoneVal.error, valid: false, statusCode: 422 }, 422);
+                }
+            }
+
+            const searchId = identifier.toLowerCase();
             
             // Search in drivers
             const driver = state.drivers.find(d => 
-                (d.phoneNumber && d.phoneNumber.toLowerCase() === identifier) ||
-                (d.email && d.email.toLowerCase() === identifier)
+                (d.phoneNumber && d.phoneNumber.toLowerCase() === searchId) ||
+                (d.email && d.email.toLowerCase() === searchId)
             );
             if (driver) {
                 if (driver.isBlocked) {
@@ -1133,16 +1355,7 @@ const server = http.createServer((req, res) => {
         }
 
         if (targetFile && fs.existsSync(targetFile)) {
-            const ext = path.extname(targetFile).toLowerCase();
-            const contentType = mimeTypes[ext] || 'application/octet-stream';
-            return fs.readFile(targetFile, (err, content) => {
-                if (err) {
-                    res.writeHead(500);
-                    return res.end('Error reading web app file');
-                }
-                res.writeHead(200, { 'Content-Type': contentType });
-                res.end(content);
-            });
+            return serveCompressedFile(targetFile, req, res);
         } else {
             res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
             return res.end('تطبيق الويب قيد التجهيز...');
@@ -1160,18 +1373,7 @@ const server = http.createServer((req, res) => {
             filePath = path.join(DASHBOARD_DIR, 'index.html');
         }
 
-        const ext = path.extname(filePath).toLowerCase();
-        const contentType = mimeTypes[ext] || 'application/octet-stream';
-
-        fs.readFile(filePath, (readErr, content) => {
-            if (readErr) {
-                res.writeHead(500);
-                res.end('Error loading dashboard file');
-                return;
-            }
-            res.writeHead(200, { 'Content-Type': contentType });
-            res.end(content);
-        });
+        return serveCompressedFile(filePath, req, res);
     });
 });
 

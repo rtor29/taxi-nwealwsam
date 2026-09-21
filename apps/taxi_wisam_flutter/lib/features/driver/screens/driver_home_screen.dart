@@ -38,18 +38,28 @@ class _DriverHomeState extends State<DriverHome> {
   }
 
   Future<void> _initDriver() async {
-    _driverId = await widget.storageService.getUserId();
-    _driverName = await widget.storageService.getFullName() ?? 'كابتن';
+    final id = await widget.storageService.getUserId();
+    final name = await widget.storageService.getFullName();
 
-    await _signalRService.initConnection();
-    await _loadProfile();
+    if (mounted) {
+      setState(() {
+        _driverId = (id != null && id.isNotEmpty) ? id : 'drv-current';
+        _driverName = (name != null && name.isNotEmpty) ? name : 'كابتن توصيله';
+      });
+    }
+
+    _loadProfile();
+
+    try {
+      _signalRService.initConnection();
+    } catch (_) {}
   }
 
   Future<void> _loadProfile() async {
-    if (_driverId == null) return;
+    final activeId = _driverId ?? 'drv-current';
     try {
-      final res = await widget.apiClient.dio.get('${ApiEndpoints.profile}?userId=$_driverId');
-      if (mounted) {
+      final res = await widget.apiClient.dio.get('${ApiEndpoints.profile}?userId=$activeId');
+      if (mounted && res.data != null) {
         setState(() {
           _isVerified = res.data['isDriverVerified'] ?? false;
         });
@@ -199,14 +209,15 @@ class _DriverHomeState extends State<DriverHome> {
                     ),
                     const SizedBox(height: 12),
                     ElevatedButton.icon(
-                      onPressed: () {
-                        if (_driverId == null) return;
+                      onPressed: () async {
+                        final driverId = _driverId ?? (await widget.storageService.getUserId()) ?? 'drv-current';
+                        if (!context.mounted) return;
                         Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => DocumentUploadScreen(
                               apiClient: widget.apiClient,
-                              driverId: _driverId!,
+                              driverId: driverId,
                             ),
                           ),
                         ).then((_) => _loadProfile());
@@ -238,14 +249,15 @@ class _DriverHomeState extends State<DriverHome> {
                     icon: Icons.add_road,
                     title: 'إنشاء خط نقل',
                     subtitle: 'تحديد مسار دوري ومقاعد',
-                    onTap: () {
-                      if (_driverId == null) return;
+                    onTap: () async {
+                      final driverId = _driverId ?? (await widget.storageService.getUserId()) ?? 'drv-current';
+                      if (!context.mounted) return;
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => CreateRouteScreen(
                             apiClient: widget.apiClient,
-                            driverId: _driverId!,
+                            driverId: driverId,
                           ),
                         ),
                       );

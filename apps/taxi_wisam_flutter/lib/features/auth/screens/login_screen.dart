@@ -2,8 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/storage_service.dart';
+import '../../../core/utils/iraqi_phone_validator.dart';
 import '../../customer/screens/customer_home_screen.dart';
 import '../../driver/screens/driver_home_screen.dart';
+import 'phone_otp_verification_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -37,6 +39,15 @@ class _LoginScreenState extends State<LoginScreen> {
     if (identifier.isEmpty) {
       setState(() => _errorMessage = 'يرجى إدخال البريد الإلكتروني أو رقم الهاتف');
       return;
+    }
+
+    final isEmail = identifier.contains('@');
+    if (!isEmail) {
+      final phoneRes = IraqiPhoneValidator.validate(identifier);
+      if (!phoneRes.isValid) {
+        setState(() => _errorMessage = phoneRes.errorMessage ?? IraqiPhoneValidator.invalidPhoneErrorMessage);
+        return;
+      }
     }
 
     setState(() {
@@ -282,7 +293,28 @@ class _LoginScreenState extends State<LoginScreen> {
                           )
                         : const Text('تسجيل الدخول', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PhoneOtpVerificationScreen(
+                            apiClient: widget.apiClient,
+                            storageService: widget.storageService,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.sms_rounded),
+                    label: const Text('الدخول السريع عبر رمز التحقق (OTP) 📲'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
 
                   TextButton(
                     onPressed: () {

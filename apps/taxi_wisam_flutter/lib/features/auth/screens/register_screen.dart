@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/services/storage_service.dart';
+import '../../../core/utils/iraqi_phone_validator.dart';
 import '../../customer/screens/customer_home_screen.dart';
 import '../../driver/screens/driver_home_screen.dart';
+import '../widgets/iraqi_phone_input_field.dart';
 
 class RegisterScreen extends StatefulWidget {
   final ApiClient apiClient;
@@ -28,6 +30,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _selectedRole = 'Customer'; // 'Customer' or 'Driver'
   bool _isLoading = false;
   String? _errorMessage;
+  IraqiPhoneValidationResult _phoneValidation = const IraqiPhoneValidationResult(
+    isValid: false,
+    operator: IraqiTelecomOperator.unknown,
+    normalizedLocalNumber: '',
+    normalizedE164Number: '',
+  );
 
   final List<String> _emailDomains = [
     '@gmail.com',
@@ -49,6 +57,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (phone.isEmpty && email.isEmpty) {
       setState(() => _errorMessage = 'يرجى إدخال رقم الهاتف أو البريد الإلكتروني للتسجيل');
       return;
+    }
+
+    if (phone.isNotEmpty) {
+      if (!_phoneValidation.isValid) {
+        setState(() => _errorMessage = _phoneValidation.errorMessage ?? IraqiPhoneValidator.invalidPhoneErrorMessage);
+        return;
+      }
     }
 
     if (_selectedRole == 'Driver' && _licenseController.text.trim().isEmpty) {
@@ -232,16 +247,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 16),
 
-              TextField(
+              IraqiPhoneInputField(
                 controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                autofillHints: const [AutofillHints.telephoneNumber],
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'رقم الهاتف',
-                  hintText: '0770xxxxxxx',
-                  prefixIcon: Icon(Icons.phone_android_outlined),
-                ),
+                onValidationChanged: (res) {
+                  setState(() {
+                    _phoneValidation = res;
+                    _errorMessage = null;
+                  });
+                },
               ),
               const SizedBox(height: 16),
 
