@@ -94,7 +94,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final fallbackUserId = 'usr-${DateTime.now().millisecondsSinceEpoch}';
       final fallbackToken = 'jwt_offline_$fallbackUserId';
       final isEmail = identifier.contains('@');
-      final fallbackName = isEmail ? identifier.split('@')[0] : 'مستخدم تاكسي وسام';
+      final fallbackName = isEmail ? identifier.split('@')[0] : 'مستخدم توصيله';
 
       await widget.storageService.saveSession(
         token: fallbackToken,
@@ -153,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'تاكسي وسام',
+                    'توصيله',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 28,

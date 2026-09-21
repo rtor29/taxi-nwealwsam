@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>تكسي وسام</string>
+	<string>توصيله</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -67,6 +67,6 @@
 		<true/>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>يحتاج تاكسي وسام لمعرفة موقعك لتحديد نقطة الركوب والوجهة بدقة</string>
+	<string>يحتاج تطبيق توصيله لمعرفة موقعك لتحديد نقطة الركوب والوجهة بدقة</string>
 </dict>
 </plist>

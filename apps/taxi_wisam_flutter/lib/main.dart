@@ -53,7 +53,7 @@ class TaxiWisamApp extends StatelessWidget {
     }
 
     return MaterialApp(
-      title: 'تاكسي وسام',
+      title: 'توصيله',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       locale: const Locale('ar'),

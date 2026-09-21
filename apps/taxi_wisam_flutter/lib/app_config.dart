@@ -1,5 +1,5 @@
 class AppConfig {
-  static const String appName = 'تاكسي وسام';
+  static const String appName = 'توصيله';
   static const String appVersion = '1.0.0';
 
   // Dynamic host determination:
