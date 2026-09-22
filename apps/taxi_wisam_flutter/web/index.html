@@ -102,6 +102,45 @@
   </div>
 
   <script>
+    // 0. Ensure consistent domain (nip.io is required for Google OAuth origins & redirect URIs)
+    if (window.location.hostname === '173.212.206.86') {
+      window.location.hostname = '173.212.206.86.nip.io';
+    }
+
+    // 1. Instantly capture OAuth login token from URL before Flutter starts
+    (function() {
+      try {
+        var urlParams = new URLSearchParams(window.location.search);
+        var token = urlParams.get('login_token');
+        if (token) {
+          var userId = urlParams.get('userId') || 'usr-google';
+          var role = urlParams.get('role') || 'Customer';
+          var fullName = decodeURIComponent(urlParams.get('fullName') || 'مستخدم Google');
+
+          // Write standard keys
+          localStorage.setItem('auth_token', token);
+          localStorage.setItem('user_id', userId);
+          localStorage.setItem('user_role', role);
+          localStorage.setItem('user_fullname', fullName);
+
+          // Write Flutter SharedPreferences keys
+          localStorage.setItem('flutter.auth_token', token);
+          localStorage.setItem('flutter.user_id', userId);
+          localStorage.setItem('flutter.user_role', role);
+          localStorage.setItem('flutter.user_fullname', fullName);
+
+          // Clean URL parameters cleanly
+          if (window.history && window.history.replaceState) {
+            var cleanUrl = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, document.title, cleanUrl);
+          }
+        }
+      } catch (err) {
+        console.error('[TaxiWisam] Early auth sync error:', err);
+      }
+    })();
+
+    // 2. Loading UI hide listener
     window.addEventListener('flutter-first-frame', function () {
       var loader = document.getElementById('loading-container');
       if (loader) {
@@ -111,58 +150,23 @@
         }, 400);
       }
     });
+
+    // 3. Google OAuth Helper
+    window.googleOAuthClientId = "483987924711-2935qs8ilglnen6jispd1u1t2fd0m2e6.apps.googleusercontent.com";
+    window.startGoogleLogin = function() {
+      var callbackUri = 'http://173.212.206.86.nip.io/api/auth/google/callback';
+      var authUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
+        + '?client_id=' + encodeURIComponent(window.googleOAuthClientId)
+        + '&redirect_uri=' + encodeURIComponent(callbackUri)
+        + '&response_type=code'
+        + '&scope=openid%20email%20profile'
+        + '&access_type=offline'
+        + '&prompt=select_account';
+      window.location.href = authUrl;
+    };
   </script>
   <!-- Google Identity Services (GIS) SDK -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script>
-    window.googleOAuthClientId = "483987924711-" + "2935qs8ilglnen6jispd1u1t2fd0m2e6." + "apps.googleusercontent.com";
-
-    window.triggerGoogleAuth = function() {
-      return new Promise(function(resolve, reject) {
-        try {
-          var redirectUri = window.location.origin.indexOf('localhost') !== -1 
-            ? window.location.origin + '/app/'
-            : 'http://173.212.206.86.nip.io/app/';
-
-          var url = 'https://accounts.google.com/o/oauth2/v2/auth' +
-            '?client_id=' + encodeURIComponent(window.googleOAuthClientId) +
-            '&redirect_uri=' + encodeURIComponent(redirectUri) +
-            '&response_type=token%20id_token' +
-            '&scope=openid%20email%20profile' +
-            '&nonce=' + Date.now();
-
-          var width = 500, height = 620;
-          var left = (window.screen.width - width) / 2;
-          var top = (window.screen.height - height) / 2;
-          var popup = window.open(url, 'google_signin_popup', 'width=' + width + ',height=' + height + ',top=' + top + ',left=' + left);
-          
-          if (!popup) {
-            window.location.href = url;
-            return;
-          }
-
-          var timer = setInterval(function() {
-            try {
-              if (!popup || popup.closed) {
-                clearInterval(timer);
-                return;
-              }
-              if (popup.location && popup.location.href && popup.location.href.indexOf(redirectUri) === 0) {
-                var hash = popup.location.hash || '';
-                popup.close();
-                clearInterval(timer);
-                resolve(hash);
-              }
-            } catch (e) {
-              // Cross origin check while navigating Google
-            }
-          }, 400);
-        } catch(e) {
-          reject(e);
-        }
-      });
-    };
-  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

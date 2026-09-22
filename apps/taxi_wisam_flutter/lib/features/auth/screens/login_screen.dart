@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/storage_service.dart';
@@ -39,6 +40,61 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _checkIncomingGoogleAuth() async {
+    // 1. Check if session already active in storage
+    final savedToken = await widget.storageService.getToken();
+    if (savedToken != null && savedToken.isNotEmpty) {
+      final role = await widget.storageService.getUserRole() ?? 'Customer';
+      final userId = await widget.storageService.getUserId() ?? '';
+      final fullName = await widget.storageService.getFullName() ?? 'مستخدم';
+      if (mounted) {
+        _navigateAfterLogin({
+          'token': savedToken,
+          'role': role,
+          'userId': userId,
+          'fullName': fullName,
+        });
+      }
+      return;
+    }
+
+    // 2. On Web, check if Google OAuth redirect provided a login token in URL
+    if (kIsWeb) {
+      try {
+        final query = Uri.base.queryParameters;
+        if (query.containsKey('login_token') && query['login_token']!.isNotEmpty) {
+          final token = query['login_token']!;
+          final userId = query['userId'] ?? 'usr-google';
+          final role = query['role'] ?? 'Customer';
+          final fullName = query['fullName'] ?? 'مستخدم Google';
+
+          await widget.storageService.saveSession(
+            token: token,
+            userId: userId,
+            role: role,
+            fullName: fullName,
+          );
+
+          if (mounted) {
+            _navigateAfterLogin({
+              'token': token,
+              'role': role,
+              'userId': userId,
+              'fullName': fullName,
+            });
+          }
+          return;
+        }
+
+        if (query.containsKey('error')) {
+          final err = query['error']!;
+          setState(() {
+            _errorMessage = 'فشلت عملية المصادقة عبر Google ($err). يرجى المحاولة مرة أخرى.';
+          });
+        }
+      } catch (_) {}
+    }
+
+    // 3. Fallback for direct token callback in fragment/query
     final authService = GoogleAuthService(
       apiClient: widget.apiClient,
       storageService: widget.storageService,

@@ -161,13 +161,22 @@ function serveCompressedFile(filePath, req, res, defaultMime = 'application/octe
     const contentType = mimeTypes[ext] || defaultMime;
     const acceptGzip = req.headers['accept-encoding'] && req.headers['accept-encoding'].includes('gzip');
 
-    const isStaticAsset = ['.js', '.mjs', '.wasm', '.png', '.jpg', '.jpeg', '.svg', '.ttf', '.otf', '.woff', '.woff2', '.css'].includes(ext);
+    const isBootstrapOrCode = filePath.endsWith('main.dart.js') || 
+                              filePath.endsWith('flutter_bootstrap.js') || 
+                              filePath.endsWith('flutter_service_worker.js') ||
+                              ext === '.html' || ext === '.json';
+
+    const isStaticAsset = !isBootstrapOrCode && ['.js', '.mjs', '.wasm', '.png', '.jpg', '.jpeg', '.svg', '.ttf', '.otf', '.woff', '.woff2', '.css'].includes(ext);
     const headers = {
         'Content-Type': contentType,
         'Vary': 'Accept-Encoding'
     };
 
-    if (isStaticAsset) {
+    if (isBootstrapOrCode) {
+        headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+        headers['Pragma'] = 'no-cache';
+        headers['Expires'] = '0';
+    } else if (isStaticAsset) {
         headers['Cache-Control'] = 'public, max-age=86400';
     } else {
         headers['Cache-Control'] = 'no-cache';
@@ -1369,7 +1378,13 @@ const server = http.createServer((req, res) => {
             try {
                 const parts = token.split('.');
                 if (parts.length === 3) {
-                    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+                    let jsonStr;
+                    try {
+                        jsonStr = Buffer.from(parts[1], 'base64url').toString('utf8');
+                    } catch (_) {
+                        jsonStr = Buffer.from(parts[1], 'base64').toString('utf8');
+                    }
+                    const payload = JSON.parse(jsonStr);
                     if (payload && payload.email) {
                         return {
                             email: payload.email,
@@ -1525,14 +1540,109 @@ const server = http.createServer((req, res) => {
         });
     }
 
+    function renderAuthSuccessHtml(res, token, userId, role, fullName) {
+        const safeToken = JSON.stringify(token);
+        const safeUserId = JSON.stringify(userId);
+        const safeRole = JSON.stringify(role);
+        const safeFullName = JSON.stringify(fullName);
+        const target = `/app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(userId)}&role=${encodeURIComponent(role)}&fullName=${encodeURIComponent(fullName)}`;
+
+        const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>توصيله | تسجيل الدخول</title>
+  <style>
+    body { background-color: #0F172A; color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .box { text-align: center; padding: 36px; background: rgba(30, 41, 59, 0.85); border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.6); max-width: 360px; width: 90%; }
+    .icon { font-size: 54px; margin-bottom: 16px; }
+    .title { font-size: 20px; font-weight: bold; margin-bottom: 8px; color: #F8FAFC; }
+    .subtitle { font-size: 14px; color: #94A3B8; }
+    .spinner { width: 32px; height: 32px; border: 3px solid rgba(245,158,11,0.2); border-top-color: #F59E0B; border-radius: 50%; animation: spin 1s infinite linear; margin: 20px auto 0; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="icon">🚖</div>
+    <div class="title">تم تسجيل الدخول بنجاح!</div>
+    <div class="subtitle">جاري تحويلك إلى حسابك...</div>
+    <div class="spinner"></div>
+  </div>
+  <script>
+    try {
+      var t = ${safeToken};
+      var u = ${safeUserId};
+      var r = ${safeRole};
+      var n = ${safeFullName};
+
+      localStorage.setItem('auth_token', t);
+      localStorage.setItem('user_id', u);
+      localStorage.setItem('user_role', r);
+      localStorage.setItem('user_fullname', n);
+
+      localStorage.setItem('flutter.auth_token', t);
+      localStorage.setItem('flutter.user_id', u);
+      localStorage.setItem('flutter.user_role', r);
+      localStorage.setItem('flutter.user_fullname', n);
+    } catch (e) {
+      console.error(e);
+    }
+    setTimeout(function() {
+      window.location.replace(${JSON.stringify(target)});
+    }, 200);
+  </script>
+</body>
+</html>`;
+
+        res.writeHead(200, {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+        });
+        return res.end(html);
+    }
+
+    function renderAuthErrorHtml(res, errorMessage) {
+        const html = `<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>توصيله | خطأ في تسجيل الدخول</title>
+  <style>
+    body { background-color: #0F172A; color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .box { text-align: center; padding: 36px; background: rgba(30, 41, 59, 0.85); border-radius: 24px; max-width: 400px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.6); }
+    .icon { font-size: 54px; margin-bottom: 16px; }
+    .title { font-size: 20px; font-weight: bold; margin-bottom: 8px; color: #EF4444; }
+    .subtitle { font-size: 14px; color: #94A3B8; margin-bottom: 24px; line-height: 1.6; }
+    .btn { display: inline-block; background: #F59E0B; color: #0F172A; text-decoration: none; padding: 12px 28px; border-radius: 12px; font-weight: bold; font-size: 15px; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="icon">⚠️</div>
+    <div class="title">تعذر إكمال تسجيل الدخول عبر Google</div>
+    <div class="subtitle">${errorMessage}</div>
+    <a href="/app/" class="btn">العودة لصفحة البداية</a>
+  </div>
+</body>
+</html>`;
+
+        res.writeHead(200, {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+        });
+        return res.end(html);
+    }
+
     if (pathname === '/api/auth/google/callback') {
         const code = url.searchParams.get('code');
         const error = url.searchParams.get('error');
 
         if (error || !code) {
             console.error('[GoogleAuth] OAuth callback error:', error || 'No code provided');
-            res.writeHead(302, { 'Location': '/app/?error=' + encodeURIComponent(error || 'Google auth cancelled') });
-            return res.end();
+            return renderAuthErrorHtml(res, error ? `تم إلغاء عملية تسجيل الدخول: ${error}` : 'لم يتم استلام رمز المصادقة من Google.');
         }
 
         try {
@@ -1562,8 +1672,7 @@ const server = http.createServer((req, res) => {
                         const tokenData = JSON.parse(raw);
                         if (!tokenData.id_token && !tokenData.access_token) {
                             console.error('[GoogleAuth] Failed to exchange code for token:', raw);
-                            res.writeHead(302, { 'Location': '/app/?error=token_exchange_failed' });
-                            return res.end();
+                            return renderAuthErrorHtml(res, 'فشل تبادل رمز التفويض مع خوادم Google.');
                         }
 
                         const profile = await resolveGoogleProfile({
@@ -1572,8 +1681,7 @@ const server = http.createServer((req, res) => {
                         });
 
                         if (!profile || !profile.email) {
-                            res.writeHead(302, { 'Location': '/app/?error=profile_not_found' });
-                            return res.end();
+                            return renderAuthErrorHtml(res, 'لم يتم العثور على بيانات البريد الإلكتروني في حساب Google.');
                         }
 
                         const emailLower = profile.email.toLowerCase();
@@ -1585,9 +1693,7 @@ const server = http.createServer((req, res) => {
                         );
                         if (driver) {
                             const token = 'jwt_token_' + driver.driverId;
-                            const target = `/app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driver.driverId)}&role=Driver&fullName=${encodeURIComponent(driver.fullName)}`;
-                            res.writeHead(302, { 'Location': target });
-                            return res.end();
+                            return renderAuthSuccessHtml(res, token, driver.driverId, 'Driver', driver.fullName);
                         }
 
                         // 2. Check Customer
@@ -1603,9 +1709,7 @@ const server = http.createServer((req, res) => {
                                 saveState();
                             }
                             const token = 'jwt_token_' + customer.customerId;
-                            const target = `/app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(customer.customerId)}&role=Customer&fullName=${encodeURIComponent(customer.fullName)}`;
-                            res.writeHead(302, { 'Location': target });
-                            return res.end();
+                            return renderAuthSuccessHtml(res, token, customer.customerId, 'Customer', customer.fullName);
                         }
 
                         // 3. Register New Customer
@@ -1630,21 +1734,17 @@ const server = http.createServer((req, res) => {
                         saveState();
 
                         const token = 'jwt_token_' + newId;
-                        const target = `/app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(newId)}&role=Customer&fullName=${encodeURIComponent(customer.fullName)}`;
-                        res.writeHead(302, { 'Location': target });
-                        return res.end();
+                        return renderAuthSuccessHtml(res, token, newId, 'Customer', customer.fullName);
                     } catch (err) {
                         console.error('[GoogleAuth] Error in callback handler:', err);
-                        res.writeHead(302, { 'Location': '/app/?error=auth_internal_error' });
-                        return res.end();
+                        return renderAuthErrorHtml(res, 'حدث خطأ داخلي أثناء معالجة بيانات الحساب.');
                     }
                 });
             });
 
             tokenReq.on('error', (err) => {
                 console.error('[GoogleAuth] Token request error:', err);
-                res.writeHead(302, { 'Location': '/app/?error=network_error' });
-                return res.end();
+                return renderAuthErrorHtml(res, 'تعذر الاتصال بخوادم Google. يرجى التحقق من الاتصال بالإنترنت.');
             });
 
             tokenReq.write(postData);

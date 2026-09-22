@@ -14,11 +14,10 @@ void main() async {
   final storageService = StorageService();
   final apiClient = ApiClient(storageService);
 
-  // Check initial session
-  String? token = await storageService.getToken();
-  String? role = await storageService.getUserRole();
+  String? token;
+  String? role;
 
-  // On Web, check if Google OAuth redirect provided a login token in query parameters
+  // 1. On Web, check if Google OAuth redirect provided a login token in query parameters
   if (kIsWeb) {
     try {
       final queryParams = Uri.base.queryParameters;
@@ -36,6 +35,12 @@ void main() async {
         );
       }
     } catch (_) {}
+  }
+
+  // 2. Read persisted session (populated via index.html early sync or previous login)
+  if (token == null || token.isEmpty) {
+    token = await storageService.getToken();
+    role = await storageService.getUserRole();
   }
 
   runApp(TaxiWisamApp(
