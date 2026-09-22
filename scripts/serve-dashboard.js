@@ -176,6 +176,9 @@ function serveCompressedFile(filePath, req, res, defaultMime = 'application/octe
         headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
         headers['Pragma'] = 'no-cache';
         headers['Expires'] = '0';
+        if (ext === '.html') {
+            headers['Clear-Site-Data'] = '"cache"';
+        }
     } else if (isStaticAsset) {
         headers['Cache-Control'] = 'public, max-age=86400';
     } else {

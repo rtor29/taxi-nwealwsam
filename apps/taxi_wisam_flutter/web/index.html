@@ -7,6 +7,27 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="description" content="توصيله - منصة حجز وتتبع الرحلات والخطوط اليومية في محافظة النجف الأشرف">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
+  <script>
+    // Unconditionally purge old service workers and caches from previous versions
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        for (var i = 0; i < regs.length; i++) {
+          regs[i].unregister();
+        }
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then(function(names) {
+        for (var i = 0; i < names.length; i++) {
+          caches.delete(names[i]);
+        }
+      });
+    }
+  </script>
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -167,6 +188,11 @@
   </script>
   <!-- Google Identity Services (GIS) SDK -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    var bootScript = document.createElement('script');
+    bootScript.src = 'flutter_bootstrap.js?v=' + Date.now();
+    bootScript.async = true;
+    document.body.appendChild(bootScript);
+  </script>
 </body>
 </html>
