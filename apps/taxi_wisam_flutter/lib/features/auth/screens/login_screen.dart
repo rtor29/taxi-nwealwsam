@@ -409,8 +409,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       );
                     },
-                    icon: const Icon(Icons.sms_rounded),
-                    label: const Text('الدخول السريع عبر رمز التحقق (OTP) 📲'),
+                    icon: const Icon(Icons.phone_android_rounded),
+                    label: const Text(
+                      'ليس لديك حساب؟ سجّل الآن عن طريق رقم الهاتف',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -430,7 +433,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       );
                     },
-                    child: const Text('ليس لديك حساب؟ سجّل الآن عبر هاتفك أو بريدك'),
+                    child: const Text('تسجيل حساب جديد كسائق أو تفاصيل أخرى'),
                   ),
                 ],
               ),

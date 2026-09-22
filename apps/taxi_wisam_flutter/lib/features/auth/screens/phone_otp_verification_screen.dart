@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/utils/iraqi_phone_validator.dart';
@@ -41,6 +42,7 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
   String? _serverErrorMessage;
   String? _serverSuccessMessage;
   String? _maskedPhone;
+  String? _otpDisplayUrl;
 
   @override
   void dispose() {
@@ -49,7 +51,7 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
     super.dispose();
   }
 
-  /// 1. إرسال رمز التحقق OTP إلى شبكة زين أو آسيا سيل
+  /// 1. إرسال رمز التحقق OTP إلى شبكة زين أو آسيا سيل وفتح رابط التحقق
   Future<void> _handleSendOtp() async {
     // Client-side verification guard
     if (!_validationResult.isValid) {
@@ -77,11 +79,21 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = response.data;
+        final link = data['otpDisplayUrl']?.toString() ??
+            'http://173.212.206.86.nip.io/otp?phone=${_validationResult.normalizedLocalNumber}';
+
         setState(() {
           _isCodeSent = true;
-          _serverSuccessMessage = data['message'] ?? 'تم إرسال رمز التحقق بنجاح.';
+          _serverSuccessMessage = data['message'] ?? 'تم توليد وإرسال رمز التحقق بنجاح.';
           _maskedPhone = _validationResult.normalizedLocalNumber;
+          _otpDisplayUrl = link;
         });
+
+        // Automatically launch the verification code link
+        try {
+          final uri = Uri.parse(link);
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } catch (_) {}
       }
     } on DioException catch (e) {
       if (e.response?.statusCode == 422) {
@@ -313,11 +325,52 @@ class _PhoneOtpVerificationScreenState extends State<PhoneOtpVerificationScreen>
                 ] else ...[
                   // Step 2: OTP Entry Field
                   Text(
-                    'تم إرسال رمز التحقق إلى الرقم $_maskedPhone',
+                    'تم توليد رمز التحقق للرقم $_maskedPhone',
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+
+                  if (_otpDisplayUrl != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.amber.shade300, width: 1.5),
+                      ),
+                      child: Column(
+                        children: [
+                          const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.vpn_key_rounded, color: Color(0xFFD97706), size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                'كلمة التحقق متاحة على السيرفر',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFFB45309)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              launchUrl(Uri.parse(_otpDisplayUrl!), mode: LaunchMode.externalApplication);
+                            },
+                            icon: const Icon(Icons.open_in_browser_rounded, size: 18),
+                            label: const Text('فتح رابط كلمة التحقق من السيرفر 🌐', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0F172A),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
 
                   TextField(
                     controller: _otpController,

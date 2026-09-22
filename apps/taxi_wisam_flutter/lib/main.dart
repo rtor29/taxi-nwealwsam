@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/network/api_client.dart';
@@ -14,8 +15,28 @@ void main() async {
   final apiClient = ApiClient(storageService);
 
   // Check initial session
-  final token = await storageService.getToken();
-  final role = await storageService.getUserRole();
+  String? token = await storageService.getToken();
+  String? role = await storageService.getUserRole();
+
+  // On Web, check if Google OAuth redirect provided a login token in query parameters
+  if (kIsWeb) {
+    try {
+      final queryParams = Uri.base.queryParameters;
+      if (queryParams.containsKey('login_token') && queryParams['login_token']!.isNotEmpty) {
+        token = queryParams['login_token'];
+        final userId = queryParams['userId'] ?? 'usr-google';
+        role = queryParams['role'] ?? 'Customer';
+        final fullName = queryParams['fullName'] ?? 'مستخدم Google';
+
+        await storageService.saveSession(
+          token: token!,
+          userId: userId,
+          role: role,
+          fullName: fullName,
+        );
+      }
+    } catch (_) {}
+  }
 
   runApp(TaxiWisamApp(
     storageService: storageService,

@@ -88,27 +88,24 @@ class GoogleAuthService {
     }
   }
 
-  /// Launch Google OAuth 2.0 Flow
+  /// Launch Google OAuth 2.0 Flow via server-side authorization code exchange
   Future<void> launchGoogleSignInFlow() async {
-    final redirectUri = kIsWeb
-        ? (Uri.base.origin.contains('localhost')
-            ? '${Uri.base.origin}/app/'
-            : AppConfig.googleRedirectUri)
-        : AppConfig.googleRedirectUri;
+    const callbackUri = 'http://173.212.206.86.nip.io/api/auth/google/callback';
 
     final authUrl = Uri.parse(
       'https://accounts.google.com/o/oauth2/v2/auth'
       '?client_id=${AppConfig.googleClientId}'
-      '&redirect_uri=${Uri.encodeComponent(redirectUri)}'
-      '&response_type=token%20id_token'
+      '&redirect_uri=${Uri.encodeComponent(callbackUri)}'
+      '&response_type=code'
       '&scope=openid%20email%20profile'
-      '&prompt=select_account'
-      '&nonce=tw_${DateTime.now().millisecondsSinceEpoch}',
+      '&access_type=offline'
+      '&prompt=select_account',
     );
 
     await launchUrl(
       authUrl,
       mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+      webOnlyWindowName: '_self',
     );
   }
 }

@@ -5,6 +5,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const querystring = require('querystring');
 
 let googleSecretConfig = {};
 try {
@@ -958,24 +959,180 @@ const server = http.createServer((req, res) => {
                 }, 422);
             }
 
-            const otpCode = '1234';
+            // Generate dynamic 4-digit OTP code (e.g. 7349)
+            const otpCode = Math.floor(1000 + Math.random() * 9000).toString();
             if (!state.otps) state.otps = {};
             state.otps[validation.normalizedLocal] = {
                 code: otpCode,
                 operator: validation.operator,
-                expiresAt: Date.now() + 5 * 60 * 1000
+                createdAt: Date.now(),
+                expiresAt: Date.now() + 10 * 60 * 1000
             };
 
             const opNameAr = validation.operator === 'Asiacell' ? 'آسيا سيل (Asiacell)' : 'زين العراق (Zain Iraq)';
+            const otpDisplayUrl = `http://173.212.206.86.nip.io/otp?phone=${encodeURIComponent(validation.normalizedLocal)}`;
             return json({
                 success: true,
                 message: `تم إرسال رمز التحقق بنجاح إلى شبكة ${opNameAr}.`,
                 phoneNumber: validation.normalizedLocal,
                 e164Number: validation.normalizedE164,
                 operator: validation.operator,
-                debugOtp: otpCode
+                debugOtp: otpCode,
+                otpDisplayUrl: otpDisplayUrl
             }, 200);
         });
+    }
+
+    // Public OTP display page requested by user
+    if (pathname === '/otp' || pathname === '/api/auth/otp-display') {
+        const phone = (url.searchParams.get('phone') || '').trim();
+        const record = state.otps ? state.otps[phone] : null;
+        const currentCode = record ? record.code : (phone ? '1234' : '----');
+        const operator = record ? record.operator : (phone.startsWith('077') ? 'Asiacell' : 'Zain Iraq');
+        const opNameAr = operator === 'Asiacell' ? 'آسيا سيل (Asiacell)' : 'زين العراق (Zain Iraq)';
+        const opColor = operator === 'Asiacell' ? '#EF4444' : '#0284C7';
+
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        return res.end(`<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>رمز التحقق - منصة توصيله</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      color: #FFFFFF;
+    }
+    .card {
+      background: rgba(30, 41, 59, 0.9);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 32px 24px;
+      width: 90%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+    .logo-icon {
+      font-size: 50px;
+      margin-bottom: 8px;
+    }
+    h1 {
+      font-size: 24px;
+      margin: 0 0 6px 0;
+      color: #F59E0B;
+    }
+    p.subtitle {
+      color: #94A3B8;
+      font-size: 14px;
+      margin: 0 0 20px 0;
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: bold;
+      background: ${opColor};
+      color: white;
+      margin-bottom: 18px;
+    }
+    .code-box {
+      background: #0F172A;
+      border: 2px dashed #F59E0B;
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .code-label {
+      font-size: 13px;
+      color: #94A3B8;
+      margin-bottom: 8px;
+    }
+    .otp-digits {
+      font-size: 44px;
+      font-weight: 800;
+      letter-spacing: 12px;
+      color: #F59E0B;
+      font-family: monospace;
+      margin: 6px 0;
+    }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      margin-top: 10px;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: bold;
+      text-decoration: none;
+      cursor: pointer;
+      box-sizing: border-box;
+      transition: all 0.2s;
+    }
+    .btn-copy {
+      background: #F59E0B;
+      color: #0F172A;
+      border: none;
+    }
+    .btn-app {
+      background: transparent;
+      color: #F8FAFC;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .footer-tip {
+      font-size: 12px;
+      color: #94A3B8;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo-icon">🚖</div>
+    <h1>منصة توصيله</h1>
+    <p class="subtitle">رمز التحقق المعتمد من السيرفر</p>
+    
+    ${phone ? `<div class="badge">شبكة ${opNameAr} | ${phone}</div>` : ''}
+
+    <div class="code-box">
+      <div class="code-label">رمز التحقق الخاص بك (OTP)</div>
+      <div class="otp-digits" id="otpCode">${currentCode}</div>
+    </div>
+
+    <button class="btn btn-copy" onclick="copyCode()">📋 نسخ الرمز</button>
+    <a class="btn btn-app" href="/app/">الرجوع إلى التطبيق وإدخال الرمز 📲</a>
+
+    <div class="footer-tip">أدخل هذا الرمز في شاشة التطبيق لإتمام تسجيل الدخول فوراً</div>
+  </div>
+
+  <script>
+    function copyCode() {
+      var code = document.getElementById('otpCode').innerText.trim();
+      navigator.clipboard.writeText(code).then(function() {
+        var btn = document.querySelector('.btn-copy');
+        btn.innerText = 'تم نسخ الرمز بنجاح! ✓';
+        btn.style.background = '#10B981';
+        btn.style.color = '#FFFFFF';
+        setTimeout(function() {
+          btn.innerText = '📋 نسخ الرمز';
+          btn.style.background = '#F59E0B';
+          btn.style.color = '#0F172A';
+        }, 2500);
+      });
+    }
+  </script>
+</body>
+</html>`);
     }
 
     if (pathname === '/api/auth/verify-otp' && req.method === 'POST') {
@@ -1369,8 +1526,135 @@ const server = http.createServer((req, res) => {
     }
 
     if (pathname === '/api/auth/google/callback') {
-        res.writeHead(302, { 'Location': '/app/' });
-        return res.end();
+        const code = url.searchParams.get('code');
+        const error = url.searchParams.get('error');
+
+        if (error || !code) {
+            console.error('[GoogleAuth] OAuth callback error:', error || 'No code provided');
+            res.writeHead(302, { 'Location': '/app/?error=' + encodeURIComponent(error || 'Google auth cancelled') });
+            return res.end();
+        }
+
+        try {
+            const redirectUri = 'http://173.212.206.86.nip.io/api/auth/google/callback';
+            const postData = querystring.stringify({
+                code: code,
+                client_id: GOOGLE_CLIENT_ID,
+                client_secret: GOOGLE_CLIENT_SECRET,
+                redirect_uri: redirectUri,
+                grant_type: 'authorization_code'
+            });
+
+            const tokenReq = https.request({
+                hostname: 'oauth2.googleapis.com',
+                port: 443,
+                path: '/token',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Content-Length': Buffer.byteLength(postData)
+                }
+            }, (tokenRes) => {
+                let raw = '';
+                tokenRes.on('data', chunk => raw += chunk);
+                tokenRes.on('end', async () => {
+                    try {
+                        const tokenData = JSON.parse(raw);
+                        if (!tokenData.id_token && !tokenData.access_token) {
+                            console.error('[GoogleAuth] Failed to exchange code for token:', raw);
+                            res.writeHead(302, { 'Location': '/app/?error=token_exchange_failed' });
+                            return res.end();
+                        }
+
+                        const profile = await resolveGoogleProfile({
+                            idToken: tokenData.id_token,
+                            accessToken: tokenData.access_token
+                        });
+
+                        if (!profile || !profile.email) {
+                            res.writeHead(302, { 'Location': '/app/?error=profile_not_found' });
+                            return res.end();
+                        }
+
+                        const emailLower = profile.email.toLowerCase();
+
+                        // 1. Check Driver
+                        const driver = state.drivers.find(d => 
+                            (d.email && d.email.toLowerCase() === emailLower) ||
+                            (d.googleId && d.googleId === profile.sub)
+                        );
+                        if (driver) {
+                            const token = 'jwt_token_' + driver.driverId;
+                            const target = `/app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driver.driverId)}&role=Driver&fullName=${encodeURIComponent(driver.fullName)}`;
+                            res.writeHead(302, { 'Location': target });
+                            return res.end();
+                        }
+
+                        // 2. Check Customer
+                        let customer = state.customers.find(c => 
+                            (c.email && c.email.toLowerCase() === emailLower) ||
+                            (c.googleId && c.googleId === profile.sub)
+                        );
+
+                        if (customer) {
+                            if (!customer.googleId) {
+                                customer.googleId = profile.sub;
+                                customer.authProvider = 'Google';
+                                saveState();
+                            }
+                            const token = 'jwt_token_' + customer.customerId;
+                            const target = `/app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(customer.customerId)}&role=Customer&fullName=${encodeURIComponent(customer.fullName)}`;
+                            res.writeHead(302, { 'Location': target });
+                            return res.end();
+                        }
+
+                        // 3. Register New Customer
+                        const newId = 'usr-g-' + Math.random().toString(36).substr(2, 9);
+                        customer = {
+                            customerId: newId,
+                            fullName: profile.name || emailLower.split('@')[0],
+                            email: emailLower,
+                            phoneNumber: '',
+                            picture: profile.picture || '',
+                            authProvider: 'Google',
+                            googleId: profile.sub,
+                            preferredPaymentMethod: 'Cash',
+                            ratingAverage: 5.0,
+                            totalBookings: 0,
+                            isActive: true,
+                            registeredAt: new Date().toISOString()
+                        };
+
+                        state.customers.push(customer);
+                        state.stats.totalUsers++;
+                        saveState();
+
+                        const token = 'jwt_token_' + newId;
+                        const target = `/app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(newId)}&role=Customer&fullName=${encodeURIComponent(customer.fullName)}`;
+                        res.writeHead(302, { 'Location': target });
+                        return res.end();
+                    } catch (err) {
+                        console.error('[GoogleAuth] Error in callback handler:', err);
+                        res.writeHead(302, { 'Location': '/app/?error=auth_internal_error' });
+                        return res.end();
+                    }
+                });
+            });
+
+            tokenReq.on('error', (err) => {
+                console.error('[GoogleAuth] Token request error:', err);
+                res.writeHead(302, { 'Location': '/app/?error=network_error' });
+                return res.end();
+            });
+
+            tokenReq.write(postData);
+            tokenReq.end();
+            return;
+        } catch (e) {
+            console.error('[GoogleAuth] Callback error:', e);
+            res.writeHead(302, { 'Location': '/app/?error=exception' });
+            return res.end();
+        }
     }
 
     if (pathname === '/api/auth/me') {
