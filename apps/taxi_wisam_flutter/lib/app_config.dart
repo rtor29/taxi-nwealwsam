@@ -1,12 +1,21 @@
+import 'package:flutter/foundation.dart';
+
 class AppConfig {
   static const String appName = 'توصيله';
   static const String appVersion = '1.0.0';
 
   // Dynamic host determination:
-  // Android Emulator uses 10.0.2.2
-  // iOS Simulator & Web use localhost
+  // On Web, use current origin (e.g. https://tawseelaiq.app)
+  // On Mobile apps, use production VPS IP
   static String get baseUrl {
-    // Dedicated Production VPS Cloud Server
+    if (kIsWeb) {
+      try {
+        final origin = Uri.base.origin;
+        if (origin.isNotEmpty && origin != 'null') {
+          return origin;
+        }
+      } catch (_) {}
+    }
     return 'http://173.212.206.86';
   }
 

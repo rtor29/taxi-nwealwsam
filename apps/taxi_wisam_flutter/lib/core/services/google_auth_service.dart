@@ -90,7 +90,15 @@ class GoogleAuthService {
 
   /// Launch Google OAuth 2.0 Flow via server-side authorization code exchange
   Future<void> launchGoogleSignInFlow() async {
-    const callbackUri = 'http://173.212.206.86.nip.io/api/auth/google/callback';
+    String callbackUri = 'http://173.212.206.86.nip.io/api/auth/google/callback';
+    if (kIsWeb) {
+      try {
+        final origin = Uri.base.origin;
+        if (origin.contains('tawseelaiq.app')) {
+          callbackUri = 'https://tawseelaiq.app/api/auth/google/callback';
+        }
+      } catch (_) {}
+    }
 
     final authUrl = Uri.parse(
       'https://accounts.google.com/o/oauth2/v2/auth'

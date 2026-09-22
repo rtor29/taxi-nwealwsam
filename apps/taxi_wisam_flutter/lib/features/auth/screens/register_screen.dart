@@ -12,11 +12,13 @@ import '../widgets/iraqi_phone_input_field.dart';
 class RegisterScreen extends StatefulWidget {
   final ApiClient apiClient;
   final StorageService storageService;
+  final String? initialEmail;
 
   const RegisterScreen({
     super.key,
     required this.apiClient,
     required this.storageService,
+    this.initialEmail,
   });
 
   @override
@@ -33,6 +35,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   bool _isGoogleLoading = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialEmail != null && widget.initialEmail!.isNotEmpty) {
+      _emailController.text = widget.initialEmail!;
+    }
+  }
 
   Future<void> _handleGoogleSignIn() async {
     setState(() {
@@ -74,18 +84,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final email = _emailController.text.trim();
 
     if (name.isEmpty) {
-      setState(() => _errorMessage = 'يرجى إدخال اسمك الكريم');
+      setState(() => _errorMessage = 'يرجى إدخال اسمك الكامل');
       return;
     }
 
-    if (phone.isEmpty && email.isEmpty) {
-      setState(() => _errorMessage = 'يرجى إدخال رقم الهاتف أو البريد الإلكتروني للتسجيل');
+    if (email.isEmpty) {
+      setState(() => _errorMessage = 'يرجى إدخال البريد الإلكتروني لتسجيل الحساب');
       return;
     }
 
+    if (!email.contains('@') || !email.contains('.')) {
+      setState(() => _errorMessage = 'يرجى إدخال بريد إلكتروني صالح (مثال: name@gmail.com)');
+      return;
+    }
+
+    // Phone is optional since OTP is under preparation
     if (phone.isNotEmpty) {
-      if (!_phoneValidation.isValid) {
-        setState(() => _errorMessage = _phoneValidation.errorMessage ?? IraqiPhoneValidator.invalidPhoneErrorMessage);
+      final phoneRes = IraqiPhoneValidator.validate(phone);
+      if (!phoneRes.isValid) {
+        setState(() => _errorMessage = phoneRes.errorMessage ?? IraqiPhoneValidator.invalidPhoneErrorMessage);
         return;
       }
     }
@@ -216,6 +233,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // OTP status notice
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF3C7),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFFCD34D)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 22),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'التسجيل مفعل حالياً عبر البريد الإلكتروني أو حساب Google.\n(خدمة التحقق برقم الهاتف قيد التجهيز الفني)',
+                        style: TextStyle(color: Color(0xFF92400E), fontSize: 12, height: 1.4, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
               if (_errorMessage != null) ...[
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -264,21 +304,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 autofillHints: const [AutofillHints.name],
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
-                  labelText: 'الاسم الكامل',
+                  labelText: 'الاسم الكامل *',
                   hintText: 'الاسم الثلاثي',
                   prefixIcon: Icon(Icons.person_outline),
                 ),
-              ),
-              const SizedBox(height: 16),
-
-              IraqiPhoneInputField(
-                controller: _phoneController,
-                onValidationChanged: (res) {
-                  setState(() {
-                    _phoneValidation = res;
-                    _errorMessage = null;
-                  });
-                },
               ),
               const SizedBox(height: 16),
 
@@ -288,7 +317,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 autofillHints: const [AutofillHints.email],
                 textInputAction: _selectedRole == 'Driver' ? TextInputAction.next : TextInputAction.done,
                 decoration: InputDecoration(
-                  labelText: 'البريد الإلكتروني (جهاز الآيفون)',
+                  labelText: 'البريد الإلكتروني (أساسي للتسجيل) *',
                   hintText: 'name@example.com',
                   prefixIcon: const Icon(Icons.email_outlined),
                   suffixIcon: _emailController.text.isNotEmpty
@@ -325,12 +354,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 16),
 
+              // Optional Phone input
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'رقم الهاتف (اختياري - الخدمة قيد التجهيز):',
+                    style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  IraqiPhoneInputField(
+                    controller: _phoneController,
+                    onValidationChanged: (res) {
+                      setState(() {
+                        _phoneValidation = res;
+                        _errorMessage = null;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
               if (_selectedRole == 'Driver') ...[
                 TextField(
                   controller: _licenseController,
                   textInputAction: TextInputAction.done,
                   decoration: const InputDecoration(
-                    labelText: 'رقم إجازة السوق',
+                    labelText: 'رقم إجازة السوق *',
                     hintText: 'مثال: IRQ-98234-B',
                     prefixIcon: Icon(Icons.badge_outlined),
                   ),
@@ -352,7 +403,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         width: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : const Text('تسجيل الحساب والمتابعة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    : const Text('إنشاء الحساب ودخول التطبيق', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 14),
 
@@ -374,6 +425,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 isLoading: _isGoogleLoading,
                 onPressed: _handleGoogleSignIn,
                 text: 'التسجيل المباشر بحساب Google',
+              ),
+              const SizedBox(height: 16),
+
+              Center(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'لديك حساب بالفعل؟ تسجيل الدخول',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                  ),
+                ),
               ),
               const SizedBox(height: 10),
             ],

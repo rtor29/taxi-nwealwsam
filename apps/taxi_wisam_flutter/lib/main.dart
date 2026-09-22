@@ -17,15 +17,25 @@ void main() async {
   String? token;
   String? role;
 
-  // 1. On Web, check if Google OAuth redirect provided a login token in query parameters
+  // 1. On Web, check if Google OAuth redirect provided a login token in query parameters or fragment
   if (kIsWeb) {
     try {
-      final queryParams = Uri.base.queryParameters;
+      final queryParams = Map<String, String>.from(Uri.base.queryParameters);
+      if ((!queryParams.containsKey('login_token') || queryParams['login_token']!.isEmpty) && Uri.base.hasFragment) {
+        final frag = Uri.base.fragment;
+        if (frag.contains('login_token')) {
+          final fragUri = Uri.parse(frag.startsWith('/') ? frag : '/$frag');
+          queryParams.addAll(fragUri.queryParameters);
+        }
+      }
+
       if (queryParams.containsKey('login_token') && queryParams['login_token']!.isNotEmpty) {
         token = queryParams['login_token'];
         final userId = queryParams['userId'] ?? 'usr-google';
         role = queryParams['role'] ?? 'Customer';
-        final fullName = queryParams['fullName'] ?? 'مستخدم Google';
+        final fullName = (queryParams['fullName'] != null && queryParams['fullName']!.isNotEmpty)
+            ? queryParams['fullName']!
+            : 'مستخدم Google';
 
         await storageService.saveSession(
           token: token!,

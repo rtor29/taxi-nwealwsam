@@ -1348,16 +1348,12 @@ const server = http.createServer((req, res) => {
                 });
             }
 
-            // If not found, dynamically log them in as verified customer with entered credentials
-            const newId = 'usr-' + Math.random().toString(36).substr(2, 9);
+            // If not found in drivers or customers, return 404 so user can be redirected to registration
             return json({
-                userId: newId,
-                fullName: isEmail ? identifier.split('@')[0] : 'مستخدم تاكسي وسام',
-                email: isEmail ? identifier : '',
-                phoneNumber: isEmail ? '07700000000' : identifier,
-                role: 'Customer',
-                token: 'jwt_token_' + newId
-            });
+                error: "هذا الحساب غير مسجل حالياً. يرجى إنشاء حساب جديد.",
+                notFound: true,
+                statusCode: 404
+            }, 404);
         });
     }
 
@@ -1543,12 +1539,14 @@ const server = http.createServer((req, res) => {
         });
     }
 
-    function renderAuthSuccessHtml(res, token, userId, role, fullName) {
+    function renderAuthSuccessHtml(res, token, userId, role, fullName, reqHost) {
         const safeToken = JSON.stringify(token);
         const safeUserId = JSON.stringify(userId);
         const safeRole = JSON.stringify(role);
         const safeFullName = JSON.stringify(fullName);
-        const target = `/app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(userId)}&role=${encodeURIComponent(role)}&fullName=${encodeURIComponent(fullName)}`;
+        const isTawseela = reqHost && reqHost.includes('tawseelaiq.app');
+        const basePath = isTawseela ? '/' : '/app/';
+        const target = `${basePath}?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(userId)}&role=${encodeURIComponent(role)}&fullName=${encodeURIComponent(fullName)}`;
 
         const html = `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -1585,16 +1583,16 @@ const server = http.createServer((req, res) => {
       localStorage.setItem('user_role', r);
       localStorage.setItem('user_fullname', n);
 
-      localStorage.setItem('flutter.auth_token', t);
-      localStorage.setItem('flutter.user_id', u);
-      localStorage.setItem('flutter.user_role', r);
-      localStorage.setItem('flutter.user_fullname', n);
+      localStorage.setItem('flutter.auth_token', JSON.stringify(t));
+      localStorage.setItem('flutter.user_id', JSON.stringify(u));
+      localStorage.setItem('flutter.user_role', JSON.stringify(r));
+      localStorage.setItem('flutter.user_fullname', JSON.stringify(n));
     } catch (e) {
       console.error(e);
     }
     setTimeout(function() {
       window.location.replace(${JSON.stringify(target)});
-    }, 200);
+    }, 100);
   </script>
 </body>
 </html>`;
@@ -1649,7 +1647,13 @@ const server = http.createServer((req, res) => {
         }
 
         try {
-            const redirectUri = 'http://173.212.206.86.nip.io/api/auth/google/callback';
+            const rawHost = req.headers['x-forwarded-host'] || req.headers.host || '173.212.206.86.nip.io';
+            const reqHost = rawHost.split(':')[0].toLowerCase();
+            const isTawseela = reqHost.includes('tawseelaiq.app');
+            const redirectUri = isTawseela
+                ? 'https://tawseelaiq.app/api/auth/google/callback'
+                : 'http://173.212.206.86.nip.io/api/auth/google/callback';
+
             const postData = querystring.stringify({
                 code: code,
                 client_id: GOOGLE_CLIENT_ID,
@@ -1696,7 +1700,7 @@ const server = http.createServer((req, res) => {
                         );
                         if (driver) {
                             const token = 'jwt_token_' + driver.driverId;
-                            return renderAuthSuccessHtml(res, token, driver.driverId, 'Driver', driver.fullName);
+                            return renderAuthSuccessHtml(res, token, driver.driverId, 'Driver', driver.fullName, reqHost);
                         }
 
                         // 2. Check Customer
@@ -1712,7 +1716,7 @@ const server = http.createServer((req, res) => {
                                 saveState();
                             }
                             const token = 'jwt_token_' + customer.customerId;
-                            return renderAuthSuccessHtml(res, token, customer.customerId, 'Customer', customer.fullName);
+                            return renderAuthSuccessHtml(res, token, customer.customerId, 'Customer', customer.fullName, reqHost);
                         }
 
                         // 3. Register New Customer
@@ -1737,7 +1741,7 @@ const server = http.createServer((req, res) => {
                         saveState();
 
                         const token = 'jwt_token_' + newId;
-                        return renderAuthSuccessHtml(res, token, newId, 'Customer', customer.fullName);
+                        return renderAuthSuccessHtml(res, token, newId, 'Customer', customer.fullName, reqHost);
                     } catch (err) {
                         console.error('[GoogleAuth] Error in callback handler:', err);
                         return renderAuthErrorHtml(res, 'حدث خطأ داخلي أثناء معالجة بيانات الحساب.');

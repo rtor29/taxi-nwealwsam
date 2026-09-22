@@ -144,17 +144,11 @@
           localStorage.setItem('user_role', role);
           localStorage.setItem('user_fullname', fullName);
 
-          // Write Flutter SharedPreferences keys
-          localStorage.setItem('flutter.auth_token', token);
-          localStorage.setItem('flutter.user_id', userId);
-          localStorage.setItem('flutter.user_role', role);
-          localStorage.setItem('flutter.user_fullname', fullName);
-
-          // Clean URL parameters cleanly
-          if (window.history && window.history.replaceState) {
-            var cleanUrl = window.location.origin + window.location.pathname;
-            window.history.replaceState({}, document.title, cleanUrl);
-          }
+          // Write Flutter SharedPreferences keys (shared_preferences_web expects JSON.stringify)
+          localStorage.setItem('flutter.auth_token', JSON.stringify(token));
+          localStorage.setItem('flutter.user_id', JSON.stringify(userId));
+          localStorage.setItem('flutter.user_role', JSON.stringify(role));
+          localStorage.setItem('flutter.user_fullname', JSON.stringify(fullName));
         }
       } catch (err) {
         console.error('[TaxiWisam] Early auth sync error:', err);
@@ -175,7 +169,10 @@
     // 3. Google OAuth Helper
     window.googleOAuthClientId = "483987924711-2935qs8ilglnen6jispd1u1t2fd0m2e6.apps.googleusercontent.com";
     window.startGoogleLogin = function() {
-      var callbackUri = 'http://173.212.206.86.nip.io/api/auth/google/callback';
+      var isDomain = window.location.hostname.indexOf('tawseelaiq.app') !== -1;
+      var callbackUri = isDomain
+        ? 'https://' + window.location.hostname + '/api/auth/google/callback'
+        : 'http://173.212.206.86.nip.io/api/auth/google/callback';
       var authUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
         + '?client_id=' + encodeURIComponent(window.googleOAuthClientId)
         + '&redirect_uri=' + encodeURIComponent(callbackUri)

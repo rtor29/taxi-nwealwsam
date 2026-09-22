@@ -60,12 +60,22 @@ class _LoginScreenState extends State<LoginScreen> {
     // 2. On Web, check if Google OAuth redirect provided a login token in URL
     if (kIsWeb) {
       try {
-        final query = Uri.base.queryParameters;
+        final query = Map<String, String>.from(Uri.base.queryParameters);
+        if ((!query.containsKey('login_token') || query['login_token']!.isEmpty) && Uri.base.hasFragment) {
+          final frag = Uri.base.fragment;
+          if (frag.contains('login_token')) {
+            final fragUri = Uri.parse(frag.startsWith('/') ? frag : '/$frag');
+            query.addAll(fragUri.queryParameters);
+          }
+        }
+
         if (query.containsKey('login_token') && query['login_token']!.isNotEmpty) {
           final token = query['login_token']!;
           final userId = query['userId'] ?? 'usr-google';
           final role = query['role'] ?? 'Customer';
-          final fullName = query['fullName'] ?? 'مستخدم Google';
+          final fullName = (query['fullName'] != null && query['fullName']!.isNotEmpty)
+              ? query['fullName']!
+              : 'مستخدم Google';
 
           await widget.storageService.saveSession(
             token: token,
@@ -271,6 +281,51 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
+      if (e is DioException && (e.response?.statusCode == 404 || e.response?.data?['notFound'] == true)) {
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Row(
+                children: [
+                  Icon(Icons.person_add_alt_1_rounded, color: Color(0xFFF59E0B), size: 28),
+                  SizedBox(width: 8),
+                  Text('الحساب غير مسجل', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                ],
+              ),
+              content: Text(
+                'البريد الإلكتروني ($identifier) غير مسجل في المنصة حتى الآن.\n\nهل ترغب في الانتقال إلى صفحة إنشاء حساب جديد؟',
+                style: const TextStyle(fontSize: 14, height: 1.5),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('إلغاء'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => RegisterScreen(
+                          apiClient: widget.apiClient,
+                          storageService: widget.storageService,
+                          initialEmail: identifier,
+                        ),
+                      ),
+                    );
+                  },
+                  child: const Text('إنشاء حساب جديد'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
       // Seamless entry fallback for offline or new guest customers
       final fallbackUserId = 'usr-${DateTime.now().millisecondsSinceEpoch}';
       final fallbackToken = 'jwt_offline_$fallbackUserId';
@@ -377,9 +432,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     textInputAction: TextInputAction.done,
                     onSubmitted: (_) => _handleLogin(),
                     decoration: InputDecoration(
-                      labelText: 'البريد الإلكتروني أو رقم الهاتف',
-                      hintText: 'name@example.com أو 0770xxxxxxx',
-                      prefixIcon: const Icon(Icons.account_circle_outlined),
+                      labelText: 'البريد الإلكتروني',
+                      hintText: 'name@example.com',
+                      prefixIcon: const Icon(Icons.email_outlined),
                       suffixIcon: _identifierController.text.isNotEmpty
                           ? IconButton(
                               icon: const Icon(Icons.clear, size: 20),
@@ -428,9 +483,36 @@ class _LoginScreenState extends State<LoginScreen> {
                             width: 20,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
-                        : const Text('تسجيل الدخول', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        : const Text('تسجيل الدخول بالبريد الإلكتروني', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
+
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      final emailInput = _identifierController.text.trim();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => RegisterScreen(
+                            apiClient: widget.apiClient,
+                            storageService: widget.storageService,
+                            initialEmail: emailInput.contains('@') ? emailInput : null,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.person_add_alt_1_rounded, color: Color(0xFFF59E0B)),
+                    label: const Text(
+                      'ليس لديك حساب؟ إنشاء حساب جديد بالبريد الإلكتروني',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: Color(0xFFF59E0B), width: 1.5),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
 
                   // Divider OR
                   Row(
@@ -438,12 +520,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text('أو المتابعة عبر', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                        child: Text('أو المتابعة السريعة عبر', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
                       ),
                       Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 16),
 
                   // Google Sign-In Official Button
                   GoogleSignInButton(
@@ -453,25 +535,42 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 12),
 
+                  // Phone OTP registration (Service under preparation)
                   OutlinedButton.icon(
                     onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => PhoneOtpVerificationScreen(
-                            apiClient: widget.apiClient,
-                            storageService: widget.storageService,
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          title: const Row(
+                            children: [
+                              Icon(Icons.hourglass_bottom_rounded, color: Color(0xFFF59E0B), size: 28),
+                              SizedBox(width: 8),
+                              Text('الخدمة قيد التجهيز', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            ],
                           ),
+                          content: const Text(
+                            'خدمة التسجيل وتأكيد الحساب عبر رقم الهاتف (رمز OTP) قيد التجهيز الفني حالياً ريثما يتم تفعيل باقة مشغلي الاتصالات في العراق (زين، آسيا سيل).\n\nيرجى المتابعة والتسجيل الآن عبر البريد الإلكتروني أو باستخدام حساب Google.',
+                            style: TextStyle(fontSize: 14, height: 1.6),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text('حسناً، فهمت', style: TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                          ],
                         ),
                       );
                     },
-                    icon: const Icon(Icons.phone_android_rounded),
+                    icon: const Icon(Icons.phone_android_rounded, color: Colors.grey),
                     label: const Text(
-                      'ليس لديك حساب؟ سجّل الآن عن طريق رقم الهاتف',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      'التسجيل عن طريق رقم الهاتف (الخدمة قيد التجهيز ⏳)',
+                      style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
                     ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: BorderSide(color: Colors.grey.shade300),
+                      backgroundColor: Colors.grey.shade50,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
@@ -489,7 +588,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       );
                     },
-                    child: const Text('تسجيل حساب جديد كسائق أو تفاصيل أخرى'),
+                    child: const Text('تسجيل حساب جديد ككابتن (سائق)'),
                   ),
                 ],
               ),
