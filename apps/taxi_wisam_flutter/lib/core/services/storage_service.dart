@@ -41,55 +41,67 @@ class StorageService {
   }
 
   Future<String?> getToken() async {
+    String? val;
     if (kIsWeb) {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_keyToken);
+      val = prefs.getString(_keyToken);
+    } else {
+      try {
+        val = await _storage.read(key: _keyToken);
+        if (val != null && val.isNotEmpty) return val.replaceAll('"', '').trim();
+      } catch (_) {}
+      final prefs = await SharedPreferences.getInstance();
+      val = prefs.getString(_keyToken);
     }
-    try {
-      final val = await _storage.read(key: _keyToken);
-      if (val != null && val.isNotEmpty) return val;
-    } catch (_) {}
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyToken);
+    return val?.replaceAll('"', '').trim();
   }
 
   Future<String?> getUserId() async {
+    String? val;
     if (kIsWeb) {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_keyUserId);
+      val = prefs.getString(_keyUserId);
+    } else {
+      try {
+        val = await _storage.read(key: _keyUserId);
+        if (val != null && val.isNotEmpty) return val.replaceAll('"', '').trim();
+      } catch (_) {}
+      final prefs = await SharedPreferences.getInstance();
+      val = prefs.getString(_keyUserId);
     }
-    try {
-      final val = await _storage.read(key: _keyUserId);
-      if (val != null && val.isNotEmpty) return val;
-    } catch (_) {}
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyUserId);
+    return val?.replaceAll('"', '').trim();
   }
 
   Future<String?> getUserRole() async {
+    String? val;
     if (kIsWeb) {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_keyUserRole);
+      val = prefs.getString(_keyUserRole);
+    } else {
+      try {
+        val = await _storage.read(key: _keyUserRole);
+        if (val != null && val.isNotEmpty) return val.replaceAll('"', '').trim();
+      } catch (_) {}
+      final prefs = await SharedPreferences.getInstance();
+      val = prefs.getString(_keyUserRole);
     }
-    try {
-      final val = await _storage.read(key: _keyUserRole);
-      if (val != null && val.isNotEmpty) return val;
-    } catch (_) {}
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyUserRole);
+    return val?.replaceAll('"', '').trim();
   }
 
   Future<String?> getFullName() async {
+    String? val;
     if (kIsWeb) {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_keyFullName);
+      val = prefs.getString(_keyFullName);
+    } else {
+      try {
+        val = await _storage.read(key: _keyFullName);
+        if (val != null && val.isNotEmpty) return val.replaceAll('"', '').trim();
+      } catch (_) {}
+      final prefs = await SharedPreferences.getInstance();
+      val = prefs.getString(_keyFullName);
     }
-    try {
-      final val = await _storage.read(key: _keyFullName);
-      if (val != null && val.isNotEmpty) return val;
-    } catch (_) {}
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyFullName);
+    return val?.replaceAll('"', '').trim();
   }
 
   Future<String?> getUserName() => getFullName();

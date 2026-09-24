@@ -1,0 +1,154 @@
+{
+  "drivers": [
+    {
+      "driverId": "drv-1vl6oy4co",
+      "fullName": "موسي هاشم",
+      "email": "hasin@gmail.com",
+      "phoneNumber": "٠٧٧٠٦٢٠٤٠٦٦",
+      "passwordHash": "5994471abb01112afcc18159f6cc74b4f511b99806da59b3caf5a9c173cacfc5",
+      "licenseNumber": "IRQ-NJF-6752",
+      "vehicleMake": ";dads",
+      "vehicleModel": ";dads",
+      "vehicleYear": 2022,
+      "vehiclePlate": "sfs",
+      "vehicleColor": "أبيض",
+      "serviceType": "both",
+      "status": "Approved",
+      "isVerified": true,
+      "isBlocked": false,
+      "ratingAverage": 5,
+      "totalTrips": 0,
+      "latitude": 31.9961,
+      "longitude": 44.3168,
+      "createdAt": "2026-09-24T10:35:18.529Z",
+      "registeredAt": "2026-09-24T10:35:18.529Z",
+      "vehicles": [
+        {
+          "make": ";dads",
+          "model": ";dads",
+          "year": 2022,
+          "plateNumber": "sfs",
+          "color": "أبيض"
+        }
+      ],
+      "routes": [
+        {
+          "id": "rt-aq77hj6ic",
+          "routeId": "rt-aq77hj6ic",
+          "driverId": "drv-1vl6oy4co",
+          "driverName": "موسي هاشم",
+          "driverPhone": "٠٧٧٠٦٢٠٤٠٦٦",
+          "driverRating": 5,
+          "vehicleInfo": ";dads sfs",
+          "startName": "مركز النجف (ساحة ثورة العشرين)",
+          "endName": "جامعة الكوفة",
+          "startLat": 31.9961,
+          "startLon": 44.3168,
+          "endLat": 32.0321,
+          "endLon": 44.3725,
+          "fare": 40000,
+          "pricePerSeat": 40000,
+          "availableSeats": 4,
+          "totalSeats": 4,
+          "departureTime": "07:30 ص",
+          "status": "Active",
+          "createdAt": "2026-09-24T10:35:18.529Z"
+        }
+      ]
+    }
+  ],
+  "customers": [],
+  "verifications": [],
+  "routes": [
+    {
+      "id": "rt-aq77hj6ic",
+      "routeId": "rt-aq77hj6ic",
+      "driverId": "drv-1vl6oy4co",
+      "driverName": "موسي هاشم",
+      "driverPhone": "٠٧٧٠٦٢٠٤٠٦٦",
+      "driverRating": 5,
+      "vehicleInfo": ";dads sfs",
+      "startName": "مركز النجف (ساحة ثورة العشرين)",
+      "endName": "جامعة الكوفة",
+      "startLat": 31.9961,
+      "startLon": 44.3168,
+      "endLat": 32.0321,
+      "endLon": 44.3725,
+      "fare": 40000,
+      "pricePerSeat": 40000,
+      "availableSeats": 4,
+      "totalSeats": 4,
+      "departureTime": "07:30 ص",
+      "status": "Active",
+      "createdAt": "2026-09-24T10:35:18.529Z"
+    }
+  ],
+  "bookings": [],
+  "complaints": [],
+  "settings": [
+    {
+      "key": "city_coverage",
+      "valueJson": "{\"province\":\"النجف الأشرف\",\"centerLat\":31.9961,\"centerLon\":44.3168,\"allowedAreas\":[\"المركز\",\"الكوفة\",\"المشخاب\",\"الحيدرية\",\"المناذرة\"]}",
+      "description": "نطاق تغطية الخدمة المعتمد"
+    },
+    {
+      "key": "matching_settings",
+      "valueJson": "{\"max_detour_meters\":2000,\"min_overlap_percentage\":60,\"search_radius_meters\":5000,\"time_window_minutes\":30}",
+      "description": "معايير محرك المطابقة الجغرافي بالنجف"
+    },
+    {
+      "key": "pricing_settings",
+      "valueJson": "{\"base_fare_iqd\":2500,\"per_km_rate_iqd\":400,\"per_minute_rate_iqd\":80,\"surge_multiplier_max\":2}",
+      "description": "تسعيرات مشاوير النجف الأشرف"
+    }
+  ],
+  "auditLogs": [
+    {
+      "id": 1790274064001,
+      "action": "CustomerDeletedPermanently",
+      "entityName": "Customer",
+      "entityId": "usr-c-0c5z8lcs4",
+      "newValuesJson": "{\"deletedCustomerName\":\"محمد علي\",\"deletedAt\":\"2026-09-24T18:21:03.933Z\"}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-24T18:21:03.933Z"
+    },
+    {
+      "id": 1790273937369,
+      "action": "CustomerUpdated",
+      "entityName": "Customer",
+      "entityId": "usr-c-0c5z8lcs4",
+      "newValuesJson": "{\"fullName\":\"محمد علي\",\"phoneNumber\":\"07706204011\",\"route\":\"الكوفي\",\"address\":\"كلية التربية بنات جامعة الكوفه, شارع ابی الاحرار, حي الامير, Hayy al Qadisiyah, Al-Najaf Central Subdistrict, Al-Najaf District, Al-Najaf Governorate, 54001, Iraq\"}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-24T18:18:56.667Z"
+    },
+    {
+      "id": 1790246119285,
+      "action": "AdminCreatedDriver",
+      "entityName": "Admin",
+      "entityId": "usr-admin",
+      "newValuesJson": "{\"driverId\":\"drv-1vl6oy4co\",\"fullName\":\"موسي هاشم\",\"phoneNumber\":\"٠٧٧٠٦٢٠٤٠٦٦\",\"hasRoute\":true}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-24T10:35:18.530Z"
+    },
+    {
+      "id": 1790246022999,
+      "action": "PassengerRegistered",
+      "entityName": "Customer",
+      "entityId": "usr-c-0c5z8lcs4",
+      "newValuesJson": "{\"fullName\":\"محمد علي\",\"phoneNumber\":\"07706204066\",\"route\":\"الكوفي\",\"address\":\"كلية التربية بنات جامعة الكوفه, شارع ابی الاحرار, حي الامير, Hayy al Qadisiyah, Al-Najaf Central Subdistrict, Al-Najaf District, Al-Najaf Governorate, 54001, Iraq\",\"registeredAt\":\"2026-09-24T10:33:42.485Z\"}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-24T10:33:42.485Z"
+    }
+  ],
+  "notifications": [],
+  "stats": {
+    "totalUsers": 0,
+    "totalDrivers": 1,
+    "verifiedDrivers": 1,
+    "pendingVerifications": 0,
+    "activeRoutes": 1,
+    "totalBookings": 0,
+    "pendingComplaints": 0,
+    "totalRevenue": 0
+  }
+}

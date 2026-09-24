@@ -1,13 +1,10 @@
+import 'dart:html' as html;
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../../core/network/api_client.dart';
-import '../../../core/network/api_endpoints.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/utils/iraqi_phone_validator.dart';
-import '../../../core/services/google_auth_service.dart';
-import '../widgets/google_sign_in_button.dart';
-import '../../customer/screens/customer_home_screen.dart';
-import '../../driver/screens/driver_home_screen.dart';
-import '../widgets/iraqi_phone_input_field.dart';
 
 class RegisterScreen extends StatefulWidget {
   final ApiClient apiClient;
@@ -26,419 +23,388 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _phoneController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _licenseController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _routeController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _passwordController = TextEditingController();
 
-  String _selectedRole = 'Customer'; // 'Customer' or 'Driver'
+  bool _obscurePassword = true;
   bool _isLoading = false;
-  bool _isGoogleLoading = false;
   String? _errorMessage;
 
   @override
-  void initState() {
-    super.initState();
-    if (widget.initialEmail != null && widget.initialEmail!.isNotEmpty) {
-      _emailController.text = widget.initialEmail!;
-    }
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _routeController.dispose();
+    _addressController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
-  Future<void> _handleGoogleSignIn() async {
-    setState(() {
-      _isGoogleLoading = true;
-      _errorMessage = null;
-    });
-
-    final authService = GoogleAuthService(
-      apiClient: widget.apiClient,
-      storageService: widget.storageService,
-    );
-
-    try {
-      await authService.launchGoogleSignInFlow();
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'تعذر فتح نافذة تسجيل الدخول بحساب Google: $e';
-        _isGoogleLoading = false;
-      });
+  String _normalizePhone(String phone) {
+    const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+    String p = phone;
+    for (int i = 0; i < arabicDigits.length; i++) {
+      p = p.replaceAll(arabicDigits[i], i.toString());
     }
+    String digits = p.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.startsWith('00964')) digits = digits.substring(5);
+    if (digits.startsWith('964')) digits = digits.substring(3);
+    if (digits.length == 10 && digits.startsWith('7')) digits = '0$digits';
+    return digits;
   }
-  IraqiPhoneValidationResult _phoneValidation = const IraqiPhoneValidationResult(
-    isValid: false,
-    operator: IraqiTelecomOperator.unknown,
-    normalizedLocalNumber: '',
-    normalizedE164Number: '',
-  );
-
-  final List<String> _emailDomains = [
-    '@gmail.com',
-    '@icloud.com',
-    '@yahoo.com',
-    '@outlook.com',
-  ];
 
   Future<void> _handleRegister() async {
-    final phone = _phoneController.text.trim();
+    setState(() => _errorMessage = null);
+
     final name = _nameController.text.trim();
-    final email = _emailController.text.trim();
+    final phone = _phoneController.text.trim();
+    final route = _routeController.text.trim();
+    final address = _addressController.text.trim();
+    final password = _passwordController.text.trim();
 
     if (name.isEmpty) {
-      setState(() => _errorMessage = 'يرجى إدخال اسمك الكامل');
+      setState(() => _errorMessage = 'يرجى إدخال الاسم الكامل.');
       return;
     }
 
-    if (email.isEmpty) {
-      setState(() => _errorMessage = 'يرجى إدخال البريد الإلكتروني لتسجيل الحساب');
+    final normPhone = _normalizePhone(phone);
+    final phoneRes = IraqiPhoneValidator.validate(normPhone);
+    if (!phoneRes.isValid) {
+      setState(() => _errorMessage = phoneRes.errorMessage ?? 'يرجى إدخال رقم هاتف عراقي صالح يبدأ بـ 07.');
       return;
     }
 
-    if (!email.contains('@') || !email.contains('.')) {
-      setState(() => _errorMessage = 'يرجى إدخال بريد إلكتروني صالح (مثال: name@gmail.com)');
+    if (route.isEmpty) {
+      setState(() => _errorMessage = 'يرجى إدخال المسار المطلوب (خط السير).');
       return;
     }
 
-    // Phone is optional since OTP is under preparation
-    if (phone.isNotEmpty) {
-      final phoneRes = IraqiPhoneValidator.validate(phone);
-      if (!phoneRes.isValid) {
-        setState(() => _errorMessage = phoneRes.errorMessage ?? IraqiPhoneValidator.invalidPhoneErrorMessage);
-        return;
-      }
-    }
-
-    if (_selectedRole == 'Driver' && _licenseController.text.trim().isEmpty) {
-      setState(() => _errorMessage = 'يرجى إدخال رقم إجازة السوق للسائق');
+    if (address.isEmpty) {
+      setState(() => _errorMessage = 'يرجى إدخال العنوان بالتفصيل.');
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    if (password.length < 4) {
+      setState(() => _errorMessage = 'يجب أن لا تقل كلمة المرور عن 4 خانات.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
 
     try {
-      final payload = {
-        'phoneNumber': phone.isNotEmpty ? phone : '07700000000',
-        'fullName': name,
-        'email': email.isNotEmpty ? email : null,
-        'role': _selectedRole,
-        'licenseNumber': _selectedRole == 'Driver' ? _licenseController.text.trim() : null,
-      };
-
       final response = await widget.apiClient.dio.post(
-        ApiEndpoints.register,
-        data: payload,
+        '/auth/complete-passenger-registration',
+        data: {
+          'fullName': name,
+          'phoneNumber': normPhone,
+          'route': route,
+          'address': address,
+          'password': password,
+        },
       );
 
       final data = response.data;
-      final userId = data['userId'] ?? 'usr-new';
-      final token = data['token'] ?? 'jwt_session_$userId';
+      if (data['success'] == true) {
+        if (!mounted) return;
 
-      await widget.storageService.saveSession(
-        token: token,
-        userId: userId,
-        role: _selectedRole,
-        fullName: name,
-      );
+        // Auto-redirect to Login Screen with phone pre-filled
+        if (kIsWeb) {
+          try {
+            html.window.history.pushState(null, '', '/?phone=${Uri.encodeComponent(normPhone)}&registered=true');
+          } catch (_) {}
+        }
 
-      if (!mounted) return;
-
-      if (_selectedRole == 'Driver') {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DriverHome(
-              apiClient: widget.apiClient,
-              storageService: widget.storageService,
-            ),
-          ),
-          (route) => false,
-        );
+        Navigator.pop(context, {
+          'phone': normPhone,
+          'registered': true,
+        });
       } else {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (_) => CustomerHome(
-              apiClient: widget.apiClient,
-              storageService: widget.storageService,
-            ),
-          ),
-          (route) => false,
-        );
+        setState(() {
+          _errorMessage = data['error'] ?? 'فشل في تسجيل الحساب.';
+        });
       }
     } catch (e) {
-      // Fallback: If local network connection to Mac is blocked or delayed,
-      // create session locally and allow full immediate app entry seamlessly!
-      final fallbackUserId = 'usr-${DateTime.now().millisecondsSinceEpoch}';
-      final fallbackToken = 'jwt_offline_$fallbackUserId';
-
-      await widget.storageService.saveSession(
-        token: fallbackToken,
-        userId: fallbackUserId,
-        role: _selectedRole,
-        fullName: name,
-      );
-
-      if (!mounted) return;
-
-      if (_selectedRole == 'Driver') {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DriverHome(
-              apiClient: widget.apiClient,
-              storageService: widget.storageService,
-            ),
-          ),
-          (route) => false,
-        );
-      } else {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(
-            builder: (_) => CustomerHome(
-              apiClient: widget.apiClient,
-              storageService: widget.storageService,
-            ),
-          ),
-          (route) => false,
-        );
+      String errMsg = 'هذا الرقم مسجل بالفعل';
+      if (e is DioException && e.response?.data != null) {
+        final d = e.response!.data;
+        if (d is Map && d.containsKey('error')) {
+          errMsg = d['error'].toString();
+        }
       }
+      setState(() => _errorMessage = errMsg);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _appendDomain(String domain) {
-    final current = _emailController.text.trim();
-    if (current.contains('@')) {
-      final base = current.split('@')[0];
-      _emailController.text = '$base$domain';
-    } else {
-      _emailController.text = '$current$domain';
-    }
-    _emailController.selection = TextSelection.fromPosition(
-      TextPosition(offset: _emailController.text.length),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('إنشاء حساب جديد')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: AutofillGroup(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // OTP status notice
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFFCD34D)),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.info_outline_rounded, color: Color(0xFFD97706), size: 22),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'التسجيل مفعل حالياً عبر البريد الإلكتروني أو حساب Google.\n(خدمة التحقق برقم الهاتف قيد التجهيز الفني)',
-                        style: TextStyle(color: Color(0xFF92400E), fontSize: 12, height: 1.4, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              if (_errorMessage != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.red.shade200),
-                  ),
-                  child: Text(
-                    _errorMessage!,
-                    style: TextStyle(color: Colors.red.shade800, fontSize: 13),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              const Text(
-                'اختر نوع الحساب:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              ),
-              const SizedBox(height: 10),
-              Row(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text(
+          'تسجيل راكب جديد',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF0F172A)),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF0F172A)),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: ChoiceChip(
-                      label: const Center(child: Text('👤 راكب')),
-                      selected: _selectedRole == 'Customer',
-                      onSelected: (val) => setState(() => _selectedRole = 'Customer'),
+                  const Center(
+                    child: CircleAvatar(
+                      radius: 36,
+                      backgroundColor: Color(0xFFEFF6FF),
+                      child: Text('📝', style: TextStyle(fontSize: 34)),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ChoiceChip(
-                      label: const Center(child: Text('🚖 سائق')),
-                      selected: _selectedRole == 'Driver',
-                      onSelected: (val) => setState(() => _selectedRole = 'Driver'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-
-              TextField(
-                controller: _nameController,
-                autofillHints: const [AutofillHints.name],
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(
-                  labelText: 'الاسم الكامل *',
-                  hintText: 'الاسم الثلاثي',
-                  prefixIcon: Icon(Icons.person_outline),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                autofillHints: const [AutofillHints.email],
-                textInputAction: _selectedRole == 'Driver' ? TextInputAction.next : TextInputAction.done,
-                decoration: InputDecoration(
-                  labelText: 'البريد الإلكتروني (أساسي للتسجيل) *',
-                  hintText: 'name@example.com',
-                  prefixIcon: const Icon(Icons.email_outlined),
-                  suffixIcon: _emailController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, size: 20),
-                          onPressed: () {
-                            setState(() {
-                              _emailController.clear();
-                            });
-                          },
-                        )
-                      : null,
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 8),
-
-              // Quick Email Domain Suggestions
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: _emailDomains.map((domain) {
-                    return Padding(
-                      padding: const EdgeInsets.only(left: 6.0),
-                      child: ActionChip(
-                        label: Text(domain, style: const TextStyle(fontSize: 12)),
-                        backgroundColor: Colors.grey.shade100,
-                        side: BorderSide(color: Colors.grey.shade300),
-                        onPressed: () => _appendDomain(domain),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Optional Phone input
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                  const SizedBox(height: 12),
                   const Text(
-                    'رقم الهاتف (اختياري - الخدمة قيد التجهيز):',
-                    style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600),
+                    'إنشاء حساب راكب جديد',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A),
+                    ),
                   ),
                   const SizedBox(height: 6),
-                  IraqiPhoneInputField(
+                  const Text(
+                    'أدخل بياناتك وسيتم توجيهك فوراً لتسجيل الدخول بكلمة المرور',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 24),
+
+                  if (_errorMessage != null) ...[
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _errorMessage!,
+                              style: TextStyle(
+                                color: Colors.red.shade800,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // 1. الاسم الكامل
+                  TextField(
+                    controller: _nameController,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: 'الاسم الكامل *',
+                      hintText: 'مثال: علي حسن النجفي',
+                      prefixIcon: const Icon(Icons.person_outline_rounded),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 2. رقم الهاتف
+                  TextField(
                     controller: _phoneController,
-                    onValidationChanged: (res) {
-                      setState(() {
-                        _phoneValidation = res;
-                        _errorMessage = null;
-                      });
-                    },
+                    keyboardType: TextInputType.phone,
+                    textDirection: TextDirection.ltr,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: 'رقم الهاتف العراقي *',
+                      hintText: '07701234567',
+                      prefixIcon: const Icon(Icons.phone_android_rounded),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 3. المسار
+                  TextField(
+                    controller: _routeController,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: 'المسار (خط السير المطلوب) *',
+                      hintText: 'مثال: حي الجامعة - جامعة الكوفة',
+                      prefixIcon: const Icon(Icons.route_rounded),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 4. العنوان
+                  TextField(
+                    controller: _addressController,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      labelText: 'العنوان بالتفصيل *',
+                      hintText: 'مثال: النجف - حي الأمير - قرب المسجد',
+                      prefixIcon: const Icon(Icons.location_on_outlined),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 5. كلمة المرور
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _handleRegister(),
+                    decoration: InputDecoration(
+                      labelText: 'كلمة المرور (الباسوورد للحساب) *',
+                      hintText: '••••••••',
+                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          size: 20,
+                        ),
+                        onPressed: () {
+                          setState(() => _obscurePassword = !_obscurePassword);
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Submit Button
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _handleRegister,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 2,
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Text(
+                            'إكمال التسجيل والمتابعة 🚀',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Back to Login link
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      'لديك حساب بالفعل؟ تسجيل الدخول',
+                      style: TextStyle(
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-
-              if (_selectedRole == 'Driver') ...[
-                TextField(
-                  controller: _licenseController,
-                  textInputAction: TextInputAction.done,
-                  decoration: const InputDecoration(
-                    labelText: 'رقم إجازة السوق *',
-                    hintText: 'مثال: IRQ-98234-B',
-                    prefixIcon: Icon(Icons.badge_outlined),
-                  ),
-                ),
-                const SizedBox(height: 20),
-              ],
-
-              ElevatedButton(
-                onPressed: _isLoading ? null : _handleRegister,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('إنشاء الحساب ودخول التطبيق', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(height: 14),
-
-              // Divider OR
-              Row(
-                children: [
-                  Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text('أو التسجيل السريع عبر', style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-                  ),
-                  Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
-                ],
-              ),
-              const SizedBox(height: 14),
-
-              // Google Sign-In Official Button
-              GoogleSignInButton(
-                isLoading: _isGoogleLoading,
-                onPressed: _handleGoogleSignIn,
-                text: 'التسجيل المباشر بحساب Google',
-              ),
-              const SizedBox(height: 16),
-
-              Center(
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'لديك حساب بالفعل؟ تسجيل الدخول',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
+            ),
           ),
         ),
       ),

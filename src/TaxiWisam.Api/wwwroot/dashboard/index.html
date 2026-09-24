@@ -1,13 +1,29 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+    <base href="/dashboard/">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="توصيله">
     <title>توصيله | لوحة تحكم وإدارة المنصة</title>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+                for (var i = 0; i < regs.length; i++) { regs[i].unregister(); }
+            });
+        }
+        if ('caches' in window) {
+            caches.keys().then(function(keys) {
+                for (var j = 0; j < keys.length; j++) { caches.delete(keys[j]); }
+            });
+        }
+    </script>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
@@ -16,17 +32,37 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="/dashboard/style.css?v=20260924_rel120">
     <!-- Mapbox GL JS -->
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
-</head>
-<body class="bg-slate-50 text-slate-800 font-['Cairo'] antialiased min-h-screen flex flex-col select-none">
+    <script>
+        if (typeof mapboxgl !== 'undefined' && typeof mapboxgl.setRTLTextPlugin === 'function') {
+            if (mapboxgl.getRTLTextPluginStatus() === 'unavailable') {
+                mapboxgl.setRTLTextPlugin(
+                    'https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js',
+                    null,
+                    true
+                );
+            }
+        }
+    </script>
+<body class="bg-slate-50 text-slate-800 font-['Cairo'] antialiased min-h-screen flex flex-col">
 
     <!-- ===================================================================== -->
     <!-- 0. ADMIN LOGIN OVERLAY (Gated Access: admin / 1122 or ١١٢٢)             -->
     <!-- ===================================================================== -->
-    <div id="login-overlay" class="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center p-4">
+    <script>
+        (function() {
+            if (localStorage.getItem('tawseela_admin_auth') === 'true') {
+                var s = document.createElement('style');
+                s.id = 'tawseela-auth-bypass';
+                s.innerHTML = '#login-overlay { display: none !important; pointer-events: none !important; visibility: hidden !important; }';
+                document.head.appendChild(s);
+            }
+        })();
+    </script>
+    <div id="login-overlay" style="display: none;" class="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center p-4">
         <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl text-center animate-scale-up space-y-6">
             <!-- Brand Logo -->
             <div class="mx-auto w-20 h-20 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center text-4xl font-black shadow-lg shadow-amber-500/20">
@@ -40,7 +76,51 @@
             </div>
 
             <!-- Login Form -->
-            <form id="login-form" onsubmit="handleAdminLogin(event)" class="space-y-4 text-right">
+            <script>
+                window.handleAdminLogin = function(event) {
+                    if (event) {
+                        try { event.preventDefault(); } catch(_) {}
+                    }
+                    var uInput = document.getElementById('login-username');
+                    var pInput = document.getElementById('login-password');
+                    var errBox = document.getElementById('login-error');
+                    var rawU = (uInput ? uInput.value : '') || '';
+                    var u = rawU.trim().toLowerCase();
+                    var rawP = (pInput ? pInput.value : '') || '';
+                    var arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+                    var p = rawP.trim().replace(/[٠-٩]/g, function(d) { return arabicDigits.indexOf(d); });
+
+                    var uValid = (u === 'admin' || u === 'admin@taxiwisam.com' || u === 'مدير' || u === 'الادارة');
+                    var pValid = (p === '1122' || rawP.trim() === '1122' || rawP.trim() === '١١٢٢');
+
+                    if (uValid && pValid) {
+                        localStorage.setItem('tawseela_admin_auth', 'true');
+                        if (errBox) errBox.classList.add('hidden');
+                        var overlay = document.getElementById('login-overlay');
+                        if (overlay && overlay.parentNode) {
+                            overlay.parentNode.removeChild(overlay);
+                        } else if (overlay) {
+                            overlay.style.display = 'none';
+                            overlay.style.pointerEvents = 'none';
+                            overlay.classList.add('hidden');
+                        }
+                        if (typeof loadDashboardStats === 'function') {
+                            try { loadDashboardStats(); } catch(e) {}
+                        }
+                        if (typeof loadMatchingSettings === 'function') {
+                            try { loadMatchingSettings(); } catch(e) {}
+                        }
+                    } else {
+                        if (errBox) {
+                            errBox.innerText = 'بيانات الدخول غير صحيحة! يرجى إدخال اسم المستخدم admin وكلمة المرور 1122 أو ١١٢٢';
+                            errBox.classList.remove('hidden');
+                        }
+                        if (pInput) pInput.focus();
+                    }
+                    return false;
+                };
+            </script>
+            <form id="login-form" onsubmit="return handleAdminLogin(event)" class="space-y-4 text-right">
                 <div id="login-error" class="hidden p-3 rounded-xl bg-rose-950/80 border border-rose-800 text-rose-300 text-xs font-bold text-center">
                     اسم المستخدم أو كلمة المرور غير صحيحة!
                 </div>
@@ -78,6 +158,12 @@
             </div>
         </div>
     </div>
+    <script>
+        if (localStorage.getItem('tawseela_admin_auth') === 'true') {
+            var _ov = document.getElementById('login-overlay');
+            if (_ov && _ov.parentNode) _ov.parentNode.removeChild(_ov);
+        }
+    </script>
 
     <!-- ===================================================================== -->
     <!-- TOP NAVIGATION BAR (Responsive: Mobile + Desktop)                     -->
@@ -112,13 +198,33 @@
                     <span class="sm:hidden text-[11px]">الويب</span>
                 </a>
 
-                <!-- APK Direct Download Button -->
-                <a href="/downloads/tawseela.apk" download="tawseela.apk" title="تحميل أحدث نسخة لتطبيق الأندرويد"
-                   class="flex items-center px-2.5 md:px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-sm shadow-emerald-600/20">
-                    <i class="fa-brands fa-android ml-1.5 text-sm md:text-base"></i>
-                    <span class="hidden sm:inline">تحميل APK</span>
-                    <span class="sm:hidden text-[11px]">APK</span>
-                </a>
+                <!-- Notification Bell & Dropdown -->
+                <div class="relative">
+                    <button onclick="toggleNotificationsDropdown()" id="btn-notification-bell" title="مركز الإشعارات والتنبيهات"
+                            class="relative flex items-center justify-center w-9 h-9 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-xl transition shadow-sm border border-slate-700">
+                        <i class="fa-solid fa-bell text-sm md:text-base"></i>
+                        <span id="header-notif-badge" class="hidden absolute -top-1 -right-1 px-1.5 py-0.5 min-w-[18px] text-[10px] bg-rose-600 text-white rounded-full font-black text-center shadow animate-pulse">0</span>
+                    </button>
+
+                    <!-- Notifications Dropdown Menu -->
+                    <div id="notifications-dropdown" class="hidden absolute left-0 mt-2 w-80 sm:w-96 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden text-right">
+                        <div class="p-3.5 bg-slate-850 border-b border-slate-800 flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <i class="fa-solid fa-bell text-amber-400"></i>
+                                <span class="text-xs font-bold text-white">مركز التنبيهات الآنية</span>
+                            </div>
+                            <span id="dropdown-notif-count" class="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">0 تنبيه</span>
+                        </div>
+                        <div id="notifications-list" class="max-h-80 overflow-y-auto divide-y divide-slate-800/60 p-1">
+                            <div class="p-4 text-center text-xs text-slate-500">لا توجد إشعارات جديدة</div>
+                        </div>
+                        <div class="p-2.5 bg-slate-950/80 border-t border-slate-800/80 text-center">
+                            <button onclick="switchTab('verifications'); toggleNotificationsDropdown(false);" class="text-xs text-amber-400 hover:underline font-bold">
+                                الانتقال لطلبات التوثيق 🪪
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Connection status -->
                 <div class="hidden lg:flex items-center px-3 py-1 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-full text-xs font-semibold">
@@ -142,11 +248,11 @@
     <!-- ===================================================================== -->
     <!-- MAIN WORKSPACE                                                        -->
     <!-- ===================================================================== -->
-    <div class="flex flex-1 overflow-hidden relative">
+    <div class="flex flex-1 overflow-hidden relative min-h-0">
 
         <!-- Mobile Drawer Backdrop -->
-        <div id="mobile-sidebar-backdrop" onclick="toggleMobileSidebar(false)" 
-             class="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm hidden md:hidden transition-opacity"></div>
+        <div id="mobile-sidebar-backdrop" onclick="toggleMobileSidebar(false)" style="display: none;"
+             class="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm hidden md:hidden transition-opacity pointer-events-none"></div>
 
         <!-- Sidebar Navigation (Desktop sticky, Mobile off-canvas drawer) -->
         <aside id="sidebar-drawer" 
@@ -218,17 +324,17 @@
                     <span>سجل التدقيق (Audit Logs)</span>
                 </button>
 
-                <!-- Web App & APK Download Cards inside Sidebar -->
+                <button onclick="switchTab('backup')" id="tab-btn-backup" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
+                    <i class="fa-solid fa-database w-5 text-center text-amber-400"></i>
+                    <span>النسخ الاحتياطي وقاعدة البيانات</span>
+                </button>
+
+                <!-- Web App Quick Card inside Sidebar -->
                 <div class="pt-4 space-y-2">
                     <a href="/app/" target="_blank"
                        class="w-full flex items-center justify-center space-x-2 space-x-reverse p-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl text-xs font-bold hover:brightness-110 transition shadow-md">
                         <i class="fa-solid fa-globe text-base"></i>
-                        <span>📱 فتح تطبيق الويب (للأجهزة)</span>
-                    </a>
-                    <a href="/downloads/tawseela.apk" download="tawseela.apk"
-                       class="w-full flex items-center justify-center space-x-2 space-x-reverse p-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl text-xs font-bold hover:brightness-110 transition shadow-md">
-                        <i class="fa-brands fa-android text-base"></i>
-                        <span>تحميل تطبيق أندرويد (APK)</span>
+                        <span>📱 فتح تطبيق الويب (Web App)</span>
                     </a>
                 </div>
             </div>
@@ -236,7 +342,7 @@
             <!-- Footer info -->
             <div class="p-4 border-t border-slate-800 text-xs text-slate-400 text-center">
                 <p class="font-bold text-amber-400">توصيله v2.0</p>
-                <p class="text-[10px] text-slate-500 mt-0.5">النجف الأشرف • PostGIS + Supabase</p>
+                <p class="text-[10px] text-slate-500 mt-0.5">النجف الأشرف • محرك PostgreSQL الذاتي</p>
             </div>
         </aside>
 
@@ -334,8 +440,8 @@
                                 <span class="font-bold text-emerald-600 flex items-center"><i class="fa-solid fa-phone ml-1.5 text-xs"></i> Direct Call & WA</span>
                             </div>
                             <div class="p-3 md:p-4 rounded-xl bg-slate-50 border border-slate-100">
-                                <span class="text-[10px] md:text-xs text-slate-400 block mb-1">حزمة الأندرويد</span>
-                                <span class="font-bold text-emerald-600 flex items-center"><i class="fa-brands fa-android ml-1.5 text-xs"></i> APK v2.0 Ready</span>
+                                <span class="text-[10px] md:text-xs text-slate-400 block mb-1">المنصة التشغيلية</span>
+                                <span class="font-bold text-blue-600 flex items-center"><i class="fa-solid fa-globe ml-1.5 text-xs"></i> Web Application</span>
                             </div>
                         </div>
                     </div>
@@ -359,12 +465,18 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                         <h2 class="text-2xl font-black text-slate-900">توثيق مستمسكات السائقين</h2>
-                        <p class="text-xs md:text-sm text-slate-500">فحص الهويات، رخص القيادة، ومستمسكات السائقين مع إمكانية التحميل والطباعة</p>
+                        <p class="text-xs md:text-sm text-slate-500">فحص الهويات، رخص القيادة، ومستمسكات السائقين مع تسجيل واعتماد الكباتن واعتماد المسارات</p>
                     </div>
-                    <button onclick="loadVerifications()" class="self-start sm:self-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold flex items-center space-x-2 space-x-reverse transition">
-                        <i class="fa-solid fa-rotate"></i>
-                        <span>تحديث القائمة</span>
-                    </button>
+                    <div class="flex items-center space-x-2 space-x-reverse flex-wrap gap-2">
+                        <button type="button" id="btn-open-add-captain-verif" onclick="openAddCaptainModal(); return false;" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs md:text-sm transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 cursor-pointer">
+                            <i class="fa-solid fa-user-check"></i>
+                            <span>+ تسجيل كابتن واعتماد الاستمارة والمستمسكات</span>
+                        </button>
+                        <button onclick="loadVerifications()" class="self-start sm:self-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold flex items-center space-x-2 space-x-reverse transition cursor-pointer">
+                            <i class="fa-solid fa-rotate"></i>
+                            <span>تحديث القائمة</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -404,9 +516,13 @@
                         <h2 class="text-2xl font-black text-slate-900">إدارة السائقين</h2>
                         <p class="text-xs md:text-sm text-slate-500">قائمة السائقين المسجلين في النجف الأشرف، حالتهم الآنية ومستمسكاتهم</p>
                     </div>
-                    <div class="flex items-center space-x-2 space-x-reverse">
+                    <div class="flex items-center space-x-2 space-x-reverse flex-wrap gap-2">
+                        <button type="button" id="btn-open-add-captain" onclick="openAddCaptainModal(); return false;" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs md:text-sm transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 cursor-pointer">
+                            <i class="fa-solid fa-user-plus"></i>
+                            <span>+ تسجيل كابتن واعتماد مساره</span>
+                        </button>
                         <input type="text" id="drivers-search-input" placeholder="بحث بالاسم أو الهاتف..." class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" oninput="debounceDriverSearch()">
-                        <button onclick="loadDrivers()" class="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-semibold transition">
+                        <button onclick="loadDrivers()" class="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer">
                             <i class="fa-solid fa-rotate"></i>
                         </button>
                     </div>
@@ -414,16 +530,15 @@
 
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-right text-sm border-collapse min-w-[750px]">
+                        <table class="w-full text-right text-sm border-collapse min-w-[850px]">
                             <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                                 <tr>
-                                    <th class="p-4">السائق</th>
+                                    <th class="p-4">الكابتن</th>
                                     <th class="p-4">رقم الهاتف</th>
-                                    <th class="p-4">رقم الرخصة</th>
+                                    <th class="p-4">المسار</th>
+                                    <th class="p-4">كلمة المرور</th>
                                     <th class="p-4">الحالة الآنية</th>
                                     <th class="p-4">التوثيق</th>
-                                    <th class="p-4">التقييم</th>
-                                    <th class="p-4">الرحلات</th>
                                     <th class="p-4 text-center">الإجراءات والتحكم</th>
                                 </tr>
                             </thead>
@@ -440,7 +555,7 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                         <h2 class="text-2xl font-black text-slate-900">إدارة الركاب</h2>
-                        <p class="text-xs md:text-sm text-slate-500">قائمة المستخدمين والركاب المسجلين ونشاط الحجوزات</p>
+                        <p class="text-xs md:text-sm text-slate-500">قائمة المستخدمين والركاب المسجلين، خطوط السير، والعناوين وكلمات المرور</p>
                     </div>
                     <div class="flex items-center space-x-2 space-x-reverse">
                         <input type="text" id="customers-search-input" placeholder="بحث بالاسم أو الهاتف..." class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" oninput="debounceCustomerSearch()">
@@ -453,14 +568,14 @@
 
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-right text-sm border-collapse min-w-[750px]">
+                        <table class="w-full text-right text-sm border-collapse min-w-[850px]">
                             <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                                 <tr>
                                     <th class="p-4">الراكب</th>
                                     <th class="p-4">رقم الهاتف</th>
-                                    <th class="p-4">طريقة الدفع المفضلة</th>
-                                    <th class="p-4">التقييم</th>
-                                    <th class="p-4">إجمالي الحجوزات</th>
+                                    <th class="p-4">المسار</th>
+                                    <th class="p-4">العنوان</th>
+                                    <th class="p-4">كلمة المرور</th>
                                     <th class="p-4">حالة الحساب</th>
                                     <th class="p-4 text-center">الإجراءات والتحكم</th>
                                 </tr>
@@ -535,14 +650,14 @@
                     <div>
                         <h2 class="text-2xl font-black text-slate-900 flex items-center gap-2">
                             <span>خريطة الأسطول ورسم المسارات المباشرة</span>
-                            <span class="text-xs bg-amber-500/20 text-amber-700 px-2.5 py-1 rounded-full font-bold">Mapbox Live</span>
+                            <span class="text-xs bg-emerald-500/20 text-emerald-700 px-2.5 py-1 rounded-full font-bold">تتبع حي ومباشر</span>
                         </h2>
-                        <p class="text-xs md:text-sm text-slate-500">متابعة تحركات الكباتن الحية، ورسم وتعديل المسارات وتعميمها فورياً للمركبات والركاب</p>
+                        <p class="text-xs md:text-sm text-slate-500">متابعة تحركات الكباتن الحية ومواقع الركاب والطلبات ورسم وتعديل المسارات وتعميمها فورياً للمركبات والركاب</p>
                     </div>
                     <div class="flex items-center space-x-2 space-x-reverse">
                         <button onclick="refreshFleetLocations()" class="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-amber-400 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
                             <i class="fa-solid fa-arrows-rotate"></i>
-                            <span>تحديث الأسطول</span>
+                            <span>تحديث الأسطول والركاب</span>
                         </button>
                     </div>
                 </div>
@@ -560,10 +675,10 @@
                     </div>
                     <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3 space-x-reverse">
                         <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-lg">
-                            <i class="fa-solid fa-road"></i>
+                            <i class="fa-solid fa-user-group"></i>
                         </div>
                         <div>
-                            <div class="text-[11px] text-slate-500 font-semibold">في مشوار حالي</div>
+                            <div class="text-[11px] text-slate-500 font-semibold">ركاب على الخريطة</div>
                             <div id="fleet-ontrip-count" class="text-lg font-black text-slate-900">0</div>
                         </div>
                     </div>
@@ -594,10 +709,22 @@
                         <div class="flex items-center justify-between p-2 border-b border-slate-100 text-xs font-bold text-slate-700">
                             <div class="flex items-center gap-2">
                                 <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                <span>خريطة النجف الأشرف التفاعلية (Mapbox Navigation)</span>
+                                <span>خريطة النجف الأشرف التفاعلية المباشرة (تتبع الأسطول والركاب)</span>
                             </div>
-                            <span class="text-[11px] text-slate-500 font-normal">انقر على الخريطة لتحديد مسار مخصص وتعميمه</span>
+                            <span class="text-[11px] text-slate-500 font-normal">البحث محدد في محافظة النجف الأشرف حصراً 📍</span>
                         </div>
+                        
+                        <!-- Instant Map Search in Najaf from 1st Character -->
+                        <div class="relative px-1 pt-2 z-20">
+                            <div class="relative flex items-center">
+                                <i class="fa-solid fa-magnifying-glass absolute right-3 text-amber-500 text-xs"></i>
+                                <input type="text" id="fleet-map-search-input" oninput="searchFleetMapPlace(this.value)" placeholder="ابحث في الخريطة عن أي شارع، حي، أو معلم في النجف (من أول حرف)..."
+                                       class="w-full pr-8 pl-8 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 transition">
+                                <button type="button" onclick="clearFleetMapSearch()" id="btn-clear-fleet-search" class="absolute left-2.5 text-slate-400 hover:text-slate-600 hidden text-sm font-bold">&times;</button>
+                            </div>
+                            <div id="fleet-map-search-results" class="absolute right-1 left-1 top-full mt-1 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 max-h-64 overflow-y-auto hidden divide-y divide-slate-100"></div>
+                        </div>
+
                         <div id="mapbox-fleet-map" class="w-full h-[520px] rounded-xl overflow-hidden mt-2 relative"></div>
                     </div>
 
@@ -804,6 +931,95 @@
                 </div>
             </section>
 
+            <!-- 9. BACKUP & RESTORE TAB -->
+            <section id="tab-backup" class="tab-content hidden space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-2xl font-black text-slate-900">النسخ الاحتياطي وإدارة قاعدة البيانات</h2>
+                        <p class="text-xs md:text-sm text-slate-500">نظام إدارة قاعدة بيانات PostgreSQL الذاتية وتصدير واسترجاع النسخ الشاملة</p>
+                    </div>
+                </div>
+
+                <!-- Database Status & Actions Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    
+                    <!-- Card 1: Full Backup Export -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center space-x-3 space-x-reverse mb-2">
+                                <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center text-lg">
+                                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-slate-900 text-base">تصدير نسخة احتياطية كاملة (Full Backup Export)</h3>
+                                    <p class="text-xs text-slate-500">تحميل نسخة مشفرة ومكتملة من كافة الجداول والسجلات</p>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-600 leading-relaxed mt-3">
+                                يشمل التصدير: بيانات المستخدمين، السائقين، الركاب، الوثائق، المسارات، الحجوزات، البلاغات، إعدادات التسعير، وسجلات التدقيق. يتم حفظ ملف JSON رسمي يمكن استعادته في أي وقت.
+                            </p>
+                        </div>
+                        <button onclick="exportSystemBackup()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-md shadow-amber-500/20">
+                            <i class="fa-solid fa-download"></i>
+                            <span>تصدير وتحميل النسخة الاحتياطية الآن</span>
+                        </button>
+                    </div>
+
+                    <!-- Card 2: Restore Backup -->
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center space-x-3 space-x-reverse mb-2">
+                                <div class="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-500 flex items-center justify-center text-lg">
+                                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-slate-900 text-base">استعادة نسخة احتياطية (Restore Backup)</h3>
+                                    <p class="text-xs text-slate-500">رفع ملف JSON لاستعادة البيانات بالكامل</p>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-600 leading-relaxed mt-3">
+                                يتم التحقق من صحة الملف ومعالجة المعاملة داخل PostgreSQL مع ضمان سلامة المفاتيح والعلاقات (Transactions with ON DELETE CASCADE).
+                            </p>
+                            <div class="mt-4">
+                                <label class="block text-xs font-bold text-slate-700 mb-1.5">اختر ملف النسخة الاحتياطية (.json)</label>
+                                <input type="file" id="backup-file-input" accept=".json" class="w-full text-xs text-slate-500 file:mr-0 file:ml-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer border border-slate-200 rounded-xl p-1 bg-slate-50">
+                            </div>
+                        </div>
+                        <button onclick="restoreSystemBackup()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-md shadow-blue-600/20">
+                            <i class="fa-solid fa-rotate-left"></i>
+                            <span>بدء استعادة النسخة الاحتياطية</span>
+                        </button>
+                    </div>
+
+                </div>
+
+                <!-- Database Engine Health Card -->
+                <div class="bg-slate-900 text-white p-6 rounded-2xl border border-slate-800 shadow-sm">
+                    <h3 class="font-bold text-amber-400 text-sm mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-server"></i>
+                        <span>حالة محرك قاعدة بيانات PostgreSQL</span>
+                    </h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+                        <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700/60">
+                            <span class="text-[10px] text-slate-400 block mb-1">نوع المحرك</span>
+                            <span class="text-xs font-bold text-emerald-400 font-mono">PostgreSQL 16 + PostGIS</span>
+                        </div>
+                        <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700/60">
+                            <span class="text-[10px] text-slate-400 block mb-1">حالة الاتصال</span>
+                            <span class="text-xs font-bold text-emerald-400">متصل (Online) 🐘</span>
+                        </div>
+                        <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700/60">
+                            <span class="text-[10px] text-slate-400 block mb-1">المعالجة المتتالية</span>
+                            <span class="text-xs font-bold text-emerald-400 font-mono">ON DELETE CASCADE</span>
+                        </div>
+                        <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700/60">
+                            <span class="text-[10px] text-slate-400 block mb-1">المزامنة التلقائية</span>
+                            <span class="text-xs font-bold text-amber-400">Active Real-Time</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
         </main>
     </div>
 
@@ -839,107 +1055,607 @@
     </nav>
 
     <!-- ===================================================================== -->
-    <!-- DOCUMENT PREVIEW MODAL (INSPECT, DOWNLOAD, PRINT, APPROVE/REJECT)     -->
+    <!-- DOCUMENT PREVIEW MODAL (FULL 4-DOCUMENTS SIMULTANEOUS INSPECTION)     -->
     <!-- ===================================================================== -->
-    <div id="document-modal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-2 sm:p-4">
-        <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[95vh] animate-scale-up border border-slate-200">
+    <div id="document-modal" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm hidden items-center justify-center p-2 sm:p-4 pointer-events-none">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-5xl w-full overflow-hidden flex flex-col max-h-[96vh] animate-scale-up border border-slate-200">
             
             <!-- Modal Header -->
             <div class="px-5 py-4 bg-slate-900 text-white flex items-center justify-between">
                 <div class="flex items-center space-x-3 space-x-reverse">
-                    <div class="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold text-lg">
+                    <div class="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xl">
                         🚖
                     </div>
                     <div>
-                        <h3 id="modal-doc-title" class="font-bold text-base leading-tight">معاينة وثيقة السائق</h3>
-                        <p class="text-[11px] text-amber-400 font-semibold">منصة توصيله - النجف الأشرف</p>
+                        <h3 class="font-bold text-base leading-tight">فحص وتدقيق مستمسكات وبيانات الكابتن الكاملة</h3>
+                        <p class="text-[11px] text-amber-400 font-semibold">منصة توصيله - إدارة النقل الموحد بالنجف الأشرف</p>
                     </div>
                 </div>
-                <button onclick="closeDocumentModal()" class="text-slate-400 hover:text-white transition text-2xl font-bold p-1 leading-none">
+                <button type="button" onclick="closeDocumentModal()" class="text-slate-400 hover:text-white transition text-2xl font-bold p-1 leading-none">
                     &times;
                 </button>
             </div>
 
-            <!-- Driver Meta Summary Bar inside Modal -->
-            <div id="modal-driver-meta" class="px-5 py-3 bg-slate-100 border-b border-slate-200 text-xs text-slate-700 flex flex-wrap gap-x-4 gap-y-2 justify-between items-center">
-                <div>
-                    <span class="text-slate-500">السائق:</span>
-                    <strong id="modal-driver-name" class="text-slate-900 font-bold ml-1">-</strong>
-                </div>
-                <div>
-                    <span class="text-slate-500">الهاتف:</span>
-                    <strong id="modal-driver-phone" class="text-slate-900 font-mono ml-1">-</strong>
-                </div>
-                <div>
-                    <span class="text-slate-500">المركبة:</span>
-                    <strong id="modal-driver-vehicle" class="text-slate-900 ml-1">-</strong>
-                </div>
-                <div>
-                    <span class="text-slate-500">رقم الرخصة:</span>
-                    <strong id="modal-driver-license" class="text-slate-900 font-mono ml-1">-</strong>
+            <!-- Driver & Vehicle & Route Meta Summary -->
+            <div class="px-5 py-3 bg-slate-50 border-b border-slate-200 text-xs">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <!-- Captain Info -->
+                    <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                        <span class="text-slate-400 block text-[10px] font-bold">اسم الكابتن ورقم الهاتف</span>
+                        <div class="flex items-center justify-between mt-0.5">
+                            <strong id="modal-driver-name" class="text-slate-900 font-bold text-sm truncate">-</strong>
+                            <span id="modal-driver-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">قيد المراجعة</span>
+                        </div>
+                        <span id="modal-driver-phone" class="text-slate-600 font-mono text-xs block mt-1">-</span>
+                        <span id="modal-driver-license-num" class="text-slate-500 font-mono text-[11px] block mt-0.5">-</span>
+                    </div>
+
+                    <!-- Vehicle Info -->
+                    <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                        <span class="text-slate-400 block text-[10px] font-bold">بيانات المركبة</span>
+                        <strong id="modal-driver-vehicle" class="text-slate-900 font-bold text-xs truncate block mt-0.5">-</strong>
+                        <span id="modal-driver-plate" class="text-amber-600 font-bold text-xs font-mono block mt-1">-</span>
+                    </div>
+
+                    <!-- Route Info -->
+                    <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                        <span class="text-slate-400 block text-[10px] font-bold">مسار الخط المحدد</span>
+                        <div id="modal-driver-route" class="text-slate-800 font-semibold text-xs mt-0.5">
+                            -
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Modal Body (Image display) -->
-            <div class="p-4 sm:p-6 overflow-y-auto flex-1 flex flex-col items-center justify-center bg-slate-900/5">
-                <div id="modal-image-container" class="w-full flex justify-center max-h-[50vh] overflow-hidden rounded-2xl border border-slate-300 bg-white p-2 shadow-inner">
-                    <img id="modal-doc-img" src="" alt="وثيقة السائق" class="max-h-[48vh] rounded-xl object-contain">
+            <!-- All 4 Documents Grid (Simultaneous Display) -->
+            <div class="p-4 sm:p-5 overflow-y-auto flex-1 bg-slate-100 space-y-4">
+                <div class="flex items-center justify-between px-1">
+                    <span class="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                        <i class="fa-solid fa-folder-open text-amber-500"></i>
+                        المستمسكات والوثائق الرسمية (معاينة مباشرة لكافة الوثائق الأربعة):
+                    </span>
+                    <span class="text-[11px] text-slate-500">انقر على أي صورة لتكبيرها بالحجم الكامل</span>
                 </div>
-                <div id="modal-no-preview" class="hidden text-center py-12 text-slate-400">
-                    <i class="fa-solid fa-file-pdf text-5xl text-rose-500 mb-2"></i>
-                    <p class="font-bold text-slate-700">مستند PDF رسمي</p>
-                    <a id="modal-pdf-link" href="#" target="_blank" class="mt-2 inline-block px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold">فتح المستند في تبويب آمن</a>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- Doc 1: National ID Front -->
+                    <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-id-card text-amber-500"></i>
+                                    البطاقة الوطنية (الوجه الأمامي)
+                                </span>
+                                <span id="doc-badge-id-front" class="text-[10px] px-2 py-0.5 rounded font-bold bg-amber-100 text-amber-800">جاري التحميل...</span>
+                            </div>
+                            <div class="h-48 rounded-xl bg-slate-900/5 border border-slate-200 flex items-center justify-center overflow-hidden relative group">
+                                <img id="doc-img-id-front" src="" alt="البطاقة الوطنية - الوجه الأمامي"
+                                     onclick="openZoomImage(this.src, 'البطاقة الوطنية (الوجه الأمامي)')"
+                                     class="max-h-48 w-full object-contain cursor-pointer transition transform group-hover:scale-105 duration-200 hidden">
+                                <div id="doc-placeholder-id-front" class="text-slate-400 text-center p-4">
+                                    <i class="fa-solid fa-image text-3xl mb-1 text-slate-300"></i>
+                                    <p class="text-xs font-semibold">لم تُرفع هذه الوثيقة</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 mt-3 pt-2 border-t border-slate-100">
+                            <button type="button" onclick="zoomDoc('id-front')" id="btn-zoom-id-front" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition">
+                                <i class="fa-solid fa-magnifying-glass-plus"></i> تكبير الصورة
+                            </button>
+                            <button type="button" onclick="downloadSingleDocById('id-front', 'البطاقة_الوطنية_الوجه')" id="btn-dl-id-front" class="py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition">
+                                <i class="fa-solid fa-download text-amber-400"></i> تحميل
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Doc 2: National ID Back -->
+                    <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-id-card text-amber-500"></i>
+                                    البطاقة الوطنية (الوجه الخلفي)
+                                </span>
+                                <span id="doc-badge-id-back" class="text-[10px] px-2 py-0.5 rounded font-bold bg-amber-100 text-amber-800">جاري التحميل...</span>
+                            </div>
+                            <div class="h-48 rounded-xl bg-slate-900/5 border border-slate-200 flex items-center justify-center overflow-hidden relative group">
+                                <img id="doc-img-id-back" src="" alt="البطاقة الوطنية - الوجه الخلفي"
+                                     onclick="openZoomImage(this.src, 'البطاقة الوطنية (الوجه الخلفي)')"
+                                     class="max-h-48 w-full object-contain cursor-pointer transition transform group-hover:scale-105 duration-200 hidden">
+                                <div id="doc-placeholder-id-back" class="text-slate-400 text-center p-4">
+                                    <i class="fa-solid fa-image text-3xl mb-1 text-slate-300"></i>
+                                    <p class="text-xs font-semibold">لم تُرفع هذه الوثيقة</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 mt-3 pt-2 border-t border-slate-100">
+                            <button type="button" onclick="zoomDoc('id-back')" id="btn-zoom-id-back" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition">
+                                <i class="fa-solid fa-magnifying-glass-plus"></i> تكبير الصورة
+                            </button>
+                            <button type="button" onclick="downloadSingleDocById('id-back', 'البطاقة_الوطنية_الظهر')" id="btn-dl-id-back" class="py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition">
+                                <i class="fa-solid fa-download text-amber-400"></i> تحميل
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Doc 3: Driving License Front -->
+                    <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-address-card text-emerald-500"></i>
+                                    إجازة السوق (الوجه الأمامي)
+                                </span>
+                                <span id="doc-badge-lic-front" class="text-[10px] px-2 py-0.5 rounded font-bold bg-amber-100 text-amber-800">جاري التحميل...</span>
+                            </div>
+                            <div class="h-48 rounded-xl bg-slate-900/5 border border-slate-200 flex items-center justify-center overflow-hidden relative group">
+                                <img id="doc-img-lic-front" src="" alt="إجازة السوق - الوجه الأمامي"
+                                     onclick="openZoomImage(this.src, 'إجازة السوق (الوجه الأمامي)')"
+                                     class="max-h-48 w-full object-contain cursor-pointer transition transform group-hover:scale-105 duration-200 hidden">
+                                <div id="doc-placeholder-lic-front" class="text-slate-400 text-center p-4">
+                                    <i class="fa-solid fa-image text-3xl mb-1 text-slate-300"></i>
+                                    <p class="text-xs font-semibold">لم تُرفع هذه الوثيقة</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 mt-3 pt-2 border-t border-slate-100">
+                            <button type="button" onclick="zoomDoc('lic-front')" id="btn-zoom-lic-front" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition">
+                                <i class="fa-solid fa-magnifying-glass-plus"></i> تكبير الصورة
+                            </button>
+                            <button type="button" onclick="downloadSingleDocById('lic-front', 'إجازة_السوق_الوجه')" id="btn-dl-lic-front" class="py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition">
+                                <i class="fa-solid fa-download text-amber-400"></i> تحميل
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Doc 4: Driving License Back -->
+                    <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-address-card text-emerald-500"></i>
+                                    إجازة السوق (الوجه الخلفي)
+                                </span>
+                                <span id="doc-badge-lic-back" class="text-[10px] px-2 py-0.5 rounded font-bold bg-amber-100 text-amber-800">جاري التحميل...</span>
+                            </div>
+                            <div class="h-48 rounded-xl bg-slate-900/5 border border-slate-200 flex items-center justify-center overflow-hidden relative group">
+                                <img id="doc-img-lic-back" src="" alt="إجازة السوق - الوجه الخلفي"
+                                     onclick="openZoomImage(this.src, 'إجازة السوق (الوجه الخلفي)')"
+                                     class="max-h-48 w-full object-contain cursor-pointer transition transform group-hover:scale-105 duration-200 hidden">
+                                <div id="doc-placeholder-lic-back" class="text-slate-400 text-center p-4">
+                                    <i class="fa-solid fa-image text-3xl mb-1 text-slate-300"></i>
+                                    <p class="text-xs font-semibold">لم تُرفع هذه الوثيقة</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 mt-3 pt-2 border-t border-slate-100">
+                            <button type="button" onclick="zoomDoc('lic-back')" id="btn-zoom-lic-back" class="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition">
+                                <i class="fa-solid fa-magnifying-glass-plus"></i> تكبير الصورة
+                            </button>
+                            <button type="button" onclick="downloadSingleDocById('lic-back', 'إجازة_السوق_الظهر')" id="btn-dl-lic-back" class="py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition">
+                                <i class="fa-solid fa-download text-amber-400"></i> تحميل
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Document Actions: Download, Print, Approve, Reject -->
+            <!-- Document Actions: Approval, Rejection, Print, Close -->
             <div class="p-4 sm:p-5 bg-white border-t border-slate-200 space-y-3">
                 <!-- Rejection input box -->
                 <div id="rejection-box" class="hidden">
-                    <label class="block text-xs font-bold text-rose-600 mb-1">سبب الرفض (سيتم إرساله في إشعار للسائق)</label>
+                    <label class="block text-xs font-bold text-rose-600 mb-1">سبب الرفض (سيتم حفظه في سجل الكابتن وإشعاره به)</label>
                     <div class="flex gap-2">
-                        <input type="text" id="rejection-reason-input" placeholder="مثال: الصورة غير واضحة، انتهاء صلاحية الرخصة..." class="flex-1 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
-                        <button onclick="rejectCurrentDocument()" class="px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs transition">تأكيد الرفض</button>
+                        <input type="text" id="rejection-reason-input" placeholder="مثال: صورة إجازة السوق غير واضحة، انتهاء الصلاحية..." class="flex-1 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-rose-500">
+                        <button type="button" onclick="confirmRejectDriver()" class="px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs transition">تأكيد الرفض ❌</button>
                     </div>
                 </div>
 
                 <!-- Action Button Toolbar -->
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     
-                    <!-- Utility Buttons: Download & Print -->
+                    <!-- Utility Buttons: Print All -->
                     <div class="flex items-center gap-2">
-                        <button onclick="downloadDocument()" title="حفظ الوثيقة على جهازك"
-                                class="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-sm">
-                            <i class="fa-solid fa-download text-amber-400"></i>
-                            <span>حفظ الوثيقة</span>
-                        </button>
-
-                        <button onclick="printDocument()" title="طباعة الوثيقة الرسمية"
+                        <button type="button" onclick="printAllDocuments()" title="طباعة استمارة الكابتن الموحدة بكافة الوثائق"
                                 class="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center gap-1.5 transition border border-slate-300 shadow-sm">
                             <i class="fa-solid fa-print text-slate-700"></i>
-                            <span>طباعة الوثيقة</span>
+                            <span>طباعة الاستمارة الموحدة</span>
                         </button>
                     </div>
 
-                    <!-- Approval Buttons -->
+                    <!-- Approval / Rejection Buttons -->
                     <div class="flex items-center gap-2">
-                        <button onclick="approveCurrentDocument()" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-md shadow-emerald-600/20">
+                        <button type="button" onclick="confirmApproveDriver()" class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl text-xs sm:text-sm flex items-center gap-1.5 transition shadow-md shadow-emerald-600/20 active:scale-95">
                             <i class="fa-solid fa-check"></i>
-                            <span>اعتماد وتوثيق</span>
+                            <span>الموافقة واعتماد الكابتن وتفعيله ✅</span>
                         </button>
 
-                        <button onclick="toggleRejectionBox()" id="btn-reject-toggle" class="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition border border-rose-200">
+                        <button type="button" onclick="toggleRejectionBox()" id="btn-reject-toggle" class="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition border border-rose-200">
                             <i class="fa-solid fa-xmark"></i>
-                            <span>رفض</span>
+                            <span>رفض ❌</span>
                         </button>
 
-                        <button onclick="closeDocumentModal()" class="px-3.5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">
+                        <button type="button" onclick="closeDocumentModal()" class="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition">
                             إغلاق
                         </button>
                     </div>
 
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL: ADD CAPTAIN & DRAW ROUTE (Admin Feature)                       -->
+    <!-- ===================================================================== -->
+    <div id="modal-add-captain" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm hidden items-center justify-center p-2 sm:p-4 pointer-events-none">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full overflow-hidden flex flex-col max-h-[95vh] animate-scale-up border border-slate-200">
+            
+            <!-- Modal Header -->
+            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xl shadow-md">
+                        🚖
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-base leading-tight">تسجيل كابتن جديد واعتماد خط سيره</h3>
+                        <p class="text-[11px] text-amber-400 font-semibold">إدخال البيانات وتحديد اسم المستخدم وكلمة المرور ورسم المسار على الخريطة</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeAddCaptainModal()" class="text-slate-400 hover:text-white transition text-3xl font-bold p-1 leading-none cursor-pointer">
+                    &times;
+                </button>
+            </div>
+
+            <!-- Modal Body (Form) -->
+            <form id="form-add-captain" onsubmit="submitAdminAddCaptain(event)" class="overflow-y-auto flex-1 p-5 space-y-5 bg-slate-50">
+                
+                <!-- SECTION 1: Personal & Login Credentials -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <span class="text-xs font-black text-slate-800 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs">1</span>
+                            <span>بيانات الحساب ومعلومات الدخول (يتم إعطاؤها للكابتن)</span>
+                        </span>
+                        <span class="text-[11px] text-slate-400">بيانات تسجيل الدخول للتطبيق</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">الاسم الكامل للكابتن <span class="text-rose-500">*</span></label>
+                            <input type="text" id="admin-drv-name" required placeholder="مثال: وسام علي الشمري"
+                                   class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف العراقي (اسم المستخدم للدخول) <span class="text-rose-500">*</span></label>
+                            <input type="tel" id="admin-drv-phone" required oninput="checkAdminCaptainPhone(this.value)" placeholder="07706204066 أو 07801234567" dir="ltr"
+                                   class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 text-left">
+                            <div id="admin-drv-phone-status" class="text-xs font-bold mt-1.5 hidden"></div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">البريد الإلكتروني (اختياري)</label>
+                            <input type="email" id="admin-drv-email" placeholder="captain@taxiwisam.com" dir="ltr"
+                                   class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 text-left">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">كلمة المرور (الباسوورد للدخول) <span class="text-rose-500">*</span></label>
+                            <div class="flex gap-2">
+                                <div class="relative flex-1">
+                                    <input type="text" id="admin-drv-password" required minlength="4" value="123456" placeholder="مثال: 123456"
+                                           class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900">
+                                </div>
+                                <button type="button" onclick="generateCaptainPassword()" title="توليد كلمة مرور عشوائية"
+                                        class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                                    <i class="fa-solid fa-dice"></i>
+                                    <span>توليد</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 2: Vehicle & Service Details -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <span class="text-xs font-black text-slate-800 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs">2</span>
+                            <span>بيانات المركبة والخدمة</span>
+                        </span>
+                        <span class="text-[11px] text-slate-400">تظهر للراكب عند البحث</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">نوع وموديل السيارة <span class="text-rose-500">*</span></label>
+                            <input type="text" id="admin-drv-vehicle" required placeholder="مثال: كيا ريو 2022 / سايبا"
+                                   class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">رقم اللوحة والمحافظة <span class="text-rose-500">*</span></label>
+                            <input type="text" id="admin-drv-plate" required placeholder="مثال: 12345 النجف - خصوصي"
+                                   class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">لون المركبة</label>
+                            <input type="text" id="admin-drv-color" placeholder="مثال: أبيض / أصفر / رصاصي" value="أبيض"
+                                   class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">عدد المقاعد الشاغرة للركاب <span class="text-rose-500">*</span></label>
+                            <select id="admin-drv-seats" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 font-semibold">
+                                <option value="4" selected>4 ركاب (سيارة صالون)</option>
+                                <option value="1">1 راكب</option>
+                                <option value="2">2 ركاب</option>
+                                <option value="3">3 ركاب</option>
+                                <option value="5">5 ركاب</option>
+                                <option value="6">6 ركاب</option>
+                                <option value="7">7 ركاب فما فوق (فان / باص)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">نوع الخدمة والخط <span class="text-rose-500">*</span></label>
+                            <select id="admin-drv-service" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 font-semibold">
+                                <option value="both" selected>كلاهما (خط ثابت وتوصيلات يومية)</option>
+                                <option value="monthly">خط شهري ثابت (طلاب / موظفين)</option>
+                                <option value="daily">توصيل يومي مرن / تكسي</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SECTION 3: Route Definition on Interactive Map -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <span class="text-xs font-black text-slate-800 flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs">3</span>
+                            <span>تحديد ورسم مسار الكابتن على الخريطة (Mapbox)</span>
+                        </span>
+                        <span class="text-[11px] text-emerald-600 font-bold">يظهر للراكب مباشرة على الخريطة</span>
+                    </div>
+
+                    <!-- Search Controls for Start and Dest -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="relative">
+                            <label class="block text-xs font-bold text-emerald-700 mb-1 flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                                <span>نقطة الانطلاق (حي، شارع، مجمع):</span>
+                            </label>
+                            <div class="flex gap-2">
+                                <div class="relative flex-1">
+                                    <input type="text" id="admin-route-start-input" placeholder="ابحث عن شارع، بيت، محل، أسواق، جامعة، حي..." 
+                                           oninput="searchAdminNajafPlace('start')"
+                                           class="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                    <span class="absolute left-2.5 top-2 text-slate-400">
+                                        <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                                    </span>
+                                </div>
+                                <button type="button" onclick="setAdminMapPickMode('start')" id="btn-admin-pick-start"
+                                        class="px-3 py-2 bg-emerald-100 border border-emerald-300 text-emerald-800 hover:bg-emerald-600 hover:text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                                    <i class="fa-solid fa-location-crosshairs"></i>
+                                    <span>تثبيت</span>
+                                </button>
+                            </div>
+                            <div id="admin-start-results" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-30 max-h-44 overflow-y-auto text-xs"></div>
+                        </div>
+
+                        <div class="relative">
+                            <label class="block text-xs font-bold text-rose-700 mb-1 flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                                <span>نقطة الوصول (جامعة الكوفة، مستشفى، شارع):</span>
+                            </label>
+                            <div class="flex gap-2">
+                                <div class="relative flex-1">
+                                    <input type="text" id="admin-route-dest-input" placeholder="ابحث عن شارع، بيت، محل، أسواق، جامعة، حي..." 
+                                           oninput="searchAdminNajafPlace('dest')"
+                                           class="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-rose-500">
+                                    <span class="absolute left-2.5 top-2 text-slate-400">
+                                        <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                                    </span>
+                                </div>
+                                <button type="button" onclick="setAdminMapPickMode('dest')" id="btn-admin-pick-dest"
+                                        class="px-3 py-2 bg-rose-100 border border-rose-300 text-rose-800 hover:bg-rose-600 hover:text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                                    <i class="fa-solid fa-location-crosshairs"></i>
+                                    <span>تثبيت</span>
+                                </button>
+                            </div>
+                            <div id="admin-dest-results" class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-30 max-h-44 overflow-y-auto text-xs"></div>
+                        </div>
+                    </div>
+
+                    <!-- Map Container for Captain Route -->
+                    <div id="admin-captain-route-map" class="w-full h-64 sm:h-72 rounded-2xl border border-slate-300 overflow-hidden relative shadow-inner bg-slate-900"></div>
+
+                    <!-- Hidden Coordinate inputs -->
+                    <input type="hidden" id="admin-route-start-lat" value="31.9961">
+                    <input type="hidden" id="admin-route-start-lon" value="44.3168">
+                    <input type="hidden" id="admin-route-end-lat" value="32.0321">
+                    <input type="hidden" id="admin-route-end-lon" value="44.3725">
+
+                    <!-- Route Details & Fare -->
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                        <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                            <span class="text-[10px] text-slate-400 block font-bold">الانطلاق:</span>
+                            <span id="admin-route-start-label" class="text-xs font-bold text-emerald-800 truncate block">مركز النجف (ساحة ثورة العشرين)</span>
+                        </div>
+                        <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                            <span class="text-[10px] text-slate-400 block font-bold">الوصول:</span>
+                            <span id="admin-route-dest-label" class="text-xs font-bold text-rose-800 truncate block">جامعة الكوفة</span>
+                        </div>
+                        <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                            <span class="text-[10px] text-slate-400 block font-bold">المسافة التقديرية:</span>
+                            <span id="admin-route-dist-label" class="text-xs font-bold text-amber-600 block font-mono">8.2 كم</span>
+                        </div>
+                        <div class="bg-slate-50 p-2 rounded-xl border border-slate-200">
+                            <label class="block text-[10px] text-slate-500 font-bold mb-0.5">أجرة الراكب (د.ع):</label>
+                            <input type="number" id="admin-route-fare" value="3000" step="500"
+                                   class="w-full px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-center text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Buttons -->
+                <div class="flex items-center justify-end gap-3 pt-2 border-t border-slate-200">
+                    <button type="button" onclick="closeAddCaptainModal()" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer">
+                        إلغاء
+                    </button>
+                    <button type="submit" id="btn-submit-add-captain" class="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs sm:text-sm transition flex items-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer">
+                        <i class="fa-solid fa-check-double"></i>
+                        <span>حفظ واعتماد الكابتن وتثبيت مساره 🚀</span>
+                    </button>
+                </div>
+
+            </form>
+
+            <!-- SUCCESS CARD OVERLAY (Appears after captain creation) -->
+            <div id="admin-captain-success-box" style="display: none;" class="p-6 bg-white flex-1 flex flex-col justify-center items-center text-center space-y-4">
+                <div class="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-3xl shadow-inner">
+                    ✅
+                </div>
+                <div>
+                    <h3 class="text-lg font-black text-slate-900">تم تسجيل واعتماد الكابتن بنجاح!</h3>
+                    <p class="text-xs text-slate-500 mt-1">تم تثبيت حسابه وتفعيل مساره ليظهر مباشرة على خريطة الركاب</p>
+                </div>
+
+                <!-- Credentials Box for Admin to Copy/Share -->
+                <div class="bg-slate-900 text-white p-5 rounded-2xl max-w-md w-full text-right space-y-3 font-mono border border-slate-800 shadow-xl">
+                    <div class="text-xs text-amber-400 font-bold border-b border-slate-800 pb-2 flex items-center justify-between">
+                        <span>بيانات الدخول لتسليمها للكابتن:</span>
+                        <span class="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded text-amber-300">حساب معتمد ✅</span>
+                    </div>
+                    <div class="text-xs space-y-1.5 font-sans">
+                        <div><b>اسم الكابتن:</b> <span id="succ-captain-name" class="text-amber-300 font-bold"></span></div>
+                        <div><b>رقم الهاتف (اسم المستخدم):</b> <span id="succ-captain-phone" class="font-mono text-emerald-400 font-bold" dir="ltr"></span></div>
+                        <div><b>كلمة المرور (الباسوورد):</b> <span id="succ-captain-pass" class="font-mono text-amber-400 font-black text-sm"></span></div>
+                        <div><b>خط السير المعتمد:</b> <span id="succ-captain-route" class="text-slate-300 text-xs font-semibold"></span></div>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 flex-wrap justify-center pt-2">
+                    <button type="button" onclick="copyCaptainCredentials()" class="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-md cursor-pointer">
+                        <i class="fa-solid fa-copy"></i>
+                        <span>نسخ بيانات الدخول 📋</span>
+                    </button>
+                    <a id="succ-whatsapp-link" href="#" target="_blank" class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-md cursor-pointer">
+                        <i class="fa-brands fa-whatsapp"></i>
+                        <span>مشاركة عبر واتساب 💬</span>
+                    </a>
+                    <button type="button" onclick="finishCaptainCreation()" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs transition cursor-pointer">
+                        تم والعودة لقائمة السائقين
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Fullscreen Image Zoom Modal -->
+    <div id="image-zoom-modal" style="display: none;" onclick="if(event.target === this) closeZoomModal()" class="fixed inset-0 z-[60] bg-slate-950/90 backdrop-blur-md hidden flex-col items-center justify-center p-3 sm:p-6 pointer-events-none">
+        <div class="flex items-center justify-between w-full max-w-4xl pb-3 text-white">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-magnifying-glass-plus text-amber-400"></i>
+                <span id="zoom-modal-title" class="font-bold text-sm text-white">معاينة الوثيقة بالحجم الكامل</span>
+            </div>
+            <button type="button" onclick="closeZoomModal()" class="text-slate-400 hover:text-white text-3xl font-bold p-1 leading-none transition">&times;</button>
+        </div>
+        <div class="max-w-4xl max-h-[85vh] overflow-auto flex items-center justify-center p-2 bg-slate-900/60 rounded-2xl border border-slate-800 shadow-2xl">
+            <img id="zoom-modal-img" src="" alt="وثيقة مكبرة" class="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl">
+        </div>
+    </div>
+
+    <!-- EDIT CUSTOMER MODAL -->
+    <div id="modal-edit-customer" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4 pointer-events-none">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 class="text-lg font-black text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-user-pen text-amber-500"></i>
+                    <span>تعديل بيانات الراكب</span>
+                </h3>
+                <button type="button" onclick="closeEditCustomerModal()" class="text-slate-400 hover:text-slate-600 text-2xl font-bold p-1 leading-none">&times;</button>
+            </div>
+            <form id="form-edit-customer" onsubmit="submitEditCustomer(event)" class="space-y-3.5">
+                <input type="hidden" id="edit-cust-id">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">الاسم الكامل</label>
+                    <input type="text" id="edit-cust-name" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف</label>
+                    <input type="tel" id="edit-cust-phone" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-left" dir="ltr">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">المسار (خط السير)</label>
+                    <input type="text" id="edit-cust-route" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">العنوان</label>
+                    <input type="text" id="edit-cust-address" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">كلمة المرور (اتركها فارغة إذا لم ترغب بالتغيير)</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="edit-cust-password" placeholder="أدخل كلمة مرور جديدة أو اتركها كما هي" class="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <button type="button" onclick="generateUniquePasswordToInput('edit-cust-password')" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                            <i class="fa-solid fa-dice"></i>
+                            <span>توليد</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button type="button" onclick="closeEditCustomerModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition">إلغاء</button>
+                    <button type="submit" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black shadow-md shadow-amber-500/20 transition">حفظ التعديلات ✅</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- EDIT DRIVER MODAL -->
+    <div id="modal-edit-driver" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4 pointer-events-none">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 class="text-lg font-black text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-user-gear text-amber-500"></i>
+                    <span>تعديل بيانات الكابتن</span>
+                </h3>
+                <button type="button" onclick="closeEditDriverModal()" class="text-slate-400 hover:text-slate-600 text-2xl font-bold p-1 leading-none">&times;</button>
+            </div>
+            <form id="form-edit-driver" onsubmit="submitEditDriver(event)" class="space-y-3.5">
+                <input type="hidden" id="edit-drv-id">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">الاسم الكامل</label>
+                    <input type="text" id="edit-drv-name" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف</label>
+                    <input type="tel" id="edit-drv-phone" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-left" dir="ltr">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">المسار (خط السير المعتمد)</label>
+                    <input type="text" id="edit-drv-route" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">كلمة المرور (اتركها فارغة إذا لم ترغب بالتغيير)</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="edit-drv-password" placeholder="أدخل كلمة مرور جديدة أو اتركها كما هي" class="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <button type="button" onclick="generateUniquePasswordToInput('edit-drv-password')" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                            <i class="fa-solid fa-dice"></i>
+                            <span>توليد</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button type="button" onclick="closeEditDriverModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition">إلغاء</button>
+                    <button type="submit" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black shadow-md shadow-amber-500/20 transition">حفظ التعديلات ✅</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -951,6 +1667,55 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <script>
+        window.openAddCaptainModal = function() {
+            try {
+                var modal = document.getElementById('modal-add-captain');
+                if (modal) {
+                    modal.style.display = 'flex';
+                    var form = document.getElementById('form-add-captain');
+                    if (form) form.style.display = 'block';
+                    var succ = document.getElementById('admin-captain-success-box');
+                    if (succ) succ.style.display = 'none';
+                    setTimeout(function() {
+                        if (typeof initAdminCaptainRouteMap === 'function') {
+                            try { initAdminCaptainRouteMap(); } catch(e) { console.warn(e); }
+                        }
+                    }, 150);
+                }
+            } catch(err) {
+                console.error('Error opening captain modal:', err);
+            }
+        };
+        window.closeAddCaptainModal = function() {
+            var modal = document.getElementById('modal-add-captain');
+            if (modal) modal.style.display = 'none';
+        };
+        window.forcePurgeAndReloadDashboard = async function() {
+            var btn = document.getElementById('btn-purge-dashboard');
+            if (btn) btn.innerHTML = '<span>⏳</span><span>جاري تحديث التطبيق...</span>';
+            try {
+                if ('caches' in window) {
+                    var keys = await caches.keys();
+                    for (var i = 0; i < keys.length; i++) await caches.delete(keys[i]);
+                }
+            } catch (_) {}
+            try { sessionStorage.clear(); } catch (_) {}
+            window.location.replace(window.location.origin + window.location.pathname + '?refresh=' + Date.now());
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var btn = document.getElementById('btn-open-add-captain');
+            if (btn) {
+                btn.addEventListener('click', window.openAddCaptainModal);
+            }
+            var btnVerif = document.getElementById('btn-open-add-captain-verif');
+            if (btnVerif) {
+                btnVerif.addEventListener('click', window.openAddCaptainModal);
+            }
+        });
+    </script>
+
+    <script src="/dashboard/app.js?v=20260924_rel120"></script>
 </body>
 </html>

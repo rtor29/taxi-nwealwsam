@@ -1,15 +1,64 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: taxi-wisam-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${PGDATABASE:-taxiwisam}
+      POSTGRES_USER: ${PGUSER:-postgres}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./src/backend/db/schema.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d taxiwisam"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taxi-wisam-backend
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 5050
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${PGUSER:-postgres}:${PGPASSWORD:-postgres}@postgres:5432/${PGDATABASE:-taxiwisam}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${PGDATABASE:-taxiwisam}
+      PGUSER: ${PGUSER:-postgres}
+      PGPASSWORD: ${PGPASSWORD:-postgres}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-1122}
+      DATA_FILE: /app/data/state.json
+      UPLOADS_DIR: /app/data/uploads
+    ports:
+      - "5050:5050"
+    volumes:
+      - ./data:/app/data
+
   redis:
     image: redis:7-alpine
     container_name: taxi-wisam-redis
+    restart: always
     ports:
       - "6379:6379"
-    restart: always
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
 
 volumes:
+  pgdata:
   redis_data:

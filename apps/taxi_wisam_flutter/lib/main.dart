@@ -1,3 +1,4 @@
+import 'dart:html' as html;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -5,7 +6,7 @@ import 'core/network/api_client.dart';
 import 'core/services/storage_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/screens/login_screen.dart';
-import 'features/customer/screens/customer_home_screen.dart';
+import 'features/customer/screens/route_search_screen.dart';
 import 'features/driver/screens/driver_home_screen.dart';
 
 void main() async {
@@ -16,6 +17,7 @@ void main() async {
 
   String? token;
   String? role;
+  String? userId;
 
   // 1. On Web, check if Google OAuth redirect provided a login token in query parameters or fragment
   if (kIsWeb) {
@@ -31,7 +33,7 @@ void main() async {
 
       if (queryParams.containsKey('login_token') && queryParams['login_token']!.isNotEmpty) {
         token = queryParams['login_token'];
-        final userId = queryParams['userId'] ?? 'usr-google';
+        userId = queryParams['userId'] ?? 'usr-google';
         role = queryParams['role'] ?? 'Customer';
         final fullName = (queryParams['fullName'] != null && queryParams['fullName']!.isNotEmpty)
             ? queryParams['fullName']!
@@ -51,6 +53,7 @@ void main() async {
   if (token == null || token.isEmpty) {
     token = await storageService.getToken();
     role = await storageService.getUserRole();
+    userId = await storageService.getUserId();
   }
 
   runApp(TaxiWisamApp(
@@ -58,6 +61,7 @@ void main() async {
     apiClient: apiClient,
     initialToken: token,
     initialRole: role,
+    initialUserId: userId,
   ));
 }
 
@@ -66,6 +70,7 @@ class TaxiWisamApp extends StatelessWidget {
   final ApiClient apiClient;
   final String? initialToken;
   final String? initialRole;
+  final String? initialUserId;
 
   const TaxiWisamApp({
     super.key,
@@ -73,6 +78,7 @@ class TaxiWisamApp extends StatelessWidget {
     required this.apiClient,
     this.initialToken,
     this.initialRole,
+    this.initialUserId,
   });
 
   @override
@@ -82,10 +88,26 @@ class TaxiWisamApp extends StatelessWidget {
       if (initialRole == 'Driver') {
         home = DriverHome(apiClient: apiClient, storageService: storageService);
       } else {
-        home = CustomerHome(apiClient: apiClient, storageService: storageService);
+        home = RouteSearchScreen(
+          apiClient: apiClient,
+          customerId: initialUserId ?? '',
+          storageService: storageService,
+        );
       }
     } else {
-      home = LoginScreen(apiClient: apiClient, storageService: storageService);
+      if (kIsWeb) {
+        try {
+          html.window.location.replace('/');
+        } catch (_) {}
+        home = const Scaffold(
+          backgroundColor: Color(0xFF0F172A),
+          body: Center(
+            child: CircularProgressIndicator(color: Color(0xFFF59E0B)),
+          ),
+        );
+      } else {
+        home = LoginScreen(apiClient: apiClient, storageService: storageService);
+      }
     }
 
     return MaterialApp(
@@ -103,6 +125,34 @@ class TaxiWisamApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       home: home,
+      routes: {
+        '/': (context) {
+          if (kIsWeb) {
+            try {
+              html.window.location.replace('/');
+            } catch (_) {}
+            return const Scaffold(
+              backgroundColor: Color(0xFF0F172A),
+              body: Center(child: CircularProgressIndicator(color: Color(0xFFF59E0B))),
+            );
+          }
+          return LoginScreen(apiClient: apiClient, storageService: storageService);
+        },
+        '/login': (context) {
+          if (kIsWeb) {
+            try {
+              html.window.location.replace('/');
+            } catch (_) {}
+            return const Scaffold(
+              backgroundColor: Color(0xFF0F172A),
+              body: Center(child: CircularProgressIndicator(color: Color(0xFFF59E0B))),
+            );
+          }
+          return LoginScreen(apiClient: apiClient, storageService: storageService);
+        },
+        '/customer': (context) => RouteSearchScreen(apiClient: apiClient, customerId: initialUserId ?? '', storageService: storageService),
+        '/driver': (context) => DriverHome(apiClient: apiClient, storageService: storageService),
+      },
     );
   }
 }

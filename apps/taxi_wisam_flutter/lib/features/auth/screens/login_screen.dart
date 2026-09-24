@@ -1,14 +1,16 @@
+import 'dart:html' as html;
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/utils/iraqi_phone_validator.dart';
 import '../../../core/services/google_auth_service.dart';
 import '../widgets/google_sign_in_button.dart';
 import '../../customer/screens/customer_home_screen.dart';
+import '../../customer/screens/route_search_screen.dart';
 import '../../driver/screens/driver_home_screen.dart';
-import 'phone_otp_verification_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -27,6 +29,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _identifierController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
   bool _isLoading = false;
   bool _isGoogleLoading = false;
   String? _errorMessage;
@@ -101,6 +105,26 @@ class _LoginScreenState extends State<LoginScreen> {
             _errorMessage = 'فشلت عملية المصادقة عبر Google ($err). يرجى المحاولة مرة أخرى.';
           });
         }
+
+        if (query.containsKey('phone') && query['phone']!.isNotEmpty) {
+          final phoneParam = query['phone']!;
+          setState(() {
+            _identifierController.text = phoneParam;
+          });
+          if (query['registered'] == 'true' && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'تم إنشاء حسابك بنجاح! 🚖 أدخل كلمة المرور لتسجيل الدخول مباشرة.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                backgroundColor: Color(0xFF10B981),
+                duration: Duration(seconds: 4),
+              ),
+            );
+          }
+        }
       } catch (_) {}
     }
 
@@ -150,6 +174,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _navigateAfterLogin(Map<String, dynamic> data) {
     final role = data['role'] ?? 'Customer';
+    final userId = data['userId']?.toString() ?? '';
     if (!mounted) return;
     if (role == 'Driver') {
       Navigator.pushReplacement(
@@ -165,8 +190,9 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => CustomerHome(
+          builder: (_) => RouteSearchScreen(
             apiClient: widget.apiClient,
+            customerId: userId,
             storageService: widget.storageService,
           ),
         ),
@@ -174,27 +200,28 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  final List<String> _emailDomains = [
-    '@gmail.com',
-    '@icloud.com',
-    '@yahoo.com',
-    '@outlook.com',
-  ];
-
   Future<void> _handleLogin() async {
-    final identifier = _identifierController.text.trim();
-    if (identifier.isEmpty) {
-      setState(() => _errorMessage = 'يرجى إدخال البريد الإلكتروني أو رقم الهاتف');
+    final rawIdentifier = _identifierController.text.trim();
+    final password = _passwordController.text.trim();
+    if (rawIdentifier.isEmpty) {
+      setState(() => _errorMessage = 'يرجى إدخال رقم الهاتف للمتابعة');
+      return;
+    }
+    if (password.isEmpty) {
+      setState(() => _errorMessage = 'يرجى إدخال كلمة المرور (الباسوورد) للمتابعة');
       return;
     }
 
-    final isEmail = identifier.contains('@');
-    if (!isEmail) {
-      final phoneRes = IraqiPhoneValidator.validate(identifier);
-      if (!phoneRes.isValid) {
-        setState(() => _errorMessage = phoneRes.errorMessage ?? IraqiPhoneValidator.invalidPhoneErrorMessage);
-        return;
-      }
+    String identifier = rawIdentifier;
+    const arabicDigits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+    for (int i = 0; i < arabicDigits.length; i++) {
+      identifier = identifier.replaceAll(arabicDigits[i], i.toString());
+    }
+    if (!identifier.contains('@')) {
+      identifier = identifier.replaceAll(RegExp(r'[^0-9]'), '');
+      if (identifier.startsWith('00964')) identifier = identifier.substring(5);
+      if (identifier.startsWith('964')) identifier = identifier.substring(3);
+      if (identifier.length == 10 && identifier.startsWith('7')) identifier = '0$identifier';
     }
 
     setState(() {
@@ -207,8 +234,9 @@ class _LoginScreenState extends State<LoginScreen> {
         '/auth/login',
         data: {
           'identifier': identifier,
-          'email': identifier.contains('@') ? identifier : null,
+          'password': password,
           'phoneNumber': !identifier.contains('@') ? identifier : null,
+          'email': identifier.contains('@') ? identifier : null,
         },
       );
 
@@ -241,8 +269,9 @@ class _LoginScreenState extends State<LoginScreen> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => CustomerHome(
+            builder: (_) => RouteSearchScreen(
               apiClient: widget.apiClient,
+              customerId: userId,
               storageService: widget.storageService,
             ),
           ),
@@ -295,7 +324,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ],
               ),
               content: Text(
-                'البريد الإلكتروني ($identifier) غير مسجل في المنصة حتى الآن.\n\nهل ترغب في الانتقال إلى صفحة إنشاء حساب جديد؟',
+                'رقم الهاتف ($identifier) غير مسجل في المنصة حتى الآن.\n\nهل ترغب في الانتقال إلى صفحة التسجيل والتوثيق؟',
                 style: const TextStyle(fontSize: 14, height: 1.5),
               ),
               actions: [
@@ -306,18 +335,16 @@ class _LoginScreenState extends State<LoginScreen> {
                 ElevatedButton(
                   onPressed: () {
                     Navigator.pop(ctx);
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => RegisterScreen(
-                          apiClient: widget.apiClient,
-                          storageService: widget.storageService,
-                          initialEmail: identifier,
-                        ),
-                      ),
-                    );
+                    const url = '/register';
+                    try {
+                      if (kIsWeb) {
+                        html.window.location.href = url;
+                        return;
+                      }
+                    } catch (_) {}
+                    launchUrl(Uri.parse(url), mode: LaunchMode.platformDefault);
                   },
-                  child: const Text('إنشاء حساب جديد'),
+                  child: const Text('تسجيل حساب جديد'),
                 ),
               ],
             ),
@@ -326,50 +353,37 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
 
-      // Seamless entry fallback for offline or new guest customers
-      final fallbackUserId = 'usr-${DateTime.now().millisecondsSinceEpoch}';
-      final fallbackToken = 'jwt_offline_$fallbackUserId';
-      final isEmail = identifier.contains('@');
-      final fallbackName = isEmail ? identifier.split('@')[0] : 'مستخدم توصيله';
+      String userMsg = 'رقم الهاتف أو كلمة المرور غير صحيحة. يرجى التأكد والمحاولة مرة أخرى.';
+      if (e is DioException && e.response?.data is Map && e.response?.data['error'] != null) {
+        userMsg = e.response?.data['error'].toString() ?? userMsg;
+      }
 
-      await widget.storageService.saveSession(
-        token: fallbackToken,
-        userId: fallbackUserId,
-        role: 'Customer',
-        fullName: fallbackName,
-      );
-
-      if (!mounted) return;
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CustomerHome(
-            apiClient: widget.apiClient,
-            storageService: widget.storageService,
-          ),
-        ),
-      );
+      if (mounted) {
+        setState(() {
+          _errorMessage = userMsg;
+        });
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _appendDomain(String domain) {
-    final current = _identifierController.text.trim();
-    if (current.contains('@')) {
-      final base = current.split('@')[0];
-      _identifierController.text = '$base$domain';
-    } else {
-      _identifierController.text = '$current$domain';
-    }
-    _identifierController.selection = TextSelection.fromPosition(
-      TextPosition(offset: _identifierController.text.length),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          html.window.location.replace('/');
+        } catch (_) {}
+      });
+      return const Scaffold(
+        backgroundColor: Color(0xFF0F172A),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFFF59E0B)),
+        ),
+      );
+    }
+
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -423,18 +437,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   TextField(
                     controller: _identifierController,
-                    keyboardType: TextInputType.emailAddress,
+                    keyboardType: TextInputType.phone,
                     autofillHints: const [
-                      AutofillHints.email,
-                      AutofillHints.username,
                       AutofillHints.telephoneNumber,
                     ],
-                    textInputAction: TextInputAction.done,
-                    onSubmitted: (_) => _handleLogin(),
+                    textInputAction: TextInputAction.next,
                     decoration: InputDecoration(
-                      labelText: 'البريد الإلكتروني',
-                      hintText: 'name@example.com',
-                      prefixIcon: const Icon(Icons.email_outlined),
+                      labelText: 'رقم الهاتف',
+                      hintText: '07701234567',
+                      prefixIcon: const Icon(Icons.phone_android_rounded),
                       suffixIcon: _identifierController.text.isNotEmpty
                           ? IconButton(
                               icon: const Icon(Icons.clear, size: 20),
@@ -448,34 +459,70 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     onChanged: (_) => setState(() {}),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 16),
 
-                  // Quick Email Domain Suggestions
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: _emailDomains.map((domain) {
-                        return Padding(
-                          padding: const EdgeInsets.only(left: 6.0),
-                          child: ActionChip(
-                            label: Text(domain, style: const TextStyle(fontSize: 12)),
-                            backgroundColor: Colors.grey.shade100,
-                            side: BorderSide(color: Colors.grey.shade300),
-                            onPressed: () => _appendDomain(domain),
-                          ),
-                        );
-                      }).toList(),
+                  // Password TextField
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _handleLogin(),
+                    decoration: InputDecoration(
+                      labelText: 'كلمة المرور (الباسوورد)',
+                      hintText: '••••••••',
+                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          size: 20,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  
+                  // Forgot Password Link -> WhatsApp 07706204066
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () {
+                        const whatsappUrl = 'https://wa.me/9647706204066?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7%D9%8B%D8%8C%20%D8%A3%D9%88%D8%AF%20%D8%A7%D8%B3%D8%AA%D8%B9%D8%A7%D8%AF%D8%A9%20%D9%83%D9%84%D9%85%D8%A9%20%D8%A7%D9%84%D9%85%D8%B1%D9%88%D8%B1%20%D9%84%D8%AD%D8%B3%D8%A7%D8%A8%D9%8A%20%D9%81%D9%8A%20%D8%AA%D8%B7%D8%A8%D9%8A%D9%82%20%D8%AA%D9%88%D8%B5%D9%8A%D9%84%D8%A9.';
+                        try {
+                          if (kIsWeb) {
+                            html.window.open(whatsappUrl, '_blank');
+                            return;
+                          }
+                        } catch (_) {}
+                        launchUrl(Uri.parse(whatsappUrl), mode: LaunchMode.externalApplication);
+                      },
+                      icon: const Icon(Icons.support_agent_rounded, size: 16, color: Color(0xFF2563EB)),
+                      label: const Text(
+                        'نسيت كلمة المرور؟',
+                        style: TextStyle(
+                          color: Color(0xFF2563EB),
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
 
+                  // Login Button with smooth interaction
                   ElevatedButton(
                     onPressed: _isLoading ? null : _handleLogin,
                     style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2563EB),
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
+                      elevation: 2,
                     ),
                     child: _isLoading
                         ? const SizedBox(
@@ -483,32 +530,30 @@ class _LoginScreenState extends State<LoginScreen> {
                             width: 20,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
-                        : const Text('تسجيل الدخول بالبريد الإلكتروني', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        : const Text('تسجيل الدخول', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 14),
 
+                  // Unified Dark Portal Button (Passenger Registration + Captain Onboarding)
                   OutlinedButton.icon(
                     onPressed: () {
-                      final emailInput = _identifierController.text.trim();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => RegisterScreen(
-                            apiClient: widget.apiClient,
-                            storageService: widget.storageService,
-                            initialEmail: emailInput.contains('@') ? emailInput : null,
-                          ),
-                        ),
-                      );
+                      const url = '/register';
+                      try {
+                        if (kIsWeb) {
+                          html.window.location.href = url;
+                          return;
+                        }
+                      } catch (_) {}
+                      launchUrl(Uri.parse(url), mode: LaunchMode.platformDefault);
                     },
-                    icon: const Icon(Icons.person_add_alt_1_rounded, color: Color(0xFFF59E0B)),
+                    icon: const Icon(Icons.app_registration_rounded, color: Color(0xFF2563EB)),
                     label: const Text(
-                      'ليس لديك حساب؟ إنشاء حساب جديد بالبريد الإلكتروني',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      'ليس لديك حساب؟ تسجيل راكب جديد أو انضمام كابتن 📝',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF2563EB)),
                     ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: const BorderSide(color: Color(0xFFF59E0B), width: 1.5),
+                      side: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
@@ -535,60 +580,49 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Phone OTP registration (Service under preparation)
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          title: const Row(
-                            children: [
-                              Icon(Icons.hourglass_bottom_rounded, color: Color(0xFFF59E0B), size: 28),
-                              SizedBox(width: 8),
-                              Text('الخدمة قيد التجهيز', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            ],
-                          ),
-                          content: const Text(
-                            'خدمة التسجيل وتأكيد الحساب عبر رقم الهاتف (رمز OTP) قيد التجهيز الفني حالياً ريثما يتم تفعيل باقة مشغلي الاتصالات في العراق (زين، آسيا سيل).\n\nيرجى المتابعة والتسجيل الآن عبر البريد الإلكتروني أو باستخدام حساب Google.',
-                            style: TextStyle(fontSize: 14, height: 1.6),
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx),
-                              child: const Text('حسناً، فهمت', style: TextStyle(fontWeight: FontWeight.bold)),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.phone_android_rounded, color: Colors.grey),
-                    label: const Text(
-                      'التسجيل عن طريق رقم الهاتف (الخدمة قيد التجهيز ⏳)',
-                      style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: BorderSide(color: Colors.grey.shade300),
-                      backgroundColor: Colors.grey.shade50,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
 
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => RegisterScreen(
-                            apiClient: widget.apiClient,
-                            storageService: widget.storageService,
+                  // Captain Login at the very bottom of the page
+                  const SizedBox(height: 24),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEB),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFFDE68A)),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'هل أنت كابتن (سائق) مسجل في المنصة؟',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF92400E), fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            const url = '/captain-login';
+                            try {
+                              if (kIsWeb) {
+                                html.window.location.href = url;
+                                return;
+                              }
+                            } catch (_) {}
+                            launchUrl(Uri.parse(url), mode: LaunchMode.platformDefault);
+                          },
+                          icon: const Icon(Icons.local_taxi_rounded, color: Color(0xFF0F172A), size: 20),
+                          label: const Text(
+                            'تسجيل الدخول للكباتن 🚖',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A)),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFF59E0B),
+                            foregroundColor: const Color(0xFF0F172A),
+                            elevation: 0,
+                            minimumSize: const Size.fromHeight(46),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                         ),
-                      );
-                    },
-                    child: const Text('تسجيل حساب جديد ككابتن (سائق)'),
+                      ],
+                    ),
                   ),
                 ],
               ),

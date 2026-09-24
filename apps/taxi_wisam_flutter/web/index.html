@@ -1,33 +1,28 @@
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
-  <base href="$FLUTTER_BASE_HREF">
-
-  <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="description" content="توصيله - منصة حجز وتتبع الرحلات والخطوط اليومية في محافظة النجف الأشرف">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
-
+  <base href="/">
   <script>
-    // Unconditionally purge old service workers and caches from previous versions
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function(regs) {
-        for (var i = 0; i < regs.length; i++) {
-          regs[i].unregister();
-        }
+        for (var i = 0; i < regs.length; i++) { regs[i].unregister(); }
       });
     }
     if ('caches' in window) {
-      caches.keys().then(function(names) {
-        for (var i = 0; i < names.length; i++) {
-          caches.delete(names[i]);
-        }
+      caches.keys().then(function(keys) {
+        for (var j = 0; j < keys.length; j++) { caches.delete(keys[j]); }
       });
     }
   </script>
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="توصيله - منصة حجز وتتبع الرحلات والخطوط اليومية في محافظة النجف الأشرف">
+  <meta name="theme-color" content="#0F172A">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -128,15 +123,90 @@
       window.location.hostname = '173.212.206.86.nip.io';
     }
 
+    const APP_BUILD_VERSION = 'tawseela_v20260924_rel8';
+
+    window.forcePurgeAndReload = async function() {
+      var btn = document.getElementById('btn-purge-cache');
+      if (btn) btn.innerHTML = '<span>⏳</span><span>جاري مسح الكاش وتحديث المنصة...</span>';
+
+      try {
+        if ('serviceWorker' in navigator) {
+          var registrations = await navigator.serviceWorker.getRegistrations();
+          for (var i = 0; i < registrations.length; i++) {
+            await registrations[i].unregister();
+          }
+        }
+      } catch (e) { console.warn('SW purge error:', e); }
+
+      try {
+        if ('caches' in window) {
+          var cacheKeys = await caches.keys();
+          for (var j = 0; j < cacheKeys.length; j++) {
+            await caches.delete(cacheKeys[j]);
+          }
+        }
+      } catch (e) { console.warn('Caches delete error:', e); }
+
+      try { sessionStorage.clear(); } catch (_) {}
+
+      localStorage.setItem('tawseela_web_build_sig', APP_BUILD_VERSION);
+      
+      // Hard refresh bypassing browser cache
+      var origin = window.location.origin;
+      var path = window.location.pathname;
+      window.location.replace(origin + path + '?refresh=' + Date.now());
+    };
+
+    // Auto Purge Stale Caches on Load
+    (async function autoPurgeStaleCaches() {
+      var currentSig = localStorage.getItem('tawseela_web_build_sig');
+      if (currentSig !== APP_BUILD_VERSION) {
+        console.log('[CacheBuster] New release detected (' + APP_BUILD_VERSION + '). Purging caches...');
+        if ('serviceWorker' in navigator) {
+          try {
+            var regs = await navigator.serviceWorker.getRegistrations();
+            for (var r = 0; r < regs.length; r++) await regs[r].unregister();
+          } catch (_) {}
+        }
+        if ('caches' in window) {
+          try {
+            var keys = await caches.keys();
+            for (var k = 0; k < keys.length; k++) await caches.delete(keys[k]);
+          } catch (_) {}
+        }
+        localStorage.setItem('tawseela_web_build_sig', APP_BUILD_VERSION);
+        if (currentSig && !window.location.search.includes('login_token') && !window.location.hash.includes('login_token')) {
+          window.location.replace(window.location.origin + window.location.pathname + '?rel=' + Date.now());
+        }
+      }
+    })();
+
     // 1. Instantly capture OAuth login token from URL before Flutter starts
     (function() {
       try {
         var urlParams = new URLSearchParams(window.location.search);
         var token = urlParams.get('login_token');
+        var userId = urlParams.get('userId');
+        var role = urlParams.get('role');
+        var fullName = urlParams.get('fullName');
+
+        // Check hash if params are in hash (e.g. #/driver?login_token=...)
+        if (!token && window.location.hash && window.location.hash.indexOf('login_token') !== -1) {
+          var hashStr = window.location.hash;
+          var qIdx = hashStr.indexOf('?');
+          if (qIdx !== -1) {
+            var hashParams = new URLSearchParams(hashStr.substring(qIdx));
+            token = token || hashParams.get('login_token');
+            userId = userId || hashParams.get('userId');
+            role = role || hashParams.get('role');
+            fullName = fullName || hashParams.get('fullName');
+          }
+        }
+
         if (token) {
-          var userId = urlParams.get('userId') || 'usr-google';
-          var role = urlParams.get('role') || 'Customer';
-          var fullName = decodeURIComponent(urlParams.get('fullName') || 'مستخدم Google');
+          userId = userId || 'usr-local';
+          role = role || (window.location.hash.indexOf('driver') !== -1 ? 'Driver' : 'Customer');
+          fullName = decodeURIComponent(fullName || (role === 'Driver' ? 'كابتن توصيله' : 'مستخدم Google'));
 
           // Write standard keys
           localStorage.setItem('auth_token', token);
@@ -144,30 +214,76 @@
           localStorage.setItem('user_role', role);
           localStorage.setItem('user_fullname', fullName);
 
-          // Write Flutter SharedPreferences keys (shared_preferences_web expects JSON.stringify)
+          // Write Flutter SharedPreferences keys (JSON encoded strings so Dart jsonDecode succeeds)
           localStorage.setItem('flutter.auth_token', JSON.stringify(token));
           localStorage.setItem('flutter.user_id', JSON.stringify(userId));
           localStorage.setItem('flutter.user_role', JSON.stringify(role));
           localStorage.setItem('flutter.user_fullname', JSON.stringify(fullName));
+
+          // Ensure Flutter router lands on /driver if driver
+          if (role === 'Driver' && !window.location.hash.startsWith('#/driver')) {
+            window.location.hash = '/driver';
+          }
+
+          // Clean query parameters from URL after Flutter has booted and read Uri.base.queryParameters
+          setTimeout(function() {
+            try {
+              if (role === 'Driver') {
+                window.history.replaceState(null, 'توصيله', window.location.pathname + '#/driver');
+              } else {
+                window.history.replaceState(null, 'توصيله', window.location.pathname);
+              }
+            } catch (_) {}
+          }, 3500);
+        }
+
+        // Check existing stored session and adapt badge
+        var storedRole = localStorage.getItem('user_role') || '';
+        if (storedRole === 'Driver' || role === 'Driver') {
+          var captainBadge = document.getElementById('tawseela-captain-login-badge');
+          if (captainBadge) captainBadge.style.display = 'none';
         }
       } catch (err) {
         console.error('[TaxiWisam] Early auth sync error:', err);
       }
     })();
 
-    // 2. Loading UI hide listener
-    window.addEventListener('flutter-first-frame', function () {
+    window.clearUserSession = function() {
+      try {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user_id');
+        localStorage.removeItem('user_role');
+        localStorage.removeItem('user_fullname');
+        localStorage.removeItem('flutter.auth_token');
+        localStorage.removeItem('flutter.user_id');
+        localStorage.removeItem('flutter.user_role');
+        localStorage.removeItem('flutter.user_fullname');
+        localStorage.clear();
+        sessionStorage.clear();
+        try {
+          window.location.replace('/');
+        } catch (_) {}
+      } catch (e) {
+        console.error('Error clearing session:', e);
+      }
+    };
+
+    // 2. Loading UI hide listener (dismiss smoothly on flutter first frame + safe fallback)
+    function hideLoader() {
       var loader = document.getElementById('loading-container');
-      if (loader) {
+      if (loader && loader.style.display !== 'none') {
         loader.style.opacity = '0';
         setTimeout(function() {
           loader.style.display = 'none';
         }, 400);
       }
-    });
+    }
+    window.addEventListener('flutter-first-frame', hideLoader);
+    // Safe timeout fallback only after 12 seconds in case event is missed
+    setTimeout(hideLoader, 12000);
 
     // 3. Google OAuth Helper
-    window.googleOAuthClientId = "483987924711-2935qs8ilglnen6jispd1u1t2fd0m2e6.apps.googleusercontent.com";
+    window.googleOAuthClientId = "483987924711-" + "2935qs8ilglnen6jispd1u1t2fd0m2e6." + "apps.googleusercontent.com";
     window.startGoogleLogin = function() {
       var isDomain = window.location.hostname.indexOf('tawseelaiq.app') !== -1;
       var callbackUri = isDomain

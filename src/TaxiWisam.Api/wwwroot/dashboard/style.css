@@ -42,3 +42,56 @@
 ::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
 }
+
+/* Strict mobile touch scrolling & viewport management */
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    -webkit-overflow-scrolling: touch;
+    touch-action: manipulation;
+}
+
+main {
+    -webkit-overflow-scrolling: touch;
+    touch-action: auto;
+}
+
+/* Strict visibility & pointer-events rules */
+.hidden,
+[hidden],
+#login-overlay.hidden,
+#modal-edit-customer.hidden,
+#modal-edit-driver.hidden,
+#document-modal.hidden,
+#modal-add-captain.hidden,
+#image-zoom-modal.hidden,
+#mobile-sidebar-backdrop.hidden {
+    display: none !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+}
+
+/* Ensure active modals become visible and clickable */
+#document-modal.active,
+#modal-add-captain.active,
+#image-zoom-modal.active,
+#modal-edit-customer.active,
+#modal-edit-driver.active {
+    display: flex !important;
+    pointer-events: auto !important;
+    visibility: visible !important;
+}
+
+#mobile-sidebar-backdrop.active {
+    display: block !important;
+    pointer-events: auto !important;
+    visibility: visible !important;
+}
+
+.tab-content.hidden {
+    display: none !important;
+}
+.tab-content:not(.hidden) {
+    display: block !important;
+}
