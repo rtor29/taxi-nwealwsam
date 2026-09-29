@@ -46,6 +46,8 @@ function checkAdminAuth() {
         }
         try { loadDashboardStats(); } catch(e) { console.warn(e); }
         try { loadMatchingSettings(); } catch(e) { console.warn(e); }
+        // Auto-refresh stats & cancellation badge every 30 seconds
+        setInterval(() => { try { loadDashboardStats(); } catch(e) {} }, 30000);
     } else {
         if (overlay) {
             overlay.classList.add('active');
@@ -140,6 +142,9 @@ function switchTab(tabName) {
     // Close mobile drawer if open
     toggleMobileSidebar(false);
 
+    // Clear any active cancellations polling
+    if (window._cancelTabInterval) { clearInterval(window._cancelTabInterval); window._cancelTabInterval = null; }
+
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(content => {
         content.classList.add('hidden');
@@ -173,6 +178,8 @@ function switchTab(tabName) {
             break;
         case 'cancellations':
             loadCancellationRequests();
+            // Live-refresh every 15s while tab is open
+            window._cancelTabInterval = setInterval(() => { try { loadCancellationRequests(); } catch(e) {} }, 15000);
             break;
         case 'fleet-map':
             initFleetMapbox();
