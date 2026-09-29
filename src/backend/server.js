@@ -146,8 +146,54 @@ async function startServer() {
         };
 
         // ---------------------------------------------------------------------
-        // 0. HEALTH CHECK
+        // 0. HEALTH CHECK & SEO / AGENTIC FILES
         // ---------------------------------------------------------------------
+        if (pathname === '/robots.txt') {
+            res.writeHead(200, {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Cache-Control': 'public, max-age=86400'
+            });
+            return res.end('User-agent: *\nAllow: /\n');
+        }
+
+        if (pathname === '/llms.txt') {
+            const llmsContent = `# منصة توصيلة (Tawseela IQ)
+منصة حجز وتنظيم رحلات التوصيل اليومية والخطوط المنتظمة في محافظة النجف الأشرف.
+
+## الخدمات المتاحة
+- حجز رحلات يومية واشتراكات شهرية للركاب والطلاب والموظفين
+- ربط مباشر بين السائقين المعتمدين والركاب
+- تتبع وملاحة ذكية في النجف الأشرف
+- تحقق فوري وأمان عالي عبر واتساب
+
+## الروابط الرسمية
+- الموقع الرسمي: https://tawseelaiq.app/
+- بوابة الكباتن: https://tawseelaiq.app/captain-login
+- لوحة التحكم: https://tawseelaiq.app/dashboard/
+`;
+            res.writeHead(200, {
+                'Content-Type': 'text/plain; charset=utf-8',
+                'Cache-Control': 'public, max-age=86400'
+            });
+            return res.end(llmsContent);
+        }
+
+        if (pathname === '/ai-catalog.json' || pathname === '/.well-known/ai-plugin.json') {
+            const catalog = {
+                schema_version: "v1",
+                name_for_human: "منصة توصيلة",
+                name_for_model: "tawseela_iq",
+                description_for_human: "خدمة حجز وتنظيم رحلات التوصيل اليومية والسائقين في النجف الأشرف بسهولة وأمان.",
+                description_for_model: "Platform for booking and organizing daily taxi routes, driver matching, and rides in Najaf, Iraq.",
+                auth: { type: "none" },
+                api: { type: "openapi", url: "https://tawseelaiq.app/api/health" },
+                logo_url: "https://tawseelaiq.app/favicon.png",
+                contact_email: "support@tawseelaiq.app",
+                legal_info_url: "https://tawseelaiq.app/"
+            };
+            return sendJson(catalog, 200);
+        }
+
         if (pathname === '/api/health' || pathname === '/health') {
             return sendJson({
                 status: 'Healthy',

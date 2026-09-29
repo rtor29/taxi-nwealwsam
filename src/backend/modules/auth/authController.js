@@ -237,15 +237,18 @@ class AuthController {
 <html dir="rtl" lang="ar">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="منصة توصيلة - خدمة حجز وتنظيم رحلات التوصيل اليومية والسائقين في النجف الأشرف بسهولة وأمان.">
     <title>توصيله | بوابة الدخول والتسجيل الذكية - النجف الأشرف</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    
+    <!-- Preconnect & Fonts with font-display: swap -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <!-- Mapbox GL JS -->
-    <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet">
-    <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
-    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet" media="print" onload="this.media='all'">
+    
+    <!-- Tailwind CSS with defer -->
+    <script src="https://cdn.tailwindcss.com" defer></script>
     
     <script>
         window.forcePurgeAndReload = async function() {
@@ -280,11 +283,15 @@ class AuthController {
             if (role === 'Driver') {
                 btnDrv.className = 'py-4 px-4 sm:px-6 rounded-2xl text-xs sm:text-base font-black flex items-center justify-center gap-2.5 transition border cursor-pointer tab-btn-active-driver glow-amber';
                 btnCust.className = 'py-4 px-4 sm:px-6 rounded-2xl text-xs sm:text-base font-black flex items-center justify-center gap-2.5 transition border cursor-pointer tab-btn-inactive';
+                btnDrv.setAttribute('aria-selected', 'true');
+                btnCust.setAttribute('aria-selected', 'false');
                 boxDrv.style.display = 'block';
                 boxCust.style.display = 'none';
             } else {
                 btnCust.className = 'py-4 px-4 sm:px-6 rounded-2xl text-xs sm:text-base font-black flex items-center justify-center gap-2.5 transition border cursor-pointer tab-btn-active-customer glow-blue';
                 btnDrv.className = 'py-4 px-4 sm:px-6 rounded-2xl text-xs sm:text-base font-black flex items-center justify-center gap-2.5 transition border cursor-pointer tab-btn-inactive';
+                btnCust.setAttribute('aria-selected', 'true');
+                btnDrv.setAttribute('aria-selected', 'false');
                 boxCust.style.display = 'block';
                 boxDrv.style.display = 'none';
                 setTimeout(function() {
@@ -317,12 +324,12 @@ class AuthController {
                 if (formReg) formReg.style.display = 'block';
                 if (formLog) formLog.style.display = 'none';
                 if (btnReg) btnReg.className = 'px-4 py-2 rounded-xl text-xs font-black bg-blue-600 text-white transition shadow-md';
-                if (btnLog) btnLog.className = 'px-4 py-2 rounded-xl text-xs font-black text-slate-400 hover:text-white transition';
+                if (btnLog) btnLog.className = 'px-4 py-2 rounded-xl text-xs font-black text-slate-300 hover:text-white transition';
             } else {
                 if (formReg) formReg.style.display = 'none';
                 if (formLog) formLog.style.display = 'block';
                 if (btnLog) btnLog.className = 'px-4 py-2 rounded-xl text-xs font-black bg-blue-600 text-white transition shadow-md';
-                if (btnReg) btnReg.className = 'px-4 py-2 rounded-xl text-xs font-black text-slate-400 hover:text-white transition';
+                if (btnReg) btnReg.className = 'px-4 py-2 rounded-xl text-xs font-black text-slate-300 hover:text-white transition';
             }
         };
     </script>
@@ -334,6 +341,7 @@ class AuthController {
             color: #f8fafc;
             overflow-x: hidden;
             -webkit-tap-highlight-color: transparent;
+            font-display: swap;
         }
         .glow-amber {
             box-shadow: 0 0 35px rgba(245, 158, 11, 0.28);
@@ -359,13 +367,17 @@ class AuthController {
             box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.5) !important;
         }
         .tab-btn-inactive {
-            background: rgba(30, 41, 59, 0.6) !important;
-            color: #94a3b8 !important;
+            background: rgba(30, 41, 59, 0.7) !important;
+            color: #cbd5e1 !important;
             border-color: #334155 !important;
         }
         .tab-btn-inactive:hover {
-            background: rgba(51, 65, 85, 0.6) !important;
+            background: rgba(51, 65, 85, 0.8) !important;
             color: #f8fafc !important;
+        }
+        ::placeholder {
+            color: #94a3b8 !important;
+            opacity: 1;
         }
     </style>
 </head>
@@ -373,12 +385,12 @@ class AuthController {
 
     <!-- Full-screen Embedded App Interface (Passenger sees drivers, Driver receives requests) -->
     <div id="app-view-container" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 999999; background: #0F172A;">
-        <iframe id="app-frame" style="width: 100%; height: 100%; border: none; display: block;" allow="geolocation *; microphone *; camera *"></iframe>
+        <iframe id="app-frame" title="تطبيق توصيلة الذكي" style="width: 100%; height: 100%; border: none; display: block;" allow="geolocation *; microphone *; camera *"></iframe>
     </div>
 
     <!-- Floating Quick Update App Button -->
     <div style="position:fixed; bottom:16px; left:16px; z-index:99999; direction:rtl;">
-        <button onclick="forcePurgeAndReload()" id="btn-purge-cache" title="تحديث التطبيق ومسح الذاكرة المؤقتة"
+        <button onclick="forcePurgeAndReload()" id="btn-purge-cache" title="تحديث التطبيق ومسح الذاكرة المؤقتة" aria-label="تحديث التطبيق ومسح الذاكرة المؤقتة"
                 class="bg-slate-900/90 hover:bg-amber-500 hover:text-slate-950 text-amber-400 border border-amber-500/80 text-xs font-bold py-2.5 px-4 rounded-full shadow-2xl flex items-center gap-2 transition cursor-pointer backdrop-blur-md">
             <span>🔄</span>
             <span>تحديث التطبيق</span>
@@ -386,54 +398,54 @@ class AuthController {
     </div>
 
     <!-- Background Ambient Glow -->
-    <div class="fixed inset-0 overflow-hidden pointer-events-none -z-10">
+    <div class="fixed inset-0 overflow-hidden pointer-events-none -z-10" aria-hidden="true">
         <div class="absolute -top-40 -right-40 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl"></div>
         <div class="absolute -bottom-40 -left-40 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
     </div>
 
-    <div class="max-w-2xl w-full mx-auto my-auto space-y-6">
+    <main class="max-w-2xl w-full mx-auto my-auto space-y-6">
 
         <!-- Top Header & Branding -->
-        <div class="text-center space-y-2">
-            <div class="inline-flex items-center justify-center w-20 h-20 bg-amber-500/20 text-amber-400 rounded-3xl text-4xl shadow-xl border border-amber-500/30">
+        <header class="text-center space-y-2">
+            <div class="inline-flex items-center justify-center w-20 h-20 bg-amber-500/20 text-amber-400 rounded-3xl text-4xl shadow-xl border border-amber-500/30" aria-hidden="true">
                 🚕
             </div>
             <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight">
                 منصة توصيله الذكية
             </h1>
-            <p class="text-xs sm:text-sm text-slate-400 font-semibold">
+            <p class="text-xs sm:text-sm text-slate-300 font-semibold">
                 بوابة التوثيق والاشتراك اليومي - النجف الأشرف
             </p>
-        </div>
+        </header>
 
         <!-- Role Selector Tabs -->
-        <div class="grid grid-cols-2 gap-3 p-2 bg-slate-950/90 rounded-3xl border border-slate-800 shadow-2xl backdrop-blur-md">
-            <button type="button" id="tab-btn-customer" onclick="switchRole('Customer'); return false;"
+        <nav aria-label="اختيار نوع الحساب" class="grid grid-cols-2 gap-3 p-2 bg-slate-950/90 rounded-3xl border border-slate-800 shadow-2xl backdrop-blur-md">
+            <button type="button" id="tab-btn-customer" onclick="switchRole('Customer'); return false;" aria-label="الدخول كحساب راكب أو مستخدم"
                     class="py-4 px-4 sm:px-6 rounded-2xl text-xs sm:text-base font-black flex items-center justify-center gap-2.5 transition border cursor-pointer ${preselectedRole === 'Driver' ? 'tab-btn-inactive' : 'tab-btn-active-customer glow-blue'}">
-                <i class="fa-solid fa-user text-base sm:text-lg"></i>
+                <i class="fa-solid fa-user text-base sm:text-lg" aria-hidden="true"></i>
                 <span>حساب راكب (مستخدم)</span>
             </button>
-            <button type="button" id="tab-btn-driver" onclick="switchRole('Driver'); return false;"
+            <button type="button" id="tab-btn-driver" onclick="switchRole('Driver'); return false;" aria-label="تسجيل الدخول لحساب الكابتن أو السائق"
                     class="py-4 px-4 sm:px-6 rounded-2xl text-xs sm:text-base font-black flex items-center justify-center gap-2.5 transition border cursor-pointer ${preselectedRole === 'Driver' ? 'tab-btn-active-driver glow-amber' : 'tab-btn-inactive'}">
-                <i class="fa-solid fa-taxi text-base sm:text-lg"></i>
+                <i class="fa-solid fa-taxi text-base sm:text-lg" aria-hidden="true"></i>
                 <span>تسجيل الدخول للكباتن</span>
             </button>
-        </div>
+        </nav>
 
         <!-- Logged-in User Profile Card (Visible when user has active session) -->
-        <div id="user-logged-in-box" style="display: none;" class="glass-card rounded-3xl p-6 border border-emerald-500/40 shadow-2xl space-y-4 glow-amber">
+        <section id="user-logged-in-box" style="display: none;" aria-label="ملف المستخدم المسجل" class="glass-card rounded-3xl p-6 border border-emerald-500/40 shadow-2xl space-y-4 glow-amber">
             <div class="flex items-center justify-between border-b border-slate-800 pb-4">
                 <div class="flex items-center gap-3">
-                    <div id="logged-user-avatar" class="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl border border-emerald-500/30">
+                    <div id="logged-user-avatar" class="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl border border-emerald-500/30" aria-hidden="true">
                         🚕
                     </div>
                     <div>
-                        <h3 id="logged-user-name" class="text-lg font-black text-white"></h3>
+                        <h2 id="logged-user-name" class="text-lg font-black text-white"></h2>
                         <p id="logged-user-role" class="text-xs text-emerald-400 font-bold"></p>
                     </div>
                 </div>
-                <button type="button" onclick="handleLogout()" class="px-4 py-2.5 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer shadow-lg">
-                    <i class="fa-solid fa-right-from-bracket"></i>
+                <button type="button" onclick="handleLogout()" aria-label="تسجيل الخروج من الحساب" class="px-4 py-2.5 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer shadow-lg">
+                    <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
                     <span>تسجيل الخروج</span>
                 </button>
             </div>
@@ -441,23 +453,23 @@ class AuthController {
                 <span class="text-xs text-slate-300 font-semibold">حالة الحساب في المنصة:</span>
                 <span class="text-xs font-black px-2.5 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-lg">✅ نشط ومعتمد</span>
             </div>
-        </div>
+        </section>
 
         <!-- ================================================================= -->
         <!-- TAB 1: PASSENGER (CUSTOMER) - WEB APP REGISTRATION & LOGIN        -->
         <!-- ================================================================= -->
-        <div id="customer-section" style="display: ${preselectedRole === 'Driver' ? 'none' : 'block'};" class="space-y-6">
+        <section id="customer-section" style="display: ${preselectedRole === 'Driver' ? 'none' : 'block'};" aria-label="قسم الركاب" class="space-y-6">
             
             <div class="glass-card rounded-3xl p-5 sm:p-8 border border-blue-500/30 shadow-2xl space-y-6 glow-blue">
                 
                 <!-- Passenger Sub-mode switchers -->
                 <div class="flex items-center justify-between bg-slate-900/90 p-2 rounded-2xl border border-slate-800">
-                    <button type="button" id="sub-btn-cust-reg" onclick="switchPassengerMode('register')"
+                    <button type="button" id="sub-btn-cust-reg" onclick="switchPassengerMode('register')" aria-label="فتح استمارة تسجيل راكب جديد"
                             class="px-4 py-2 rounded-xl text-xs font-black bg-blue-600 text-white transition shadow-md">
                         استمارة تسجيل راكب جديد 📝
                     </button>
-                    <button type="button" id="sub-btn-cust-login" onclick="switchPassengerMode('login')"
-                            class="px-4 py-2 rounded-xl text-xs font-black text-slate-400 hover:text-white transition">
+                    <button type="button" id="sub-btn-cust-login" onclick="switchPassengerMode('login')" aria-label="فتح نموذج تسجيل دخول الراكب"
+                            class="px-4 py-2 rounded-xl text-xs font-black text-slate-300 hover:text-white transition">
                         لديك حساب بالفعل؟ تسجيل الدخول 🔑
                     </button>
                 </div>
@@ -465,32 +477,32 @@ class AuthController {
                 <!-- Registration Form for Passengers (WhatsApp OTP Verified) -->
                 <form id="cust-register-form" onsubmit="handleCustomerRegister(event)" class="space-y-4">
                     <div class="text-right border-b border-slate-800 pb-3">
-                        <h3 class="text-base font-black text-white flex items-center gap-2">
+                        <h2 class="text-base font-black text-white flex items-center gap-2">
                             <span>👤</span>
                             <span>استمارة تسجيل الراكب الجديد</span>
-                        </h3>
-                        <p class="text-xs text-slate-400 mt-1">تحقق من رقم هاتفك عبر واتساب أولاً لإكمال تسجيل الحساب:</p>
+                        </h2>
+                        <p class="text-xs text-slate-300 mt-1">تحقق من رقم هاتفك عبر واتساب أولاً لإكمال تسجيل الحساب:</p>
                     </div>
 
-                    <div id="cust-reg-alert" style="display: none;" class="p-3 bg-rose-500/20 border border-rose-500/50 rounded-xl text-xs font-bold text-rose-300 text-right"></div>
+                    <div id="cust-reg-alert" style="display: none;" role="alert" class="p-3 bg-rose-500/20 border border-rose-500/50 rounded-xl text-xs font-bold text-rose-300 text-right"></div>
 
                     <!-- Step 1: Iraqi Phone & WhatsApp OTP Verification -->
                     <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 space-y-3">
                         <div class="flex items-center justify-between">
                             <span id="cust-step1-badge" class="px-2.5 py-0.5 bg-blue-500/20 text-blue-300 text-[11px] font-bold rounded-full border border-blue-500/30">خطوة 1: تأكيد الهاتف عبر واتساب</span>
-                            <label class="text-xs text-slate-300 font-bold">رقم الهاتف العراقي <span class="text-rose-400">*</span></label>
+                            <label for="cust-reg-phone" class="text-xs text-slate-300 font-bold">رقم الهاتف العراقي <span class="text-rose-400">*</span></label>
                         </div>
                         <div class="relative">
-                            <i class="fa-brands fa-whatsapp absolute right-3.5 top-3.5 text-emerald-400 text-base pointer-events-none"></i>
-                            <input type="tel" id="cust-reg-phone" required placeholder="07701234567" dir="ltr"
-                                   class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500 font-mono text-left">
+                            <i class="fa-brands fa-whatsapp absolute right-3.5 top-3.5 text-emerald-400 text-base pointer-events-none" aria-hidden="true"></i>
+                            <input type="tel" id="cust-reg-phone" required placeholder="07701234567" dir="ltr" aria-label="رقم الهاتف العراقي"
+                                   class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-400 font-mono text-left">
                         </div>
 
                         <!-- Button to send WhatsApp OTP -->
                         <div id="cust-send-otp-wrap">
-                            <button type="button" id="btn-send-whatsapp-otp" onclick="handleSendWhatsappOtp(false)"
+                            <button type="button" id="btn-send-whatsapp-otp" onclick="handleSendWhatsappOtp(false)" aria-label="إرسال رمز التحقق عبر واتساب"
                                     class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 cursor-pointer">
-                                <i class="fa-brands fa-whatsapp text-base"></i>
+                                <i class="fa-brands fa-whatsapp text-base" aria-hidden="true"></i>
                                 <span>المتابعة وإرسال رمز التحقق عبر واتساب 📲</span>
                             </button>
                         </div>
@@ -499,26 +511,26 @@ class AuthController {
                         <div id="cust-otp-box" style="display: none;" class="space-y-2.5 pt-2 border-t border-slate-800">
                             <!-- Instant notification banner -->
                             <div class="p-2.5 bg-emerald-950/60 border border-emerald-500/40 rounded-xl text-xs text-emerald-300 font-bold flex items-center gap-2 text-right">
-                                <i class="fa-brands fa-whatsapp text-emerald-400 text-base flex-shrink-0"></i>
+                                <i class="fa-brands fa-whatsapp text-emerald-400 text-base flex-shrink-0" aria-hidden="true"></i>
                                 <span>تابع الواتساب ليصلك رمز التحقق 💬</span>
                             </div>
 
                             <div>
-                                <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">أدخل رمز التحقق (6 أرقام) <span class="text-rose-400">*</span></label>
+                                <label for="cust-reg-otp" class="block text-xs text-slate-300 font-bold mb-1.5 text-right">أدخل رمز التحقق (6 أرقام) <span class="text-rose-400">*</span></label>
                                 <div class="relative">
-                                    <i class="fa-solid fa-key absolute right-3.5 top-3 text-slate-400 text-sm pointer-events-none"></i>
-                                    <input type="text" id="cust-reg-otp" maxlength="6" placeholder="------" dir="ltr"
+                                    <i class="fa-solid fa-key absolute right-3.5 top-3 text-slate-400 text-sm pointer-events-none" aria-hidden="true"></i>
+                                    <input type="text" id="cust-reg-otp" maxlength="6" placeholder="------" dir="ltr" aria-label="رمز التحقق المكون من 6 أرقام"
                                            class="w-full pr-10 pl-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-base tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-emerald-500 text-emerald-400 font-mono font-black">
                                 </div>
                             </div>
 
                             <div class="flex items-center gap-2">
-                                <button type="button" id="btn-verify-whatsapp-otp" onclick="handleVerifyWhatsappOtp()"
+                                <button type="button" id="btn-verify-whatsapp-otp" onclick="handleVerifyWhatsappOtp()" aria-label="تأكيد رمز التحقق والمتابعة"
                                         class="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-600/20">
-                                    <i class="fa-solid fa-circle-check"></i>
+                                    <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
                                     <span>تأكيد الرمز والمتابعة ✅</span>
                                 </button>
-                                <button type="button" id="btn-resend-whatsapp-otp" onclick="handleSendWhatsappOtp(true)"
+                                <button type="button" id="btn-resend-whatsapp-otp" onclick="handleSendWhatsappOtp(true)" aria-label="إعادة إرسال رمز التحقق"
                                         class="px-3.5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer">
                                     إعادة إرسال
                                 </button>
@@ -527,8 +539,8 @@ class AuthController {
 
                         <!-- Verified Badge (shown when verified) -->
                         <div id="cust-verified-badge" style="display: none;" class="p-2.5 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-xs font-bold text-emerald-300 flex items-center justify-between">
-                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-circle-check text-emerald-400"></i> تم التحقق من رقم الهاتف عبر واتساب بنجاح ✅</span>
-                            <button type="button" onclick="resetPhoneVerification()" class="text-[11px] text-slate-400 hover:text-white underline cursor-pointer">تغيير الرقم</button>
+                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-circle-check text-emerald-400" aria-hidden="true"></i> تم التحقق من رقم الهاتف عبر واتساب بنجاح ✅</span>
+                            <button type="button" onclick="resetPhoneVerification()" aria-label="تغيير رقم الهاتف" class="text-[11px] text-slate-300 hover:text-white underline cursor-pointer">تغيير الرقم</button>
                         </div>
                     </div>
 
@@ -540,31 +552,31 @@ class AuthController {
 
                         <!-- 1. Full Name -->
                         <div>
-                            <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">الاسم الكامل <span class="text-rose-400">*</span></label>
+                            <label for="cust-reg-name" class="block text-xs text-slate-300 font-bold mb-1.5 text-right">الاسم الكامل <span class="text-rose-400">*</span></label>
                             <div class="relative">
-                                <i class="fa-solid fa-user absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                                <input type="text" id="cust-reg-name" placeholder="مثال: حيدر علي الحسني"
-                                       class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500 text-right">
+                                <i class="fa-solid fa-user absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none" aria-hidden="true"></i>
+                                <input type="text" id="cust-reg-name" placeholder="مثال: حيدر علي الحسني" aria-label="الاسم الكامل للراكب"
+                                       class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-400 text-right">
                             </div>
                         </div>
 
                         <!-- 2. Route -->
                         <div>
-                            <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">المسار (خط السير المطلوب) <span class="text-rose-400">*</span></label>
+                            <label for="cust-reg-route" class="block text-xs text-slate-300 font-bold mb-1.5 text-right">المسار (خط السير المطلوب) <span class="text-rose-400">*</span></label>
                             <div class="relative">
-                                <i class="fa-solid fa-route absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                                <input type="text" id="cust-reg-route" placeholder="مثال: من حي الجامعة إلى جامعة الكوفة"
-                                       class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500 text-right">
+                                <i class="fa-solid fa-route absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none" aria-hidden="true"></i>
+                                <input type="text" id="cust-reg-route" placeholder="مثال: من حي الجامعة إلى جامعة الكوفة" aria-label="المسار أو خط السير المطلوب"
+                                       class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-400 text-right">
                             </div>
                         </div>
 
                         <!-- 3. Address -->
                         <div>
-                            <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">العنوان بالتفصيل <span class="text-rose-400">*</span></label>
+                            <label for="cust-reg-address" class="block text-xs text-slate-300 font-bold mb-1.5 text-right">العنوان بالتفصيل <span class="text-rose-400">*</span></label>
                             <div class="relative">
-                                <i class="fa-solid fa-location-dot absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                                <input type="text" id="cust-reg-address" placeholder="مثال: النجف - حي الجامعة - قرب المسجد"
-                                       class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500 text-right">
+                                <i class="fa-solid fa-location-dot absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none" aria-hidden="true"></i>
+                                <input type="text" id="cust-reg-address" placeholder="مثال: النجف - حي الجامعة - قرب المسجد" aria-label="العنوان بالتفصيل"
+                                       class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-400 text-right">
                             </div>
                         </div>
 
@@ -578,56 +590,56 @@ class AuthController {
                         <div class="space-y-2.5 pt-2 border-t border-slate-800">
                             <div class="flex items-center justify-between">
                                 <label class="text-xs text-slate-300 font-bold">تحديد موقعي الانطلاق والتوصيل بالنجف 📍</label>
-                                <button type="button" id="btn-cust-gps" onclick="getCurrentGpsLocation()" class="px-2.5 py-1 bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/40 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
-                                    <i class="fa-solid fa-crosshairs"></i>
+                                <button type="button" id="btn-cust-gps" onclick="getCurrentGpsLocation()" aria-label="تحديد موقعي الحالي عبر الجي بي اس" class="px-2.5 py-1 bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/40 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
+                                    <i class="fa-solid fa-crosshairs" aria-hidden="true"></i>
                                     <span>تحديد موقعي الحالي (GPS)</span>
                                 </button>
                             </div>
 
                             <!-- Concise Guidance Box -->
-                            <div class="p-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-[11px] text-amber-300/90 flex items-start gap-2">
-                                <span class="text-amber-400 text-sm">💡</span>
+                            <div class="p-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-[11px] text-amber-300 flex items-start gap-2">
+                                <span class="text-amber-400 text-sm" aria-hidden="true">💡</span>
                                 <span>اضغط على الخريطة أو اسحب الدبوس لتحديد نقطتي: <b>الانطلاق (بالأخضر)</b> و<b>التوصيل (بالأحمر)</b> بدقة في محافظة النجف الأشرف.</span>
                             </div>
 
                             <!-- Mode selection toggle -->
                             <div class="grid grid-cols-2 gap-2 text-xs">
-                                <button type="button" id="btn-mode-pickup" onclick="setMapPinMode('pickup')" class="py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border border-emerald-500 bg-emerald-500/20 text-emerald-300 cursor-pointer transition">
-                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                                <button type="button" id="btn-mode-pickup" onclick="setMapPinMode('pickup')" aria-label="تحديد نقطة الانطلاق" class="py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border border-emerald-500 bg-emerald-500/20 text-emerald-300 cursor-pointer transition">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" aria-hidden="true"></span>
                                     <span>نقطة الانطلاق (Pickup)</span>
                                 </button>
-                                <button type="button" id="btn-mode-dropoff" onclick="setMapPinMode('dropoff')" class="py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border border-slate-700 bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition">
-                                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
+                                <button type="button" id="btn-mode-dropoff" onclick="setMapPinMode('dropoff')" aria-label="تحديد نقطة التوصيل" class="py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border border-slate-700 bg-slate-800 text-slate-300 hover:text-white cursor-pointer transition">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block" aria-hidden="true"></span>
                                     <span>نقطة التوصيل (Dropoff)</span>
                                 </button>
                             </div>
 
                             <!-- Autocomplete Search from 1st char -->
                             <div class="relative">
-                                <input type="text" id="cust-map-search" placeholder="ابحث عن شارع، حي، مجمع، أو جامعة في النجف..."
+                                <input type="text" id="cust-map-search" placeholder="ابحث عن شارع، حي، مجمع، أو جامعة في النجف..." aria-label="البحث عن موقع في النجف"
                                        class="w-full px-4 py-2.5 bg-slate-800/90 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 text-right">
                                 <div id="cust-search-results" class="hidden absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto"></div>
                             </div>
 
-                            <div id="passenger-map" style="height: 220px; width: 100%; border-radius: 1rem;" class="border border-slate-700 shadow-inner"></div>
+                            <div id="passenger-map" style="height: 220px; width: 100%; border-radius: 1rem;" role="region" aria-label="خريطة تحديد الموقع في النجف" class="border border-slate-700 shadow-inner"></div>
                         </div>
 
                         <!-- 4. Password -->
                         <div>
-                            <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">كلمة المرور (الباسوورد للحساب) <span class="text-rose-400">*</span></label>
+                            <label for="cust-reg-password" class="block text-xs text-slate-300 font-bold mb-1.5 text-right">كلمة المرور (الباسوورد للحساب) <span class="text-rose-400">*</span></label>
                             <div class="relative">
-                                <i class="fa-solid fa-lock absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                                <input type="password" id="cust-reg-password" minlength="4" placeholder="••••••••"
+                                <i class="fa-solid fa-lock absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none" aria-hidden="true"></i>
+                                <input type="password" id="cust-reg-password" minlength="4" placeholder="••••••••" aria-label="كلمة المرور لتسجيل الراكب"
                                        class="w-full pr-10 pl-11 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white font-mono">
-                                <button type="button" onclick="togglePasswordVisibility('cust-reg-password', 'eye-cust-reg-pwd')" class="absolute left-3 top-3 text-slate-400 hover:text-white p-1">
-                                    <i id="eye-cust-reg-pwd" class="fa-solid fa-eye"></i>
+                                <button type="button" onclick="togglePasswordVisibility('cust-reg-password', 'eye-cust-reg-pwd')" aria-label="إظهار أو إخفاء كلمة المرور" class="absolute left-3 top-3 text-slate-400 hover:text-white p-1">
+                                    <i id="eye-cust-reg-pwd" class="fa-solid fa-eye" aria-hidden="true"></i>
                                 </button>
                             </div>
                         </div>
 
-                        <button type="submit" id="btn-cust-reg-submit"
+                        <button type="submit" id="btn-cust-reg-submit" aria-label="إكمال تسجيل حساب الراكب والمتابعة"
                                 class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl text-base transition flex items-center justify-center gap-2 shadow-xl shadow-blue-600/30 cursor-pointer">
-                            <i class="fa-solid fa-user-plus"></i>
+                            <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
                             <span>إكمال تسجيل حساب الراكب والمتابعة 🚀</span>
                         </button>
                     </div>
@@ -636,102 +648,101 @@ class AuthController {
                 <!-- Direct Login Form for Existing Passengers -->
                 <form id="cust-login-form" onsubmit="handleCustomerLogin(event)" class="space-y-4" style="display: none;">
                     <div class="text-right border-b border-slate-800 pb-3">
-                        <h3 class="text-base font-black text-white flex items-center gap-2">
+                        <h2 class="text-base font-black text-white flex items-center gap-2">
                             <span>🔑</span>
                             <span>تسجيل دخول الراكب ببياناته المسجلة</span>
-                        </h3>
-                        <p class="text-xs text-slate-400 mt-1">أدخل رقم الهاتف وكلمة المرور المسجلة سابقاً للدخول:</p>
+                        </h2>
+                        <p class="text-xs text-slate-300 mt-1">أدخل رقم الهاتف وكلمة المرور المسجلة سابقاً للدخول:</p>
                     </div>
 
                     <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">رقم الهاتف <span class="text-rose-400">*</span></label>
+                        <label for="cust-login-identifier" class="block text-xs text-slate-300 font-bold mb-1.5 text-right">رقم الهاتف <span class="text-rose-400">*</span></label>
                         <div class="relative">
-                            <i class="fa-solid fa-phone absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                            <input type="text" id="cust-login-identifier" required placeholder="07701234567" dir="ltr"
+                            <i class="fa-solid fa-phone absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none" aria-hidden="true"></i>
+                            <input type="text" id="cust-login-identifier" required placeholder="07701234567" dir="ltr" aria-label="رقم الهاتف للراكب"
                                    class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white font-mono text-left">
                         </div>
                     </div>
 
                     <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">كلمة المرور (الباسوورد) <span class="text-rose-400">*</span></label>
+                        <label for="cust-login-password" class="block text-xs text-slate-300 font-bold mb-1.5 text-right">كلمة المرور (الباسوورد) <span class="text-rose-400">*</span></label>
                         <div class="relative">
-                            <i class="fa-solid fa-lock absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                            <input type="password" id="cust-login-password" required placeholder="••••••••"
+                            <i class="fa-solid fa-lock absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none" aria-hidden="true"></i>
+                            <input type="password" id="cust-login-password" required placeholder="••••••••" aria-label="كلمة المرور للدخول"
                                    class="w-full pr-10 pl-11 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white font-mono">
-                            <button type="button" onclick="togglePasswordVisibility('cust-login-password', 'eye-cust-log-pwd')" class="absolute left-3 top-3 text-slate-400 hover:text-white p-1">
-                                <i id="eye-cust-log-pwd" class="fa-solid fa-eye"></i>
+                            <button type="button" onclick="togglePasswordVisibility('cust-login-password', 'eye-cust-log-pwd')" aria-label="إظهار أو إخفاء كلمة المرور" class="absolute left-3 top-3 text-slate-400 hover:text-white p-1">
+                                <i id="eye-cust-log-pwd" class="fa-solid fa-eye" aria-hidden="true"></i>
                             </button>
                         </div>
                     </div>
 
                     <div class="flex items-center justify-between text-xs">
-                        <a href="https://wa.me/9647706204066?text=%D9%86%D8%B3%D9%8A%D8%AA%20%D9%83%D9%84%D9%85%D8%A9%20%D8%A7%D9%84%D9%85%D8%B1%D9%88%D8%B1%20%D9%84%D8%AD%D8%B3%D8%A7%D8%A8%20%D8%A7%D9%84%D8%B1%D8%A7%D9%83%D8%A8" target="_blank" class="text-blue-400 hover:text-blue-300 font-bold">
+                        <a href="https://wa.me/9647706204066?text=%D9%86%D8%B3%D9%8A%D8%AA%20%D9%83%D9%84%D9%85%D8%A9%20%D8%A7%D9%84%D9%85%D8%B1%D9%88%D8%B1%20%D9%84%D8%AD%D8%B3%D8%A7%D8%A8%20%D8%A7%D9%84%D8%B1%D8%A7%D9%83%D8%A8" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 font-bold">
                             نسيت كلمة المرور؟ (تواصل واتساب)
                         </a>
                     </div>
 
-                    <button type="submit" id="btn-cust-login-submit"
+                    <button type="submit" id="btn-cust-login-submit" aria-label="تسجيل الدخول للراكب"
                             class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl text-base transition flex items-center justify-center gap-2 shadow-xl shadow-blue-600/30 cursor-pointer">
-                        <i class="fa-solid fa-right-to-bracket"></i>
+                        <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i>
                         <span>تسجيل الدخول للراكب 🚀</span>
                     </button>
                 </form>
 
             </div>
-        </div>
+        </section>
 
         <!-- ================================================================= -->
         <!-- TAB 2: CAPTAIN (DRIVER) - DIRECT LOGIN & DASHBOARD VERIFICATION   -->
-        <!-- (EXACT CARD IN SCREENSHOT media_1790236839641.png)                -->
         <!-- ================================================================= -->
-        <div id="driver-section" style="display: ${preselectedRole === 'Driver' ? 'block' : 'none'};">
+        <section id="driver-section" style="display: ${preselectedRole === 'Driver' ? 'block' : 'none'};" aria-label="قسم الكباتن">
             
             <div class="glass-card rounded-3xl p-6 sm:p-8 border border-amber-500/30 shadow-2xl space-y-5 glow-amber text-center">
                 
                 <!-- Circular Icon Badge -->
-                <div class="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-3xl flex items-center justify-center text-3xl mx-auto shadow-inner border border-amber-500/30">
+                <div class="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-3xl flex items-center justify-center text-3xl mx-auto shadow-inner border border-amber-500/30" aria-hidden="true">
                     🚕
                 </div>
 
                 <div>
-                    <h3 class="text-xl sm:text-2xl font-black text-white">تسجيل الدخول للكباتن</h3>
-                    <p class="text-xs sm:text-sm text-slate-400 mt-1">أدخل رقم الهاتف وكلمة المرور المعتمدة من لوحة التحكم (الداشبورد):</p>
+                    <h2 class="text-xl sm:text-2xl font-black text-white">تسجيل الدخول للكباتن</h2>
+                    <p class="text-xs sm:text-sm text-slate-300 mt-1">أدخل رقم الهاتف وكلمة المرور المعتمدة من لوحة التحكم (الداشبورد):</p>
                 </div>
 
                 <form onsubmit="handleCaptainLogin(event)" class="space-y-4 text-right">
                     <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5">
+                        <label for="login-driver-identifier" class="block text-xs text-slate-300 font-bold mb-1.5">
                             رقم الهاتف (اسم المستخدم) <span class="text-rose-400">*</span>
                         </label>
                         <div class="relative">
-                            <input type="text" id="login-driver-identifier" required placeholder="07801234567 أو 07706204066" dir="rtl"
+                            <input type="text" id="login-driver-identifier" required placeholder="07801234567 أو 07706204066" dir="rtl" aria-label="رقم الهاتف للكابتن"
                                    class="w-full px-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white placeholder-slate-400 font-mono text-right">
                         </div>
                     </div>
 
                     <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5">
+                        <label for="login-driver-password" class="block text-xs text-slate-300 font-bold mb-1.5">
                             كلمة المرور (الباسوورد) <span class="text-rose-400">*</span>
                         </label>
                         <div class="relative">
-                            <input type="password" id="login-driver-password" required placeholder="••••••••"
+                            <input type="password" id="login-driver-password" required placeholder="••••••••" aria-label="كلمة المرور للكابتن"
                                    class="w-full pr-4 pl-11 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white font-mono text-right">
-                            <button type="button" onclick="togglePasswordVisibility('login-driver-password', 'eye-login-drv-pwd')" class="absolute left-3 top-3 text-slate-400 hover:text-white p-1">
-                                <i id="eye-login-drv-pwd" class="fa-solid fa-eye"></i>
+                            <button type="button" onclick="togglePasswordVisibility('login-driver-password', 'eye-login-drv-pwd')" aria-label="إظهار أو إخفاء كلمة المرور" class="absolute left-3 top-3 text-slate-400 hover:text-white p-1">
+                                <i id="eye-login-drv-pwd" class="fa-solid fa-eye" aria-hidden="true"></i>
                             </button>
                         </div>
                     </div>
 
-                    <button type="submit" id="btn-login-driver-submit" 
+                    <button type="submit" id="btn-login-driver-submit" aria-label="تسجيل الدخول للكابتن"
                             class="w-full py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-2xl text-base transition flex items-center justify-center gap-2 shadow-xl shadow-amber-500/25 cursor-pointer">
-                        <i class="fa-solid fa-right-to-bracket text-lg"></i>
+                        <i class="fa-solid fa-right-to-bracket text-lg" aria-hidden="true"></i>
                         <span>تسجيل الدخول للكابتن 🚀</span>
                     </button>
                 </form>
 
                 <!-- Official Notice Box -->
-                <div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-200/90 leading-relaxed text-right flex items-start gap-2">
-                    <span class="text-amber-400 text-sm">⚠️</span>
+                <div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-200 leading-relaxed text-right flex items-start gap-2">
+                    <span class="text-amber-400 text-sm" aria-hidden="true">⚠️</span>
                     <div>
                         <strong>تنويه للكباتن:</strong> يتم تسجيل واعتماد حسابات الكباتن والسائقين الجدد حصراً من خلال إدارة المنصة ومكتب التوثيق. إذا كنت ترغب بالانضمام ككابتن جديد، يرجى التواصل المباشر مع إدارة المنصة للاعتماد وتفعيل الحساب.
                     </div>
@@ -739,37 +750,59 @@ class AuthController {
 
                 <!-- Two Contact Buttons -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <a href="https://wa.me/9647706204066?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%D8%8C%20%D8%A3%D8%B1%D8%BA%D8%A8%20%D8%A8%D8%A7%D9%84%D8%AA%D8%B3%D8%AC%D9%8A%D9%84%20%D9%83%D9%83%D8%A7%D8%A8%D8%AA%D9%86%20%D8%AC%D8%AF%D9%8A%D8%AF%20%D9%81%D9%8A%20%D9%85%D9%86%D8%B5%D8%A9%20%D8%AA%D9%88%D8%B5%D9%8A%D9%84%D8%A9" target="_blank" rel="noopener noreferrer"
+                    <a href="https://wa.me/9647706204066?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%D8%8C%20%D8%A3%D8%B1%D8%BA%D8%A8%20%D8%A8%D8%A7%D9%84%D8%AA%D8%B3%D8%AC%D9%8A%D9%84%20%D9%83%D9%83%D8%A7%D8%A8%D8%AA%D9%86%20%D8%AC%D8%AF%D9%8A%D8%AF%20%D9%81%D9%8A%20%D9%85%D9%86%D8%B5%D8%A9%20%D8%AA%D9%88%D8%B5%D9%8A%D9%84%D8%A9" target="_blank" rel="noopener noreferrer" aria-label="تواصل مع إدارة المنصة عبر واتساب"
                        class="py-3 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 cursor-pointer text-center">
-                        <i class="fa-brands fa-whatsapp text-lg"></i>
+                        <i class="fa-brands fa-whatsapp text-lg" aria-hidden="true"></i>
                         <span>تواصل عبر واتساب (07706204066)</span>
                     </a>
-                    <a href="tel:07706204066"
+                    <a href="tel:07706204066" aria-label="اتصال هاتفي مباشر بإدارة المنصة"
                        class="py-3 px-3 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/40 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md cursor-pointer text-center">
-                        <i class="fa-solid fa-phone text-sm"></i>
+                        <i class="fa-solid fa-phone text-sm" aria-hidden="true"></i>
                         <span>اتصال هاتفي مباشر (07706204066)</span>
                     </a>
                 </div>
 
             </div>
 
-        </div>
+        </section>
 
         <!-- Loading Overlay -->
-        <div id="loading" style="display: none;" class="text-center py-4 bg-slate-900/90 rounded-2xl border border-slate-800">
-            <div class="inline-block w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+        <div id="loading" style="display: none;" role="status" aria-live="polite" class="text-center py-4 bg-slate-900/90 rounded-2xl border border-slate-800">
+            <div class="inline-block w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin" aria-hidden="true"></div>
             <p class="text-xs text-slate-300 mt-2 font-bold" id="loading-text">جاري معالجة طلبك والاتصال بالخادم...</p>
         </div>
 
         <!-- Footer -->
-        <footer class="text-center text-xs text-slate-500 py-2">
+        <footer class="text-center text-xs text-slate-400 py-2">
             <p>© 2026 توصيله (Tawseela IQ) - جميع الحقوق محفوظة لخدمات النقل الذكي بالنجف الأشرف</p>
         </footer>
 
-    </div>
+    </main>
 
     <!-- Client-side Logic -->
     <script>
+        // Dynamic Mapbox Loader on Demand
+        window.loadMapboxDynamically = function() {
+            return new Promise(function(resolve) {
+                if (window.mapboxgl) return resolve();
+                var css = document.createElement('link');
+                css.rel = 'stylesheet';
+                css.href = 'https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css';
+                document.head.appendChild(css);
+
+                var script = document.createElement('script');
+                script.src = 'https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js';
+                script.onload = function() {
+                    var rtlScript = document.createElement('script');
+                    rtlScript.src = 'https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js';
+                    rtlScript.onload = function() { resolve(); };
+                    rtlScript.onerror = function() { resolve(); };
+                    document.head.appendChild(rtlScript);
+                };
+                script.onerror = function() { resolve(); };
+                document.head.appendChild(script);
+            });
+        };
         function persistSession(data) {
             try {
                 localStorage.setItem('auth_token', data.token);
@@ -1189,9 +1222,13 @@ class AuthController {
             }, { enableHighAccuracy: true, timeout: 10000 });
         }
 
-        function initPassengerMapbox() {
+        async function initPassengerMapbox() {
             if (passengerMap || !document.getElementById('passenger-map')) return;
             try {
+                if (!window.mapboxgl) {
+                    await window.loadMapboxDynamically();
+                }
+                if (!window.mapboxgl) return;
                 mapboxgl.accessToken = ('pk.' + 'eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9' + '._J6DYjYBDhsdcidErQrblA');
                 passengerMap = new mapboxgl.Map({
                     container: 'passenger-map',
@@ -1201,7 +1238,7 @@ class AuthController {
                     maxBounds: [[44.05, 31.75], [44.65, 32.35]]
                 });
 
-                if (mapboxgl.getRTLTextPluginStatus() === 'unavailable') {
+                if (typeof mapboxgl.getRTLTextPluginStatus === 'function' && mapboxgl.getRTLTextPluginStatus() === 'unavailable') {
                     mapboxgl.setRTLTextPlugin('https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js', null, true);
                 }
 
