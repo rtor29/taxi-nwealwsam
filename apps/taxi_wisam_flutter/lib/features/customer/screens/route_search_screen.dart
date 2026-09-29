@@ -580,7 +580,9 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
       final payload = {
         'customerId': _activeCustomerId.isNotEmpty ? _activeCustomerId : (widget.customerId.isNotEmpty ? widget.customerId : 'usr-cust'),
         'driverRouteId': routeId,
+        'driverId': match['driverId'] ?? match['id'],
         'driverName': match['driverName'],
+        'driverPhone': match['driverPhone'] ?? match['phoneNumber'],
         'seatsBooked': _seatsNeeded,
         'pickupName': _pickupController.text,
         'dropoffName': _dropoffController.text,
@@ -599,9 +601,9 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
       if (response.statusCode == 200 && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('تم تأكيد حجز مقعدك بنجاح مع ${match['driverName']}! 🚖 جاري تتبع الكابتن...'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
+            content: Text('تم إرسال طلب الحجز بنجاح إلى ${match['driverName']}! 🚖 بانتظار موافقة السائق...'),
+            backgroundColor: Colors.amber.shade800,
+            duration: const Duration(seconds: 4),
           ),
         );
         _startLiveDriverTracking(match);

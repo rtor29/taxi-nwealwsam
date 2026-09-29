@@ -49,6 +49,26 @@ class AdminController {
 
     async updateDriver(driverId, data) {
         let driver = db.memoryState.drivers.find(d => d.driverId === driverId);
+        if (!driver && db.isPostgresConnected && db.pool) {
+            try {
+                const pgRes = await db.pool.query('SELECT * FROM drivers WHERE driver_id = $1 LIMIT 1', [driverId]);
+                if (pgRes.rows && pgRes.rows.length > 0) {
+                    const row = pgRes.rows[0];
+                    driver = {
+                        driverId: row.driver_id,
+                        fullName: row.full_name,
+                        phoneNumber: row.phone_number,
+                        email: row.email,
+                        plainPassword: row.plain_password,
+                        passwordHash: row.password_hash,
+                        status: row.status,
+                        isVerified: row.is_verified,
+                        isBlocked: row.is_blocked
+                    };
+                    db.memoryState.drivers.unshift(driver);
+                }
+            } catch (_) {}
+        }
         if (!driver) return { success: false, error: 'السائق غير موجود' };
 
         if (data.fullName !== undefined) driver.fullName = String(data.fullName).trim();
@@ -86,15 +106,15 @@ class AdminController {
             try {
                 await db.pool.query(`
                     UPDATE drivers 
-                    SET full_name = $1, phone_number = $2
-                    WHERE driver_id = $3
-                `, [driver.fullName, driver.phoneNumber, driverId]);
+                    SET full_name = $1, phone_number = $2, password_hash = COALESCE($3, password_hash), plain_password = COALESCE($4, plain_password), updated_at = NOW()
+                    WHERE driver_id = $5
+                `, [driver.fullName, driver.phoneNumber, driver.passwordHash || null, driver.plainPassword || null, driverId]);
 
                 await db.pool.query(`
                     UPDATE users 
-                    SET full_name = $1, phone_number = $2
-                    WHERE id = $3
-                `, [driver.fullName, driver.phoneNumber, driverId]);
+                    SET full_name = $1, phone_number = $2, password_hash = COALESCE($3, password_hash), plain_password = COALESCE($4, plain_password), updated_at = NOW()
+                    WHERE id = $5
+                `, [driver.fullName, driver.phoneNumber, driver.passwordHash || null, driver.plainPassword || null, driverId]);
             } catch (e) {
                 console.error('[AdminController] updateDriver PG error:', e);
             }
@@ -154,7 +174,27 @@ class AdminController {
     }
 
     async toggleDriverBlock(driverId, isBlocked) {
-        const driver = db.memoryState.drivers.find(d => d.driverId === driverId);
+        let driver = db.memoryState.drivers.find(d => d.driverId === driverId);
+        if (!driver && db.isPostgresConnected && db.pool) {
+            try {
+                const pgRes = await db.pool.query('SELECT * FROM drivers WHERE driver_id = $1 LIMIT 1', [driverId]);
+                if (pgRes.rows && pgRes.rows.length > 0) {
+                    const row = pgRes.rows[0];
+                    driver = {
+                        driverId: row.driver_id,
+                        fullName: row.full_name,
+                        phoneNumber: row.phone_number,
+                        email: row.email,
+                        plainPassword: row.plain_password,
+                        passwordHash: row.password_hash,
+                        status: row.status,
+                        isVerified: row.is_verified,
+                        isBlocked: row.is_blocked
+                    };
+                    db.memoryState.drivers.unshift(driver);
+                }
+            } catch (_) {}
+        }
         if (!driver) return { success: false, error: 'السائق غير موجود' };
 
         driver.isBlocked = !!isBlocked;
@@ -170,8 +210,8 @@ class AdminController {
                     UPDATE drivers SET is_blocked = $1, status = $2, updated_at = NOW() WHERE driver_id = $3
                 `, [driver.isBlocked, driver.status, driverId]);
                 await db.pool.query(`
-                    UPDATE users SET is_blocked = $1 WHERE id = $2
-                `, [driver.isBlocked, driverId]);
+                    UPDATE users SET is_blocked = $1, is_active = $2, updated_at = NOW() WHERE id = $3
+                `, [driver.isBlocked, !driver.isBlocked, driverId]);
             } catch (e) {
                 console.error('[AdminController] toggleDriverBlock PG error:', e);
             }
@@ -293,8 +333,124 @@ class AdminController {
         };
     }
 
+    async createCustomer(data) {
+        const { fullName, phoneNumber, password, route, address } = data;
+        if (!fullName || !phoneNumber || !password) {
+            return { success: false, error: 'الاسم الكامل، رقم الهاتف، وكلمة المرور مطلوبة.' };
+        }
+
+        // Iraqi Phone Normalization
+        const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+        let norm = String(phoneNumber || '').replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
+        if (norm.startsWith('00964')) norm = norm.substring(5);
+        else if (norm.startsWith('964')) norm = norm.substring(3);
+        if (norm.length === 10 && norm.startsWith('7')) norm = '0' + norm;
+
+        const cleanPhone = (p) => {
+            if (!p) return '';
+            let s = String(p).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
+            if (s.startsWith('00964')) s = s.substring(5);
+            else if (s.startsWith('964')) s = s.substring(3);
+            if (s.length === 10 && s.startsWith('7')) s = '0' + s;
+            return s;
+        };
+
+        const existsInDrivers = (db.memoryState.drivers || []).some(d => cleanPhone(d.phoneNumber) === norm || (norm.length >= 6 && cleanPhone(d.phoneNumber).endsWith(norm)));
+        const existsInCustomers = (db.memoryState.customers || []).some(c => cleanPhone(c.phoneNumber) === norm || (norm.length >= 6 && cleanPhone(c.phoneNumber).endsWith(norm)));
+        if (norm.length >= 6 && (existsInDrivers || existsInCustomers)) {
+            return {
+                success: false,
+                duplicate: true,
+                error: 'رقم الهاتف مسجل بالفعل في المنصة، يرجى اختيار رقم آخر.'
+            };
+        }
+
+        const crypto = require('crypto');
+        const pass = String(password).trim();
+        const passwordHash = crypto.createHash('sha256').update(pass).digest('hex');
+        const customerId = 'usr-c-' + Math.random().toString(36).substr(2, 9);
+        const now = new Date().toISOString();
+        const userRoute = (route || 'النجف الأشرف').trim();
+        const userAddress = (address || 'النجف الأشرف').trim();
+        const normalizedPhone = norm.startsWith('0') ? norm : ('0' + norm);
+
+        const newCustomer = {
+            customerId,
+            fullName: fullName.trim(),
+            phoneNumber: normalizedPhone,
+            email: `${normalizedPhone}@tawseelaiq.app`,
+            route: userRoute,
+            address: userAddress,
+            area: userAddress,
+            plainPassword: pass,
+            passwordHash: passwordHash,
+            preferredPaymentMethod: 'Cash',
+            ratingAverage: 5.0,
+            totalBookings: 0,
+            isActive: true,
+            isBlocked: false,
+            registeredAt: now,
+            createdByAdmin: true
+        };
+
+        db.memoryState.customers.unshift(newCustomer);
+
+        if (db.isPostgresConnected && db.pool) {
+            try {
+                await db.pool.query(`
+                    INSERT INTO users (id, phone_number, email, full_name, role, password_hash, plain_password, is_active, is_blocked, created_at)
+                    VALUES ($1, $2, $3, $4, 'Customer', $5, $6, true, false, $7)
+                    ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number, password_hash = EXCLUDED.password_hash, plain_password = EXCLUDED.plain_password
+                `, [customerId, normalizedPhone, newCustomer.email, newCustomer.fullName, passwordHash, pass, now]);
+
+                await db.pool.query(`
+                    INSERT INTO customers (customer_id, full_name, phone_number, email, route, address, plain_password, password_hash, preferred_payment_method, rating_average, total_bookings, is_active, is_blocked, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Cash', 5.0, 0, true, false, $9)
+                    ON CONFLICT (customer_id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number, route = EXCLUDED.route, address = EXCLUDED.address, plain_password = EXCLUDED.plain_password, password_hash = EXCLUDED.password_hash
+                `, [customerId, newCustomer.fullName, normalizedPhone, newCustomer.email, userRoute, userAddress, pass, passwordHash, now]);
+            } catch (e) {
+                console.error('[AdminController] createCustomer PG error:', e);
+            }
+        }
+
+        db.addAuditLog('CustomerCreatedByAdmin', 'Customer', customerId, {
+            fullName: newCustomer.fullName,
+            phoneNumber: normalizedPhone,
+            route: userRoute,
+            address: userAddress
+        });
+        db.saveStateSnapshot();
+
+        return {
+            success: true,
+            message: 'تم إنشاء وتفعيل حساب الراكب بنجاح',
+            customer: newCustomer
+        };
+    }
+
     async updateCustomer(customerId, data) {
         let customer = db.memoryState.customers.find(c => c.customerId === customerId);
+        if (!customer && db.isPostgresConnected && db.pool) {
+            try {
+                const pgCust = await db.pool.query('SELECT * FROM customers WHERE customer_id = $1 LIMIT 1', [customerId]);
+                if (pgCust.rows && pgCust.rows.length > 0) {
+                    const row = pgCust.rows[0];
+                    customer = {
+                        customerId: row.customer_id,
+                        fullName: row.full_name,
+                        phoneNumber: row.phone_number,
+                        email: row.email,
+                        route: row.route,
+                        address: row.address,
+                        plainPassword: row.plain_password || null,
+                        passwordHash: row.password_hash || null,
+                        isActive: row.is_active,
+                        isBlocked: row.is_blocked
+                    };
+                    db.memoryState.customers.unshift(customer);
+                }
+            } catch (_) {}
+        }
         if (!customer) return { success: false, error: 'الراكب غير موجود' };
 
         if (data.fullName !== undefined) customer.fullName = String(data.fullName).trim();
@@ -341,18 +497,39 @@ class AdminController {
     }
 
     async toggleCustomerBlock(customerId, isBlocked) {
-        const customer = db.memoryState.customers.find(c => c.customerId === customerId);
+        let customer = db.memoryState.customers.find(c => c.customerId === customerId);
+        if (!customer && db.isPostgresConnected && db.pool) {
+            try {
+                const pgRes = await db.pool.query('SELECT * FROM customers WHERE customer_id = $1 LIMIT 1', [customerId]);
+                if (pgRes.rows && pgRes.rows.length > 0) {
+                    const row = pgRes.rows[0];
+                    customer = {
+                        customerId: row.customer_id,
+                        fullName: row.full_name,
+                        phoneNumber: row.phone_number,
+                        email: row.email,
+                        plainPassword: row.plain_password,
+                        passwordHash: row.password_hash,
+                        isActive: row.is_active,
+                        isBlocked: row.is_blocked
+                    };
+                    db.memoryState.customers.unshift(customer);
+                }
+            } catch (_) {}
+        }
         if (!customer) return { success: false, error: 'الراكب غير موجود' };
 
         customer.isBlocked = !!isBlocked;
+        customer.isActive = !customer.isBlocked;
+
         if (db.isPostgresConnected && db.pool) {
             try {
                 await db.pool.query(`
-                    UPDATE customers SET is_blocked = $1 WHERE customer_id = $2
-                `, [customer.isBlocked, customerId]);
+                    UPDATE customers SET is_blocked = $1, is_active = $2, updated_at = NOW() WHERE customer_id = $3
+                `, [customer.isBlocked, customer.isActive, customerId]);
                 await db.pool.query(`
-                    UPDATE users SET is_blocked = $1 WHERE id = $2
-                `, [customer.isBlocked, customerId]);
+                    UPDATE users SET is_blocked = $1, is_active = $2, updated_at = NOW() WHERE id = $3
+                `, [customer.isBlocked, customer.isActive, customerId]);
             } catch (e) {
                 console.error('[AdminController] toggleCustomerBlock PG error:', e);
             }
@@ -360,7 +537,8 @@ class AdminController {
 
         db.addAuditLog(isBlocked ? 'CustomerBlocked' : 'CustomerUnblocked', 'Customer', customerId, { isBlocked });
         db.saveStateSnapshot();
-        return { success: true, isBlocked: customer.isBlocked };
+
+        return { success: true, isBlocked: customer.isBlocked, isActive: customer.isActive };
     }
 
     async deleteCustomer(customerId) {
@@ -382,6 +560,178 @@ class AdminController {
             total: db.memoryState.bookings.length,
             bookings: db.memoryState.bookings
         };
+    }
+
+    async acceptBooking(bookingId, driverId = null) {
+        let booking = (db.memoryState.bookings || []).find(b => (b.id === bookingId || b.bookingId === bookingId));
+        
+        if (!booking && db.isPostgresConnected && db.pool) {
+            try {
+                const pgRes = await db.pool.query('SELECT * FROM bookings WHERE id = $1 LIMIT 1', [bookingId]);
+                if (pgRes.rows && pgRes.rows.length > 0) {
+                    const r = pgRes.rows[0];
+                    booking = {
+                        id: r.id,
+                        bookingId: r.id,
+                        routeId: r.route_id,
+                        driverId: r.driver_id,
+                        driverName: r.driver_name,
+                        customerId: r.customer_id,
+                        customerName: r.customer_name,
+                        customerPhone: r.customer_phone,
+                        pickupLocation: r.pickup_name,
+                        dropoffLocation: r.dropoff_name,
+                        seatsBooked: r.seats_booked || 1,
+                        status: r.status,
+                        totalFare: r.total_fare,
+                        createdAt: r.created_at
+                    };
+                    db.memoryState.bookings.unshift(booking);
+                }
+            } catch (e) {
+                console.error('[AdminController] PG fetch booking error:', e);
+            }
+        }
+
+        if (!booking) {
+            return { success: false, error: 'الحجز غير موجود' };
+        }
+
+        booking.status = 'Confirmed';
+        booking.acceptedAt = new Date().toISOString();
+
+        // Deduct seats from target route
+        const targetRoute = (db.memoryState.routes || []).find(r => (r.id === booking.routeId || r.routeId === booking.routeId));
+        if (targetRoute && !booking.seatsDeducted) {
+            targetRoute.availableSeats = Math.max(0, (targetRoute.availableSeats || 4) - (booking.seatsBooked || 1));
+            booking.seatsDeducted = true;
+        }
+
+        // Link customer to driver so customer is confirmed passenger
+        const cust = (db.memoryState.customers || []).find(c => c.customerId === booking.customerId || c.phoneNumber === booking.customerPhone);
+        if (cust) {
+            cust.assignedDriverId = booking.driverId;
+            cust.driverId = booking.driverId;
+            cust.bookingConfirmed = true;
+        }
+
+        if (db.isPostgresConnected && db.pool) {
+            try {
+                await db.pool.query(`
+                    UPDATE bookings 
+                    SET status = 'Confirmed' 
+                    WHERE id = $1
+                `, [booking.id || bookingId]);
+            } catch (e) {
+                console.error('[AdminController] PG accept booking error:', e);
+            }
+        }
+
+        db.addAuditLog('BookingAccepted', 'Driver', booking.driverId || 'Admin', {
+            bookingId: booking.id || bookingId,
+            customerName: booking.customerName,
+            status: 'Confirmed'
+        });
+
+        db.saveStateSnapshot();
+        return { success: true, message: 'تمت موافقة السائق على الحجز وأصبح الزبون ضمن الركاب بنجاح! ✅', booking };
+    }
+
+    async declineBooking(bookingId, reason = null) {
+        let booking = (db.memoryState.bookings || []).find(b => (b.id === bookingId || b.bookingId === bookingId));
+
+        if (!booking && db.isPostgresConnected && db.pool) {
+            try {
+                const pgRes = await db.pool.query('SELECT * FROM bookings WHERE id = $1 LIMIT 1', [bookingId]);
+                if (pgRes.rows && pgRes.rows.length > 0) {
+                    const r = pgRes.rows[0];
+                    booking = {
+                        id: r.id,
+                        bookingId: r.id,
+                        routeId: r.route_id,
+                        driverId: r.driver_id,
+                        driverName: r.driver_name,
+                        customerId: r.customer_id,
+                        customerName: r.customer_name,
+                        customerPhone: r.customer_phone,
+                        seatsBooked: r.seats_booked || 1,
+                        status: r.status,
+                        createdAt: r.created_at
+                    };
+                    db.memoryState.bookings.unshift(booking);
+                }
+            } catch (e) {
+                console.error('[AdminController] PG fetch booking error:', e);
+            }
+        }
+
+        if (!booking) {
+            return { success: false, error: 'الحجز غير موجود' };
+        }
+
+        booking.status = 'Declined';
+        booking.declinedAt = new Date().toISOString();
+        if (reason) booking.declineReason = reason;
+
+        if (booking.seatsDeducted) {
+            const targetRoute = (db.memoryState.routes || []).find(r => (r.id === booking.routeId || r.routeId === booking.routeId));
+            if (targetRoute) {
+                targetRoute.availableSeats = (targetRoute.availableSeats || 0) + (booking.seatsBooked || 1);
+            }
+            booking.seatsDeducted = false;
+        }
+
+        const cust = (db.memoryState.customers || []).find(c => c.customerId === booking.customerId || c.phoneNumber === booking.customerPhone);
+        if (cust && cust.assignedDriverId === booking.driverId) {
+            cust.assignedDriverId = null;
+            cust.bookingConfirmed = false;
+        }
+
+        if (db.isPostgresConnected && db.pool) {
+            try {
+                await db.pool.query(`
+                    UPDATE bookings 
+                    SET status = 'Declined' 
+                    WHERE id = $1
+                `, [booking.id || bookingId]);
+            } catch (e) {
+                console.error('[AdminController] PG decline booking error:', e);
+            }
+        }
+
+        db.addAuditLog('BookingDeclined', 'Driver', booking.driverId || 'Admin', {
+            bookingId: booking.id || bookingId,
+            customerName: booking.customerName,
+            reason
+        });
+
+        db.saveStateSnapshot();
+        return { success: true, message: 'تم رفض طلب الحجز.', booking };
+    }
+
+    async updateBookingStatus(bookingId, status, reason = null) {
+        if (status === 'Confirmed' || status === 'Accepted') {
+            return await this.acceptBooking(bookingId);
+        } else if (status === 'Declined' || status === 'Rejected' || status === 'Cancelled') {
+            return await this.declineBooking(bookingId, reason);
+        }
+
+        let booking = (db.memoryState.bookings || []).find(b => (b.id === bookingId || b.bookingId === bookingId));
+        if (!booking) return { success: false, error: 'الحجز غير موجود' };
+
+        booking.status = status;
+        if (reason) booking.reason = reason;
+
+        if (db.isPostgresConnected && db.pool) {
+            try {
+                await db.pool.query(`
+                    UPDATE bookings SET status = $1 WHERE id = $2
+                `, [status, booking.id || bookingId]);
+            } catch (e) {}
+        }
+
+        db.saveStateSnapshot();
+        return { success: true, booking };
     }
 
     // 7. Complaints
@@ -528,11 +878,13 @@ class AdminController {
         const startLat = (route && route.startLat) ? parseFloat(route.startLat) : 31.9961;
         const startLon = (route && route.startLon) ? parseFloat(route.startLon) : 44.3168;
 
+        const passStr = String(password).trim();
         const newDriver = {
             driverId,
             fullName,
             email: cleanEmail,
             phoneNumber: cleanPhone,
+            plainPassword: passStr,
             passwordHash,
             licenseNumber: license,
             vehicleMake: vMake,
@@ -604,16 +956,16 @@ class AdminController {
         if (db.isPostgresConnected && db.pool) {
             try {
                 await db.pool.query(`
-                    INSERT INTO users (id, phone_number, email, full_name, role, password_hash, is_active, is_blocked, created_at)
-                    VALUES ($1, $2, $3, $4, 'Driver', $5, true, false, $6)
-                    ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number, password_hash = EXCLUDED.password_hash
-                `, [driverId, cleanPhone, cleanEmail, fullName, passwordHash, now]);
+                    INSERT INTO users (id, phone_number, email, full_name, role, password_hash, plain_password, is_active, is_blocked, created_at)
+                    VALUES ($1, $2, $3, $4, 'Driver', $5, $6, true, false, $7)
+                    ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number, password_hash = EXCLUDED.password_hash, plain_password = EXCLUDED.plain_password
+                `, [driverId, cleanPhone, cleanEmail, fullName, passwordHash, passStr, now]);
 
                 await db.pool.query(`
-                    INSERT INTO drivers (driver_id, full_name, phone_number, email, password_hash, license_number, vehicle_make, vehicle_model, vehicle_year, vehicle_plate, status, is_verified, is_blocked, latitude, longitude, created_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Approved', true, false, $11, $12, $13)
-                    ON CONFLICT (driver_id) DO NOTHING
-                `, [driverId, fullName, cleanPhone, cleanEmail, passwordHash, license, vMake, vModel, vYear, vPlate, startLat, startLon, now]);
+                    INSERT INTO drivers (driver_id, full_name, phone_number, email, password_hash, plain_password, license_number, vehicle_make, vehicle_model, vehicle_year, vehicle_plate, status, is_verified, is_blocked, latitude, longitude, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Approved', true, false, $12, $13, $14)
+                    ON CONFLICT (driver_id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number, password_hash = EXCLUDED.password_hash, plain_password = EXCLUDED.plain_password
+                `, [driverId, fullName, cleanPhone, cleanEmail, passwordHash, passStr, license, vMake, vModel, vYear, vPlate, startLat, startLon, now]);
 
                 if (createdRoute) {
                     await db.pool.query(`
@@ -647,6 +999,136 @@ class AdminController {
                 password: password,
                 fullName: fullName
             }
+        };
+    }
+
+    // 12. Driver & Passenger Cancellation Requests
+    async createCancellationRequest(data) {
+        db.memoryState.cancellationRequests = db.memoryState.cancellationRequests || [];
+        const requestId = 'can-' + Math.random().toString(36).substr(2, 9);
+        const bookingId = data.bookingId || data.id;
+
+        const booking = (db.memoryState.bookings || []).find(b => (b.id === bookingId || b.bookingId === bookingId));
+        if (booking) {
+            booking.cancellationPending = true;
+            booking.cancellationReason = data.reason || 'طلب إلغاء من الكابتن';
+        }
+
+        const newRequest = {
+            id: requestId,
+            requestId: requestId,
+            bookingId: bookingId,
+            driverId: data.driverId || booking?.driverId || '',
+            driverName: data.driverName || booking?.driverName || 'الكابتن',
+            driverPhone: data.driverPhone || booking?.driverPhone || '',
+            customerId: data.customerId || booking?.customerId || '',
+            customerName: data.customerName || booking?.customerName || 'الراكب',
+            customerPhone: data.customerPhone || booking?.customerPhone || '',
+            routeId: data.routeId || booking?.routeId || '',
+            route: booking?.pickupLocation ? `${booking.pickupLocation} ➔ ${booking.dropoffLocation}` : (data.route || 'مسار الخط'),
+            reason: data.reason || 'طلب إلغاء من الكابتن',
+            seats: booking?.seatsBooked || 1,
+            status: 'Pending',
+            createdAt: new Date().toISOString()
+        };
+
+        db.memoryState.cancellationRequests.unshift(newRequest);
+        db.saveStateSnapshot();
+
+        return {
+            success: true,
+            message: 'تم تسجيل طلب الإلغاء بنجاح وبانتظار موافقة الإدارة',
+            request: newRequest
+        };
+    }
+
+    async getCancellationRequests() {
+        return {
+            success: true,
+            total: (db.memoryState.cancellationRequests || []).length,
+            requests: db.memoryState.cancellationRequests || []
+        };
+    }
+
+    async approveCancellation(requestId) {
+        db.memoryState.cancellationRequests = db.memoryState.cancellationRequests || [];
+        const req = db.memoryState.cancellationRequests.find(r => r.id === requestId || r.requestId === requestId);
+        if (!req) return { success: false, error: 'طلب الإلغاء غير موجود' };
+
+        req.status = 'Approved';
+        req.approvedAt = new Date().toISOString();
+
+        // 1. Unlink & cancel booking
+        const booking = (db.memoryState.bookings || []).find(b => b.id === req.bookingId || b.bookingId === req.bookingId);
+        if (booking) {
+            booking.status = 'Cancelled';
+            booking.cancellationPending = false;
+            booking.cancelledAt = new Date().toISOString();
+
+            // 2. Free seat(s) on target route
+            const targetRoute = (db.memoryState.routes || []).find(r => (r.id === booking.routeId || r.routeId === booking.routeId));
+            if (targetRoute) {
+                const totalCap = targetRoute.totalSeats || 4;
+                const freedSeats = parseInt(booking.seatsBooked || req.seats || 1, 10);
+                targetRoute.availableSeats = Math.min(totalCap, (targetRoute.availableSeats || 0) + freedSeats);
+            }
+
+            // 3. Unlink passenger from driver
+            const cust = (db.memoryState.customers || []).find(c => c.customerId === booking.customerId || c.phoneNumber === booking.customerPhone);
+            if (cust) {
+                cust.assignedDriverId = null;
+                cust.driverId = null;
+                cust.bookingConfirmed = false;
+            }
+
+            // 4. Update in PostgreSQL if connected
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    await db.pool.query(`UPDATE bookings SET status = 'Cancelled' WHERE id = $1`, [booking.id || req.bookingId]);
+                    if (targetRoute) {
+                        await db.pool.query(`UPDATE routes SET available_seats = $1 WHERE id = $2`, [targetRoute.availableSeats, targetRoute.id]);
+                    }
+                } catch (pgErr) {
+                    console.error('[AdminController] PG cancel error:', pgErr);
+                }
+            }
+        }
+
+        db.addAuditLog('PassengerCancellationApproved', 'Admin', 'usr-admin', {
+            requestId,
+            bookingId: req.bookingId,
+            driverName: req.driverName,
+            customerName: req.customerName
+        });
+
+        db.saveStateSnapshot();
+
+        return {
+            success: true,
+            message: 'تمت الموافقة على إلغاء الراكب وفك ارتباطه وإعادة إتاحة المقعد فوراً ✅',
+            request: req
+        };
+    }
+
+    async rejectCancellation(requestId) {
+        db.memoryState.cancellationRequests = db.memoryState.cancellationRequests || [];
+        const req = db.memoryState.cancellationRequests.find(r => r.id === requestId || r.requestId === requestId);
+        if (!req) return { success: false, error: 'طلب الإلغاء غير موجود' };
+
+        req.status = 'Rejected';
+        req.rejectedAt = new Date().toISOString();
+
+        const booking = (db.memoryState.bookings || []).find(b => b.id === req.bookingId || b.bookingId === req.bookingId);
+        if (booking) {
+            booking.cancellationPending = false;
+        }
+
+        db.saveStateSnapshot();
+
+        return {
+            success: true,
+            message: 'تم رفض طلب الإلغاء واستمرار اشتراك الراكب',
+            request: req
         };
     }
 }

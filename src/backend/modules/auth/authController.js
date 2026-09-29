@@ -222,7 +222,7 @@ class AuthController {
             tokenReq.end();
         } catch (e) {
             console.error('[GoogleAuth] Callback error:', e);
-            res.writeHead(302, { 'Location': '/app/?error=exception' });
+            res.writeHead(302, { 'Location': '/?error=exception' });
             res.end();
         }
     }
@@ -371,6 +371,11 @@ class AuthController {
 </head>
 <body class="min-h-screen relative flex flex-col justify-between py-6 px-3 sm:px-6">
 
+    <!-- Full-screen Embedded App Interface (Passenger sees drivers, Driver receives requests) -->
+    <div id="app-view-container" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 999999; background: #0F172A;">
+        <iframe id="app-frame" style="width: 100%; height: 100%; border: none; display: block;" allow="geolocation *; microphone *; camera *"></iframe>
+    </div>
+
     <!-- Floating Quick Update App Button -->
     <div style="position:fixed; bottom:16px; left:16px; z-index:99999; direction:rtl;">
         <button onclick="forcePurgeAndReload()" id="btn-purge-cache" title="تحديث التطبيق ومسح الذاكرة المؤقتة"
@@ -415,6 +420,29 @@ class AuthController {
             </button>
         </div>
 
+        <!-- Logged-in User Profile Card (Visible when user has active session) -->
+        <div id="user-logged-in-box" style="display: none;" class="glass-card rounded-3xl p-6 border border-emerald-500/40 shadow-2xl space-y-4 glow-amber">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div class="flex items-center gap-3">
+                    <div id="logged-user-avatar" class="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl border border-emerald-500/30">
+                        🚕
+                    </div>
+                    <div>
+                        <h3 id="logged-user-name" class="text-lg font-black text-white"></h3>
+                        <p id="logged-user-role" class="text-xs text-emerald-400 font-bold"></p>
+                    </div>
+                </div>
+                <button type="button" onclick="handleLogout()" class="px-4 py-2.5 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer shadow-lg">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>تسجيل الخروج</span>
+                </button>
+            </div>
+            <div class="p-3.5 bg-slate-900/80 border border-slate-800 rounded-2xl flex items-center justify-between">
+                <span class="text-xs text-slate-300 font-semibold">حالة الحساب في المنصة:</span>
+                <span class="text-xs font-black px-2.5 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 rounded-lg">✅ نشط ومعتمد</span>
+            </div>
+        </div>
+
         <!-- ================================================================= -->
         <!-- TAB 1: PASSENGER (CUSTOMER) - WEB APP REGISTRATION & LOGIN        -->
         <!-- ================================================================= -->
@@ -434,76 +462,175 @@ class AuthController {
                     </button>
                 </div>
 
-                <!-- Registration Form for Passengers (5 Fields) -->
+                <!-- Registration Form for Passengers (WhatsApp OTP Verified) -->
                 <form id="cust-register-form" onsubmit="handleCustomerRegister(event)" class="space-y-4">
                     <div class="text-right border-b border-slate-800 pb-3">
                         <h3 class="text-base font-black text-white flex items-center gap-2">
                             <span>👤</span>
                             <span>استمارة تسجيل الراكب الجديد</span>
                         </h3>
-                        <p class="text-xs text-slate-400 mt-1">أدخل بياناتك وسيتم توجيهك فوراً لدخول التطبيق:</p>
+                        <p class="text-xs text-slate-400 mt-1">تحقق من رقم هاتفك عبر واتساب أولاً لإكمال تسجيل الحساب:</p>
                     </div>
 
                     <div id="cust-reg-alert" style="display: none;" class="p-3 bg-rose-500/20 border border-rose-500/50 rounded-xl text-xs font-bold text-rose-300 text-right"></div>
 
-                    <!-- 1. Full Name -->
-                    <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">الاسم الكامل <span class="text-rose-400">*</span></label>
-                        <div class="relative">
-                            <i class="fa-solid fa-user absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                            <input type="text" id="cust-reg-name" required placeholder="مثال: حيدر علي الحسني"
-                                   class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500 text-right">
+                    <!-- Step 1: Iraqi Phone & WhatsApp OTP Verification -->
+                    <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span id="cust-step1-badge" class="px-2.5 py-0.5 bg-blue-500/20 text-blue-300 text-[11px] font-bold rounded-full border border-blue-500/30">خطوة 1: تأكيد الهاتف عبر واتساب</span>
+                            <label class="text-xs text-slate-300 font-bold">رقم الهاتف العراقي <span class="text-rose-400">*</span></label>
                         </div>
-                    </div>
-
-                    <!-- 2. Iraqi Phone -->
-                    <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">رقم الهاتف العراقي <span class="text-rose-400">*</span></label>
                         <div class="relative">
-                            <i class="fa-solid fa-phone absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
+                            <i class="fa-brands fa-whatsapp absolute right-3.5 top-3.5 text-emerald-400 text-base pointer-events-none"></i>
                             <input type="tel" id="cust-reg-phone" required placeholder="07701234567" dir="ltr"
                                    class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500 font-mono text-left">
                         </div>
-                    </div>
 
-                    <!-- 3. Route -->
-                    <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">المسار (خط السير المطلوب) <span class="text-rose-400">*</span></label>
-                        <div class="relative">
-                            <i class="fa-solid fa-route absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                            <input type="text" id="cust-reg-route" required placeholder="مثال: من حي الجامعة إلى جامعة الكوفة"
-                                   class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500 text-right">
-                        </div>
-                    </div>
-
-                    <!-- 4. Address -->
-                    <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">العنوان بالتفصيل <span class="text-rose-400">*</span></label>
-                        <div class="relative">
-                            <i class="fa-solid fa-location-dot absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                            <input type="text" id="cust-reg-address" required placeholder="مثال: النجف - حي الجامعة - قرب المسجد"
-                                   class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500 text-right">
-                        </div>
-                    </div>
-
-                    <!-- 5. Password -->
-                    <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">كلمة المرور (الباسوورد للحساب) <span class="text-rose-400">*</span></label>
-                        <div class="relative">
-                            <i class="fa-solid fa-lock absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                            <input type="password" id="cust-reg-password" required minlength="4" placeholder="••••••••"
-                                   class="w-full pr-10 pl-11 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white font-mono">
-                            <button type="button" onclick="togglePasswordVisibility('cust-reg-password', 'eye-cust-reg-pwd')" class="absolute left-3 top-3 text-slate-400 hover:text-white p-1">
-                                <i id="eye-cust-reg-pwd" class="fa-solid fa-eye"></i>
+                        <!-- Button to send WhatsApp OTP -->
+                        <div id="cust-send-otp-wrap">
+                            <button type="button" id="btn-send-whatsapp-otp" onclick="handleSendWhatsappOtp(false)"
+                                    class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 cursor-pointer">
+                                <i class="fa-brands fa-whatsapp text-base"></i>
+                                <span>المتابعة وإرسال رمز التحقق عبر واتساب 📲</span>
                             </button>
                         </div>
+
+                        <!-- OTP Input Box (shown after sending OTP) -->
+                        <div id="cust-otp-box" style="display: none;" class="space-y-2.5 pt-2 border-t border-slate-800">
+                            <!-- Instant notification banner -->
+                            <div class="p-2.5 bg-emerald-950/60 border border-emerald-500/40 rounded-xl text-xs text-emerald-300 font-bold flex items-center gap-2 text-right">
+                                <i class="fa-brands fa-whatsapp text-emerald-400 text-base flex-shrink-0"></i>
+                                <span>تابع الواتساب ليصلك رمز التحقق 💬</span>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">أدخل رمز التحقق (6 أرقام) <span class="text-rose-400">*</span></label>
+                                <div class="relative">
+                                    <i class="fa-solid fa-key absolute right-3.5 top-3 text-slate-400 text-sm pointer-events-none"></i>
+                                    <input type="text" id="cust-reg-otp" maxlength="6" placeholder="------" dir="ltr"
+                                           class="w-full pr-10 pl-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-base tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-emerald-500 text-emerald-400 font-mono font-black">
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <button type="button" id="btn-verify-whatsapp-otp" onclick="handleVerifyWhatsappOtp()"
+                                        class="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-600/20">
+                                    <i class="fa-solid fa-circle-check"></i>
+                                    <span>تأكيد الرمز والمتابعة ✅</span>
+                                </button>
+                                <button type="button" id="btn-resend-whatsapp-otp" onclick="handleSendWhatsappOtp(true)"
+                                        class="px-3.5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer">
+                                    إعادة إرسال
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Verified Badge (shown when verified) -->
+                        <div id="cust-verified-badge" style="display: none;" class="p-2.5 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-xs font-bold text-emerald-300 flex items-center justify-between">
+                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-circle-check text-emerald-400"></i> تم التحقق من رقم الهاتف عبر واتساب بنجاح ✅</span>
+                            <button type="button" onclick="resetPhoneVerification()" class="text-[11px] text-slate-400 hover:text-white underline cursor-pointer">تغيير الرقم</button>
+                        </div>
                     </div>
 
-                    <button type="submit" id="btn-cust-reg-submit"
-                            class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl text-base transition flex items-center justify-center gap-2 shadow-xl shadow-blue-600/30 cursor-pointer">
-                        <i class="fa-solid fa-user-plus"></i>
-                        <span>إكمال تسجيل حساب الراكب والمتابعة 🚀</span>
-                    </button>
+                    <!-- Step 2: Customer Details (Unlocked after OTP verification) -->
+                    <div id="cust-details-section" style="display: none;" class="space-y-4 pt-1 border-t border-slate-800">
+                        <div class="text-right">
+                            <span class="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 text-[11px] font-bold rounded-full border border-emerald-500/30">خطوة 2: إكمال بيانات الحساب</span>
+                        </div>
+
+                        <!-- 1. Full Name -->
+                        <div>
+                            <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">الاسم الكامل <span class="text-rose-400">*</span></label>
+                            <div class="relative">
+                                <i class="fa-solid fa-user absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
+                                <input type="text" id="cust-reg-name" placeholder="مثال: حيدر علي الحسني"
+                                       class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500 text-right">
+                            </div>
+                        </div>
+
+                        <!-- 2. Route -->
+                        <div>
+                            <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">المسار (خط السير المطلوب) <span class="text-rose-400">*</span></label>
+                            <div class="relative">
+                                <i class="fa-solid fa-route absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
+                                <input type="text" id="cust-reg-route" placeholder="مثال: من حي الجامعة إلى جامعة الكوفة"
+                                       class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500 text-right">
+                            </div>
+                        </div>
+
+                        <!-- 3. Address -->
+                        <div>
+                            <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">العنوان بالتفصيل <span class="text-rose-400">*</span></label>
+                            <div class="relative">
+                                <i class="fa-solid fa-location-dot absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
+                                <input type="text" id="cust-reg-address" placeholder="مثال: النجف - حي الجامعة - قرب المسجد"
+                                       class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500 text-right">
+                            </div>
+                        </div>
+
+                        <!-- Hidden Coordinates for Pickup & Dropoff -->
+                        <input type="hidden" id="cust-pickup-lat" name="pickupLat" value="32.0200">
+                        <input type="hidden" id="cust-pickup-lon" name="pickupLon" value="44.3200">
+                        <input type="hidden" id="cust-dropoff-lat" name="dropoffLat" value="32.0321">
+                        <input type="hidden" id="cust-dropoff-lon" name="dropoffLon" value="44.3725">
+
+                        <!-- Interactive Najaf Map UX (Mapbox) -->
+                        <div class="space-y-2.5 pt-2 border-t border-slate-800">
+                            <div class="flex items-center justify-between">
+                                <label class="text-xs text-slate-300 font-bold">تحديد موقعي الانطلاق والتوصيل بالنجف 📍</label>
+                                <button type="button" id="btn-cust-gps" onclick="getCurrentGpsLocation()" class="px-2.5 py-1 bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/40 rounded-lg text-[11px] font-bold flex items-center gap-1.5 transition cursor-pointer">
+                                    <i class="fa-solid fa-crosshairs"></i>
+                                    <span>تحديد موقعي الحالي (GPS)</span>
+                                </button>
+                            </div>
+
+                            <!-- Concise Guidance Box -->
+                            <div class="p-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-[11px] text-amber-300/90 flex items-start gap-2">
+                                <span class="text-amber-400 text-sm">💡</span>
+                                <span>اضغط على الخريطة أو اسحب الدبوس لتحديد نقطتي: <b>الانطلاق (بالأخضر)</b> و<b>التوصيل (بالأحمر)</b> بدقة في محافظة النجف الأشرف.</span>
+                            </div>
+
+                            <!-- Mode selection toggle -->
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <button type="button" id="btn-mode-pickup" onclick="setMapPinMode('pickup')" class="py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border border-emerald-500 bg-emerald-500/20 text-emerald-300 cursor-pointer transition">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                                    <span>نقطة الانطلاق (Pickup)</span>
+                                </button>
+                                <button type="button" id="btn-mode-dropoff" onclick="setMapPinMode('dropoff')" class="py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border border-slate-700 bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
+                                    <span>نقطة التوصيل (Dropoff)</span>
+                                </button>
+                            </div>
+
+                            <!-- Autocomplete Search from 1st char -->
+                            <div class="relative">
+                                <input type="text" id="cust-map-search" placeholder="ابحث عن شارع، حي، مجمع، أو جامعة في النجف..."
+                                       class="w-full px-4 py-2.5 bg-slate-800/90 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 text-right">
+                                <div id="cust-search-results" class="hidden absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto"></div>
+                            </div>
+
+                            <div id="passenger-map" style="height: 220px; width: 100%; border-radius: 1rem;" class="border border-slate-700 shadow-inner"></div>
+                        </div>
+
+                        <!-- 4. Password -->
+                        <div>
+                            <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">كلمة المرور (الباسوورد للحساب) <span class="text-rose-400">*</span></label>
+                            <div class="relative">
+                                <i class="fa-solid fa-lock absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
+                                <input type="password" id="cust-reg-password" minlength="4" placeholder="••••••••"
+                                       class="w-full pr-10 pl-11 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white font-mono">
+                                <button type="button" onclick="togglePasswordVisibility('cust-reg-password', 'eye-cust-reg-pwd')" class="absolute left-3 top-3 text-slate-400 hover:text-white p-1">
+                                    <i id="eye-cust-reg-pwd" class="fa-solid fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="submit" id="btn-cust-reg-submit"
+                                class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl text-base transition flex items-center justify-center gap-2 shadow-xl shadow-blue-600/30 cursor-pointer">
+                            <i class="fa-solid fa-user-plus"></i>
+                            <span>إكمال تسجيل حساب الراكب والمتابعة 🚀</span>
+                        </button>
+                    </div>
                 </form>
 
                 <!-- Direct Login Form for Existing Passengers -->
@@ -549,17 +676,6 @@ class AuthController {
                         <span>تسجيل الدخول للراكب 🚀</span>
                     </button>
                 </form>
-
-                <!-- Interactive Najaf Map Explorer -->
-                <div class="space-y-2 pt-2 border-t border-slate-800/80">
-                    <label class="block text-xs text-slate-300 font-bold text-right">خريطة خطوط النجف والبحث السريع (اختياري)</label>
-                    <div class="relative">
-                        <input type="text" id="cust-map-search" placeholder="ابحث عن شارع، حي، مجمع، أو جامعة..."
-                               class="w-full px-4 py-2.5 bg-slate-800/90 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 text-right">
-                        <div id="cust-search-results" class="hidden absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto"></div>
-                    </div>
-                    <div id="passenger-map" style="height: 200px; width: 100%; border-radius: 1rem;" class="border border-slate-700 shadow-inner"></div>
-                </div>
 
             </div>
         </div>
@@ -697,12 +813,10 @@ class AuthController {
                     persistSession(data);
                     const userRole = data.role || 'Driver';
                     const targetHash = userRole === 'Customer' ? '/customer' : '/driver';
-                    submitBtn.innerHTML = '<i class="fa-solid fa-check"></i><span>تم الدخول بنجاح! جاري تحويلك...</span>';
-                    const targetUrl = '/app/#' + targetHash + '?login_token=' + encodeURIComponent(data.token) +
-                                      '&userId=' + encodeURIComponent(data.userId) +
-                                      '&role=' + encodeURIComponent(userRole) +
-                                      '&fullName=' + encodeURIComponent(data.fullName || (userRole === 'Driver' ? 'كابتن توصيله' : 'راكب توصيله'));
-                    setTimeout(function() { window.location.replace(targetUrl); }, 200);
+                    submitBtn.innerHTML = '<i class="fa-solid fa-check"></i><span>تم الدخول بنجاح! جاري فتح شاشة الكابتن...</span>';
+                    setTimeout(function() {
+                        openAppView(data.token, data.userId, data.role || 'Driver', data.fullName || 'كابتن توصيله');
+                    }, 250);
                 } else {
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i><span>تسجيل الدخول للكابتن 🚀</span>';
@@ -715,18 +829,164 @@ class AuthController {
             }
         }
 
-        // 2. PASSENGER REGISTRATION
+        // 2. PASSENGER REGISTRATION & WHATSAPP OTP WORKFLOW
+        window.__isPhoneVerified = false;
+        window.__verifiedOtpCode = '';
+
+        async function handleSendWhatsappOtp(isResend) {
+            const phoneInput = document.getElementById('cust-reg-phone');
+            const phone = (phoneInput.value || '').trim();
+            const sendBtn = document.getElementById(isResend ? 'btn-resend-whatsapp-otp' : 'btn-send-whatsapp-otp');
+            const alertBox = document.getElementById('cust-reg-alert');
+            const otpBox = document.getElementById('cust-otp-box');
+
+            if (alertBox) alertBox.style.display = 'none';
+
+            if (!phone || phone.length < 10) {
+                alert('يرجى إدخال رقم هاتف عراقي صالح (مثال: 07701234567)');
+                phoneInput.focus();
+                return;
+            }
+
+            const originalBtnHtml = sendBtn.innerHTML;
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i><span>جاري الإرسال عبر واتساب...</span>';
+
+            try {
+                const res = await fetch('/api/auth/send-whatsapp-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phoneNumber: phone })
+                });
+
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    otpBox.style.display = 'block';
+                    phoneInput.readOnly = true;
+                    const otpInput = document.getElementById('cust-reg-otp');
+                    if (otpInput) {
+                        otpInput.value = '';
+                        otpInput.focus();
+                    }
+                    if (isResend) {
+                        alert('تمت إعادة إرسال رمز التحقق عبر واتساب إلى ' + phone);
+                    }
+                } else {
+                    if (alertBox) {
+                        alertBox.innerText = data.error || 'تعذر إرسال رمز التحقق، يرجى المحاولة لاحقاً.';
+                        alertBox.style.display = 'block';
+                    }
+                    alert(data.error || 'تعذر إرسال رمز التحقق');
+                }
+            } catch (err) {
+                alert('حدث خطأ في الاتصال بالخادم لإرسال رمز التحقق.');
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = originalBtnHtml;
+            }
+        }
+
+        async function handleVerifyWhatsappOtp() {
+            const phone = (document.getElementById('cust-reg-phone').value || '').trim();
+            const otpInput = document.getElementById('cust-reg-otp');
+            const code = (otpInput.value || '').trim();
+            const verifyBtn = document.getElementById('btn-verify-whatsapp-otp');
+            const alertBox = document.getElementById('cust-reg-alert');
+            const otpBox = document.getElementById('cust-otp-box');
+            const sendWrap = document.getElementById('cust-send-otp-wrap');
+            const verifiedBadge = document.getElementById('cust-verified-badge');
+            const detailsSection = document.getElementById('cust-details-section');
+
+            if (alertBox) alertBox.style.display = 'none';
+
+            if (!code || code.length < 4) {
+                alert('يرجى إدخال رمز التحقق المكون من 6 أرقام');
+                otpInput.focus();
+                return;
+            }
+
+            const originalBtnHtml = verifyBtn.innerHTML;
+            verifyBtn.disabled = true;
+            verifyBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i><span>جاري التحقق...</span>';
+
+            try {
+                const res = await fetch('/api/auth/verify-whatsapp-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phoneNumber: phone, code: code })
+                });
+
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    window.__isPhoneVerified = true;
+                    window.__verifiedOtpCode = code;
+
+                    // Hide OTP input box and initial send button
+                    if (otpBox) otpBox.style.display = 'none';
+                    if (sendWrap) sendWrap.style.display = 'none';
+
+                    // Show verified badge
+                    if (verifiedBadge) verifiedBadge.style.display = 'flex';
+
+                    // Unlock Step 2 Form details
+                    if (detailsSection) detailsSection.style.display = 'block';
+
+                    const nameInput = document.getElementById('cust-reg-name');
+                    if (nameInput) nameInput.focus();
+                } else {
+                    if (alertBox) {
+                        alertBox.innerText = data.error || 'رمز التحقق غير صحيح، يرجى التأكد وإعادة المحاولة.';
+                        alertBox.style.display = 'block';
+                    }
+                    alert(data.error || 'رمز التحقق غير صحيح');
+                }
+            } catch (err) {
+                alert('حدث خطأ في الاتصال بالخادم للتحقق من الرمز.');
+            } finally {
+                verifyBtn.disabled = false;
+                verifyBtn.innerHTML = originalBtnHtml;
+            }
+        }
+
+        function resetPhoneVerification() {
+            window.__isPhoneVerified = false;
+            window.__verifiedOtpCode = '';
+
+            const phoneInput = document.getElementById('cust-reg-phone');
+            if (phoneInput) {
+                phoneInput.readOnly = false;
+                phoneInput.focus();
+            }
+
+            const otpBox = document.getElementById('cust-otp-box');
+            const sendWrap = document.getElementById('cust-send-otp-wrap');
+            const verifiedBadge = document.getElementById('cust-verified-badge');
+            const detailsSection = document.getElementById('cust-details-section');
+            const alertBox = document.getElementById('cust-reg-alert');
+
+            if (otpBox) otpBox.style.display = 'none';
+            if (sendWrap) sendWrap.style.display = 'block';
+            if (verifiedBadge) verifiedBadge.style.display = 'none';
+            if (detailsSection) detailsSection.style.display = 'none';
+            if (alertBox) alertBox.style.display = 'none';
+        }
+
         async function handleCustomerRegister(event) {
             event.preventDefault();
+            const alertBox = document.getElementById('cust-reg-alert');
+            if (alertBox) alertBox.style.display = 'none';
+
+            if (!window.__isPhoneVerified) {
+                alert('يرجى التحقق من رقم الهاتف عبر واتساب أولاً للمتابعة');
+                return;
+            }
+
             const name = document.getElementById('cust-reg-name').value.trim();
             const phone = document.getElementById('cust-reg-phone').value.trim();
             const route = document.getElementById('cust-reg-route').value.trim();
             const address = document.getElementById('cust-reg-address').value.trim();
             const password = document.getElementById('cust-reg-password').value;
             const submitBtn = document.getElementById('btn-cust-reg-submit');
-            const alertBox = document.getElementById('cust-reg-alert');
-
-            alertBox.style.display = 'none';
 
             if (!name || !phone || !route || !address || !password) {
                 alert('يرجى ملء جميع الحقول المطلوبة');
@@ -735,6 +995,11 @@ class AuthController {
 
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i><span>جاري إكمال التسجيل...</span>';
+
+            const pickupLat = document.getElementById('cust-pickup-lat')?.value || '32.0200';
+            const pickupLon = document.getElementById('cust-pickup-lon')?.value || '44.3200';
+            const dropoffLat = document.getElementById('cust-dropoff-lat')?.value || '32.0321';
+            const dropoffLon = document.getElementById('cust-dropoff-lon')?.value || '44.3725';
 
             try {
                 const res = await fetch('/api/auth/complete-passenger-registration', {
@@ -745,24 +1010,29 @@ class AuthController {
                         phoneNumber: phone,
                         route: route,
                         address: address,
-                        password: password
+                        password: password,
+                        otpCode: window.__verifiedOtpCode || '',
+                        pickupLat: parseFloat(pickupLat) || 32.0200,
+                        pickupLon: parseFloat(pickupLon) || 44.3200,
+                        dropoffLat: parseFloat(dropoffLat) || 32.0321,
+                        dropoffLon: parseFloat(dropoffLon) || 44.3725
                     })
                 });
 
                 const data = await res.json();
                 if (res.ok && data.success) {
                     persistSession(data);
-                    submitBtn.innerHTML = '<i class="fa-solid fa-check"></i><span>تم التسجيل بنجاح! جاري تحويلك...</span>';
-                    const targetUrl = '/app/#/customer?login_token=' + encodeURIComponent(data.token) +
-                                      '&userId=' + encodeURIComponent(data.userId) +
-                                      '&role=Customer' +
-                                      '&fullName=' + encodeURIComponent(data.fullName || 'راكب توصيله');
-                    setTimeout(function() { window.location.replace(targetUrl); }, 200);
+                    submitBtn.innerHTML = '<i class="fa-solid fa-check"></i><span>تم التسجيل بنجاح! جاري فتح شاشة الراكب...</span>';
+                    setTimeout(function() {
+                        openAppView(data.token, data.userId, 'Customer', data.fullName || 'راكب توصيله');
+                    }, 250);
                 } else {
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i><span>إكمال تسجيل حساب الراكب والمتابعة 🚀</span>';
-                    alertBox.innerText = data.error || 'عذراً، فشل تسجيل الحساب.';
-                    alertBox.style.display = 'block';
+                    if (alertBox) {
+                        alertBox.innerText = data.error || 'عذراً، فشل تسجيل الحساب.';
+                        alertBox.style.display = 'block';
+                    }
                     alert(data.error || 'عذراً، فشل تسجيل الحساب.');
                 }
             } catch (err) {
@@ -797,12 +1067,10 @@ class AuthController {
                 const data = await res.json();
                 if (res.ok && data.success) {
                     persistSession(data);
-                    submitBtn.innerHTML = '<i class="fa-solid fa-check"></i><span>تم الدخول بنجاح! جاري تحويلك...</span>';
-                    const targetUrl = '/app/#/customer?login_token=' + encodeURIComponent(data.token) +
-                                      '&userId=' + encodeURIComponent(data.userId) +
-                                      '&role=Customer' +
-                                      '&fullName=' + encodeURIComponent(data.fullName || 'راكب توصيله');
-                    setTimeout(function() { window.location.replace(targetUrl); }, 200);
+                    submitBtn.innerHTML = '<i class="fa-solid fa-check"></i><span>تم الدخول بنجاح! جاري فتح شاشة الراكب...</span>';
+                    setTimeout(function() {
+                        openAppView(data.token, data.userId, 'Customer', data.fullName || 'راكب توصيله');
+                    }, 250);
                 } else {
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i><span>تسجيل الدخول للراكب 🚀</span>';
@@ -815,9 +1083,112 @@ class AuthController {
             }
         }
 
-        // 4. MAPBOX INIT FOR PASSENGER
+        // 4. MAPBOX INIT FOR PASSENGER (Restricted to Najaf [44.32, 32.02])
         var passengerMap = null;
-        var passengerMarker = null;
+        var pickupMarker = null;
+        var dropoffMarker = null;
+        var currentPinMode = 'pickup'; // 'pickup' or 'dropoff'
+
+        function setMapPinMode(mode) {
+            currentPinMode = mode;
+            var btnPickup = document.getElementById('btn-mode-pickup');
+            var btnDropoff = document.getElementById('btn-mode-dropoff');
+            if (btnPickup && btnDropoff) {
+                if (mode === 'pickup') {
+                    btnPickup.className = 'py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border border-emerald-500 bg-emerald-500/20 text-emerald-300 cursor-pointer transition';
+                    btnDropoff.className = 'py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border border-slate-700 bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition';
+                } else {
+                    btnPickup.className = 'py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border border-slate-700 bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition';
+                    btnDropoff.className = 'py-2 px-3 rounded-xl font-bold flex items-center justify-center gap-1.5 border border-rose-500 bg-rose-500/20 text-rose-300 cursor-pointer transition';
+                }
+            }
+        }
+
+        async function reverseGeocodeLocation(lng, lat, target) {
+            try {
+                var token = ('pk.' + 'eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9' + '._J6DYjYBDhsdcidErQrblA');
+                var res = await fetch('https://api.mapbox.com/geocoding/v5/mapbox.places/' + lng + ',' + lat + '.json?country=iq&language=ar&access_token=' + token);
+                var data = await res.json();
+                var pName = (data.features && data.features.length > 0) ? (data.features[0].place_name_ar || data.features[0].place_name) : '';
+                if (!pName) {
+                    var osm = await fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng);
+                    var osmData = await osm.json();
+                    if (osmData && osmData.display_name) pName = osmData.display_name;
+                }
+                if (pName) {
+                    if (target === 'pickup') {
+                        var aInp = document.getElementById('cust-reg-address');
+                        if (aInp) aInp.value = pName;
+                    } else if (target === 'dropoff') {
+                        var rInp = document.getElementById('cust-reg-route');
+                        if (rInp) rInp.value = pName;
+                    }
+                }
+            } catch (_) {}
+        }
+
+        function updatePickupPoint(lng, lat, doReverse) {
+            document.getElementById('cust-pickup-lat').value = Number(lat).toFixed(6);
+            document.getElementById('cust-pickup-lon').value = Number(lng).toFixed(6);
+            if (!pickupMarker && passengerMap) {
+                pickupMarker = new mapboxgl.Marker({ color: '#10b981', draggable: true })
+                    .setLngLat([lng, lat])
+                    .addTo(passengerMap);
+                pickupMarker.on('dragend', function() {
+                    var pos = pickupMarker.getLngLat();
+                    updatePickupPoint(pos.lng, pos.lat, true);
+                });
+            } else if (pickupMarker) {
+                pickupMarker.setLngLat([lng, lat]);
+            }
+            if (doReverse) reverseGeocodeLocation(lng, lat, 'pickup');
+        }
+
+        function updateDropoffPoint(lng, lat, doReverse) {
+            document.getElementById('cust-dropoff-lat').value = Number(lat).toFixed(6);
+            document.getElementById('cust-dropoff-lon').value = Number(lng).toFixed(6);
+            if (!dropoffMarker && passengerMap) {
+                dropoffMarker = new mapboxgl.Marker({ color: '#ef4444', draggable: true })
+                    .setLngLat([lng, lat])
+                    .addTo(passengerMap);
+                dropoffMarker.on('dragend', function() {
+                    var pos = dropoffMarker.getLngLat();
+                    updateDropoffPoint(pos.lng, pos.lat, true);
+                });
+            } else if (dropoffMarker) {
+                dropoffMarker.setLngLat([lng, lat]);
+            }
+            if (doReverse) reverseGeocodeLocation(lng, lat, 'dropoff');
+        }
+
+        function getCurrentGpsLocation() {
+            var btn = document.getElementById('btn-cust-gps');
+            if (!navigator.geolocation) {
+                alert('خاصية تحديد الموقع الجغرافي (GPS) غير مدعومة في متصفحك.');
+                return;
+            }
+            var originalText = btn ? btn.innerHTML : '';
+            if (btn) btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i><span>جاري التحديد...</span>';
+
+            navigator.geolocation.getCurrentPosition(function(pos) {
+                if (btn) btn.innerHTML = originalText;
+                var lat = pos.coords.latitude;
+                var lng = pos.coords.longitude;
+                // If coordinates within or near Najaf
+                if (passengerMap) {
+                    passengerMap.flyTo({ center: [lng, lat], zoom: 15 });
+                }
+                if (currentPinMode === 'pickup') {
+                    updatePickupPoint(lng, lat, true);
+                } else {
+                    updateDropoffPoint(lng, lat, true);
+                }
+            }, function(err) {
+                if (btn) btn.innerHTML = originalText;
+                alert('تعذر الوصول إلى موقعك الحالي. يرجى تفعيل إذن الموقع الجغرافي.');
+            }, { enableHighAccuracy: true, timeout: 10000 });
+        }
+
         function initPassengerMapbox() {
             if (passengerMap || !document.getElementById('passenger-map')) return;
             try {
@@ -825,37 +1196,37 @@ class AuthController {
                 passengerMap = new mapboxgl.Map({
                     container: 'passenger-map',
                     style: 'mapbox://styles/mapbox/streets-v12',
-                    center: [44.3238, 32.0004],
-                    zoom: 12
+                    center: [44.32, 32.02],
+                    zoom: 13,
+                    maxBounds: [[44.05, 31.75], [44.65, 32.35]]
                 });
+
                 if (mapboxgl.getRTLTextPluginStatus() === 'unavailable') {
                     mapboxgl.setRTLTextPlugin('https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js', null, true);
                 }
 
-                passengerMap.on('click', async function(e) {
+                // Add standard navigation controls
+                passengerMap.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'top-left');
+
+                // Initialize default markers in Najaf
+                passengerMap.on('load', function() {
+                    updatePickupPoint(44.3200, 32.0200, false);
+                    updateDropoffPoint(44.3500, 32.0300, false);
+                });
+
+                passengerMap.on('click', function(e) {
                     var lng = e.lngLat.lng;
                     var lat = e.lngLat.lat;
-                    if (passengerMarker) passengerMarker.remove();
-                    passengerMarker = new mapboxgl.Marker({ color: '#2563eb' })
-                        .setLngLat([lng, lat])
-                        .addTo(passengerMap);
-
-                    try {
-                        var revRes = await fetch('https://api.mapbox.com/geocoding/v5/mapbox.places/' + lng + ',' + lat + '.json?country=iq&language=ar&access_token=' + mapboxgl.accessToken);
-                        var revData = await revRes.json();
-                        if (revData.features && revData.features.length > 0) {
-                            var pName = revData.features[0].place_name_ar || revData.features[0].place_name;
-                            if (document.getElementById('cust-map-search')) document.getElementById('cust-map-search').value = pName;
-                            if (document.getElementById('cust-reg-address')) document.getElementById('cust-reg-address').value = pName;
-                            var rInp = document.getElementById('cust-reg-route');
-                            if (rInp && !rInp.value) rInp.value = pName;
-                        }
-                    } catch (_) {}
+                    if (currentPinMode === 'pickup') {
+                        updatePickupPoint(lng, lat, true);
+                    } else {
+                        updateDropoffPoint(lng, lat, true);
+                    }
                 });
             } catch (e) { console.error('Mapbox error:', e); }
         }
 
-        // Live Geocoding Search
+        // Live Geocoding Autocomplete Search for Najaf from 1st char
         var searchInput = document.getElementById('cust-map-search');
         var resultsBox = document.getElementById('cust-search-results');
         var searchTimeout = null;
@@ -863,11 +1234,12 @@ class AuthController {
             searchInput.addEventListener('input', function() {
                 var query = searchInput.value.trim();
                 clearTimeout(searchTimeout);
-                if (query.length < 2) { resultsBox.classList.add('hidden'); return; }
+                if (query.length < 1) { resultsBox.classList.add('hidden'); return; }
                 searchTimeout = setTimeout(async function() {
                     try {
                         var token = ('pk.' + 'eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9' + '._J6DYjYBDhsdcidErQrblA');
-                        var res = await fetch('https://api.mapbox.com/geocoding/v5/mapbox.places/' + encodeURIComponent(query) + '.json?proximity=44.3238,32.0004&country=iq&language=ar&access_token=' + token);
+                        var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + encodeURIComponent(query) + '.json?proximity=44.32,32.02&bbox=44.05,31.75,44.65,32.35&country=iq&language=ar&access_token=' + token;
+                        var res = await fetch(url);
                         var data = await res.json();
                         resultsBox.innerHTML = '';
                         var features = (data && data.features) ? data.features : [];
@@ -893,34 +1265,82 @@ class AuthController {
                             resultsBox.classList.remove('hidden');
                             features.forEach(function(feat) {
                                 var div = document.createElement('div');
-                                div.className = 'px-3 py-2 hover:bg-slate-800 cursor-pointer text-xs border-b border-slate-800/50 flex items-center gap-2';
+                                div.className = 'px-3 py-2.5 hover:bg-slate-800 cursor-pointer text-xs border-b border-slate-800/50 flex items-center justify-between';
                                 var pName = feat.place_name_ar || feat.place_name;
-                                div.innerHTML = '<span class="text-amber-400">📍</span> <span>' + pName + '</span>';
+                                var modeBadge = currentPinMode === 'pickup' ? '<span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">نقطة انطلاق</span>' : '<span class="text-[10px] bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded">نقطة توصيل</span>';
+                                div.innerHTML = '<div class="flex items-center gap-2 text-right flex-1 truncate"><span class="text-amber-400">📍</span> <span class="truncate">' + pName + '</span></div>' + modeBadge;
                                 div.onclick = function() {
                                     if (passengerMap) {
                                         passengerMap.flyTo({ center: feat.center, zoom: 15 });
-                                        if (passengerMarker) passengerMarker.remove();
-                                        passengerMarker = new mapboxgl.Marker({ color: '#2563eb' })
-                                            .setLngLat(feat.center)
-                                            .addTo(passengerMap);
+                                    }
+                                    if (currentPinMode === 'pickup') {
+                                        updatePickupPoint(feat.center[0], feat.center[1], false);
+                                        var aInp = document.getElementById('cust-reg-address');
+                                        if (aInp) aInp.value = pName;
+                                    } else {
+                                        updateDropoffPoint(feat.center[0], feat.center[1], false);
+                                        var rInp = document.getElementById('cust-reg-route');
+                                        if (rInp) rInp.value = pName;
                                     }
                                     searchInput.value = pName;
-                                    var rInp = document.getElementById('cust-reg-route');
-                                    var aInp = document.getElementById('cust-reg-address');
-                                    if (rInp && !rInp.value) rInp.value = pName;
-                                    if (aInp) aInp.value = pName;
                                     resultsBox.classList.add('hidden');
                                 };
                                 resultsBox.appendChild(div);
                             });
                         } else { resultsBox.classList.add('hidden'); }
                     } catch (_) { resultsBox.classList.add('hidden'); }
-                }, 250);
+                }, 150);
             });
         }
 
+        window.openAppView = function(token, userId, role, fullName) {
+            var container = document.getElementById('app-view-container');
+            var frame = document.getElementById('app-frame');
+            if (!container || !frame) return;
+
+            var targetHash = (role === 'Driver' || role === 'driver') ? '/driver' : '/customer';
+            var targetUrl = '/app-view/#' + targetHash + '?login_token=' + encodeURIComponent(token) +
+                            '&userId=' + encodeURIComponent(userId) +
+                            '&role=' + encodeURIComponent(role) +
+                            '&fullName=' + encodeURIComponent(fullName);
+
+            frame.src = targetUrl;
+            container.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        };
+
+        function checkUserSession() {
+            try {
+                var token = localStorage.getItem('auth_token');
+                var userId = localStorage.getItem('user_id') || 'usr-current';
+                var role = localStorage.getItem('user_role') || 'Customer';
+                var fullName = localStorage.getItem('user_fullname') || (role === 'Driver' ? 'كابتن توصيله' : 'راكب توصيله');
+
+                if (token && token.length > 5) {
+                    window.openAppView(token, userId, role, fullName);
+                }
+            } catch (_) {}
+        }
+
+        window.handleLogout = function() {
+            try {
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('user_id');
+                localStorage.removeItem('user_role');
+                localStorage.removeItem('user_fullname');
+                localStorage.removeItem('driver_status');
+                localStorage.removeItem('flutter.auth_token');
+                localStorage.removeItem('flutter.user_id');
+                localStorage.removeItem('flutter.user_role');
+                localStorage.removeItem('flutter.user_fullname');
+                sessionStorage.clear();
+            } catch (_) {}
+            window.location.replace('/');
+        };
+
         // Auto Select Tab on Load from URL (Defaults to Captain/Driver)
         (function() {
+            checkUserSession();
             var urlParams = new URLSearchParams(window.location.search);
             var role = urlParams.get('role');
             if (role === 'Customer' || role === 'customer') {
@@ -953,7 +1373,7 @@ class AuthController {
      * Completes Passenger (Customer) Registration with Duplicate Prevention and Password Hashing
      */
     async handleCompletePassengerRegistration(req, res, body) {
-        const { fullName, email, password, googleId, phoneNumber, route, address, area, paymentMethod } = body;
+        const { fullName, email, password, googleId, phoneNumber, route, address, area, paymentMethod, pickupLat, pickupLon, dropoffLat, dropoffLon } = body;
         if (!fullName || !phoneNumber || !password) {
             res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
             return res.end(JSON.stringify({ success: false, error: 'الاسم الكامل، رقم الهاتف، وكلمة المرور مطلوبة.' }));
@@ -974,6 +1394,16 @@ class AuthController {
 
         const cleanPhone = normDigits.startsWith('0') ? normDigits : ('0' + normDigits);
         const emailLower = email ? email.trim().toLowerCase() : `${cleanPhone}@tawseelaiq.app`;
+
+        // Optional WhatsApp OTP verification if provided
+        if (body.otpCode) {
+            const whatsappService = require('../whatsapp/whatsappService');
+            const otpCheck = whatsappService.verifyOtp(phoneNumber, body.otpCode);
+            if (!otpCheck.valid) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                return res.end(JSON.stringify({ success: false, error: otpCheck.error }));
+            }
+        }
 
         // 1. DUPLICATE CHECK (In Memory)
         const normalizeCheck = (p) => {
@@ -1041,6 +1471,10 @@ class AuthController {
             googleId: googleId || null,
             preferredPaymentMethod: paymentMethod || 'Cash',
             area: userAddress,
+            pickupLat: pickupLat ? parseFloat(pickupLat) : 32.0200,
+            pickupLon: pickupLon ? parseFloat(pickupLon) : 44.3200,
+            dropoffLat: dropoffLat ? parseFloat(dropoffLat) : 32.0321,
+            dropoffLon: dropoffLon ? parseFloat(dropoffLon) : 44.3725,
             ratingAverage: 5.0,
             totalBookings: 0,
             isActive: true,
@@ -1077,6 +1511,12 @@ class AuthController {
         });
 
         db.saveStateSnapshot();
+
+        try {
+            const whatsappService = require('../whatsapp/whatsappService');
+            whatsappService.consumeVerification(cleanPhone);
+            whatsappService.sendTextMessage(cleanPhone, `مرحباً ${fullName.trim()} في تطبيق توصيلة (Tawsela) 🚖\nتم تسجيل حسابك كراكب بنجاح. نتمنى لك رحلات آمنة ومريحة!`).catch(() => {});
+        } catch (_) {}
 
         const token = 'jwt_customer_' + customerId;
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -1266,8 +1706,7 @@ class AuthController {
         const safeRole = JSON.stringify(role);
         const safeFullName = JSON.stringify(fullName);
         const safeStatus = JSON.stringify(status || 'Active');
-        const isTawseela = reqHost && reqHost.includes('tawseelaiq.app');
-        const basePath = isTawseela ? '/' : '/app/';
+        const basePath = '/';
         const target = `${basePath}?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(userId)}&role=${encodeURIComponent(role)}&fullName=${encodeURIComponent(fullName)}&status=${encodeURIComponent(status || 'Active')}`;
 
         const html = `<!DOCTYPE html>

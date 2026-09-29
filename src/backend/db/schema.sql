@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     full_name VARCHAR(150) NOT NULL,
     role VARCHAR(30) NOT NULL DEFAULT 'Customer', -- 'Customer', 'Driver', 'Admin', 'Unassigned'
     password_hash TEXT,
+    plain_password TEXT,
     google_id VARCHAR(100),
     profile_picture_url TEXT,
     is_active BOOLEAN NOT NULL DEFAULT true,
@@ -34,6 +35,7 @@ CREATE TABLE IF NOT EXISTS drivers (
     phone_number VARCHAR(30),
     email VARCHAR(255),
     password_hash TEXT,
+    plain_password TEXT,
     google_id VARCHAR(100),
     license_number VARCHAR(50) NOT NULL,
     vehicle_make VARCHAR(50) DEFAULT 'تويوتا',

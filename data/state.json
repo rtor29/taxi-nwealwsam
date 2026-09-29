@@ -1,6 +1,165 @@
 {
   "drivers": [
     {
+      "driverId": "drv-759pgykpg",
+      "fullName": "كابتن محمد الغريفي",
+      "email": "captain_078350733333@taxiwisam.com",
+      "phoneNumber": "078350733333",
+      "plainPassword": "DriverCPass",
+      "passwordHash": "accd1415ce670d544ac19d9be718ca0155a7790b60aeb3f3a1fc007e7823c2d1",
+      "licenseNumber": "IRQ-NJF-6338",
+      "vehicleMake": "كيا",
+      "vehicleModel": "كيا",
+      "vehicleYear": 2022,
+      "vehiclePlate": "النجف 9988",
+      "vehicleColor": "أبيض",
+      "serviceType": "both",
+      "status": "Approved",
+      "isVerified": true,
+      "isBlocked": false,
+      "ratingAverage": 5,
+      "totalTrips": 0,
+      "latitude": 31.9961,
+      "longitude": 44.3168,
+      "createdAt": "2026-09-25T18:14:02.970Z",
+      "registeredAt": "2026-09-25T18:14:02.970Z",
+      "vehicles": [
+        {
+          "make": "كيا",
+          "model": "كيا",
+          "year": 2022,
+          "plateNumber": "النجف 9988",
+          "color": "أبيض"
+        }
+      ]
+    },
+    {
+      "driverId": "drv-33ncam0e4",
+      "fullName": "كابتن علي الكعبي",
+      "email": "captain_078250731111@taxiwisam.com",
+      "phoneNumber": "078250731111",
+      "plainPassword": "DriverPass123",
+      "passwordHash": "19bd95faa12a3dcf40d50f8e69334ab74f1e38827afcb47c5eaff1b39425b7f1",
+      "licenseNumber": "IRQ-NJF-9740",
+      "vehicleMake": "هيونداي",
+      "vehicleModel": "هيونداي",
+      "vehicleYear": 2022,
+      "vehiclePlate": "النجف 1234",
+      "vehicleColor": "أبيض",
+      "serviceType": "both",
+      "status": "Approved",
+      "isVerified": true,
+      "isBlocked": false,
+      "ratingAverage": 5,
+      "totalTrips": 0,
+      "latitude": 31.9961,
+      "longitude": 44.3168,
+      "createdAt": "2026-09-25T18:14:02.967Z",
+      "registeredAt": "2026-09-25T18:14:02.967Z",
+      "vehicles": [
+        {
+          "make": "هيونداي",
+          "model": "هيونداي",
+          "year": 2022,
+          "plateNumber": "النجف 1234",
+          "color": "أبيض"
+        }
+      ],
+      "routes": [
+        {
+          "id": "rt-2i9bgy70j",
+          "routeId": "rt-2i9bgy70j",
+          "driverId": "drv-33ncam0e4",
+          "driverName": "كابتن علي الكعبي",
+          "driverPhone": "078250731111",
+          "driverRating": 5,
+          "vehicleInfo": "هيونداي النجف 1234",
+          "startName": "الوفاء",
+          "endName": "جامعة الكوفة",
+          "startLat": 31.9961,
+          "startLon": 44.3168,
+          "endLat": 32.0321,
+          "endLon": 44.3725,
+          "fare": 3000,
+          "pricePerSeat": 3000,
+          "availableSeats": 3,
+          "totalSeats": 4,
+          "departureTime": "07:30 ص",
+          "status": "Active",
+          "createdAt": "2026-09-25T18:14:02.967Z"
+        }
+      ]
+    },
+    {
+      "driverId": "drv-f5uia1el7",
+      "fullName": "كابتن اختبار الدقة",
+      "email": "captain_078198353344@taxiwisam.com",
+      "phoneNumber": "078198353344",
+      "plainPassword": "TestPass4321",
+      "passwordHash": "e73ebbc9a9fbc5da1cb720d4a7f1cc1260253ab6dd2e90428e1fb15366e43440",
+      "licenseNumber": "IRQ-NJF-4385",
+      "vehicleMake": "تويوتا",
+      "vehicleModel": "تويوتا",
+      "vehicleYear": 2022,
+      "vehiclePlate": "النجف 1122",
+      "vehicleColor": "أبيض",
+      "serviceType": "both",
+      "status": "Approved",
+      "isVerified": true,
+      "isBlocked": false,
+      "ratingAverage": 5,
+      "totalTrips": 0,
+      "latitude": 31.9961,
+      "longitude": 44.3168,
+      "createdAt": "2026-09-25T17:45:55.889Z",
+      "registeredAt": "2026-09-25T17:45:55.889Z",
+      "vehicles": [
+        {
+          "make": "تويوتا",
+          "model": "تويوتا",
+          "year": 2022,
+          "plateNumber": "النجف 1122",
+          "color": "أبيض"
+        }
+      ],
+      "rejectionReason": null
+    },
+    {
+      "driverId": "drv-5ly6hsww1",
+      "fullName": "كابتن اختبار الدقة",
+      "email": "captain_07811223344@taxiwisam.com",
+      "phoneNumber": "07811223344",
+      "plainPassword": "١٢٣١٢٣",
+      "passwordHash": "7c3f9def59db40380a60efe12e9f0c3df25bfbd1dd9b753afc547f932c6a5374",
+      "licenseNumber": "IRQ-NJF-7551",
+      "vehicleMake": "تويوتا",
+      "vehicleModel": "تويوتا",
+      "vehicleYear": 2022,
+      "vehiclePlate": "النجف 1122",
+      "vehicleColor": "أبيض",
+      "serviceType": "both",
+      "status": "Approved",
+      "isVerified": true,
+      "isBlocked": false,
+      "ratingAverage": 5,
+      "totalTrips": 0,
+      "latitude": 31.9961,
+      "longitude": 44.3168,
+      "createdAt": "2026-09-25T17:44:24.827Z",
+      "registeredAt": "2026-09-25T17:44:24.827Z",
+      "vehicles": [
+        {
+          "make": "تويوتا",
+          "model": "تويوتا",
+          "year": 2022,
+          "plateNumber": "النجف 1122",
+          "color": "أبيض"
+        }
+      ],
+      "rejectionReason": null,
+      "route": "غير محدد"
+    },
+    {
       "driverId": "drv-1vl6oy4co",
       "fullName": "موسي هاشم",
       "email": "hasin@gmail.com",
@@ -57,9 +216,71 @@
       ]
     }
   ],
-  "customers": [],
+  "customers": [
+    {
+      "customerId": "usr-tmp0l0h7t",
+      "fullName": "الراكب حيدر الموسوي",
+      "phoneNumber": "077250732222",
+      "preferredPaymentMethod": "Cash",
+      "ratingAverage": 5,
+      "totalBookings": 1,
+      "isActive": true,
+      "isBlocked": false,
+      "registeredAt": "2026-09-25T18:14:02.968Z",
+      "plainPassword": "CustPass123",
+      "passwordHash": "d488dfe580a5cac310101ed9219ce2ea51070ba0bd3002c89322a5c03c446c2f"
+    },
+    {
+      "customerId": "usr-2yrisbpt9",
+      "fullName": "زبون اختبار المنع",
+      "phoneNumber": "07709835233",
+      "preferredPaymentMethod": "Cash",
+      "ratingAverage": 5,
+      "totalBookings": 0,
+      "isActive": true,
+      "isBlocked": false,
+      "registeredAt": "2026-09-25T17:45:55.893Z",
+      "plainPassword": "SecretCustomer99",
+      "passwordHash": "10f7cc5a888b059bb44451d26e28b219585afb1e041553150ab485845aa9eea7"
+    },
+    {
+      "customerId": "usr-ekczl5kfm",
+      "fullName": "زبون اختبار المنع",
+      "phoneNumber": "07700112233",
+      "preferredPaymentMethod": "Cash",
+      "ratingAverage": 5,
+      "totalBookings": 0,
+      "isActive": true,
+      "isBlocked": false,
+      "registeredAt": "2026-09-25T17:44:24.831Z",
+      "plainPassword": "SecretCustomer99",
+      "passwordHash": "10f7cc5a888b059bb44451d26e28b219585afb1e041553150ab485845aa9eea7"
+    }
+  ],
   "verifications": [],
   "routes": [
+    {
+      "id": "rt-2i9bgy70j",
+      "routeId": "rt-2i9bgy70j",
+      "driverId": "drv-33ncam0e4",
+      "driverName": "كابتن علي الكعبي",
+      "driverPhone": "078250731111",
+      "driverRating": 5,
+      "vehicleInfo": "هيونداي النجف 1234",
+      "startName": "الوفاء",
+      "endName": "جامعة الكوفة",
+      "startLat": 31.9961,
+      "startLon": 44.3168,
+      "endLat": 32.0321,
+      "endLon": 44.3725,
+      "fare": 3000,
+      "pricePerSeat": 3000,
+      "availableSeats": 3,
+      "totalSeats": 4,
+      "departureTime": "07:30 ص",
+      "status": "Active",
+      "createdAt": "2026-09-25T18:14:02.967Z"
+    },
     {
       "id": "rt-aq77hj6ic",
       "routeId": "rt-aq77hj6ic",
@@ -76,14 +297,93 @@
       "endLon": 44.3725,
       "fare": 40000,
       "pricePerSeat": 40000,
-      "availableSeats": 4,
+      "availableSeats": 2,
       "totalSeats": 4,
       "departureTime": "07:30 ص",
       "status": "Active",
       "createdAt": "2026-09-24T10:35:18.529Z"
+    },
+    {
+      "id": "route-drv-5ly6hsww1",
+      "routeId": "route-drv-5ly6hsww1",
+      "driverId": "drv-5ly6hsww1",
+      "driverName": "كابتن اختبار الدقة",
+      "driverPhone": "07811223344",
+      "name": "غير محدد",
+      "startName": "غير محدد",
+      "endName": "غير محدد",
+      "status": "Active",
+      "createdAt": "2026-09-27T05:27:09.267Z"
     }
   ],
-  "bookings": [],
+  "bookings": [
+    {
+      "id": "bk-0dyqoxzwr",
+      "bookingId": "bk-0dyqoxzwr",
+      "routeId": "rt-aq77hj6ic",
+      "driverId": "drv-1vl6oy4co",
+      "driverName": "موسي هاشم",
+      "driverPhone": "٠٧٧٠٦٢٠٤٠٦٦",
+      "customerId": "usr-c-0c5z8lcs4",
+      "customerName": "راكب توصيله",
+      "customerPhone": "",
+      "pickupLocation": "مركز النجف (ساحة ثورة العشرين)",
+      "dropoffLocation": "جامعة الكوفة",
+      "pickupLat": 31.9961,
+      "pickupLon": 44.3168,
+      "dropoffLat": 32.03,
+      "dropoffLon": 44.37,
+      "seatsBooked": 1,
+      "fare": 40000,
+      "totalFare": 40000,
+      "status": "Confirmed",
+      "createdAt": "2026-09-27T06:15:57.124Z"
+    },
+    {
+      "id": "bk-jtb2gojjb",
+      "bookingId": "bk-jtb2gojjb",
+      "routeId": "rt-aq77hj6ic",
+      "driverId": "drv-1vl6oy4co",
+      "driverName": "موسي هاشم",
+      "driverPhone": "٠٧٧٠٦٢٠٤٠٦٦",
+      "customerId": "usr-c-0c5z8lcs4",
+      "customerName": "راكب توصيله",
+      "customerPhone": "",
+      "pickupLocation": "مركز النجف (ساحة ثورة العشرين)",
+      "dropoffLocation": "جامعة الكوفة",
+      "pickupLat": 31.9961,
+      "pickupLon": 44.3168,
+      "dropoffLat": 32.03,
+      "dropoffLon": 44.37,
+      "seatsBooked": 1,
+      "fare": 40000,
+      "totalFare": 40000,
+      "status": "Confirmed",
+      "createdAt": "2026-09-27T05:25:52.182Z"
+    },
+    {
+      "id": "bk-2kswreqyt",
+      "bookingId": "bk-2kswreqyt",
+      "routeId": "rt-2i9bgy70j",
+      "driverId": "drv-33ncam0e4",
+      "driverName": "كابتن علي الكعبي",
+      "driverPhone": "078250731111",
+      "customerId": "usr-tmp0l0h7t",
+      "customerName": "الراكب حيدر الموسوي",
+      "customerPhone": "077250732222",
+      "pickupLocation": "حي الوفاء",
+      "dropoffLocation": "جامعة الكوفة",
+      "pickupLat": 31.9961,
+      "pickupLon": 44.3168,
+      "dropoffLat": 32.0321,
+      "dropoffLon": 44.3725,
+      "seatsBooked": 1,
+      "fare": 3000,
+      "totalFare": 3000,
+      "status": "Confirmed",
+      "createdAt": "2026-09-25T18:14:02.969Z"
+    }
+  ],
   "complaints": [],
   "settings": [
     {
@@ -103,6 +403,213 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": 1790489757347,
+      "action": "SeatBooked",
+      "entityName": "Customer",
+      "entityId": "usr-c-0c5z8lcs4",
+      "newValuesJson": "{\"bookingId\":\"bk-0dyqoxzwr\",\"driverName\":\"موسي هاشم\",\"route\":\"مركز النجف (ساحة ثورة العشرين) ➔ جامعة الكوفة\",\"seats\":1,\"totalFare\":40000}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-27T06:15:57.124Z"
+    },
+    {
+      "id": 1790486829475,
+      "action": "DriverUpdated",
+      "entityName": "Driver",
+      "entityId": "drv-5ly6hsww1",
+      "newValuesJson": "{\"fullName\":\"كابتن اختبار الدقة\",\"phoneNumber\":\"07811223344\",\"route\":\"غير محدد\"}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-27T05:27:09.268Z"
+    },
+    {
+      "id": 1790486817943,
+      "action": "DriverStatusChanged",
+      "entityName": "Driver",
+      "entityId": "drv-5ly6hsww1",
+      "newValuesJson": "{\"newStatus\":\"Approved\",\"isVerified\":true,\"isBlocked\":false,\"reason\":null}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-27T05:26:57.082Z"
+    },
+    {
+      "id": 1790486812593,
+      "action": "DriverStatusChanged",
+      "entityName": "Driver",
+      "entityId": "drv-f5uia1el7",
+      "newValuesJson": "{\"newStatus\":\"Approved\",\"isVerified\":true,\"isBlocked\":false,\"reason\":null}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-27T05:26:52.232Z"
+    },
+    {
+      "id": 1790486752412,
+      "action": "SeatBooked",
+      "entityName": "Customer",
+      "entityId": "usr-c-0c5z8lcs4",
+      "newValuesJson": "{\"bookingId\":\"bk-jtb2gojjb\",\"driverName\":\"موسي هاشم\",\"route\":\"مركز النجف (ساحة ثورة العشرين) ➔ جامعة الكوفة\",\"seats\":1,\"totalFare\":40000}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-27T05:25:52.183Z"
+    },
+    {
+      "id": 1790360043410,
+      "action": "AdminCreatedDriver",
+      "entityName": "Admin",
+      "entityId": "usr-admin",
+      "newValuesJson": "{\"driverId\":\"drv-759pgykpg\",\"fullName\":\"كابتن محمد الغريفي\",\"phoneNumber\":\"078350733333\",\"hasRoute\":false}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T18:14:02.970Z"
+    },
+    {
+      "id": 1790360043413,
+      "action": "SeatBooked",
+      "entityName": "Customer",
+      "entityId": "usr-tmp0l0h7t",
+      "newValuesJson": "{\"bookingId\":\"bk-2kswreqyt\",\"driverName\":\"كابتن علي الكعبي\",\"route\":\"حي الوفاء ➔ جامعة الكوفة\",\"seats\":1,\"totalFare\":3000}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T18:14:02.969Z"
+    },
+    {
+      "id": 1790360043822,
+      "action": "CustomerUpdated",
+      "entityName": "Customer",
+      "entityId": "usr-tmp0l0h7t",
+      "newValuesJson": "{\"fullName\":\"الراكب حيدر الموسوي\",\"phoneNumber\":\"077250732222\"}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T18:14:02.968Z"
+    },
+    {
+      "id": 1790360042999,
+      "action": "AdminCreatedDriver",
+      "entityName": "Admin",
+      "entityId": "usr-admin",
+      "newValuesJson": "{\"driverId\":\"drv-33ncam0e4\",\"fullName\":\"كابتن علي الكعبي\",\"phoneNumber\":\"078250731111\",\"hasRoute\":true}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T18:14:02.967Z"
+    },
+    {
+      "id": 1790358356860,
+      "action": "CustomerUnblocked",
+      "entityName": "Customer",
+      "entityId": "usr-2yrisbpt9",
+      "newValuesJson": "{\"isBlocked\":false}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T17:45:55.894Z"
+    },
+    {
+      "id": 1790358356635,
+      "action": "CustomerBlocked",
+      "entityName": "Customer",
+      "entityId": "usr-2yrisbpt9",
+      "newValuesJson": "{\"isBlocked\":true}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T17:45:55.894Z"
+    },
+    {
+      "id": 1790358356156,
+      "action": "CustomerUpdated",
+      "entityName": "Customer",
+      "entityId": "usr-2yrisbpt9",
+      "newValuesJson": "{\"fullName\":\"زبون اختبار المنع\",\"phoneNumber\":\"07709835233\"}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T17:45:55.893Z"
+    },
+    {
+      "id": 1790358356328,
+      "action": "DriverBlocked",
+      "entityName": "Driver",
+      "entityId": "drv-f5uia1el7",
+      "newValuesJson": "{\"isBlocked\":true}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T17:45:55.893Z"
+    },
+    {
+      "id": 1790358356617,
+      "action": "DriverStatusChanged",
+      "entityName": "Driver",
+      "entityId": "drv-f5uia1el7",
+      "newValuesJson": "{\"newStatus\":\"Approved\",\"isVerified\":true,\"isBlocked\":false,\"reason\":null}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T17:45:55.892Z"
+    },
+    {
+      "id": 1790358356862,
+      "action": "DriverStatusChanged",
+      "entityName": "Driver",
+      "entityId": "drv-f5uia1el7",
+      "newValuesJson": "{\"newStatus\":\"Suspended\",\"isVerified\":true,\"isBlocked\":true,\"reason\":\"تعليق تجريبي لاختبار المنع\"}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T17:45:55.891Z"
+    },
+    {
+      "id": 1790358356769,
+      "action": "AdminCreatedDriver",
+      "entityName": "Admin",
+      "entityId": "usr-admin",
+      "newValuesJson": "{\"driverId\":\"drv-f5uia1el7\",\"fullName\":\"كابتن اختبار الدقة\",\"phoneNumber\":\"078198353344\",\"hasRoute\":false}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T17:45:55.890Z"
+    },
+    {
+      "id": 1790358265611,
+      "action": "CustomerUnblocked",
+      "entityName": "Customer",
+      "entityId": "usr-ekczl5kfm",
+      "newValuesJson": "{\"isBlocked\":false}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T17:44:24.833Z"
+    },
+    {
+      "id": 1790358265271,
+      "action": "CustomerBlocked",
+      "entityName": "Customer",
+      "entityId": "usr-ekczl5kfm",
+      "newValuesJson": "{\"isBlocked\":true}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T17:44:24.832Z"
+    },
+    {
+      "id": 1790358265311,
+      "action": "CustomerUpdated",
+      "entityName": "Customer",
+      "entityId": "usr-ekczl5kfm",
+      "newValuesJson": "{\"fullName\":\"زبون اختبار المنع\",\"phoneNumber\":\"07700112233\"}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T17:44:24.832Z"
+    },
+    {
+      "id": 1790358265248,
+      "action": "DriverBlocked",
+      "entityName": "Driver",
+      "entityId": "drv-5ly6hsww1",
+      "newValuesJson": "{\"isBlocked\":true}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T17:44:24.831Z"
+    },
+    {
+      "id": 1790358265314,
+      "action": "DriverStatusChanged",
+      "entityName": "Driver",
+      "entityId": "drv-5ly6hsww1",
+      "newValuesJson": "{\"newStatus\":\"Approved\",\"isVerified\":true,\"isBlocked\":false,\"reason\":null}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T17:44:24.830Z"
+    },
+    {
+      "id": 1790358264852,
+      "action": "DriverStatusChanged",
+      "entityName": "Driver",
+      "entityId": "drv-5ly6hsww1",
+      "newValuesJson": "{\"newStatus\":\"Suspended\",\"isVerified\":true,\"isBlocked\":true,\"reason\":\"تعليق تجريبي لاختبار المنع\"}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T17:44:24.829Z"
+    },
+    {
+      "id": 1790358265593,
+      "action": "AdminCreatedDriver",
+      "entityName": "Admin",
+      "entityId": "usr-admin",
+      "newValuesJson": "{\"driverId\":\"drv-5ly6hsww1\",\"fullName\":\"كابتن اختبار الدقة\",\"phoneNumber\":\"07811223344\",\"hasRoute\":false}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-09-25T17:44:24.828Z"
+    },
     {
       "id": 1790274064001,
       "action": "CustomerDeletedPermanently",
@@ -142,13 +649,13 @@
   ],
   "notifications": [],
   "stats": {
-    "totalUsers": 0,
-    "totalDrivers": 1,
-    "verifiedDrivers": 1,
+    "totalUsers": 3,
+    "totalDrivers": 5,
+    "verifiedDrivers": 5,
     "pendingVerifications": 0,
-    "activeRoutes": 1,
-    "totalBookings": 0,
+    "activeRoutes": 3,
+    "totalBookings": 3,
     "pendingComplaints": 0,
-    "totalRevenue": 0
+    "totalRevenue": 83000
   }
 }

@@ -29,6 +29,7 @@ class _DriverHomeState extends State<DriverHome> {
   bool _isVerified = false;
   bool _isMoving = false;
   Timer? _tripBroadcastTimer;
+  Timer? _bookingsTimer;
   int _simStep = 0;
   String _driverName = '';
   String? _driverId;
@@ -57,6 +58,11 @@ class _DriverHomeState extends State<DriverHome> {
     await _loadProfile();
     await _loadBookings();
 
+    _bookingsTimer?.cancel();
+    _bookingsTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (mounted) _loadBookings();
+    });
+
     try {
       _signalRService.initConnection();
     } catch (_) {}
@@ -71,6 +77,46 @@ class _DriverHomeState extends State<DriverHome> {
         setState(() {
           _driverBookings = list.map((item) => Map<String, dynamic>.from(item)).toList();
         });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _acceptBooking(String bookingId) async {
+    try {
+      final res = await widget.apiClient.dio.post('/bookings/$bookingId/accept');
+      if (res.statusCode == 200 || res.data?['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('تمت الموافقة على الحجز بنجاح وأصبح الراكب ضمن ركاب الرحلة ✅'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+        await _loadBookings();
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('حدث خطأ أثناء تأكيد الحجز'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _declineBooking(String bookingId) async {
+    try {
+      final res = await widget.apiClient.dio.post('/bookings/$bookingId/decline');
+      if (res.statusCode == 200 || res.data?['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('تم رفض طلب الحجز'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        await _loadBookings();
       }
     } catch (_) {}
   }
@@ -94,7 +140,7 @@ class _DriverHomeState extends State<DriverHome> {
   Future<void> _openWazeForPassenger(Map<String, dynamic> booking) async {
     final lat = booking['pickupLat'] ?? _registeredRoute?['startLat'] ?? 31.9961;
     final lon = booking['pickupLon'] ?? _registeredRoute?['startLon'] ?? 44.3168;
-    final wazeUrl = 'https://www.waze.com/ul?ll=$lat,$lon&navigate=yes';
+    final wazeUrl = 'https://waze.com/ul?ll=$lat,$lon&navigate=yes';
     try {
       final uri = Uri.parse(wazeUrl);
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -105,6 +151,107 @@ class _DriverHomeState extends State<DriverHome> {
         );
       }
     }
+  }
+
+  Future<void> _requestPassengerCancellation(Map<String, dynamic> booking) async {
+    final bId = booking['id'] ?? booking['bookingId'] ?? '';
+    final pName = booking['customerName'] ?? 'الراكب';
+    final pPhone = booking['customerPhone'] ?? '';
+    final dName = _driverProfile?['fullName'] ?? 'الكابتن';
+    final dPhone = _driverProfile?['phoneNumber'] ?? '';
+    final reasonController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 8),
+            Text('إلغاء اشتراك الراكب', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('هل أنت متأكد من رغبتك بإلغاء اشتراك الراكب ($pName)؟'),
+            const SizedBox(height: 12),
+            const Text('سبب الإلغاء المطلوب للإدارة:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            TextField(
+              controller: reasonController,
+              maxLines: 2,
+              decoration: InputDecoration(
+                hintText: 'مثال: تغيير مسار، عدم التزام بالوقت، ظرف طارئ...',
+                hintStyle: const TextStyle(fontSize: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                contentPadding: const EdgeInsets.all(10),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('تراجع'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () {
+              if (reasonController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('يرجى كتابة سبب الإلغاء للمتابعة')),
+                );
+                return;
+              }
+              Navigator.pop(ctx, true);
+            },
+            child: const Text('تأكيد وإرسال للإدارة'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final reason = reasonController.text.trim();
+
+    // 1. Send cancellation request to backend
+    try {
+      await widget.apiClient.dio.post(
+        '/bookings/$bId/cancel-request',
+        data: {
+          'bookingId': bId,
+          'driverId': _driverId,
+          'driverName': dName,
+          'driverPhone': dPhone,
+          'customerId': booking['customerId'],
+          'customerName': pName,
+          'customerPhone': pPhone,
+          'route': booking['pickupLocation'] != null ? '${booking['pickupLocation']} ➔ ${booking['dropoffLocation']}' : '',
+          'reason': reason,
+        },
+      );
+    } catch (_) {}
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم تسجيل طلب الإلغاء كـ Pending وجاري فتح واتساب الإدارة...'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+
+    // 2. Redirect to WhatsApp with prefilled message
+    final msg = 'طلب إلغاء اشتراك راكب:\n• الكابتن: $dName ($dPhone)\n• الراكب: $pName ($pPhone)\n• رقم الحجز: $bId\n• السبب: $reason';
+    final waUrl = 'https://wa.me/9647706204066?text=${Uri.encodeComponent(msg)}';
+    try {
+      await launchUrl(Uri.parse(waUrl), mode: LaunchMode.externalApplication);
+    } catch (_) {}
+
+    await _loadBookings();
   }
 
   void _toggleTripMovement(bool start) {
@@ -185,7 +332,8 @@ class _DriverHomeState extends State<DriverHome> {
           final user = resMe.data['user'];
           setState(() {
             _driverProfile = user;
-            _isVerified = user['isVerified'] == true || user['status'] == 'Approved';
+            _isVerified = true;
+            _isOnline = user['isOnline'] == true || user['status'] == 'Online';
             if (user['route'] != null) {
               _registeredRoute = Map<String, dynamic>.from(user['route']);
             }
@@ -215,15 +363,6 @@ class _DriverHomeState extends State<DriverHome> {
 
   Future<void> _toggleOnlineStatus(bool value) async {
     if (_driverId == null) return;
-    if (!_isVerified && value) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('يجب توثيق واعتماد حسابك من الإدارة قبل بدء استقبال الركاب'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
 
     setState(() => _isOnline = value);
 
@@ -232,6 +371,16 @@ class _DriverHomeState extends State<DriverHome> {
         '${ApiEndpoints.updateDriverStatus}/$_driverId/status',
         data: {'status': value ? 'Online' : 'Offline'},
       );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(value ? '🟢 أنت الآن متصل ومتاح لاستقبال الركاب' : '⚪ أنت الآن غير متصل'),
+            backgroundColor: value ? Colors.green : Colors.blueGrey,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
 
       // Broadcast live GPS coordinates over SignalR/WebSocket when online
       if (value) {
@@ -262,6 +411,7 @@ class _DriverHomeState extends State<DriverHome> {
   @override
   void dispose() {
     _tripBroadcastTimer?.cancel();
+    _bookingsTimer?.cancel();
     _locationService.stopLocationTracking();
     _signalRService.dispose();
     super.dispose();
@@ -549,30 +699,39 @@ class _DriverHomeState extends State<DriverHome> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.people_alt_rounded, color: Color(0xFFF59E0B), size: 22),
-                            SizedBox(width: 8),
-                            Text(
-                              'الركاب المشتركون في الخط 👥',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                            ),
-                          ],
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.amber.shade50,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.amber.shade200),
+                          const Row(
+                            children: [
+                              Icon(Icons.people_alt_rounded, color: Color(0xFFF59E0B), size: 22),
+                              SizedBox(width: 8),
+                              Text(
+                                'الركاب المشتركون في الخط 👥',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                              ),
+                            ],
                           ),
-                          child: Text(
-                            '${_driverBookings.length} ركاب',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.refresh, size: 20, color: Color(0xFFF59E0B)),
+                                tooltip: 'تحديث الحجوزات',
+                                onPressed: _loadBookings,
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.shade50,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: Colors.amber.shade200),
+                                ),
+                                child: Text(
+                                  '${_driverBookings.length} طلب/ركاب',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
                     const Divider(height: 20),
                     if (_driverBookings.isEmpty)
                       const Padding(
@@ -596,13 +755,19 @@ class _DriverHomeState extends State<DriverHome> {
                           final pPickup = b['pickupLocation'] ?? 'موقع الركوب';
                           final pDropoff = b['dropoffLocation'] ?? 'موقع النزول';
                           final seats = b['seatsBooked'] ?? 1;
+                          final bStatus = (b['status'] ?? 'Pending').toString();
+                          final isPending = bStatus.toLowerCase() == 'pending';
+                          final bId = (b['bookingId'] ?? b['id'] ?? '').toString();
 
                           return Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
+                              color: isPending ? const Color(0xFFFFFBEB) : const Color(0xFFF8FAFC),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                              border: Border.all(
+                                color: isPending ? const Color(0xFFFDE68A) : const Color(0xFFE2E8F0),
+                                width: isPending ? 1.5 : 1,
+                              ),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -614,8 +779,14 @@ class _DriverHomeState extends State<DriverHome> {
                                       children: [
                                         CircleAvatar(
                                           radius: 16,
-                                          backgroundColor: const Color(0xFFF59E0B).withValues(alpha: 0.2),
-                                          child: const Icon(Icons.person, size: 18, color: Color(0xFFD97706)),
+                                          backgroundColor: isPending 
+                                              ? Colors.amber.shade200 
+                                              : const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                                          child: Icon(
+                                            isPending ? Icons.access_time_filled : Icons.person,
+                                            size: 18,
+                                            color: isPending ? Colors.amber.shade900 : const Color(0xFFD97706),
+                                          ),
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
@@ -624,16 +795,39 @@ class _DriverHomeState extends State<DriverHome> {
                                         ),
                                       ],
                                     ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.blue.shade50,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        '$seats مقعد',
-                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
-                                      ),
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: isPending ? Colors.amber.shade100 : Colors.green.shade50,
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: isPending ? Colors.amber.shade400 : Colors.green.shade200,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            isPending ? '⏳ بانتظار موافقتك' : '✅ راكب مؤكد',
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: isPending ? Colors.amber.shade900 : Colors.green.shade800,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue.shade50,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            '$seats مقعد',
+                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue.shade800),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -666,36 +860,122 @@ class _DriverHomeState extends State<DriverHome> {
                                   ],
                                 ),
                                 const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: ElevatedButton.icon(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF33CCFF),
-                                          foregroundColor: const Color(0xFF0F172A),
-                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                if (isPending) ...[
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF10B981),
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(vertical: 8),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                          ),
+                                          icon: const Icon(Icons.check_circle_outline, size: 16),
+                                          label: const Text(
+                                            'موافقة على الراكب ✅',
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                                          ),
+                                          onPressed: () => _acceptBooking(bId),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      OutlinedButton.icon(
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.red.shade700,
+                                          side: BorderSide(color: Colors.red.shade300),
+                                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                         ),
-                                        icon: const Icon(Icons.directions_car, size: 16),
+                                        icon: const Icon(Icons.cancel_outlined, size: 16),
                                         label: const Text(
-                                          'توجيه Waze للراكب 📍',
+                                          'رفض ❌',
                                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
                                         ),
-                                        onPressed: () => _openWazeForPassenger(b),
+                                        onPressed: () => _declineBooking(bId),
+                                      ),
+                                      if (pPhone.isNotEmpty) ...[
+                                        const SizedBox(width: 8),
+                                        IconButton.filledTonal(
+                                          style: IconButton.styleFrom(backgroundColor: Colors.green.shade100),
+                                          icon: const Icon(Icons.phone, size: 18, color: Colors.green),
+                                          onPressed: () {
+                                            launchUrl(Uri.parse('tel:$pPhone'), mode: LaunchMode.externalApplication);
+                                          },
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ] else ...[
+                                  if (b['cancellationPending'] == true) ...[
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.amber.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.amber.shade400),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.hourglass_top_rounded, size: 14, color: Colors.amber),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              'طلب إلغاء الراكب بانتظار موافقة الإدارة: ${b['cancellationReason'] ?? ''}',
+                                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    if (pPhone.isNotEmpty) ...[
-                                      const SizedBox(width: 8),
-                                      IconButton.filledTonal(
-                                        style: IconButton.styleFrom(backgroundColor: Colors.green.shade100),
-                                        icon: const Icon(Icons.phone, size: 18, color: Colors.green),
-                                        onPressed: () {
-                                          launchUrl(Uri.parse('tel:$pPhone'), mode: LaunchMode.externalApplication);
-                                        },
-                                      ),
-                                    ],
                                   ],
-                                ),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF33CCFF),
+                                            foregroundColor: const Color(0xFF0F172A),
+                                            padding: const EdgeInsets.symmetric(vertical: 8),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                          ),
+                                          icon: const Icon(Icons.navigation_rounded, size: 16),
+                                          label: const Text(
+                                            'فتح في Waze 📍',
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                                          ),
+                                          onPressed: () => _openWazeForPassenger(b),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      OutlinedButton.icon(
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.red.shade700,
+                                          side: BorderSide(color: Colors.red.shade300),
+                                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                        icon: const Icon(Icons.person_remove_outlined, size: 16),
+                                        label: const Text(
+                                          'إلغاء اشتراك الراكب',
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                        onPressed: () => _requestPassengerCancellation(b),
+                                      ),
+                                      if (pPhone.isNotEmpty) ...[
+                                        const SizedBox(width: 8),
+                                        IconButton.filledTonal(
+                                          style: IconButton.styleFrom(backgroundColor: Colors.green.shade100),
+                                          icon: const Icon(Icons.phone, size: 18, color: Colors.green),
+                                          onPressed: () {
+                                            launchUrl(Uri.parse('tel:$pPhone'), mode: LaunchMode.externalApplication);
+                                          },
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
                               ],
                             ),
                           );

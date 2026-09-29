@@ -83,32 +83,14 @@ class TaxiWisamApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget home;
-    if (initialToken != null && initialToken!.isNotEmpty) {
-      if (initialRole == 'Driver') {
-        home = DriverHome(apiClient: apiClient, storageService: storageService);
-      } else {
-        home = RouteSearchScreen(
-          apiClient: apiClient,
-          customerId: initialUserId ?? '',
-          storageService: storageService,
-        );
-      }
-    } else {
-      if (kIsWeb) {
-        try {
-          html.window.location.replace('/');
-        } catch (_) {}
-        home = const Scaffold(
-          backgroundColor: Color(0xFF0F172A),
-          body: Center(
-            child: CircularProgressIndicator(color: Color(0xFFF59E0B)),
-          ),
-        );
-      } else {
-        home = LoginScreen(apiClient: apiClient, storageService: storageService);
-      }
-    }
+    final bool isDriver = initialRole == 'Driver' || (kIsWeb && Uri.base.fragment.contains('driver'));
+    final Widget home = isDriver
+        ? DriverHome(apiClient: apiClient, storageService: storageService)
+        : RouteSearchScreen(
+            apiClient: apiClient,
+            customerId: initialUserId ?? '',
+            storageService: storageService,
+          );
 
     return MaterialApp(
       title: 'توصيله',
@@ -125,33 +107,30 @@ class TaxiWisamApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       home: home,
-      routes: {
-        '/': (context) {
-          if (kIsWeb) {
-            try {
-              html.window.location.replace('/');
-            } catch (_) {}
-            return const Scaffold(
-              backgroundColor: Color(0xFF0F172A),
-              body: Center(child: CircularProgressIndicator(color: Color(0xFFF59E0B))),
-            );
-          }
-          return LoginScreen(apiClient: apiClient, storageService: storageService);
-        },
-        '/login': (context) {
-          if (kIsWeb) {
-            try {
-              html.window.location.replace('/');
-            } catch (_) {}
-            return const Scaffold(
-              backgroundColor: Color(0xFF0F172A),
-              body: Center(child: CircularProgressIndicator(color: Color(0xFFF59E0B))),
-            );
-          }
-          return LoginScreen(apiClient: apiClient, storageService: storageService);
-        },
-        '/customer': (context) => RouteSearchScreen(apiClient: apiClient, customerId: initialUserId ?? '', storageService: storageService),
-        '/driver': (context) => DriverHome(apiClient: apiClient, storageService: storageService),
+      onGenerateRoute: (settings) {
+        final rawName = settings.name ?? '/';
+        final uri = Uri.parse(rawName);
+        final path = uri.path;
+
+        if (path.startsWith('/driver') || (initialRole == 'Driver' && (path == '/' || path.isEmpty))) {
+          return MaterialPageRoute(
+            builder: (_) => DriverHome(
+              apiClient: apiClient,
+              storageService: storageService,
+            ),
+            settings: settings,
+          );
+        }
+
+        final customerId = uri.queryParameters['userId'] ?? initialUserId ?? '';
+        return MaterialPageRoute(
+          builder: (_) => RouteSearchScreen(
+            apiClient: apiClient,
+            customerId: customerId,
+            storageService: storageService,
+          ),
+          settings: settings,
+        );
       },
     );
   }

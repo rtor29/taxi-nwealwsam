@@ -190,12 +190,12 @@
 
             <!-- Action Buttons -->
             <div class="flex items-center space-x-2 md:space-x-3 space-x-reverse">
-                <!-- Web App Button -->
-                <a href="/app/" target="_blank" title="فتح تطبيق توصيله على الويب (الهواتف، الآيبادات، الحواسيب)"
-                   class="flex items-center px-2.5 md:px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition shadow-sm shadow-blue-600/20">
-                    <i class="fa-solid fa-mobile-screen-button ml-1.5 text-sm md:text-base"></i>
-                    <span class="hidden sm:inline">تطبيق الويب 📱</span>
-                    <span class="sm:hidden text-[11px]">الويب</span>
+                <!-- Main Website Button -->
+                <a href="/" target="_blank" title="فتح الموقع الرئيسي لمنصة توصيله"
+                   class="flex items-center px-2.5 md:px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 rounded-xl text-xs font-bold transition shadow-sm">
+                    <i class="fa-solid fa-globe ml-1.5 text-sm md:text-base"></i>
+                    <span class="hidden sm:inline">الموقع الرئيسي 🌐</span>
+                    <span class="sm:hidden text-[11px]">الموقع</span>
                 </a>
 
                 <!-- Notification Bell & Dropdown -->
@@ -299,6 +299,14 @@
                     <span>المسارات والحجوزات</span>
                 </button>
 
+                <button onclick="switchTab('cancellations')" id="tab-btn-cancellations" class="tab-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition">
+                    <div class="flex items-center space-x-3 space-x-reverse">
+                        <i class="fa-solid fa-user-xmark w-5 text-center text-amber-400"></i>
+                        <span>طلبات إلغاء الركاب</span>
+                    </div>
+                    <span id="badge-cancellations" class="hidden px-2 py-0.5 text-xs bg-rose-500 text-white rounded-full font-bold">0</span>
+                </button>
+
                 <button onclick="switchTab('fleet-map')" id="tab-btn-fleet-map" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
                     <i class="fa-solid fa-map-location-dot w-5 text-center text-amber-400"></i>
                     <span>متابعة الأسطول والمسارات</span>
@@ -328,15 +336,6 @@
                     <i class="fa-solid fa-database w-5 text-center text-amber-400"></i>
                     <span>النسخ الاحتياطي وقاعدة البيانات</span>
                 </button>
-
-                <!-- Web App Quick Card inside Sidebar -->
-                <div class="pt-4 space-y-2">
-                    <a href="/app/" target="_blank"
-                       class="w-full flex items-center justify-center space-x-2 space-x-reverse p-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl text-xs font-bold hover:brightness-110 transition shadow-md">
-                        <i class="fa-solid fa-globe text-base"></i>
-                        <span>📱 فتح تطبيق الويب (Web App)</span>
-                    </a>
-                </div>
             </div>
 
             <!-- Footer info -->
@@ -559,6 +558,10 @@
                     </div>
                     <div class="flex items-center space-x-2 space-x-reverse">
                         <input type="text" id="customers-search-input" placeholder="بحث بالاسم أو الهاتف..." class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" oninput="debounceCustomerSearch()">
+                        <button onclick="openAddCustomerModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer">
+                            <i class="fa-solid fa-user-plus"></i>
+                            <span>إضافة راكب جديد</span>
+                        </button>
                         <button onclick="loadCustomers()" class="self-start sm:self-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold transition">
                             <i class="fa-solid fa-rotate"></i>
                             <span>تحديث</span>
@@ -633,11 +636,61 @@
                                     <th class="p-4">تاريخ الحجز</th>
                                     <th class="p-4">المقاعد</th>
                                     <th class="p-4">الأجرة</th>
-                                    <th class="p-4">حالة الحجز</th>
+                                    <th class="p-4 text-center">حالة الحجز</th>
+                                    <th class="p-4 text-center">موافقة السائق / الإجراء</th>
                                 </tr>
                             </thead>
                             <tbody id="bookings-table-body" class="divide-y divide-slate-100">
                                 <!-- Dynamic Bookings -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5.1 PASSENGER CANCELLATION REQUESTS -->
+            <section id="tab-cancellations" class="tab-content hidden space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-2xl font-black text-slate-900 flex items-center gap-2">
+                            <span>طلبات إلغاء اشتراك الركاب</span>
+                            <span id="cancellations-count-badge" class="text-xs bg-amber-500/20 text-amber-700 px-2.5 py-1 rounded-full font-bold">0 طلب</span>
+                        </h2>
+                        <p class="text-xs md:text-sm text-slate-500">مراجعة واعتماد طلبات إلغاء اشتراك الركاب مع تحرير المقاعد في المسارات فورياً للموافقة على ركاب جدد</p>
+                    </div>
+                    <div>
+                        <button onclick="loadCancellationRequests()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold flex items-center space-x-2 space-x-reverse transition cursor-pointer">
+                            <i class="fa-solid fa-rotate"></i>
+                            <span>تحديث الطلبات</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div id="cancellations-loading" class="p-8 text-center text-slate-500">
+                        <i class="fa-solid fa-circle-notch fa-spin text-2xl text-amber-500 mb-2"></i>
+                        <p>جاري تحميل طلبات الإلغاء...</p>
+                    </div>
+                    <div id="cancellations-empty" class="hidden p-12 text-center text-slate-400">
+                        <i class="fa-solid fa-circle-check text-4xl text-emerald-500 mb-2"></i>
+                        <p class="font-bold text-slate-700">لا توجد طلبات إلغاء حالياً!</p>
+                        <p class="text-xs text-slate-400 mt-1">كافة الحجوزات والمسارات مستقرة ونشطة.</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table id="cancellations-table" class="w-full text-right text-sm border-collapse hidden min-w-[800px]">
+                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-4">رقم الطلب</th>
+                                    <th class="p-4">السائق (الكابتن)</th>
+                                    <th class="p-4">الراكب</th>
+                                    <th class="p-4">المسار / الرحلة</th>
+                                    <th class="p-4">سبب الإلغاء</th>
+                                    <th class="p-4 text-center">الحالة</th>
+                                    <th class="p-4 text-center">الإجراء والقرار</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cancellations-body" class="divide-y divide-slate-100">
+                                <!-- Dynamic rows -->
                             </tbody>
                         </table>
                     </div>
@@ -1568,6 +1621,51 @@
         </div>
         <div class="max-w-4xl max-h-[85vh] overflow-auto flex items-center justify-center p-2 bg-slate-900/60 rounded-2xl border border-slate-800 shadow-2xl">
             <img id="zoom-modal-img" src="" alt="وثيقة مكبرة" class="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl">
+        </div>
+    </div>
+
+    <!-- ADD CUSTOMER MODAL -->
+    <div id="modal-add-customer" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4 pointer-events-none">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                <h3 class="text-lg font-black text-slate-900 flex items-center gap-2">
+                    <i class="fa-solid fa-user-plus text-blue-600"></i>
+                    <span>إضافة حساب راكب جديد وتفعيله</span>
+                </h3>
+                <button type="button" onclick="closeAddCustomerModal()" class="text-slate-400 hover:text-slate-600 text-2xl font-bold p-1 leading-none cursor-pointer">&times;</button>
+            </div>
+            <form id="form-add-customer" onsubmit="submitAdminAddCustomer(event)" class="space-y-3.5">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">الاسم الكامل للراكب <span class="text-rose-500">*</span></label>
+                    <input type="text" id="add-cust-name" required placeholder="مثال: حيدر علي الحسني" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف العراقي (اسم المستخدم) <span class="text-rose-500">*</span></label>
+                    <input type="tel" id="add-cust-phone" required placeholder="07701234567" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 text-left" dir="ltr">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">المسار (خط السير المطلوب) <span class="text-rose-500">*</span></label>
+                    <input type="text" id="add-cust-route" required placeholder="مثال: من حي الجامعة إلى جامعة الكوفة" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">العنوان بالتفصيل <span class="text-rose-500">*</span></label>
+                    <input type="text" id="add-cust-address" required placeholder="مثال: النجف - حي الجامعة - قرب المسجد" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">كلمة المرور للحساب <span class="text-rose-500">*</span></label>
+                    <div class="flex gap-2">
+                        <input type="text" id="add-cust-password" required minlength="4" placeholder="••••••••" class="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button type="button" onclick="generateUniquePasswordToInput('add-cust-password')" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                            <i class="fa-solid fa-dice"></i>
+                            <span>توليد</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button type="button" onclick="closeAddCustomerModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer">إلغاء</button>
+                    <button type="submit" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black shadow-md shadow-blue-600/20 transition cursor-pointer">إنشاء وتفعيل الحساب 🚀</button>
+                </div>
+            </form>
         </div>
     </div>
 

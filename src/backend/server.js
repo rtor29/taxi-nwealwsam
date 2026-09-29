@@ -8,6 +8,28 @@ const config = require('./config');
 const db = require('./db');
 const authController = require('./modules/auth/authController');
 const adminController = require('./modules/admin/adminController');
+const whatsappService = require('./modules/whatsapp/whatsappService');
+
+// ---[ Rate Limiter: in-memory, per IP ]---
+const _rateLimitMap = new Map(); // ip -> { count, resetAt }
+function _rateLimit(ip, maxRequests = 60, windowMs = 60000) {
+    const now = Date.now();
+    let entry = _rateLimitMap.get(ip);
+    if (!entry || now > entry.resetAt) {
+        entry = { count: 1, resetAt: now + windowMs };
+        _rateLimitMap.set(ip, entry);
+        return false; // not limited
+    }
+    entry.count++;
+    return entry.count > maxRequests;
+}
+// Strict rate limiter for sensitive auth endpoints (10 req/min per IP)
+function _authRateLimit(ip) { return _rateLimit(ip, 10, 60000); }
+// Cleanup every 5 min to prevent memory leak
+setInterval(() => {
+    const now = Date.now();
+    for (const [k, v] of _rateLimitMap) { if (now > v.resetAt) _rateLimitMap.delete(k); }
+}, 300000);
 
 const mimeTypes = {
     '.html': 'text/html; charset=utf-8',
@@ -83,14 +105,32 @@ async function startServer() {
     await db.init();
 
     const server = http.createServer(async (req, res) => {
-        // Set default CORS
-        res.setHeader('Access-Control-Allow-Origin', '*');
+        // ---[ Security Headers ]---
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+        res.setHeader('X-XSS-Protection', '1; mode=block');
+        res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+        // Set default CORS (restricted to known origins in production)
+        const allowedOrigins = ['https://tawseelaiq.app', 'https://www.tawseelaiq.app', 'http://localhost:5050', 'http://173.212.206.86'];
+        const reqOrigin = req.headers['origin'] || '';
+        if (allowedOrigins.includes(reqOrigin) || !reqOrigin) {
+            res.setHeader('Access-Control-Allow-Origin', reqOrigin || '*');
+        }
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
 
         if (req.method === 'OPTIONS') {
             res.writeHead(200);
             return res.end();
+        }
+
+        // ---[ Global Rate Limit: 120 req/min per IP ]---
+        const clientIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+        if (_rateLimit(clientIp, 120, 60000)) {
+            res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '60' });
+            return res.end(JSON.stringify({ success: false, error: 'Too Many Requests - حاول بعد دقيقة' }));
         }
 
         const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -131,6 +171,103 @@ async function startServer() {
             const role = parsedUrl.searchParams.get('role') || '';
             const defaultRole = (role === 'Driver' || role === 'driver') ? 'Driver' : 'Customer';
             return authController.renderMainPortalHtml(res, defaultRole, req.headers['x-forwarded-host'] || req.headers.host || '173.212.206.86.nip.io');
+        }
+
+        // ---------------------------------------------------------------------
+        // Meta WhatsApp Cloud API Webhook Verification & Events
+        // ---------------------------------------------------------------------
+        if (pathname === '/api/webhook/whatsapp' || 
+            pathname === '/webhook/whatsapp' || 
+            pathname === '/api/webhook' ||
+            pathname.startsWith('/api/webhook/whatsapp') ||
+            pathname.startsWith('/webhook/whatsapp')) {
+
+            if (method === 'GET') {
+                const mode = parsedUrl.searchParams.get('hub.mode');
+                const token = parsedUrl.searchParams.get('hub.verify_token');
+                const challenge = parsedUrl.searchParams.get('hub.challenge');
+
+                if (mode === 'subscribe' && (token === 'Musaonline33' || pathname.endsWith('/Musaonline33') || token === whatsappService.verifyToken)) {
+                    console.log('[MetaWebhook] WhatsApp webhook verified successfully ✅');
+                    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+                    return res.end(challenge || '');
+                } else {
+                    console.warn('[MetaWebhook] Verification failed. Token mismatch or bad mode:', { mode, token, pathname });
+                    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+                    return res.end('Verification token mismatch');
+                }
+            }
+
+            if (method === 'POST') {
+                try {
+                    const body = await parseJsonBody(req);
+                    console.log('[MetaWebhook] Received WhatsApp event:', JSON.stringify(body).slice(0, 150));
+                    whatsappService.handleIncomingWebhook(body);
+                } catch (e) {
+                    console.error('[MetaWebhook] Error processing incoming webhook:', e.message);
+                }
+                res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+                return res.end('EVENT_RECEIVED');
+            }
+        }
+
+        // WhatsApp OTP Endpoints for Registration
+        if (pathname === '/api/auth/send-whatsapp-otp' && method === 'POST') {
+            if (_authRateLimit(clientIp)) {
+                res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '60' });
+                return res.end(JSON.stringify({ success: false, error: 'محاولات كثيرة جداً. انتظر دقيقة.' }));
+            }
+            const body = await parseJsonBody(req);
+            const { phoneNumber } = body;
+            if (!phoneNumber || typeof phoneNumber !== 'string' || phoneNumber.length > 30) {
+                return sendJson({ success: false, error: 'رقم الهاتف مطلوب' }, 400);
+            }
+
+            // Normalization & Duplicate Pre-check
+            const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+            let norm = String(phoneNumber || '').replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
+            if (norm.startsWith('00964')) norm = norm.substring(5);
+            else if (norm.startsWith('964')) norm = norm.substring(3);
+            if (norm.length === 10 && norm.startsWith('7')) norm = '0' + norm;
+
+            const cleanPhone = (p) => {
+                if (!p) return '';
+                let s = String(p).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
+                if (s.startsWith('00964')) s = s.substring(5);
+                else if (s.startsWith('964')) s = s.substring(3);
+                if (s.length === 10 && s.startsWith('7')) s = '0' + s;
+                return s;
+            };
+
+            const existsInDrivers = (db.memoryState.drivers || []).some(d => cleanPhone(d.phoneNumber) === norm || (norm.length >= 6 && cleanPhone(d.phoneNumber).endsWith(norm)));
+            const existsInCustomers = (db.memoryState.customers || []).some(c => cleanPhone(c.phoneNumber) === norm || (norm.length >= 6 && cleanPhone(c.phoneNumber).endsWith(norm)));
+            if (norm.length >= 6 && (existsInDrivers || existsInCustomers)) {
+                return sendJson({
+                    success: false,
+                    duplicate: true,
+                    error: 'هذا الرقم مسجل بالفعل في المنصة، يمكنك الانتقال لتسجيل الدخول مباشرة.'
+                }, 400);
+            }
+
+            const result = await whatsappService.sendOtp(phoneNumber);
+            return sendJson({
+                success: true,
+                message: 'تم إرسال رمز التحقق عبر واتساب بنجاح',
+                phone: result.phone
+            });
+        }
+
+        if (pathname === '/api/auth/verify-whatsapp-otp' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const { phoneNumber, code } = body;
+            if (!phoneNumber || !code) {
+                return sendJson({ success: false, error: 'رقم الهاتف ورمز التحقق مطلوبان' }, 400);
+            }
+            const verification = whatsappService.verifyOtp(phoneNumber, code);
+            if (!verification.valid) {
+                return sendJson({ success: false, error: verification.error }, 400);
+            }
+            return sendJson({ success: true, message: 'تم التحقق من الرمز بنجاح' });
         }
 
         if (pathname === '/api/auth/google') {
@@ -190,18 +327,33 @@ async function startServer() {
         }
 
         if (pathname === '/api/auth/login' && method === 'POST') {
+            // Strict rate limit: 10 login attempts per IP per minute
+            if (_authRateLimit(clientIp)) {
+                res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '60' });
+                return res.end(JSON.stringify({ success: false, error: 'محاولات كثيرة جداً. انتظر دقيقة قبل المحاولة مجدداً.' }));
+            }
+
             const body = await parseJsonBody(req);
-            const identifier = (body.identifier || body.email || body.phoneNumber || '').trim().toLowerCase();
-            const password = body.password ? String(body.password) : '';
-            const requestedRole = body.role || null;
+            // Cap inputs to prevent DoS via oversized payloads
+            const identifier = (body.identifier || body.email || body.phoneNumber || '').toString().slice(0, 120).trim().toLowerCase();
+            const password = body.password ? String(body.password).slice(0, 200) : '';
+            const requestedRole = (body.role || '').toString().slice(0, 20) || null;
             const isGoogleAuth = !!body.isGoogleAuth;
 
-            // Admin Special Check
+            // Admin auth — requires password verification
             if (identifier === 'admin@taxiwisam.com' || identifier === 'admin') {
-                const token = 'jwt_admin_root';
+                const crypto = require('crypto');
+                const adminPass = config.adminPassword || '1122';
+                const cleanAdminPass = String(password).trim();
+                const adminHash = crypto.createHash('sha256').update(adminPass).digest('hex');
+                const attemptHash = crypto.createHash('sha256').update(cleanAdminPass).digest('hex');
+                if (!password || (cleanAdminPass !== adminPass && attemptHash !== adminHash)) {
+                    return sendJson({ success: false, error: 'كلمة مرور المدير غير صحيحة.' }, 401);
+                }
+                const adminToken = 'jwt_admin_' + crypto.randomBytes(16).toString('hex');
                 return sendJson({
                     success: true,
-                    token,
+                    token: adminToken,
                     userId: 'usr-admin',
                     role: 'Admin',
                     fullName: 'مدير المنصة',
@@ -262,11 +414,21 @@ async function startServer() {
                             fullName: row.full_name,
                             phoneNumber: row.phone_number,
                             email: row.email,
-                            passwordHash: row.password_hash,
+                            plainPassword: row.plain_password || null,
+                            passwordHash: row.password_hash || null,
                             status: row.status,
                             isVerified: row.is_verified,
                             isBlocked: row.is_blocked
                         };
+                        if (!driver.passwordHash && !driver.plainPassword) {
+                            try {
+                                const uRes = await db.pool.query('SELECT password_hash, plain_password FROM users WHERE id = $1 LIMIT 1', [driver.driverId]);
+                                if (uRes.rows && uRes.rows.length > 0) {
+                                    driver.passwordHash = uRes.rows[0].password_hash || null;
+                                    driver.plainPassword = uRes.rows[0].plain_password || null;
+                                }
+                            } catch (_) {}
+                        }
                         if (!db.memoryState.drivers.some(d => d.driverId === driver.driverId)) {
                             db.memoryState.drivers.unshift(driver);
                         }
@@ -303,13 +465,22 @@ async function startServer() {
                             fullName: row.full_name,
                             phoneNumber: row.phone_number,
                             email: row.email,
-                            passwordHash: row.password_hash,
-                            plainPassword: row.plain_password,
+                            plainPassword: row.plain_password || null,
+                            passwordHash: row.password_hash || null,
                             isActive: row.is_active,
                             isBlocked: row.is_blocked,
                             ratingAverage: parseFloat(row.rating_average || 5.0),
                             totalBookings: row.total_bookings || 0
                         };
+                        if (!customer.passwordHash && !customer.plainPassword) {
+                            try {
+                                const uRes = await db.pool.query('SELECT password_hash, plain_password FROM users WHERE id = $1 LIMIT 1', [customer.customerId]);
+                                if (uRes.rows && uRes.rows.length > 0) {
+                                    customer.passwordHash = uRes.rows[0].password_hash || null;
+                                    customer.plainPassword = uRes.rows[0].plain_password || null;
+                                }
+                            } catch (_) {}
+                        }
                         if (!db.memoryState.customers.some(c => c.customerId === customer.customerId)) {
                             db.memoryState.customers.unshift(customer);
                         }
@@ -320,36 +491,55 @@ async function startServer() {
             }
 
             const crypto = require('crypto');
-            const cleanPass = String(password).trim();
-            const hashedAttempt1 = crypto.createHash('sha256').update(String(password)).digest('hex');
+            const cleanPass = String(password || '').trim();
+            const hashedAttempt1 = crypto.createHash('sha256').update(String(password || '')).digest('hex');
             const hashedAttempt2 = crypto.createHash('sha256').update(cleanPass).digest('hex');
-
-            const checkPass = (u) => {
-                if (!u) return false;
-                if (!u.passwordHash && !u.plainPassword) return true;
-                if (!cleanPass) return false;
-                return u.passwordHash === String(password) ||
-                       u.passwordHash === cleanPass ||
-                       u.plainPassword === String(password) ||
-                       u.plainPassword === cleanPass ||
-                       u.passwordHash === hashedAttempt1 ||
-                       u.passwordHash === hashedAttempt2;
-            };
 
             let user = null;
             let userRole = null;
 
-            if (customer && !driver) {
-                user = customer;
-                userRole = 'Customer';
-            } else if (driver && !customer) {
+            if (requestedRole === 'Driver' || requestedRole === 'driver') {
+                if (!driver) {
+                    if (customer) {
+                        return sendJson({
+                            success: false,
+                            roleMismatch: true,
+                            error: 'هذا الحساب مسجل كراكب ولا يمكنه الدخول من بوابة الكباتن (السائقين). يرجى تسجيل الدخول من صفحة الركاب.'
+                        }, 403);
+                    }
+                    return sendJson({
+                        success: false,
+                        notFound: true,
+                        error: 'هذا الحساب غير مسجل كسائق في المنصة. يرجى إنشاء حساب كابتن أولاً.'
+                    }, 404);
+                }
                 user = driver;
                 userRole = 'Driver';
-            } else if (driver && customer) {
-                if (requestedRole === 'Driver') {
+            } else if (requestedRole === 'Customer' || requestedRole === 'customer') {
+                if (!customer) {
+                    if (driver) {
+                        return sendJson({
+                            success: false,
+                            roleMismatch: true,
+                            error: 'هذا الحساب مسجل كسائق (كابتن) ولا يمكنه الدخول من بوابة الركاب. يرجى تسجيل الدخول من صفحة الكباتن.'
+                        }, 403);
+                    }
+                    return sendJson({
+                        success: false,
+                        notFound: true,
+                        error: 'هذا الحساب غير مسجل كراكب في المنصة. يرجى إنشاء حساب جديد أولاً.'
+                    }, 404);
+                }
+                user = customer;
+                userRole = 'Customer';
+            } else {
+                if (customer && !driver) {
+                    user = customer;
+                    userRole = 'Customer';
+                } else if (driver && !customer) {
                     user = driver;
                     userRole = 'Driver';
-                } else {
+                } else if (driver && customer) {
                     user = customer;
                     userRole = 'Customer';
                 }
@@ -359,17 +549,65 @@ async function startServer() {
                 return sendJson({ success: false, notFound: true, error: 'هذا الحساب غير مسجل في المنصة. يرجى إنشاء حساب جديد أولاً.' }, 404);
             }
 
-            if (user.isBlocked) {
-                return sendJson({ success: false, error: 'تم تعليق هذا الحساب من قبل إدارة المنصة.' }, 403);
+            // Fresh database sync for status/block if PostgreSQL is connected
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    const tbl = userRole === 'Driver' ? 'drivers' : 'customers';
+                    const col = userRole === 'Driver' ? 'driver_id' : 'customer_id';
+                    const freshRes = await db.pool.query(`SELECT is_blocked, ${userRole === 'Driver' ? 'status, is_verified' : 'is_active'} FROM ${tbl} WHERE ${col} = $1 LIMIT 1`, [user.driverId || user.customerId]);
+                    if (freshRes.rows && freshRes.rows.length > 0) {
+                        const fr = freshRes.rows[0];
+                        user.isBlocked = fr.is_blocked;
+                        if (userRole === 'Driver') {
+                            user.status = fr.status;
+                            user.isVerified = fr.is_verified;
+                        } else {
+                            user.isActive = fr.is_active;
+                        }
+                    }
+                } catch (_) {}
             }
 
-            // Verify Password (if account has a passwordHash or plainPassword and login is not an authorized Google callback)
-            if ((user.passwordHash || user.plainPassword) && !isGoogleAuth) {
-                if (!password) {
+            // Block & Suspension Enforcement
+            const isUserBlocked = user.isBlocked === true || 
+                                  user.isBlocked === 'true' || 
+                                  user.isBlocked === 1 ||
+                                  user.status === 'Suspended' || 
+                                  user.status === 'Blocked' || 
+                                  user.status === 'Rejected' || 
+                                  user.isActive === false || 
+                                  user.isActive === 'false' || 
+                                  user.isActive === 0;
+
+            if (isUserBlocked) {
+                const blockMsg = userRole === 'Driver' 
+                    ? 'تم حظر أو تعليق حساب الكابتن من قبل إدارة المنصة.' 
+                    : 'تم تعليق هذا الحساب من قبل إدارة المنصة.';
+                return sendJson({ success: false, isBlocked: true, error: blockMsg }, 403);
+            }
+
+            // Strict Password Verification
+            if (!isGoogleAuth) {
+                if (!password || cleanPass === '') {
                     return sendJson({ success: false, error: 'يرجى إدخال كلمة المرور الخاصة بحسابك للدخول.' }, 400);
                 }
-                if (!checkPass(user)) {
-                    return sendJson({ success: false, error: 'كلمة المرور غير صحيحة! يرجى التأكد من كلمة المرور والمحاولة مجدداً.' }, 401);
+
+                const expectedPlain = user.plainPassword || (user.passwordHash ? null : '123456');
+                const expectedHash = user.passwordHash || (expectedPlain ? crypto.createHash('sha256').update(expectedPlain).digest('hex') : null);
+
+                let isMatch = false;
+                if (expectedPlain && (cleanPass === expectedPlain || String(password) === expectedPlain)) {
+                    isMatch = true;
+                } else if (expectedHash && (hashedAttempt1 === expectedHash || hashedAttempt2 === expectedHash || cleanPass === expectedHash)) {
+                    isMatch = true;
+                } else if (user.plainPassword && (cleanPass === String(user.plainPassword).trim() || String(password) === String(user.plainPassword))) {
+                    isMatch = true;
+                } else if (user.passwordHash && (hashedAttempt1 === user.passwordHash || hashedAttempt2 === user.passwordHash || cleanPass === user.passwordHash)) {
+                    isMatch = true;
+                }
+
+                if (!isMatch) {
+                    return sendJson({ success: false, error: 'كلمة المرور غير صحيحة! يرجى التأكد من مطابقة كلمة المرور الموجودة في لوحة التحكم والمحاولة مجدداً.' }, 401);
                 }
             }
 
@@ -387,6 +625,8 @@ async function startServer() {
                     email: user.email,
                     fullName: user.fullName,
                     role: userRole,
+                    route: user.route || 'النجف الأشرف',
+                    address: user.address || user.area || 'النجف الأشرف',
                     status: user.status || 'Active',
                     isVerified: !!user.isVerified
                 }
@@ -395,7 +635,7 @@ async function startServer() {
 
         if (pathname === '/api/auth/register' && method === 'POST') {
             const body = await parseJsonBody(req);
-            const { phoneNumber, fullName, role, licenseNumber } = body;
+            const { phoneNumber, fullName, role, licenseNumber, password, passwordHash } = body;
             const targetRole = role || 'Customer';
             const now = new Date().toISOString();
 
@@ -425,6 +665,14 @@ async function startServer() {
                 }, 400);
             }
 
+            // WhatsApp OTP verification if provided
+            if (body.otpCode) {
+                const otpCheck = whatsappService.verifyOtp(phoneNumber, body.otpCode);
+                if (!otpCheck.valid) {
+                    return sendJson({ success: false, error: otpCheck.error }, 400);
+                }
+            }
+
             if (targetRole === 'Driver') {
                 const driverId = 'drv-' + Math.random().toString(36).substr(2, 9);
                 const newDriver = {
@@ -432,9 +680,12 @@ async function startServer() {
                     fullName: fullName || 'كابتن جديد',
                     phoneNumber: phoneNumber || '07800000000',
                     licenseNumber: licenseNumber || 'IRQ-NJF-1000',
-                    status: 'Pending',
-                    isVerified: false,
+                    status: 'Online',
+                    isOnline: true,
+                    isVerified: true,
                     isBlocked: false,
+                    plainPassword: password || null,
+                    passwordHash: passwordHash || null,
                     createdAt: now
                 };
 
@@ -444,7 +695,7 @@ async function startServer() {
                     documentType: 'DrivingLicense',
                     filePath: '/images/license-placeholder.jpg',
                     fileUrl: '/images/license-placeholder.jpg',
-                    status: 'Pending',
+                    status: 'Approved',
                     submittedAt: now
                 };
 
@@ -460,12 +711,12 @@ async function startServer() {
 
                         await db.pool.query(`
                             INSERT INTO drivers (driver_id, full_name, phone_number, license_number, status, is_verified, is_blocked, created_at)
-                            VALUES ($1, $2, $3, $4, 'Pending', false, false, $5)
+                            VALUES ($1, $2, $3, $4, 'Online', true, false, $5)
                         `, [driverId, newDriver.fullName, newDriver.phoneNumber, newDriver.licenseNumber, now]);
 
                         await db.pool.query(`
                             INSERT INTO driver_documents (document_id, driver_id, document_type, file_path, file_url, status, submitted_at)
-                            VALUES ($1, $2, $3, $4, $5, 'Pending', $6)
+                            VALUES ($1, $2, $3, $4, $5, 'Approved', $6)
                         `, [initialDoc.documentId, driverId, initialDoc.documentType, initialDoc.filePath, initialDoc.fileUrl, now]);
                     } catch (e) {}
                 }
@@ -475,7 +726,7 @@ async function startServer() {
                 return sendJson({
                     success: true,
                     token,
-                    user: { id: driverId, fullName: newDriver.fullName, role: 'Driver', status: 'Pending' }
+                    user: { id: driverId, fullName: newDriver.fullName, role: 'Driver', status: 'Online', isOnline: true, isVerified: true }
                 });
             } else {
                 const customerId = 'usr-' + Math.random().toString(36).substr(2, 9);
@@ -517,8 +768,8 @@ async function startServer() {
         }
 
         if (pathname === '/api/auth/me') {
-            const authHeader = req.headers['authorization'] || '';
-            const token = authHeader.replace('Bearer ', '').trim();
+            const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
+            const token = authHeader.replace(/^Bearer\s+/i, '').trim();
             if (!token) return sendJson({ success: false, error: 'Unauthenticated' }, 401);
 
             const parts = token.split('_');
@@ -547,7 +798,20 @@ async function startServer() {
                 } catch (_) {}
             }
             if (driver) {
+                if (driver.isBlocked === true || driver.status === 'Suspended' || driver.status === 'Blocked' || (driver.isVerified === false && driver.status === 'Rejected')) {
+                    return sendJson({ success: false, isBlocked: true, error: 'تم حظر أو تعليق حساب الكابتن من قبل إدارة المنصة.' }, 403);
+                }
                 const driverRoute = db.memoryState.routes.find(r => r.driverId === driver.driverId);
+                const routeName = driver.route || (driverRoute ? (driverRoute.name || `${driverRoute.startName} - ${driverRoute.endName}`) : 'النجف الأشرف');
+                const routeObj = driverRoute || {
+                    id: 'route-' + driver.driverId,
+                    routeId: 'route-' + driver.driverId,
+                    driverId: driver.driverId,
+                    name: routeName,
+                    startName: routeName.split('-')[0]?.trim() || routeName,
+                    endName: routeName.split('-')[1]?.trim() || routeName,
+                    status: 'Active'
+                };
                 return sendJson({
                     success: true,
                     user: {
@@ -556,21 +820,46 @@ async function startServer() {
                         phoneNumber: driver.phoneNumber,
                         email: driver.email,
                         role: 'Driver',
-                        status: driver.status,
-                        isVerified: driver.isVerified,
-                        isBlocked: driver.isBlocked,
+                        route: routeObj,
+                        status: driver.status || 'Online',
+                        isOnline: driver.status === 'Online' || driver.isOnline === true,
+                        isVerified: true,
+                        isBlocked: driver.isBlocked || false,
                         vehicleMake: driver.vehicleMake,
                         vehicleModel: driver.vehicleModel,
                         vehiclePlate: driver.vehiclePlate,
                         vehicleYear: driver.vehicleYear,
-                        vehicleInfo: `${driver.vehicleMake || 'تويوتا'} (${driver.vehiclePlate || 'النجف'})`,
-                        route: driverRoute || null
+                        vehicleInfo: `${driver.vehicleMake || 'تويوتا'} (${driver.vehiclePlate || 'النجف'})`
                     }
                 });
             }
 
-            const customer = db.memoryState.customers.find(c => c.customerId === id || token.includes(c.customerId));
+            let customer = db.memoryState.customers.find(c => c.customerId === id || token.includes(c.customerId));
+            if (!customer && db.isPostgresConnected && db.pool) {
+                try {
+                    const pgCust = await db.pool.query('SELECT * FROM customers WHERE customer_id = $1 LIMIT 1', [id]);
+                    if (pgCust.rows && pgCust.rows.length > 0) {
+                        const row = pgCust.rows[0];
+                        customer = {
+                            customerId: row.customer_id,
+                            fullName: row.full_name,
+                            phoneNumber: row.phone_number,
+                            email: row.email,
+                            route: row.route,
+                            address: row.address,
+                            plainPassword: row.plain_password || null,
+                            passwordHash: row.password_hash || null,
+                            isActive: row.is_active,
+                            isBlocked: row.is_blocked
+                        };
+                        db.memoryState.customers.unshift(customer);
+                    }
+                } catch (_) {}
+            }
             if (customer) {
+                if (customer.isBlocked === true || customer.isActive === false) {
+                    return sendJson({ success: false, isBlocked: true, error: 'تم تعليق هذا الحساب من قبل إدارة المنصة.' }, 403);
+                }
                 return sendJson({
                     success: true,
                     user: {
@@ -579,7 +868,9 @@ async function startServer() {
                         phoneNumber: customer.phoneNumber,
                         email: customer.email,
                         role: 'Customer',
-                        status: 'Active',
+                        route: customer.route || 'النجف الأشرف',
+                        address: customer.address || customer.area || 'النجف الأشرف',
+                        status: customer.isActive ? 'Active' : 'Suspended',
                         isBlocked: customer.isBlocked
                     }
                 });
@@ -638,13 +929,19 @@ async function startServer() {
             return sendJson(result);
         }
 
-        // Driver Status Endpoint: POST /api/admin/drivers/:id/status or /api/drivers/:id/status
-        if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/')) && pathname.endsWith('/status') && method === 'POST') {
+        // Driver Status Endpoint: POST /api/admin/drivers/:id/status, /api/drivers/:id/status, /drivers/:id/status
+        if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/') || pathname.startsWith('/drivers/')) && pathname.endsWith('/status') && method === 'POST') {
             const parts = pathname.split('/');
             const driverId = parts[parts.length - 2];
             const body = await parseJsonBody(req);
+            let targetDriver = (db.memoryState.drivers || []).find(d => d.driverId === driverId);
+            if (targetDriver) {
+                targetDriver.status = body.status;
+                targetDriver.isOnline = (body.status === 'Online');
+                if (body.status === 'Online') targetDriver.isVerified = true;
+            }
             const result = await adminController.setDriverStatus(driverId, body.status, body.reason);
-            return sendJson(result);
+            return sendJson({ success: true, status: body.status, isOnline: body.status === 'Online', ...result });
         }
 
         // Driver Block Endpoint: POST /api/admin/drivers/:id/block or /api/drivers/:id/block
@@ -696,8 +993,15 @@ async function startServer() {
             return sendJson(result, result.success ? 200 : 400);
         }
 
-        // Customer Block Endpoint: POST /api/admin/customers/:id/block
-        if (pathname.startsWith('/api/admin/customers/') && pathname.endsWith('/block') && method === 'POST') {
+        // Customer Create: POST /api/admin/customers or /api/customers/create
+        if ((pathname === '/api/admin/customers' || pathname === '/api/admin/admin/customers' || pathname === '/api/customers/create' || pathname === '/api/admin/customers/create') && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const result = await adminController.createCustomer(body);
+            return sendJson(result, result.success ? 201 : 400);
+        }
+
+        // Customer Block Endpoint: POST /api/admin/customers/:id/block or /api/customers/:id/block
+        if ((pathname.startsWith('/api/admin/customers/') || pathname.startsWith('/api/customers/')) && pathname.endsWith('/block') && method === 'POST') {
             const parts = pathname.split('/');
             const customerId = parts[parts.length - 2];
             const body = await parseJsonBody(req);
@@ -736,7 +1040,7 @@ async function startServer() {
 
         if (pathname === '/api/admin/bookings') {
             const result = await adminController.getBookings();
-            return sendJson(result.bookings);
+            return sendJson({ success: true, total: result.total, bookings: result.bookings });
         }
 
         // Complaints
@@ -865,33 +1169,136 @@ async function startServer() {
             });
         }
 
-        // Driver Bookings (Subscribed passengers for this driver)
+        // Driver Bookings (All bookings for this driver: Pending requests & Confirmed passengers)
         if (pathname.startsWith('/api/driver/') && pathname.endsWith('/bookings') && method === 'GET') {
             const parts = pathname.split('/');
             const driverId = parts[parts.length - 2];
-            let driverBookings = (db.memoryState.bookings || [])
-                .filter(b => b.driverId === driverId || !b.driverId || b.driverId === 'drv-sample');
-            
-            // If empty, link registered customers so driver immediately has route points
-            if (!driverBookings.length && db.memoryState.customers && db.memoryState.customers.length > 0) {
-                driverBookings = db.memoryState.customers.slice(0, 3).map((c, i) => ({
-                    id: 'bk-cust-' + (i + 1),
-                    bookingId: 'bk-cust-' + (i + 1),
-                    driverId: driverId,
-                    customerId: c.customerId,
-                    customerName: c.fullName || 'راكب مشترك',
-                    customerPhone: c.phoneNumber || '07800000000',
-                    pickupLocation: c.address || 'حي الأمير - النجف الأشرف',
-                    dropoffLocation: 'جامعة الكوفة - مجمع الكليات',
-                    pickupLat: 31.9961 + (i === 0 ? 0.004 : (i === 1 ? -0.003 : 0.002)),
-                    pickupLon: 44.3168 + (i === 0 ? 0.003 : (i === 1 ? 0.004 : -0.002)),
-                    dropoffLat: 32.0321,
-                    dropoffLon: 44.3725,
-                    seatsBooked: 1,
-                    status: 'Confirmed'
-                }));
+            let driverBookings = [];
+
+            const targetDriver = (db.memoryState.drivers || []).find(d => d.driverId === driverId);
+            const driverName = targetDriver?.fullName;
+
+            // 1. Fetch bookings from PostgreSQL if connected
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    const pgRes = await db.pool.query(`
+                        SELECT * FROM bookings 
+                        WHERE driver_id = $1 
+                           OR (driver_name IS NOT NULL AND LOWER(driver_name) = LOWER($2))
+                           OR driver_id = 'drv-sample'
+                        ORDER BY created_at DESC
+                    `, [driverId, driverName || '']);
+                    if (pgRes.rows && pgRes.rows.length > 0) {
+                        driverBookings = pgRes.rows.map(r => ({
+                            id: r.id,
+                            bookingId: r.id,
+                            driverId: r.driver_id,
+                            customerId: r.customer_id,
+                            customerName: r.customer_name || 'راكب',
+                            customerPhone: r.customer_phone || '',
+                            pickupLocation: r.pickup_name || 'موقع الركوب',
+                            dropoffLocation: r.dropoff_name || 'جامعة الكوفة',
+                            pickupLat: parseFloat(r.pickup_lat || 31.9961),
+                            pickupLon: parseFloat(r.pickup_lon || 44.3168),
+                            dropoffLat: parseFloat(r.dropoff_lat || 32.0321),
+                            dropoffLon: parseFloat(r.dropoff_lon || 44.3725),
+                            seatsBooked: r.seats_booked || 1,
+                            status: r.status || 'Pending',
+                            totalFare: r.total_fare,
+                            createdAt: r.created_at
+                        }));
+                    }
+                } catch (pgErr) {
+                    console.error('[Driver] PG bookings fetch error:', pgErr.message);
+                }
             }
+
+            // 2. Fetch bookings from memory for this driver
+            const memBookings = (db.memoryState.bookings || []).filter(b => 
+                b.driverId === driverId || 
+                (driverName && b.driverName && b.driverName.trim() === driverName.trim()) ||
+                (b.driverId === 'drv-sample')
+            );
+            for (const mb of memBookings) {
+                if (!driverBookings.some(dbk => (dbk.id === mb.id || dbk.bookingId === mb.bookingId))) {
+                    driverBookings.push(mb);
+                }
+            }
+
+            // 3. Customers explicitly assigned to this driver
+            const assignedCustomers = (db.memoryState.customers || []).filter(c => 
+                c.driverId === driverId || c.assignedDriverId === driverId
+            );
+            for (const ac of assignedCustomers) {
+                if (!driverBookings.some(b => b.customerId === ac.customerId)) {
+                    driverBookings.push({
+                        id: 'bk-assign-' + ac.customerId,
+                        bookingId: 'bk-assign-' + ac.customerId,
+                        driverId: driverId,
+                        customerId: ac.customerId,
+                        customerName: ac.fullName,
+                        customerPhone: ac.phoneNumber,
+                        pickupLocation: ac.address || ac.route || 'النجف الأشرف',
+                        dropoffLocation: ac.route || 'جامعة الكوفة',
+                        pickupLat: parseFloat(ac.pickupLat || ac.latitude || 31.9961),
+                        pickupLon: parseFloat(ac.pickupLon || ac.longitude || 44.3168),
+                        dropoffLat: parseFloat(ac.dropoffLat || 32.0321),
+                        dropoffLon: parseFloat(ac.dropoffLon || 44.3725),
+                        seatsBooked: 1,
+                        status: ac.bookingConfirmed ? 'Confirmed' : 'Pending'
+                    });
+                }
+            }
+
             return sendJson(driverBookings);
+        }
+
+        // Driver Pending Requests (Customer booking requests awaiting driver approval)
+        if (pathname.startsWith('/api/driver/') && (pathname.endsWith('/requests') || pathname.endsWith('/pending-bookings') || pathname.endsWith('/pending')) && method === 'GET') {
+            const parts = pathname.split('/');
+            const driverId = parts[parts.length - 2];
+            let pendingBookings = [];
+
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    const pgRes = await db.pool.query(`
+                        SELECT * FROM bookings 
+                        WHERE (driver_id = $1 OR driver_id IS NULL) AND status = 'Pending'
+                        ORDER BY created_at DESC
+                    `, [driverId]);
+                    if (pgRes.rows && pgRes.rows.length > 0) {
+                        pendingBookings = pgRes.rows.map(r => ({
+                            id: r.id,
+                            bookingId: r.id,
+                            driverId: r.driver_id,
+                            customerId: r.customer_id,
+                            customerName: r.customer_name || 'راكب طالب حجز',
+                            customerPhone: r.customer_phone || '',
+                            pickupLocation: r.pickup_name || 'موقع الركوب',
+                            dropoffLocation: r.dropoff_name || 'جامعة الكوفة',
+                            pickupLat: parseFloat(r.pickup_lat || 31.9961),
+                            pickupLon: parseFloat(r.pickup_lon || 44.3168),
+                            dropoffLat: parseFloat(r.dropoff_lat || 32.0321),
+                            dropoffLon: parseFloat(r.dropoff_lon || 44.3725),
+                            seatsBooked: r.seats_booked || 1,
+                            status: 'Pending',
+                            totalFare: r.total_fare,
+                            createdAt: r.created_at
+                        }));
+                    }
+                } catch (e) {}
+            }
+
+            const memPending = (db.memoryState.bookings || []).filter(b => 
+                (b.driverId === driverId || !b.driverId) && b.status === 'Pending'
+            );
+            for (const mb of memPending) {
+                if (!pendingBookings.some(pb => (pb.id === mb.id || pb.bookingId === mb.bookingId))) {
+                    pendingBookings.push(mb);
+                }
+            }
+
+            return sendJson({ success: true, total: pendingBookings.length, requests: pendingBookings, bookings: pendingBookings });
         }
 
         if (pathname === '/api/matching/find-routes' || pathname === '/api/driver/routes' || pathname === '/api/routes') {
@@ -925,18 +1332,44 @@ async function startServer() {
         }
 
         // Customer Book Route Endpoint
-        if ((pathname === '/api/customer/book-route' || pathname === '/api/bookings') && method === 'POST') {
+        if ((pathname === '/api/customer/book-route' || pathname === '/api/bookings' || pathname === '/bookings') && method === 'POST') {
             const body = await parseJsonBody(req);
             const routeId = body.routeId || body.driverRouteId;
-            const targetRoute = (db.memoryState.routes || []).find(r => (r.id === routeId || r.routeId === routeId));
+            let targetRoute = (db.memoryState.routes || []).find(r => (r.id === routeId || r.routeId === routeId));
             
-            const seats = Math.max(1, parseInt(body.seats || 1, 10));
-            if (targetRoute && targetRoute.availableSeats < seats) {
-                return sendJson({ success: false, error: 'عذراً، لا تتوفر مقاعد شاغرة كافية في هذا الخط.' }, 400);
+            let targetDriver = null;
+            if (body.driverId) {
+                targetDriver = (db.memoryState.drivers || []).find(d => d.driverId === body.driverId);
+            }
+            if (!targetDriver && targetRoute) {
+                targetDriver = (db.memoryState.drivers || []).find(d => d.driverId === targetRoute.driverId);
+            }
+            if (!targetDriver && body.driverName) {
+                targetDriver = (db.memoryState.drivers || []).find(d => d.fullName && d.fullName.trim() === body.driverName.trim());
+            }
+            if (!targetDriver && routeId) {
+                targetDriver = (db.memoryState.drivers || []).find(d => routeId.includes(d.driverId) || d.driverId.includes(routeId));
+            }
+            if (!targetRoute && targetDriver) {
+                targetRoute = (db.memoryState.routes || []).find(r => r.driverId === targetDriver.driverId);
             }
 
-            if (targetRoute) {
-                targetRoute.availableSeats = Math.max(0, targetRoute.availableSeats - seats);
+            const defaultDriver = (db.memoryState.drivers || [])[0];
+            const resolvedDriverId = targetDriver ? targetDriver.driverId : (targetRoute ? targetRoute.driverId : (body.driverId || (defaultDriver ? defaultDriver.driverId : 'drv-sample')));
+            const resolvedDriverName = targetDriver ? targetDriver.fullName : (targetRoute ? targetRoute.driverName : (body.driverName || (defaultDriver ? defaultDriver.fullName : 'كابتن توصيله')));
+            const resolvedDriverPhone = targetDriver ? targetDriver.phoneNumber : (targetRoute ? targetRoute.driverPhone : (body.driverPhone || (defaultDriver ? defaultDriver.phoneNumber : '07801234567')));
+
+            const seats = Math.max(1, parseInt(body.seats || body.seatsBooked || 1, 10));
+
+            // Enforce driver capacity based on active passengers
+            const activeBookings = (db.memoryState.bookings || []).filter(b => 
+                (b.driverId === resolvedDriverId) && (b.status === 'Confirmed' || b.status === 'Pending')
+            );
+            const activeBookedSeats = activeBookings.reduce((sum, b) => sum + parseInt(b.seatsBooked || 1, 10), 0);
+            const totalCarCapacity = targetRoute?.totalSeats || targetDriver?.availableSeats || 4;
+
+            if (activeBookedSeats >= totalCarCapacity || (targetRoute && targetRoute.availableSeats <= 0) || (targetRoute && targetRoute.availableSeats < seats)) {
+                return sendJson({ success: false, error: 'عذراً، العدد عند السائق مكتمل حالياً' }, 400);
             }
 
             const bookingId = 'bk-' + Math.random().toString(36).substr(2, 9);
@@ -947,15 +1380,15 @@ async function startServer() {
             const newBooking = {
                 id: bookingId,
                 bookingId: bookingId,
-                routeId: routeId || null,
-                driverId: targetRoute ? targetRoute.driverId : (body.driverId || 'drv-sample'),
-                driverName: targetRoute ? targetRoute.driverName : (body.driverName || 'كابتن توصيله'),
-                driverPhone: targetRoute ? targetRoute.driverPhone : (body.driverPhone || '07801234567'),
+                routeId: routeId || (targetRoute ? (targetRoute.id || targetRoute.routeId) : null),
+                driverId: resolvedDriverId,
+                driverName: resolvedDriverName,
+                driverPhone: resolvedDriverPhone,
                 customerId: body.customerId || ('cust-' + Math.random().toString(36).substr(2, 7)),
                 customerName: body.customerName || body.fullName || 'راكب توصيله',
                 customerPhone: body.customerPhone || body.phoneNumber || '',
-                pickupLocation: body.pickupLocation || body.pickup || (targetRoute ? targetRoute.startName : 'ساحة ثورة العشرين'),
-                dropoffLocation: body.dropoffLocation || body.destination || (targetRoute ? targetRoute.endName : 'جامعة الكوفة'),
+                pickupLocation: body.pickupLocation || body.pickup || body.pickupName || (targetRoute ? targetRoute.startName : 'ساحة ثورة العشرين'),
+                dropoffLocation: body.dropoffLocation || body.destination || body.dropoffName || (targetRoute ? targetRoute.endName : 'جامعة الكوفة'),
                 pickupLat: parseFloat(body.pickupLat || (targetRoute ? targetRoute.startLat : 31.9961)),
                 pickupLon: parseFloat(body.pickupLon || (targetRoute ? targetRoute.startLon : 44.3168)),
                 dropoffLat: parseFloat(body.dropoffLat || (targetRoute ? targetRoute.endLat : 32.0321)),
@@ -963,7 +1396,8 @@ async function startServer() {
                 seatsBooked: seats,
                 fare: totalFare,
                 totalFare: totalFare,
-                status: 'Confirmed',
+                status: 'Pending',
+                seatsDeducted: false,
                 createdAt: now
             };
 
@@ -1004,6 +1438,13 @@ async function startServer() {
                         const dCheck = await db.pool.query('SELECT driver_id FROM drivers WHERE driver_id = $1', [newBooking.driverId]);
                         if (dCheck.rows.length > 0) validDriverId = newBooking.driverId;
                     }
+                    if (!validDriverId && newBooking.driverName) {
+                        const dnCheck = await db.pool.query('SELECT driver_id FROM drivers WHERE LOWER(full_name) = LOWER($1) LIMIT 1', [newBooking.driverName]);
+                        if (dnCheck.rows.length > 0) {
+                            validDriverId = dnCheck.rows[0].driver_id;
+                            newBooking.driverId = validDriverId;
+                        }
+                    }
 
                     await db.pool.query(`
                         INSERT INTO bookings (
@@ -1017,7 +1458,7 @@ async function startServer() {
                         bookingId, validRouteId, newBooking.customerId, newBooking.customerName,
                         validDriverId, newBooking.driverName, newBooking.pickupLocation,
                         newBooking.dropoffLocation, newBooking.pickupLat, newBooking.pickupLon,
-                        newBooking.dropoffLat, newBooking.dropoffLon, totalFare, seats, 'Confirmed', now
+                        newBooking.dropoffLat, newBooking.dropoffLon, totalFare, seats, 'Pending', now
                     ]);
                 } catch (e) {
                     console.error('[Server] PG Booking insert error:', e);
@@ -1029,16 +1470,76 @@ async function startServer() {
                 driverName: newBooking.driverName,
                 route: `${newBooking.pickupLocation} ➔ ${newBooking.dropoffLocation}`,
                 seats,
-                totalFare
+                totalFare,
+                status: 'Pending'
             });
 
             db.saveStateSnapshot();
 
             return sendJson({
                 success: true,
-                message: 'تم حجز مقعدك بنجاح! تم إشعار الكابتن وسيتم التواصل معك لتأكيد موعد الانطلاق.',
+                message: 'تم إرسال طلب الحجز إلى الكابتن بنجاح! بانتظار موافقة الكابتن لتأكيد مقعدك.',
                 booking: newBooking
             });
+        }
+
+        // Accept Booking by Driver / Admin (Driver approves customer to become passenger)
+        const acceptMatch = pathname.match(/^\/?(?:api\/)?(?:driver\/)?bookings\/([^\/]+)\/accept$/i);
+        if (acceptMatch && method === 'POST') {
+            const bookingId = acceptMatch[1];
+            const body = await parseJsonBody(req).catch(() => ({}));
+            const result = await adminController.acceptBooking(bookingId, body.driverId);
+            return sendJson(result, result.success ? 200 : 400);
+        }
+
+        // Decline / Reject Booking by Driver / Admin
+        const declineMatch = pathname.match(/^\/?(?:api\/)?(?:driver\/)?bookings\/([^\/]+)\/(?:decline|reject)$/i);
+        if (declineMatch && method === 'POST') {
+            const bookingId = declineMatch[1];
+            const body = await parseJsonBody(req).catch(() => ({}));
+            const result = await adminController.declineBooking(bookingId, body.reason || body.declineReason);
+            return sendJson(result, result.success ? 200 : 400);
+        }
+
+        // Generic Booking Status Update
+        const statusMatch = pathname.match(/^\/?(?:api\/)?(?:admin\/|driver\/)?bookings\/([^\/]+)\/status$/i);
+        if (statusMatch && method === 'POST') {
+            const bookingId = statusMatch[1];
+            const body = await parseJsonBody(req).catch(() => ({}));
+            const result = await adminController.updateBookingStatus(bookingId, body.status, body.reason);
+            return sendJson(result, result.success ? 200 : 400);
+        }
+
+        // Driver Request Passenger Cancellation
+        const cancelReqMatch = pathname.match(/^\/?(?:api\/)?(?:driver\/)?bookings\/([^\/]+)\/cancel-request$/i);
+        if ((cancelReqMatch || pathname === '/api/driver/cancellation-requests') && method === 'POST') {
+            const bookingId = cancelReqMatch ? cancelReqMatch[1] : null;
+            const body = await parseJsonBody(req).catch(() => ({}));
+            if (bookingId && !body.bookingId) body.bookingId = bookingId;
+            const result = await adminController.createCancellationRequest(body);
+            return sendJson(result, result.success ? 200 : 400);
+        }
+
+        // Admin Passenger Cancellation Requests List
+        if (pathname === '/api/admin/cancellation-requests' && method === 'GET') {
+            const result = await adminController.getCancellationRequests();
+            return sendJson(result);
+        }
+
+        // Admin Approve Cancellation Request
+        const approveCancelMatch = pathname.match(/^\/?(?:api\/)?admin\/cancellation-requests\/([^\/]+)\/approve$/i);
+        if (approveCancelMatch && method === 'POST') {
+            const requestId = approveCancelMatch[1];
+            const result = await adminController.approveCancellation(requestId);
+            return sendJson(result, result.success ? 200 : 400);
+        }
+
+        // Admin Reject Cancellation Request
+        const rejectCancelMatch = pathname.match(/^\/?(?:api\/)?admin\/cancellation-requests\/([^\/]+)\/reject$/i);
+        if (rejectCancelMatch && method === 'POST') {
+            const requestId = rejectCancelMatch[1];
+            const result = await adminController.rejectCancellation(requestId);
+            return sendJson(result, result.success ? 200 : 400);
         }
 
         if (pathname === '/api/bookings' && method === 'GET') {
@@ -1109,7 +1610,11 @@ async function startServer() {
         }
 
         if (pathname.startsWith('/uploads/')) {
-            const uploadFile = path.join(config.uploadsDir, pathname.replace(/^\/uploads\//, ''));
+            const rawRel = pathname.replace(/^\/uploads\//, '').replace(/\.\./g, '').replace(/^\/+/, '');
+            const uploadFile = path.join(config.uploadsDir, rawRel);
+            if (!uploadFile.startsWith(path.resolve(config.uploadsDir))) {
+                res.writeHead(403); return res.end('Forbidden');
+            }
             if (fs.existsSync(uploadFile)) {
                 return serveCompressedFile(uploadFile, req, res);
             }
@@ -1118,24 +1623,10 @@ async function startServer() {
         }
 
         // ---------------------------------------------------------------------
-        // 5. FLUTTER WEB APP SERVING (/app, /app/*, /)
+        // 5. INTERNAL APP VIEW SERVING (/app-view, /app-view/*)
         // ---------------------------------------------------------------------
-        const hostHeader = (req.headers.host || '').toLowerCase();
-        const isTawseelaDomain = hostHeader.includes('tawseelaiq.app');
-
-        const isAppPath = pathname === '/app' || pathname === '/app/' || pathname.startsWith('/app/');
-        const isRootOrAppOnTawseela = isTawseelaDomain && (pathname === '/' || !pathname.startsWith('/dashboard'));
-
-        if (isAppPath || isRootOrAppOnTawseela) {
-            let rel = pathname;
-            if (pathname.startsWith('/app/')) {
-                rel = pathname.replace(/^\/app\//, '');
-            } else if (pathname === '/app') {
-                rel = 'index.html';
-            } else if (isTawseelaDomain && pathname.startsWith('/')) {
-                rel = pathname.replace(/^\//, '');
-            }
-
+        if (pathname === '/app-view' || pathname === '/app-view/' || pathname.startsWith('/app-view/')) {
+            let rel = pathname.startsWith('/app-view/') ? pathname.replace(/^\/app-view\//, '') : 'index.html';
             if (!rel || rel === '') rel = 'index.html';
 
             const candidates = [
@@ -1151,7 +1642,6 @@ async function startServer() {
                 if (fs.existsSync(subIndex)) target = subIndex;
             }
 
-            // SPA Fallback
             if (!target || !fs.existsSync(target)) {
                 const indexFallbacks = [
                     path.join(config.flutterWebDir, 'index.html'),
@@ -1164,10 +1654,17 @@ async function startServer() {
 
             if (target && fs.existsSync(target)) {
                 return serveCompressedFile(target, req, res);
-            } else {
-                res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-                return res.end('تطبيق الويب قيد التجهيز...');
             }
+            res.writeHead(404);
+            return res.end('Not found');
+        }
+
+        // ---------------------------------------------------------------------
+        // 5.1 REDIRECT LEGACY /app TO ROOT (Official Website)
+        // ---------------------------------------------------------------------
+        if (pathname === '/app' || pathname === '/app/' || pathname.startsWith('/app/')) {
+            res.writeHead(301, { 'Location': '/' });
+            return res.end();
         }
 
         // ---------------------------------------------------------------------
@@ -1201,6 +1698,7 @@ async function startServer() {
         console.log(`🔗 Dashboard:     http://localhost:${config.port}/dashboard/index.html`);
         console.log(`========================================================\n`);
     });
+    return server;
 }
 
 if (require.main === module) {

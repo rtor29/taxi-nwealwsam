@@ -37,7 +37,8 @@ class DatabaseManager {
                 }
             ],
             auditLogs: [],
-            notifications: []
+            notifications: [],
+            cancellationRequests: []
         };
 
         // Load existing state.json if present to guarantee ZERO DATA LOSS
@@ -54,6 +55,7 @@ class DatabaseManager {
                 if (parsed.settings) this.memoryState.settings = parsed.settings;
                 if (parsed.auditLogs) this.memoryState.auditLogs = parsed.auditLogs;
                 if (parsed.notifications) this.memoryState.notifications = parsed.notifications;
+                if (parsed.cancellationRequests) this.memoryState.cancellationRequests = parsed.cancellationRequests;
                 console.log(`[Database] Loaded ${this.memoryState.drivers.length} drivers, ${this.memoryState.customers.length} customers from state snapshot`);
             }
         } catch (e) {
@@ -97,6 +99,15 @@ class DatabaseManager {
                 await client.query(schemaSql);
                 console.log('[Database] PostgreSQL schema verified with ON DELETE CASCADE and indexes');
             }
+
+            // Ensure plain_password columns exist for existing databases
+            try {
+                await client.query(`
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS plain_password TEXT;
+                    ALTER TABLE drivers ADD COLUMN IF NOT EXISTS plain_password TEXT;
+                    ALTER TABLE customers ADD COLUMN IF NOT EXISTS plain_password TEXT;
+                `);
+            } catch (_) {}
 
             // Check if we need to migrate/seed data from memoryState
             const userCountRes = await client.query('SELECT count(*) FROM users');
@@ -224,6 +235,7 @@ class DatabaseManager {
                 fullName: r.full_name,
                 phoneNumber: r.phone_number,
                 email: r.email,
+                plainPassword: r.plain_password || null,
                 passwordHash: r.password_hash || null,
                 googleId: r.google_id,
                 licenseNumber: r.license_number,
@@ -381,7 +393,28 @@ class DatabaseManager {
     // Driver Lifecycle Management
     // -------------------------------------------------------------------------
     async setDriverStatus(driverId, newStatus, reason = null) {
-        const driver = this.memoryState.drivers.find(d => d.driverId === driverId);
+        let driver = this.memoryState.drivers.find(d => d.driverId === driverId);
+        if (!driver && this.isPostgresConnected && this.pool) {
+            try {
+                const pgRes = await this.pool.query('SELECT * FROM drivers WHERE driver_id = $1 LIMIT 1', [driverId]);
+                if (pgRes.rows && pgRes.rows.length > 0) {
+                    const row = pgRes.rows[0];
+                    driver = {
+                        driverId: row.driver_id,
+                        fullName: row.full_name,
+                        phoneNumber: row.phone_number,
+                        email: row.email,
+                        plainPassword: row.plain_password,
+                        passwordHash: row.password_hash,
+                        status: row.status,
+                        isVerified: row.is_verified,
+                        isBlocked: row.is_blocked,
+                        rejectionReason: row.rejection_reason
+                    };
+                    this.memoryState.drivers.unshift(driver);
+                }
+            } catch (_) {}
+        }
         if (!driver) return { success: false, error: 'Driver not found' };
 
         driver.status = newStatus;
@@ -391,6 +424,7 @@ class DatabaseManager {
             driver.rejectionReason = null;
         } else if (newStatus === 'Rejected') {
             driver.isVerified = false;
+            driver.isBlocked = false;
             driver.rejectionReason = reason || 'المستمسكات غير واضحة أو غير مطابقة';
         } else if (newStatus === 'Suspended') {
             driver.isBlocked = true;
@@ -414,6 +448,12 @@ class DatabaseManager {
                     SET status = $1, is_verified = $2, is_blocked = $3, rejection_reason = $4, updated_at = NOW()
                     WHERE driver_id = $5
                 `, [driver.status, driver.isVerified, driver.isBlocked, driver.rejectionReason, driverId]);
+
+                await this.pool.query(`
+                    UPDATE users
+                    SET is_blocked = $1, is_active = $2, updated_at = NOW()
+                    WHERE id = $3
+                `, [driver.isBlocked, !driver.isBlocked, driverId]);
 
                 await this.pool.query(`
                     UPDATE driver_documents
