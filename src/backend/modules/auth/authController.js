@@ -267,7 +267,7 @@ class AuthController {
                 }
             } catch (_) {}
             try { sessionStorage.clear(); } catch (_) {}
-            window.location.replace(window.location.origin + window.location.pathname + '?purge=' + Date.now());
+            window.location.replace(window.location.origin + window.location.pathname);
         };
 
         window.currentRole = '${preselectedRole}';
@@ -332,75 +332,111 @@ class AuthController {
                 if (btnReg) btnReg.className = 'px-4 py-2 rounded-xl text-xs font-black text-slate-300 hover:text-white transition';
             }
         };
+
+        window.switchDriverMode = function(mode) {
+            var formReg = document.getElementById('driver-register-form');
+            var formLog = document.getElementById('driver-login-form');
+            var btnReg = document.getElementById('sub-btn-driver-reg');
+            var btnLog = document.getElementById('sub-btn-driver-login');
+
+            if (mode === 'register') {
+                if (formReg) formReg.style.display = 'block';
+                if (formLog) formLog.style.display = 'none';
+                if (btnReg) btnReg.className = 'px-4 py-2 rounded-xl text-xs font-black bg-amber-500 text-slate-950 transition shadow-md';
+                if (btnLog) btnLog.className = 'px-4 py-2 rounded-xl text-xs font-black text-slate-300 hover:text-white transition';
+            } else {
+                if (formReg) formReg.style.display = 'none';
+                if (formLog) formLog.style.display = 'block';
+                if (btnLog) btnLog.className = 'px-4 py-2 rounded-xl text-xs font-black bg-amber-500 text-slate-950 transition shadow-md';
+                if (btnReg) btnReg.className = 'px-4 py-2 rounded-xl text-xs font-black text-slate-300 hover:text-white transition';
+            }
+        };
+
+        window.normalizeArabicDigits = function(str) {
+            if (!str) return '';
+            var ar = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+            var fa = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+            var res = String(str).replace(/[٠-٩]/g, function(d) {
+                return ar.indexOf(d);
+            }).replace(/[۰-۹]/g, function(d) {
+                return fa.indexOf(d);
+            });
+            return res;
+        };
     </script>
 
     <style>
         body {
             font-family: 'Cairo', sans-serif;
-            background-color: #0b1120;
-            color: #f8fafc;
+            background-color: #f0f2f5;
+            color: #1a1a2e;
             overflow-x: hidden;
             -webkit-tap-highlight-color: transparent;
             font-display: swap;
         }
-        .glow-amber {
-            box-shadow: 0 0 35px rgba(245, 158, 11, 0.28);
-        }
-        .glow-blue {
-            box-shadow: 0 0 35px rgba(37, 99, 235, 0.28);
-        }
+        .glow-amber { box-shadow: 0 2px 12px rgba(245,158,11,0.18); }
+        .glow-blue  { box-shadow: 0 2px 12px rgba(37,99,235,0.18); }
         .glass-card {
-            background: rgba(15, 23, 42, 0.88);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.07);
         }
         .tab-btn-active-driver {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
-            color: #020617 !important;
-            border-color: #fbbf24 !important;
-            box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.5) !important;
+            background: #1a1a2e !important;
+            color: #f59e0b !important;
+            border-color: #1a1a2e !important;
+            box-shadow: 0 4px 16px rgba(26,26,46,0.25) !important;
         }
         .tab-btn-active-customer {
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+            background: #1a1a2e !important;
             color: #ffffff !important;
-            border-color: #60a5fa !important;
-            box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.5) !important;
+            border-color: #1a1a2e !important;
+            box-shadow: 0 4px 16px rgba(26,26,46,0.25) !important;
         }
         .tab-btn-inactive {
-            background: rgba(30, 41, 59, 0.7) !important;
-            color: #cbd5e1 !important;
-            border-color: #334155 !important;
+            background: #f8fafc !important;
+            color: #475569 !important;
+            border-color: #cbd5e1 !important;
         }
         .tab-btn-inactive:hover {
-            background: rgba(51, 65, 85, 0.8) !important;
-            color: #f8fafc !important;
+            background: #e2e8f0 !important;
+            color: #1a1a2e !important;
         }
-        ::placeholder {
-            color: #94a3b8 !important;
-            opacity: 1;
+        ::placeholder { color: #94a3b8 !important; opacity: 1; }
+        /* Override Tailwind dark classes to white-mode */
+        .bg-slate-950\/90, .bg-slate-900\/90, .bg-slate-900\/80, .bg-slate-800\/90, .bg-slate-800 {
+            background-color: #f8fafc !important;
         }
+        .border-slate-800, .border-slate-700 { border-color: #e2e8f0 !important; }
+        .text-white { color: #1a1a2e !important; }
+        .text-slate-300, .text-slate-400 { color: #475569 !important; }
+        .text-slate-500 { color: #64748b !important; }
+        .text-amber-400 { color: #d97706 !important; }
+        .text-emerald-400 { color: #059669 !important; }
+        .text-blue-300 { color: #2563eb !important; }
+        .text-rose-300 { color: #e11d48 !important; }
+        input, select, textarea {
+            background-color: #f8fafc !important;
+            border-color: #cbd5e1 !important;
+            color: #1a1a2e !important;
+        }
+        input:focus { border-color: #6366f1 !important; }
     </style>
 </head>
 <body class="min-h-screen relative flex flex-col justify-between py-6 px-3 sm:px-6">
 
     <!-- Full-screen Embedded App Interface (Passenger sees drivers, Driver receives requests) -->
-    <div id="app-view-container" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 999999; background: #0F172A;">
+    <div id="app-view-container" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 999999; background: #1a1a2e;">
         <iframe id="app-frame" title="تطبيق توصيلة الذكي" style="width: 100%; height: 100%; border: none; display: block;" allow="geolocation *; microphone *; camera *"></iframe>
     </div>
 
     <!-- Floating Quick Update App Button -->
     <div style="position:fixed; bottom:16px; left:16px; z-index:99999; direction:rtl;">
         <button onclick="forcePurgeAndReload()" id="btn-purge-cache" title="تحديث التطبيق ومسح الذاكرة المؤقتة" aria-label="تحديث التطبيق ومسح الذاكرة المؤقتة"
-                class="bg-slate-900/90 hover:bg-amber-500 hover:text-slate-950 text-amber-400 border border-amber-500/80 text-xs font-bold py-2.5 px-4 rounded-full shadow-2xl flex items-center gap-2 transition cursor-pointer backdrop-blur-md">
+                class="bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 text-xs font-bold py-2.5 px-4 rounded-full shadow-lg flex items-center gap-2 transition cursor-pointer">
             <span>🔄</span>
             <span>تحديث التطبيق</span>
         </button>
-    </div>
-
-    <!-- Background Ambient Glow -->
-    <div class="fixed inset-0 overflow-hidden pointer-events-none -z-10" aria-hidden="true">
-        <div class="absolute -top-40 -right-40 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl"></div>
-        <div class="absolute -bottom-40 -left-40 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
     </div>
 
     <main class="max-w-2xl w-full mx-auto my-auto space-y-6">
@@ -420,15 +456,15 @@ class AuthController {
 
         <!-- Role Selector Tabs -->
         <nav aria-label="اختيار نوع الحساب" class="grid grid-cols-2 gap-3 p-2 bg-slate-950/90 rounded-3xl border border-slate-800 shadow-2xl backdrop-blur-md">
-            <button type="button" id="tab-btn-customer" onclick="switchRole('Customer'); return false;" aria-label="الدخول كحساب راكب أو مستخدم"
+            <button type="button" id="tab-btn-customer" onclick="switchRole('Customer'); return false;" aria-label="تسجيل كراكب"
                     class="py-4 px-4 sm:px-6 rounded-2xl text-xs sm:text-base font-black flex items-center justify-center gap-2.5 transition border cursor-pointer ${preselectedRole === 'Driver' ? 'tab-btn-inactive' : 'tab-btn-active-customer glow-blue'}">
                 <i class="fa-solid fa-user text-base sm:text-lg" aria-hidden="true"></i>
-                <span>حساب راكب (مستخدم)</span>
+                <span>تسجيل كراكب</span>
             </button>
-            <button type="button" id="tab-btn-driver" onclick="switchRole('Driver'); return false;" aria-label="تسجيل الدخول لحساب الكابتن أو السائق"
+            <button type="button" id="tab-btn-driver" onclick="switchRole('Driver'); return false;" aria-label="تسجيل كسائق"
                     class="py-4 px-4 sm:px-6 rounded-2xl text-xs sm:text-base font-black flex items-center justify-center gap-2.5 transition border cursor-pointer ${preselectedRole === 'Driver' ? 'tab-btn-active-driver glow-amber' : 'tab-btn-inactive'}">
                 <i class="fa-solid fa-taxi text-base sm:text-lg" aria-hidden="true"></i>
-                <span>تسجيل الدخول للكباتن</span>
+                <span>تسجيل كسائق</span>
             </button>
         </nav>
 
@@ -492,10 +528,17 @@ class AuthController {
                             <span id="cust-step1-badge" class="px-2.5 py-0.5 bg-blue-500/20 text-blue-300 text-[11px] font-bold rounded-full border border-blue-500/30">خطوة 1: تأكيد الهاتف عبر واتساب</span>
                             <label for="cust-reg-phone" class="text-xs text-slate-300 font-bold">رقم الهاتف العراقي <span class="text-rose-400">*</span></label>
                         </div>
-                        <div class="relative">
-                            <i class="fa-brands fa-whatsapp absolute right-3.5 top-3.5 text-emerald-400 text-base pointer-events-none" aria-hidden="true"></i>
-                            <input type="tel" id="cust-reg-phone" required placeholder="07701234567" dir="ltr" aria-label="رقم الهاتف العراقي"
-                                   class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-400 font-mono text-left">
+                        <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1.5 px-3 py-3 bg-slate-800 border border-slate-700 rounded-xl text-xs font-black text-amber-400 select-none">
+                                <span>🇮🇶</span>
+                                <span dir="ltr">+964</span>
+                            </div>
+                            <div class="relative flex-1">
+                                <i class="fa-brands fa-whatsapp absolute right-3.5 top-3.5 text-emerald-400 text-base pointer-events-none" aria-hidden="true"></i>
+                                <input type="tel" id="cust-reg-phone" required placeholder="07706204066" dir="ltr" aria-label="رقم الهاتف العراقي"
+                                       oninput="this.value = normalizeArabicDigits(this.value)"
+                                       class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-400 font-mono text-left">
+                            </div>
                         </div>
 
                         <!-- Button to send WhatsApp OTP -->
@@ -520,6 +563,7 @@ class AuthController {
                                 <div class="relative">
                                     <i class="fa-solid fa-key absolute right-3.5 top-3 text-slate-400 text-sm pointer-events-none" aria-hidden="true"></i>
                                     <input type="text" id="cust-reg-otp" maxlength="6" placeholder="------" dir="ltr" aria-label="رمز التحقق المكون من 6 أرقام"
+                                           oninput="this.value = normalizeArabicDigits(this.value)"
                                            class="w-full pr-10 pl-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-base tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-emerald-500 text-emerald-400 font-mono font-black">
                                 </div>
                             </div>
@@ -693,40 +737,181 @@ class AuthController {
         </section>
 
         <!-- ================================================================= -->
-        <!-- TAB 2: CAPTAIN (DRIVER) - DIRECT LOGIN & DASHBOARD VERIFICATION   -->
+        <!-- TAB 2: DRIVER REGISTRATION (WHATSAPP OTP VERIFIED)                -->
         <!-- ================================================================= -->
-        <section id="driver-section" style="display: ${preselectedRole === 'Driver' ? 'block' : 'none'};" aria-label="قسم الكباتن">
+        <section id="driver-section" style="display: ${preselectedRole === 'Driver' ? 'block' : 'none'};" aria-label="قسم السائقين">
             
-            <div class="glass-card rounded-3xl p-6 sm:p-8 border border-amber-500/30 shadow-2xl space-y-5 glow-amber text-center">
+            <div class="glass-card rounded-3xl p-5 sm:p-8 border border-amber-500/30 shadow-2xl space-y-6 glow-amber">
                 
-                <!-- Circular Icon Badge -->
-                <div class="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-3xl flex items-center justify-center text-3xl mx-auto shadow-inner border border-amber-500/30" aria-hidden="true">
-                    🚕
+                <!-- Driver Sub-mode switchers -->
+                <div class="flex items-center justify-between bg-slate-900/90 p-2 rounded-2xl border border-slate-800">
+                    <button type="button" id="sub-btn-driver-reg" onclick="switchDriverMode('register')" aria-label="استمارة تسجيل سائق جديد"
+                            class="px-4 py-2 rounded-xl text-xs font-black bg-amber-500 text-slate-950 transition shadow-md">
+                        استمارة تسجيل سائق جديد 🚕
+                    </button>
+                    <button type="button" id="sub-btn-driver-login" onclick="switchDriverMode('login')" aria-label="تسجيل دخول سائق مسجل"
+                            class="px-4 py-2 rounded-xl text-xs font-black text-slate-300 hover:text-white transition">
+                        لديك حساب بالفعل؟ تسجيل الدخول 🔑
+                    </button>
                 </div>
 
-                <div>
-                    <h2 class="text-xl sm:text-2xl font-black text-white">تسجيل الدخول للكباتن</h2>
-                    <p class="text-xs sm:text-sm text-slate-300 mt-1">أدخل رقم الهاتف وكلمة المرور المعتمدة من لوحة التحكم (الداشبورد):</p>
-                </div>
+                <div id="driver-reg-alert" style="display: none;" role="alert" class="p-3 bg-rose-500/20 border border-rose-500/50 rounded-xl text-xs font-bold text-rose-300 text-right"></div>
 
-                <form onsubmit="handleCaptainLogin(event)" class="space-y-4 text-right">
-                    <div>
-                        <label for="login-driver-identifier" class="block text-xs text-slate-300 font-bold mb-1.5">
-                            رقم الهاتف (اسم المستخدم) <span class="text-rose-400">*</span>
-                        </label>
-                        <div class="relative">
-                            <input type="text" id="login-driver-identifier" required placeholder="07801234567 أو 07706204066" dir="rtl" aria-label="رقم الهاتف للكابتن"
-                                   class="w-full px-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white placeholder-slate-400 font-mono text-right">
+                <!-- Registration Form for Drivers -->
+                <form id="driver-register-form" onsubmit="handleDriverRegister(event)" class="space-y-4">
+                    <div class="text-right border-b border-slate-800 pb-3">
+                        <h2 class="text-base font-black text-white flex items-center gap-2">
+                            <span>🚖</span>
+                            <span>استمارة تسجيل السائق الجديد</span>
+                        </h2>
+                        <p class="text-xs text-slate-300 mt-1">تحقق من رقم هاتفك عبر واتساب أولاً لإكمال تسجيل حساب الكابتن:</p>
+                    </div>
+
+                    <!-- Step 1: Iraqi Phone & WhatsApp OTP -->
+                    <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span id="driver-step1-badge" class="px-2.5 py-0.5 bg-amber-500/20 text-amber-300 text-[11px] font-bold rounded-full border border-amber-500/30">خطوة 1: تأكيد الهاتف عبر واتساب</span>
+                            <label for="driver-reg-phone" class="text-xs text-slate-300 font-bold">رقم الهاتف العراقي <span class="text-rose-400">*</span></label>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1.5 px-3 py-3 bg-slate-800 border border-slate-700 rounded-xl text-xs font-black text-amber-400 select-none">
+                                <span>🇮🇶</span>
+                                <span dir="ltr">+964</span>
+                            </div>
+                            <div class="relative flex-1">
+                                <i class="fa-brands fa-whatsapp absolute right-3.5 top-3.5 text-emerald-400 text-base pointer-events-none" aria-hidden="true"></i>
+                                <input type="tel" id="driver-reg-phone" required placeholder="07706204066" dir="ltr" aria-label="رقم الهاتف العراقي للسائق"
+                                       oninput="this.value = normalizeArabicDigits(this.value)"
+                                       class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white placeholder-slate-400 font-mono text-left">
+                            </div>
+                        </div>
+
+                        <!-- Button to send WhatsApp OTP -->
+                        <div id="driver-send-otp-wrap">
+                            <button type="button" id="btn-send-driver-otp" onclick="handleSendDriverWhatsappOtp(false)" aria-label="إرسال رمز التحقق عبر واتساب"
+                                    class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 cursor-pointer">
+                                <i class="fa-brands fa-whatsapp text-base" aria-hidden="true"></i>
+                                <span>المتابعة وإرسال رمز التحقق عبر واتساب 📲</span>
+                            </button>
+                        </div>
+
+                        <!-- OTP Input Box -->
+                        <div id="driver-otp-box" style="display: none;" class="space-y-2.5 pt-2 border-t border-slate-800">
+                            <div class="p-2.5 bg-emerald-950/60 border border-emerald-500/40 rounded-xl text-xs text-emerald-300 font-bold flex items-center gap-2 text-right">
+                                <i class="fa-brands fa-whatsapp text-emerald-400 text-base flex-shrink-0" aria-hidden="true"></i>
+                                <span>تابع الواتساب ليصلك رمز التحقق 💬</span>
+                            </div>
+
+                            <div>
+                                <label for="driver-reg-otp" class="block text-xs text-slate-300 font-bold mb-1.5 text-right">أدخل رمز التحقق (6 أرقام) <span class="text-rose-400">*</span></label>
+                                <div class="relative">
+                                    <i class="fa-solid fa-key absolute right-3.5 top-3 text-slate-400 text-sm pointer-events-none" aria-hidden="true"></i>
+                                    <input type="text" id="driver-reg-otp" maxlength="6" placeholder="------" dir="ltr" aria-label="رمز التحقق المكون من 6 أرقام"
+                                           oninput="this.value = normalizeArabicDigits(this.value)"
+                                           class="w-full pr-10 pl-4 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-base tracking-widest text-center focus:outline-none focus:ring-2 focus:ring-emerald-500 text-emerald-400 font-mono font-black">
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2 pt-1">
+                                <button type="button" id="btn-verify-driver-otp" onclick="handleVerifyDriverWhatsappOtp()" aria-label="تأكيد رمز التحقق"
+                                        class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+                                    <i class="fa-solid fa-check-circle" aria-hidden="true"></i>
+                                    <span>تأكيد رمز التحقق ✅</span>
+                                </button>
+                                <button type="button" id="btn-resend-driver-otp" onclick="handleSendDriverWhatsappOtp(true)" aria-label="إعادة إرسال رمز التحقق"
+                                        class="px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer">
+                                    إعادة إرسال 🔄
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Verified Badge -->
+                        <div id="driver-verified-badge" style="display: none;" class="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center justify-between text-xs text-emerald-400 font-bold">
+                            <span class="flex items-center gap-1.5">
+                                <i class="fa-solid fa-circle-check text-emerald-400 text-sm" aria-hidden="true"></i>
+                                <span>تم تأكيد رقم الهاتف بنجاح عبر واتساب</span>
+                            </span>
+                            <button type="button" onclick="resetDriverPhoneVerification()" class="text-[11px] text-slate-400 hover:text-rose-400 underline cursor-pointer">
+                                تغيير الرقم
+                            </button>
                         </div>
                     </div>
 
+                    <!-- Step 2: Driver Details (Unlocked after OTP) -->
+                    <div id="driver-details-section" style="display: none;" class="space-y-4 pt-2 border-t border-slate-800 animate-fadeIn">
+                        <div>
+                            <label for="driver-reg-name" class="block text-xs text-slate-300 font-bold mb-1.5 text-right">الاسم الكامل للكابتن <span class="text-rose-400">*</span></label>
+                            <div class="relative">
+                                <i class="fa-solid fa-id-card absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none" aria-hidden="true"></i>
+                                <input type="text" id="driver-reg-name" required placeholder="مثال: علي محمد حسن" aria-label="الاسم الكامل للكابتن"
+                                       class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="driver-reg-license" class="block text-xs text-slate-300 font-bold mb-1.5 text-right">رقم إجازة السوق <span class="text-rose-400">*</span></label>
+                            <div class="relative">
+                                <i class="fa-solid fa-address-card absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none" aria-hidden="true"></i>
+                                <input type="text" id="driver-reg-license" required placeholder="مثال: IQ-NJF-4819" aria-label="رقم إجازة السوق"
+                                       class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white font-mono">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label for="driver-reg-vehicle" class="block text-xs text-slate-300 font-bold mb-1.5 text-right">نوع وموديل المركبة</label>
+                                <input type="text" id="driver-reg-vehicle" placeholder="مثال: تويوتا كورولا 2021" aria-label="نوع وموديل المركبة"
+                                       class="w-full px-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
+                            </div>
+                            <div>
+                                <label for="driver-reg-plate" class="block text-xs text-slate-300 font-bold mb-1.5 text-right">رقم اللوحة</label>
+                                <input type="text" id="driver-reg-plate" placeholder="مثال: النجف 12345 أ" aria-label="رقم لوحة المركبة"
+                                       class="w-full px-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="driver-reg-password" class="block text-xs text-slate-300 font-bold mb-1.5 text-right">كلمة المرور (الباسوورد) <span class="text-rose-400">*</span></label>
+                            <div class="relative">
+                                <i class="fa-solid fa-lock absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none" aria-hidden="true"></i>
+                                <input type="password" id="driver-reg-password" required minlength="4" placeholder="••••••••" aria-label="كلمة المرور للسائق"
+                                       class="w-full pr-10 pl-11 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white font-mono">
+                                <button type="button" onclick="togglePasswordVisibility('driver-reg-password', 'eye-drv-reg-pwd')" aria-label="إظهار أو إخفاء كلمة المرور" class="absolute left-3 top-3 text-slate-400 hover:text-white p-1">
+                                    <i id="eye-drv-reg-pwd" class="fa-solid fa-eye" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="submit" id="btn-driver-reg-submit" aria-label="إكمال تسجيل حساب السائق والمتابعة"
+                                class="w-full py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-2xl text-base transition flex items-center justify-center gap-2 shadow-xl shadow-amber-500/25 cursor-pointer">
+                            <i class="fa-solid fa-taxi text-lg" aria-hidden="true"></i>
+                            <span>إكمال تسجيل حساب السائق والمتابعة 🚀</span>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Driver Direct Login Form -->
+                <form id="driver-login-form" onsubmit="handleCaptainLogin(event)" class="space-y-4" style="display: none;">
+                    <div class="text-right border-b border-slate-800 pb-3">
+                        <h2 class="text-base font-black text-white flex items-center gap-2">
+                            <span>🔑</span>
+                            <span>تسجيل دخول السائق (الكابتن)</span>
+                        </h2>
+                        <p class="text-xs text-slate-300 mt-1">أدخل رقم الهاتف وكلمة المرور المسجلة للدخول:</p>
+                    </div>
+
                     <div>
-                        <label for="login-driver-password" class="block text-xs text-slate-300 font-bold mb-1.5">
-                            كلمة المرور (الباسوورد) <span class="text-rose-400">*</span>
-                        </label>
+                        <label for="login-driver-identifier" class="block text-xs text-slate-300 font-bold mb-1.5 text-right">رقم الهاتف <span class="text-rose-400">*</span></label>
+                        <input type="text" id="login-driver-identifier" required placeholder="07706204066" dir="ltr" aria-label="رقم الهاتف للكابتن"
+                               oninput="this.value = normalizeArabicDigits(this.value)"
+                               class="w-full px-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white font-mono text-left">
+                    </div>
+
+                    <div>
+                        <label for="login-driver-password" class="block text-xs text-slate-300 font-bold mb-1.5 text-right">كلمة المرور <span class="text-rose-400">*</span></label>
                         <div class="relative">
                             <input type="password" id="login-driver-password" required placeholder="••••••••" aria-label="كلمة المرور للكابتن"
-                                   class="w-full pr-4 pl-11 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white font-mono text-right">
+                                   class="w-full pr-4 pl-11 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white font-mono text-left">
                             <button type="button" onclick="togglePasswordVisibility('login-driver-password', 'eye-login-drv-pwd')" aria-label="إظهار أو إخفاء كلمة المرور" class="absolute left-3 top-3 text-slate-400 hover:text-white p-1">
                                 <i id="eye-login-drv-pwd" class="fa-solid fa-eye" aria-hidden="true"></i>
                             </button>
@@ -739,28 +924,6 @@ class AuthController {
                         <span>تسجيل الدخول للكابتن 🚀</span>
                     </button>
                 </form>
-
-                <!-- Official Notice Box -->
-                <div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-200 leading-relaxed text-right flex items-start gap-2">
-                    <span class="text-amber-400 text-sm" aria-hidden="true">⚠️</span>
-                    <div>
-                        <strong>تنويه للكباتن:</strong> يتم تسجيل واعتماد حسابات الكباتن والسائقين الجدد حصراً من خلال إدارة المنصة ومكتب التوثيق. إذا كنت ترغب بالانضمام ككابتن جديد، يرجى التواصل المباشر مع إدارة المنصة للاعتماد وتفعيل الحساب.
-                    </div>
-                </div>
-
-                <!-- Two Contact Buttons -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <a href="https://wa.me/9647706204066?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%D8%8C%20%D8%A3%D8%B1%D8%BA%D8%A8%20%D8%A8%D8%A7%D9%84%D8%AA%D8%B3%D8%AC%D9%8A%D9%84%20%D9%83%D9%83%D8%A7%D8%A8%D8%AA%D9%86%20%D8%AC%D8%AF%D9%8A%D8%AF%20%D9%81%D9%8A%20%D9%85%D9%86%D8%B5%D8%A9%20%D8%AA%D9%88%D8%B5%D9%8A%D9%84%D8%A9" target="_blank" rel="noopener noreferrer" aria-label="تواصل مع إدارة المنصة عبر واتساب"
-                       class="py-3 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 cursor-pointer text-center">
-                        <i class="fa-brands fa-whatsapp text-lg" aria-hidden="true"></i>
-                        <span>تواصل عبر واتساب (07706204066)</span>
-                    </a>
-                    <a href="tel:07706204066" aria-label="اتصال هاتفي مباشر بإدارة المنصة"
-                       class="py-3 px-3 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/40 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md cursor-pointer text-center">
-                        <i class="fa-solid fa-phone text-sm" aria-hidden="true"></i>
-                        <span>اتصال هاتفي مباشر (07706204066)</span>
-                    </a>
-                </div>
 
             </div>
 
@@ -875,8 +1038,10 @@ class AuthController {
 
             if (alertBox) alertBox.style.display = 'none';
 
-            if (!phone || phone.length < 10) {
-                alert('يرجى إدخال رقم هاتف عراقي صالح (مثال: 07701234567)');
+            const normalized = normalizeArabicDigits(phone);
+            const digits = normalized.replace(/[^0-9]/g, '');
+            if (!digits || digits.length < 9) {
+                alert('يرجى إدخال رقم هاتف عراقي صالح (مثال: 07801234567 أو 07701234567)');
                 phoneInput.focus();
                 return;
             }
@@ -889,7 +1054,7 @@ class AuthController {
                 const res = await fetch('/api/auth/send-whatsapp-otp', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phoneNumber: phone })
+                    body: JSON.stringify({ phoneNumber: normalized })
                 });
 
                 const data = await res.json();
@@ -920,9 +1085,9 @@ class AuthController {
         }
 
         async function handleVerifyWhatsappOtp() {
-            const phone = (document.getElementById('cust-reg-phone').value || '').trim();
+            const phone = normalizeArabicDigits((document.getElementById('cust-reg-phone').value || '').trim());
             const otpInput = document.getElementById('cust-reg-otp');
-            const code = (otpInput.value || '').trim();
+            const code = normalizeArabicDigits((otpInput.value || '').trim());
             const verifyBtn = document.getElementById('btn-verify-whatsapp-otp');
             const alertBox = document.getElementById('cust-reg-alert');
             const otpBox = document.getElementById('cust-otp-box');
@@ -1015,7 +1180,7 @@ class AuthController {
             }
 
             const name = document.getElementById('cust-reg-name').value.trim();
-            const phone = document.getElementById('cust-reg-phone').value.trim();
+            const phone = normalizeArabicDigits(document.getElementById('cust-reg-phone').value.trim());
             const route = document.getElementById('cust-reg-route').value.trim();
             const address = document.getElementById('cust-reg-address').value.trim();
             const password = document.getElementById('cust-reg-password').value;
@@ -1071,6 +1236,209 @@ class AuthController {
             } catch (err) {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i><span>إكمال تسجيل حساب الراكب والمتابعة 🚀</span>';
+                alert('حدث خطأ في الاتصال بالخادم. يرجى التأكد من اتصال الإنترنت.');
+            }
+        }
+
+        // DRIVER REGISTRATION & WHATSAPP OTP WORKFLOW
+        window.__isDriverPhoneVerified = false;
+        window.__verifiedDriverOtpCode = '';
+
+        async function handleSendDriverWhatsappOtp(isResend) {
+            const phoneInput = document.getElementById('driver-reg-phone');
+            const phone = (phoneInput.value || '').trim();
+            const sendBtn = document.getElementById(isResend ? 'btn-resend-driver-otp' : 'btn-send-driver-otp');
+            const alertBox = document.getElementById('driver-reg-alert');
+            const otpBox = document.getElementById('driver-otp-box');
+
+            if (alertBox) alertBox.style.display = 'none';
+
+            const normalized = normalizeArabicDigits(phone);
+            const digits = normalized.replace(/[^0-9]/g, '');
+            if (!digits || digits.length < 9) {
+                alert('يرجى إدخال رقم هاتف عراقي صالح (مثال: 07801234567 أو 07701234567)');
+                phoneInput.focus();
+                return;
+            }
+
+            const originalBtnHtml = sendBtn.innerHTML;
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i><span>جاري الإرسال عبر واتساب...</span>';
+
+            try {
+                const res = await fetch('/api/auth/send-whatsapp-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phoneNumber: normalized })
+                });
+
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    otpBox.style.display = 'block';
+                    phoneInput.readOnly = true;
+                    const otpInput = document.getElementById('driver-reg-otp');
+                    if (otpInput) {
+                        otpInput.value = '';
+                        otpInput.focus();
+                    }
+                    if (isResend) {
+                        alert('تمت إعادة إرسال رمز التحقق عبر واتساب إلى ' + phone);
+                    }
+                } else {
+                    if (alertBox) {
+                        alertBox.innerText = data.error || 'تعذر إرسال رمز التحقق، يرجى المحاولة لاحقاً.';
+                        alertBox.style.display = 'block';
+                    }
+                    alert(data.error || 'تعذر إرسال رمز التحقق');
+                }
+            } catch (err) {
+                alert('حدث خطأ في الاتصال بالخادم لإرسال رمز التحقق.');
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = originalBtnHtml;
+            }
+        }
+
+        async function handleVerifyDriverWhatsappOtp() {
+            const phone = normalizeArabicDigits((document.getElementById('driver-reg-phone').value || '').trim());
+            const otpInput = document.getElementById('driver-reg-otp');
+            const code = normalizeArabicDigits((otpInput.value || '').trim());
+            const verifyBtn = document.getElementById('btn-verify-driver-otp');
+            const alertBox = document.getElementById('driver-reg-alert');
+            const otpBox = document.getElementById('driver-otp-box');
+            const sendWrap = document.getElementById('driver-send-otp-wrap');
+            const verifiedBadge = document.getElementById('driver-verified-badge');
+            const detailsSection = document.getElementById('driver-details-section');
+
+            if (alertBox) alertBox.style.display = 'none';
+
+            if (!code || code.length < 4) {
+                alert('يرجى إدخال رمز التحقق المكون من 6 أرقام');
+                otpInput.focus();
+                return;
+            }
+
+            const originalBtnHtml = verifyBtn.innerHTML;
+            verifyBtn.disabled = true;
+            verifyBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i><span>جاري التحقق...</span>';
+
+            try {
+                const res = await fetch('/api/auth/verify-whatsapp-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phoneNumber: phone, code: code })
+                });
+
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    window.__isDriverPhoneVerified = true;
+                    window.__verifiedDriverOtpCode = code;
+
+                    if (otpBox) otpBox.style.display = 'none';
+                    if (sendWrap) sendWrap.style.display = 'none';
+                    if (verifiedBadge) verifiedBadge.style.display = 'flex';
+                    if (detailsSection) detailsSection.style.display = 'block';
+
+                    const nameInput = document.getElementById('driver-reg-name');
+                    if (nameInput) nameInput.focus();
+                } else {
+                    if (alertBox) {
+                        alertBox.innerText = data.error || 'رمز التحقق غير صحيح، يرجى التأكد وإعادة المحاولة.';
+                        alertBox.style.display = 'block';
+                    }
+                    alert(data.error || 'رمز التحقق غير صحيح');
+                }
+            } catch (err) {
+                alert('حدث خطأ في الاتصال بالخادم للتحقق من الرمز.');
+            } finally {
+                verifyBtn.disabled = false;
+                verifyBtn.innerHTML = originalBtnHtml;
+            }
+        }
+
+        function resetDriverPhoneVerification() {
+            window.__isDriverPhoneVerified = false;
+            window.__verifiedDriverOtpCode = '';
+
+            const phoneInput = document.getElementById('driver-reg-phone');
+            if (phoneInput) {
+                phoneInput.readOnly = false;
+                phoneInput.focus();
+            }
+
+            const otpBox = document.getElementById('driver-otp-box');
+            const sendWrap = document.getElementById('driver-send-otp-wrap');
+            const verifiedBadge = document.getElementById('driver-verified-badge');
+            const detailsSection = document.getElementById('driver-details-section');
+            const alertBox = document.getElementById('driver-reg-alert');
+
+            if (otpBox) otpBox.style.display = 'none';
+            if (sendWrap) sendWrap.style.display = 'block';
+            if (verifiedBadge) verifiedBadge.style.display = 'none';
+            if (detailsSection) detailsSection.style.display = 'none';
+            if (alertBox) alertBox.style.display = 'none';
+        }
+
+        async function handleDriverRegister(event) {
+            event.preventDefault();
+            const alertBox = document.getElementById('driver-reg-alert');
+            if (alertBox) alertBox.style.display = 'none';
+
+            if (!window.__isDriverPhoneVerified) {
+                alert('يرجى التحقق من رقم الهاتف عبر واتساب أولاً للمتابعة');
+                return;
+            }
+
+            const name = document.getElementById('driver-reg-name').value.trim();
+            const phone = normalizeArabicDigits(document.getElementById('driver-reg-phone').value.trim());
+            const license = document.getElementById('driver-reg-license').value.trim();
+            const vehicle = (document.getElementById('driver-reg-vehicle')?.value || '').trim();
+            const plate = (document.getElementById('driver-reg-plate')?.value || '').trim();
+            const password = document.getElementById('driver-reg-password').value;
+            const submitBtn = document.getElementById('btn-driver-reg-submit');
+
+            if (!name || !phone || !password) {
+                alert('يرجى ملء جميع الحقول المطلوبة');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i><span>جاري إكمال تسجيل السائق...</span>';
+
+            try {
+                const res = await fetch('/api/auth/complete-driver-registration', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fullName: name,
+                        phoneNumber: phone,
+                        licenseNumber: license,
+                        vehicleMake: vehicle,
+                        vehiclePlate: plate,
+                        password: password,
+                        otpCode: window.__verifiedDriverOtpCode || ''
+                    })
+                });
+
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    persistSession(data);
+                    submitBtn.innerHTML = '<i class="fa-solid fa-check"></i><span>تم التسجيل بنجاح! جاري فتح شاشة الكابتن...</span>';
+                    setTimeout(function() {
+                        openAppView(data.token, data.userId, 'Driver', data.fullName || 'كابتن توصيله');
+                    }, 250);
+                } else {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fa-solid fa-taxi"></i><span>إكمال تسجيل حساب السائق والمتابعة 🚀</span>';
+                    if (alertBox) {
+                        alertBox.innerText = data.error || 'عذراً، فشل تسجيل الحساب.';
+                        alertBox.style.display = 'block';
+                    }
+                    alert(data.error || 'عذراً، فشل تسجيل الحساب.');
+                }
+            } catch (err) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fa-solid fa-taxi"></i><span>إكمال تسجيل حساب السائق والمتابعة 🚀</span>';
                 alert('حدث خطأ في الاتصال بالخادم. يرجى التأكد من اتصال الإنترنت.');
             }
         }
@@ -1576,14 +1944,37 @@ class AuthController {
      * Completes Driver Registration with Duplicate Prevention, Password Hashing, documents & route
      */
     async handleCompleteDriverRegistration(req, res, body) {
-        const { fullName, email, password, googleId, phoneNumber, vehicleMake, vehiclePlate, vehicleYear, documents, route } = body;
-        if (!fullName || !email) {
+        const { fullName, email, password, googleId, phoneNumber, vehicleMake, vehiclePlate, vehicleYear, licenseNumber, documents, route } = body;
+        if (!fullName || !phoneNumber || !password) {
             res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-            return res.end(JSON.stringify({ success: false, error: 'الاسم والبريد الإلكتروني مطلوبان.' }));
+            return res.end(JSON.stringify({ success: false, error: 'الاسم الكامل، رقم الهاتف، وكلمة المرور مطلوبة.' }));
         }
 
-        const emailLower = email.trim().toLowerCase();
-        const cleanPhone = (phoneNumber || '').trim().replace(/[\s\-]/g, '');
+        // Iraqi Phone Normalization
+        const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+        let strPhone = String(phoneNumber).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d));
+        let normDigits = strPhone.replace(/[^0-9]/g, '');
+        if (normDigits.startsWith('00964')) normDigits = normDigits.substring(5);
+        else if (normDigits.startsWith('964')) normDigits = normDigits.substring(3);
+        if (normDigits.length === 10 && normDigits.startsWith('7')) normDigits = '0' + normDigits;
+
+        if (!normDigits || normDigits.length < 10) {
+            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(JSON.stringify({ success: false, error: 'يرجى إدخال رقم هاتف عراقي صالح (مثال: 07701234567).' }));
+        }
+
+        const cleanPhone = normDigits.startsWith('0') ? normDigits : ('0' + normDigits);
+        const emailLower = email ? email.trim().toLowerCase() : `${cleanPhone}@tawseelaiq.app`;
+
+        // Optional WhatsApp OTP verification if provided
+        if (body.otpCode) {
+            const whatsappService = require('../whatsapp/whatsappService');
+            const otpCheck = whatsappService.verifyOtp(phoneNumber, body.otpCode);
+            if (!otpCheck.valid) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                return res.end(JSON.stringify({ success: false, error: otpCheck.error }));
+            }
+        }
 
         // 1. DUPLICATE CHECK
         const existingCustomer = db.memoryState.customers.find(c =>
@@ -1609,7 +2000,7 @@ class AuthController {
 
         const driverId = 'drv-g-' + Math.random().toString(36).substr(2, 9);
         const now = new Date().toISOString();
-        const licenseNumber = 'IRQ-NJF-' + Math.floor(1000 + Math.random() * 9000);
+        const finalLicenseNumber = licenseNumber || ('IRQ-NJF-' + Math.floor(1000 + Math.random() * 9000));
 
         // Process Documents
         const docUrls = {};
@@ -1630,7 +2021,7 @@ class AuthController {
             phoneNumber: cleanPhone,
             passwordHash,
             googleId: googleId || null,
-            licenseNumber,
+            licenseNumber: finalLicenseNumber,
             vehicle: {
                 make: vehicleMake || 'تويوتا',
                 model: vehicleMake || 'كورولا',
@@ -1655,7 +2046,7 @@ class AuthController {
             driverId,
             driverName: fullName,
             phoneNumber: cleanPhone,
-            licenseNumber,
+            licenseNumber: finalLicenseNumber,
             documents: docUrls,
             vehicle: newDriver.vehicle,
             status: 'Pending',
