@@ -3466,3 +3466,112 @@ async function sendTelegramNotification() {
         document.getElementById('tg-notify-msg').value = '';
     } catch(e) { showToast('خطأ في الإرسال', 'error'); }
 }
+
+// ===== Feature 8: Fleet Operations Log =====
+async function loadFleetOperationsLog() {
+    const tbody = document.getElementById('fleet-ops-log-body');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400 text-xs"><i class="fa-solid fa-circle-notch fa-spin"></i> جاري التحميل...</td></tr>';
+    try {
+        const res = await fetch('/api/fleet/operations-log', { headers: authHeaders() });
+        const data = await res.json();
+        const ops = data.operations || [];
+        if (ops.length === 0) { tbody.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400 text-sm">لا توجد عمليات بعد</td></tr>'; return; }
+        const typeMap = { booking: { label: 'حجز داخلي', color: 'bg-emerald-100 text-emerald-700' }, external: { label: 'حجز خارجي', color: 'bg-blue-100 text-blue-700' }, join: { label: 'طلب انضمام', color: 'bg-amber-100 text-amber-700' } };
+        const statusMap = { Confirmed: 'مؤكد', Pending: 'معلق', Approved: 'موافق عليه', Rejected: 'مرفوض', Completed: 'مكتمل', Cancelled: 'ملغى' };
+        tbody.innerHTML = ops.map(op => {
+            const tm = typeMap[op.type] || { label: op.type, color: 'bg-slate-100 text-slate-700' };
+            const st = statusMap[op.status] || op.status || '--';
+            const dt = op.createdAt ? new Date(op.createdAt).toLocaleString('ar-IQ') : '--';
+            const passenger = op.passengerName || op.passengerPhone || '--';
+            return `<tr class="hover:bg-slate-50">
+                <td class="p-3"><span class="px-2 py-0.5 rounded-full text-xs font-bold ${tm.color}">${tm.label}${op.channel ? ' ('+op.channel+')' : ''}</span></td>
+                <td class="p-3 font-semibold">${passenger}</td>
+                <td class="p-3">${op.driverName || op.driverPhone || '--'}</td>
+                <td class="p-3 text-slate-500 max-w-[120px] truncate">${op.from || '--'}</td>
+                <td class="p-3 text-slate-500 max-w-[120px] truncate">${op.to || '--'}</td>
+                <td class="p-3"><span class="px-2 py-0.5 rounded-full text-xs font-bold ${st==='مؤكد'||st==='موافق عليه'||st==='مكتمل' ? 'bg-emerald-100 text-emerald-700' : st==='معلق' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}">${st}</span></td>
+                <td class="p-3 text-slate-400 whitespace-nowrap">${dt}</td>
+            </tr>`;
+        }).join('');
+    } catch(e) { tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-red-500 text-xs">خطأ في التحميل</td></tr>'; }
+}
+
+// ===== Feature 8: Join Requests in Dashboard =====
+async function loadJoinRequests() {
+    const container = document.getElementById('join-requests-container');
+    const badge = document.getElementById('join-requests-badge');
+    if (!container) return;
+    container.innerHTML = '<p class="text-center text-slate-400 text-sm"><i class="fa-solid fa-circle-notch fa-spin"></i> جاري التحميل...</p>';
+    try {
+        // Collect all pending join requests across all drivers
+        const res = await fetch('/api/fleet/operations-log', { headers: authHeaders() });
+        const data = await res.json();
+        const pending = (data.operations || []).filter(op => op.type === 'join' && op.status === 'Pending');
+        if (badge) { badge.textContent = pending.length; badge.classList.toggle('hidden', pending.length === 0); }
+        if (pending.length === 0) { container.innerHTML = '<p class="text-center text-slate-400 text-sm">لا توجد طلبات انضمام معلقة</p>'; return; }
+        container.innerHTML = '';
+        pending.forEach(req => {
+            const div = document.createElement('div');
+            div.className = 'flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl p-3';
+            div.innerHTML = `
+                <div class="space-y-1">
+                    <div class="font-bold text-slate-900 text-sm">🙋 ${req.passengerName} → 🚕 ${req.driverName}</div>
+                    <div class="text-xs text-slate-500">${req.from || '--'} ← → ${req.to || '--'}</div>
+                    <div class="text-xs text-slate-400">${req.createdAt ? new Date(req.createdAt).toLocaleString('ar-IQ') : ''}</div>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="adminApproveJoin('${req.id}')" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-white rounded-lg text-xs font-bold">✅ قبول</button>
+                    <button onclick="adminRejectJoin('${req.id}')" class="px-3 py-1.5 bg-red-500 hover:bg-red-400 text-white rounded-lg text-xs font-bold">❌ رفض</button>
+                </div>`;
+            container.appendChild(div);
+        });
+    } catch(e) { container.innerHTML = '<p class="text-center text-red-500 text-sm">خطأ في التحميل</p>'; }
+}
+
+async function adminApproveJoin(requestId) {
+    try {
+        const res = await fetch('/api/driver/approve-join', { method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()}, body:JSON.stringify({requestId}) });
+        const data = await res.json();
+        if (data.success) {
+            showToast('تم قبول طلب الانضمام ✅');
+            loadJoinRequests();
+            loadFleetOperationsLog();
+        } else showToast(data.error || 'خطأ', 'error');
+    } catch(e) { showToast('خطأ في الاتصال', 'error'); }
+}
+
+async function adminRejectJoin(requestId) {
+    try {
+        await fetch('/api/driver/reject-join', { method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()}, body:JSON.stringify({requestId}) });
+        showToast('تم رفض الطلب');
+        loadJoinRequests();
+    } catch(e) { showToast('خطأ', 'error'); }
+}
+
+// ===== Feature 7: Real-time config sync polling =====
+// Poll app-config every 30s and apply theme changes immediately to portal
+(function initConfigSyncPoller() {
+    let lastConfigStr = '';
+    async function pollConfig() {
+        try {
+            const res = await fetch('/api/admin/app-config?t=' + Date.now(), { headers: authHeaders() });
+            const cfg = await res.json();
+            const cfgStr = JSON.stringify(cfg);
+            if (cfgStr !== lastConfigStr) {
+                lastConfigStr = cfgStr;
+                // Broadcast to portal via BroadcastChannel (same origin)
+                try {
+                    const bc = new BroadcastChannel('tawseela_config_sync');
+                    bc.postMessage({ type: 'config_updated', config: cfg });
+                    bc.close();
+                } catch(_) {}
+            }
+        } catch(_) {}
+    }
+    setInterval(pollConfig, 30000);
+})();
+
+// ===== Feature 7: Auto-reload theme in portal via BroadcastChannel =====
+// This runs in dashboard; portal listens via its own BroadcastChannel listener
+// (Portal's applyDynamicAppConfig is called from the portal's own polling)

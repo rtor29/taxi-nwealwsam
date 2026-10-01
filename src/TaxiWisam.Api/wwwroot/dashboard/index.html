@@ -858,6 +858,54 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Operations Log (Feature 8) -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mt-4">
+                    <div class="flex items-center justify-between p-4 border-b border-slate-100">
+                        <div class="font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-clipboard-list text-amber-500"></i>
+                            <span>سجل العمليات والمسارات</span>
+                        </div>
+                        <button onclick="loadFleetOperationsLog()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1">
+                            <i class="fa-solid fa-rotate"></i> تحديث
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right text-xs border-collapse min-w-[700px]">
+                            <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-3">النوع</th>
+                                    <th class="p-3">الراكب / المصدر</th>
+                                    <th class="p-3">السائق</th>
+                                    <th class="p-3">من</th>
+                                    <th class="p-3">إلى</th>
+                                    <th class="p-3">الحالة</th>
+                                    <th class="p-3">الوقت</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fleet-ops-log-body" class="divide-y divide-slate-100">
+                                <tr><td colspan="7" class="p-6 text-center text-slate-400 text-sm">اضغط تحديث لتحميل السجل</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Join Requests Panel (Feature 8) -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mt-4">
+                    <div class="flex items-center justify-between p-4 border-b border-slate-100">
+                        <div class="font-bold text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-handshake text-blue-500"></i>
+                            <span>طلبات الانضمام المعلقة</span>
+                            <span id="join-requests-badge" class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold hidden">0</span>
+                        </div>
+                        <button onclick="loadJoinRequests()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1">
+                            <i class="fa-solid fa-rotate"></i> تحديث
+                        </button>
+                    </div>
+                    <div id="join-requests-container" class="p-4 space-y-3">
+                        <p class="text-center text-slate-400 text-sm">اضغط تحديث لتحميل الطلبات</p>
+                    </div>
+                </div>
             </section>
 
             <!-- 6. COMPLAINTS TAB -->

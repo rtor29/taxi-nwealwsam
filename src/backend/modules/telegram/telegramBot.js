@@ -102,6 +102,7 @@ async function handleStart(chatId, user) {
         [
             [{ text: '🚶 تسجيل راكب', callback_data: 'reg_passenger' }, { text: '🚕 تسجيل سائق', callback_data: 'reg_driver' }],
             [{ text: '🔑 تسجيل دخول', callback_data: 'login' }],
+            [{ text: '🗺️ السائقون القريبون', callback_data: 'nearby_drivers' }],
             [{ text: '📞 تواصل مع الإدارة', callback_data: 'contact_admin' }],
             [{ text: '❓ مساعدة', callback_data: 'help' }]
         ]
@@ -122,6 +123,31 @@ async function handleCallback(chatId, data, user) {
             userStates.set(chatId, { step: 'login_phone' });
             await sendMessage(chatId, '📱 أرسل رقم هاتفك المسجل:');
             break;
+        case 'nearby_drivers': {
+            // Feature 2: Show nearby active drivers directly in bot
+            const drivers = (db.memoryState.drivers || []).filter(d =>
+                !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' &&
+                (d.isVerified || d.status === 'Active' || d.status === 'Approved') && d.activeRoute
+            );
+            if (drivers.length === 0) {
+                await sendMessage(chatId, '🚕 <b>لا يوجد سائقون نشطون حالياً.</b>\n\nجرب مرة أخرى خلال دقائق.');
+            } else {
+                let msg = '🗺️ <b>السائقون المتاحون حالياً في النجف:</b>\n\n';
+                drivers.slice(0, 10).forEach((d, i) => {
+                    const cfg = db.memoryState.appConfig || {};
+                    const waNum = (d.phoneNumber || '').replace(/[^0-9]/g, '').replace(/^07/, '9647');
+                    const from = d.activeRoute ? d.activeRoute.fromText : '--';
+                    const to = d.activeRoute ? d.activeRoute.toText : '--';
+                    msg += `${i+1}. 🚕 <b>${d.fullName}</b>\n`;
+                    msg += `   📍 ${from} ← → ${to}\n`;
+                    msg += `   🚗 ${d.vehicleMake || ''} ${d.vehiclePlate || ''}\n`;
+                    msg += `   📞 <a href="https://wa.me/${waNum}">واتساب</a>\n\n`;
+                });
+                msg += '💡 لحجز مباشر، اضغط على رابط الواتساب للتواصل مع السائق.';
+                await sendMessage(chatId, msg);
+            }
+            break;
+        }
         case 'contact_admin': {
             const cfg = db.memoryState.appConfig || {};
             const tgLink = cfg.telegramAdminLink || 'https://t.me/tawseela_iq_bot';

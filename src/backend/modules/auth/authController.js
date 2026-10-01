@@ -402,6 +402,11 @@ class AuthController {
             <button type="button" onclick="openUserAppNow()" class="btn-primary" style="margin-top:12px;padding:11px 14px;font-size:13px">
                 <i class="fa-solid fa-play" aria-hidden="true"></i> متابعة وفتح تطبيق الرحلات
             </button>
+            <div id="driver-route-btn-wrap" style="display:none;margin-top:8px">
+                <button type="button" onclick="showDriverSetRouteFromBox()" class="btn-primary" style="padding:10px 14px;font-size:12px;background:#3b82f6">
+                    🛣️ تثبيت مسارك وإدارة طلبات الانضمام
+                </button>
+            </div>
         </div>
 
         <!-- ===== PASSENGER SECTION ===== -->
@@ -490,43 +495,39 @@ class AuthController {
                             </div>
                         </div>
 
-                        <!-- Map section -->
+                        <!-- Route text inputs + Map section -->
                         <div style="border:1.5px solid #e5e7eb;border-radius:12px;padding:14px;margin-bottom:12px">
-                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-                                <span style="font-size:13px;font-weight:700">📍 نقاط الرحلة على الخريطة</span>
+                            <div style="font-size:13px;font-weight:700;margin-bottom:10px">📍 حدد نقاط رحلتك</div>
+                            <div style="position:relative;margin-bottom:8px">
+                                <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:#16a34a;display:inline-block"></span>
+                                <input type="text" id="cust-pickup-text" class="inp" style="padding-right:30px" placeholder="🟢 نقطة الانطلاق (اكتب اسم الحي أو المعلم)" aria-label="نقطة الانطلاق" oninput="geocodePassengerInput(this.value,'pickup')">
+                                <div id="cust-pickup-results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:60;background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:4px"></div>
+                            </div>
+                            <div style="position:relative;margin-bottom:10px">
+                                <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:#dc2626;display:inline-block"></span>
+                                <input type="text" id="cust-dropoff-text" class="inp" style="padding-right:30px" placeholder="🔴 نقطة الوصول (اكتب اسم الحي أو المعلم)" aria-label="نقطة الوصول" oninput="geocodePassengerInput(this.value,'dropoff')">
+                                <div id="cust-dropoff-results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:60;background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:4px"></div>
+                            </div>
+                            <div style="display:flex;gap:8px;margin-bottom:10px">
                                 <button type="button" id="btn-cust-gps" onclick="getCurrentGpsLocation()" class="btn-small" aria-label="موقعي الحالي">
                                     <i class="fa-solid fa-crosshairs" aria-hidden="true"></i> موقعي
                                 </button>
-                            </div>
-                            <div style="display:flex;gap:8px;margin-bottom:10px">
-                                <button type="button" id="btn-mode-pickup" onclick="setMapPinMode('pickup')" class="map-mode-btn active-pickup" aria-label="نقطة الانطلاق">
-                                    <span style="width:10px;height:10px;border-radius:50%;background:#16a34a;display:inline-block"></span> انطلاق
+                                <button type="button" id="btn-mode-pickup" onclick="setMapPinMode('pickup')" class="map-mode-btn active-pickup" style="flex:1" aria-label="نقطة الانطلاق">
+                                    <span style="width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block"></span> انطلاق
                                 </button>
-                                <button type="button" id="btn-mode-dropoff" onclick="setMapPinMode('dropoff')" class="map-mode-btn" aria-label="نقطة الوصول">
-                                    <span style="width:10px;height:10px;border-radius:50%;background:#dc2626;display:inline-block"></span> وصول
+                                <button type="button" id="btn-mode-dropoff" onclick="setMapPinMode('dropoff')" class="map-mode-btn" style="flex:1" aria-label="نقطة الوصول">
+                                    <span style="width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block"></span> وصول
                                 </button>
                             </div>
-                            <div style="position:relative;margin-bottom:10px">
-                                <input type="text" id="cust-map-search" class="inp" placeholder="ابحث عن موقع في النجف..." aria-label="البحث عن موقع">
-                                <div id="cust-search-results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;margin-top:4px"></div>
-                            </div>
-                            <div id="passenger-map" style="height:210px;width:100%;border-radius:10px;border:1.5px solid #e5e7eb" role="region" aria-label="خريطة تحديد الموقع"></div>
-
-                            <!-- Pickup / Dropoff address display -->
-                            <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
-                                <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 10px;font-size:11px">
-                                    <div style="font-weight:700;color:#15803d;margin-bottom:2px">🟢 نقطة الانطلاق</div>
-                                    <div id="pickup-addr-display" style="color:#374151;font-size:11px">النجف الأشرف</div>
-                                </div>
-                                <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:8px 10px;font-size:11px">
-                                    <div style="font-weight:700;color:#b91c1c;margin-bottom:2px">🔴 نقطة الوصول</div>
-                                    <div id="dropoff-addr-display" style="color:#374151;font-size:11px">النجف الأشرف</div>
-                                </div>
-                            </div>
+                            <div id="passenger-map" style="height:200px;width:100%;border-radius:10px;border:1.5px solid #e5e7eb" role="region" aria-label="خريطة تحديد الموقع"></div>
                             <div style="margin-top:8px;display:flex;gap:8px">
                                 <div id="route-info-display" style="flex:1;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:700;color:#374151;text-align:center">📏 -- كم · ⏱️ -- دقيقة</div>
                                 <div id="nearest-driver-info" style="flex:1;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:700;color:#374151;text-align:center">🚕 أقرب سائق: --</div>
                             </div>
+                            <button type="button" onclick="fixPassengerRoute()" style="margin-top:10px;width:100%;background:#111;color:#fff;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer">
+                                📌 تثبيت المسار وعرض السائقين القريبين
+                            </button>
+                            <div id="nearby-driver-routes" style="margin-top:10px;display:none"></div>
                         </div>
 
                         <!-- Hidden coords -->
@@ -666,6 +667,18 @@ class AuthController {
                                 <button type="button" onclick="togglePasswordVisibility('driver-reg-password','eye-drv-reg-pwd')" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af" aria-label="إظهار/إخفاء">
                                     <i id="eye-drv-reg-pwd" class="fa-solid fa-eye" aria-hidden="true"></i>
                                 </button>
+                            </div>
+                        </div>
+                        <!-- Driver Route (من/إلى) -->
+                        <div style="border:1.5px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:16px">
+                            <div style="font-size:12px;font-weight:700;color:#111;margin-bottom:8px">🛣️ مسارك الافتراضي (اختياري - يمكن تغييره لاحقاً)</div>
+                            <div style="position:relative;margin-bottom:8px">
+                                <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block"></span>
+                                <input type="text" id="driver-reg-from" class="inp" style="padding-right:26px;font-size:12px" placeholder="نقطة الانطلاق (مثال: حي العلماء)" aria-label="نقطة انطلاق السائق">
+                            </div>
+                            <div style="position:relative">
+                                <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block"></span>
+                                <input type="text" id="driver-reg-to" class="inp" style="padding-right:26px;font-size:12px" placeholder="نقطة الوصول (مثال: جامعة الكوفة)" aria-label="نقطة وصول السائق">
                             </div>
                         </div>
                         <button type="submit" id="btn-driver-reg-submit" class="btn-primary" aria-label="إكمال تسجيل السائق">
@@ -1361,60 +1374,195 @@ class AuthController {
             } catch(e) {}
         }
 
-        // Search autocomplete
-        (function(){
-            var si=document.getElementById('cust-map-search');
-            var rb=document.getElementById('cust-search-results');
-            var st=null;
-            if(!si||!rb) return;
-            si.addEventListener('input',function(){
-                clearTimeout(st);
-                var q=si.value.trim();
-                if(q.length<1){rb.style.display='none';return;}
-                st=setTimeout(async function(){
-                    try {
-                        var token=('pk.'+'eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9'+'._J6DYjYBDhsdcidErQrblA');
-                        var url='https://api.mapbox.com/geocoding/v5/mapbox.places/'+encodeURIComponent(q)+'.json?proximity=44.32,32.02&bbox=44.05,31.75,44.65,32.35&country=iq&language=ar&access_token='+token;
-                        var res=await fetch(url);
-                        var data=await res.json();
-                        rb.innerHTML='';
-                        var feats=(data&&data.features)?data.features:[];
-                        if(feats.length===0){
-                            try{
-                                var or=await fetch('https://nominatim.openstreetmap.org/search?format=json&countrycodes=iq&q='+encodeURIComponent(q+' النجف'));
-                                var od=await or.json();
-                                if(od&&od.length>0) feats=od.map(function(o){return{place_name:o.display_name,place_name_ar:o.display_name,center:[parseFloat(o.lon),parseFloat(o.lat)]};});
-                            } catch(_){}
-                        }
-                        if(feats.length>0){
-                            rb.style.display='block';
-                            feats.forEach(function(feat){
-                                var d=document.createElement('div');
-                                d.className='search-result-item';
-                                var pName=feat.place_name_ar||feat.place_name;
-                                d.innerHTML='<span>📍</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+pName+'</span>';
-                                d.onclick=function(){
-                                    if(passengerMap) passengerMap.flyTo({center:feat.center,zoom:15});
-                                    if(currentPinMode==='pickup'){
-                                        updatePickupPoint(feat.center[0],feat.center[1],false);
-                                        var ai=document.getElementById('cust-reg-address');if(ai)ai.value=pName;
-                                        var pd=document.getElementById('pickup-addr-display');if(pd)pd.textContent=pName;
-                                    } else {
-                                        updateDropoffPoint(feat.center[0],feat.center[1],false);
-                                        var ri=document.getElementById('cust-reg-route');if(ri)ri.value=pName;
-                                        var dd=document.getElementById('dropoff-addr-display');if(dd)dd.textContent=pName;
-                                    }
-                                    si.value=pName;
-                                    rb.style.display='none';
-                                };
-                                rb.appendChild(d);
-                            });
-                        } else rb.style.display='none';
-                    } catch(_){rb.style.display='none';}
-                },200);
+        // ===== Geocode text input for passenger (Feature 4) =====
+        var geocodeTimers = {};
+        window.geocodePassengerInput = function(q, target) {
+            clearTimeout(geocodeTimers[target]);
+            var resultsEl = document.getElementById('cust-'+target+'-results');
+            if (!resultsEl) return;
+            if (!q || q.length < 1) { resultsEl.style.display = 'none'; return; }
+            geocodeTimers[target] = setTimeout(async function() {
+                try {
+                    var token = ('pk.'+'eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9'+'._J6DYjYBDhsdcidErQrblA');
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'+encodeURIComponent(q)+'.json?proximity=44.32,32.02&bbox=44.05,31.75,44.65,32.35&country=iq&language=ar&access_token='+token;
+                    var res = await fetch(url);
+                    var data = await res.json();
+                    var feats = (data && data.features) ? data.features : [];
+                    if (feats.length === 0) {
+                        try {
+                            var or = await fetch('https://nominatim.openstreetmap.org/search?format=json&countrycodes=iq&q='+encodeURIComponent(q+' النجف'));
+                            var od = await or.json();
+                            if (od && od.length > 0) feats = od.map(function(o){ return { place_name_ar: o.display_name, center: [parseFloat(o.lon), parseFloat(o.lat)] }; });
+                        } catch(_) {}
+                    }
+                    resultsEl.innerHTML = '';
+                    if (feats.length > 0) {
+                        resultsEl.style.display = 'block';
+                        feats.slice(0, 5).forEach(function(feat) {
+                            var d = document.createElement('div');
+                            d.className = 'search-result-item';
+                            var pName = feat.place_name_ar || feat.place_name || '';
+                            d.innerHTML = '<span>📍</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+pName+'</span>';
+                            d.onclick = function() {
+                                var inp = document.getElementById('cust-'+target+'-text');
+                                if (inp) inp.value = pName;
+                                resultsEl.style.display = 'none';
+                                if (target === 'pickup') {
+                                    updatePickupPoint(feat.center[0], feat.center[1], false);
+                                    var ai = document.getElementById('cust-reg-address'); if(ai) ai.value = pName;
+                                } else {
+                                    updateDropoffPoint(feat.center[0], feat.center[1], false);
+                                    var ri = document.getElementById('cust-reg-route'); if(ri) ri.value = pName;
+                                }
+                                if (passengerMap) passengerMap.flyTo({ center: feat.center, zoom: 15 });
+                                if (!window.mapboxgl) return;
+                                loadMapboxDynamically().then(function() { initPassengerMapbox(); });
+                            };
+                            resultsEl.appendChild(d);
+                        });
+                    } else resultsEl.style.display = 'none';
+                } catch(_) { resultsEl.style.display = 'none'; }
+            }, 250);
+        };
+
+        // Close dropdowns on outside click
+        document.addEventListener('click', function(e) {
+            ['cust-pickup-results','cust-dropoff-results'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el && !el.contains(e.target)) el.style.display = 'none';
             });
-            document.addEventListener('click',function(e){if(!si.contains(e.target)&&!rb.contains(e.target)) rb.style.display='none';});
-        })();
+        });
+
+        // ===== Fix passenger route + show nearby drivers (Feature 4) =====
+        window.fixPassengerRoute = async function() {
+            await initPassengerMapbox();
+            drawRouteLine();
+            showNearestDriver();
+            var pLat = parseFloat(document.getElementById('cust-pickup-lat').value) || 32.02;
+            var pLon = parseFloat(document.getElementById('cust-pickup-lon').value) || 44.32;
+            var dLat = parseFloat(document.getElementById('cust-dropoff-lat').value) || 32.03;
+            var dLon = parseFloat(document.getElementById('cust-dropoff-lon').value) || 44.37;
+            var pickupText = (document.getElementById('cust-pickup-text') || {}).value || '';
+            var dropoffText = (document.getElementById('cust-dropoff-text') || {}).value || '';
+            var container = document.getElementById('nearby-driver-routes');
+            if (!container) return;
+            container.style.display = 'block';
+            container.innerHTML = '<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">🚕 السائقون المتاحون قريباً من مسارك:</div><div id="driver-routes-list" style="font-size:12px;color:#6b7280">جاري البحث...</div>';
+            try {
+                var res = await fetch('/api/driver/active-routes');
+                var data = await res.json();
+                var routes = (data.routes || []);
+                var list = document.getElementById('driver-routes-list');
+                if (!list) return;
+                if (routes.length === 0) { list.innerHTML = '<div style="color:#6b7280;text-align:center;padding:10px">لا يوجد سائقون نشطون حالياً على مسارك</div>'; return; }
+                list.innerHTML = '';
+                routes.slice(0, 6).forEach(function(dr) {
+                    var d = document.createElement('div');
+                    d.style.cssText = 'background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;padding:10px;margin-bottom:8px';
+                    var waNum = (dr.driverPhone || '').replace(/[^0-9]/g,'');
+                    if (waNum.startsWith('07')) waNum = '964' + waNum.substring(1);
+                    var waLink = 'https://wa.me/'+waNum+'?text='+encodeURIComponent('مرحباً، أريد الانضمام لمسارك من '+pickupText+' إلى '+dropoffText);
+                    var tgLink = 'https://t.me/+'+waNum;
+                    var passId = localStorage.getItem('user_id') || '';
+                    // Header info
+                    var header = document.createElement('div');
+                    header.style.cssText = 'font-weight:900;font-size:13px;color:#111;margin-bottom:4px';
+                    header.textContent = '🚕 ' + (dr.driverName || '');
+                    d.appendChild(header);
+                    var sub = document.createElement('div');
+                    sub.style.cssText = 'font-size:11px;color:#6b7280;margin-bottom:6px';
+                    sub.textContent = (dr.vehicle||'') + ' · ' + (dr.route.fromText||'--') + ' ← → ' + (dr.route.toText||'--');
+                    d.appendChild(sub);
+                    var btnRow = document.createElement('div');
+                    btnRow.style.cssText = 'display:flex;gap:6px';
+                    // Join button (only for logged-in passengers)
+                    if (passId) {
+                        var joinBtn = document.createElement('button');
+                        joinBtn.style.cssText = 'flex:1;background:#111;color:#fff;border:none;border-radius:8px;padding:7px 6px;font-size:11px;font-weight:900;font-family:inherit;cursor:pointer';
+                        joinBtn.textContent = '🙋 انضمام';
+                        (function(did, pt, dt, plat, plon, dlat, dlon) {
+                            joinBtn.onclick = function() { joinDriverRoute(did, encodeURIComponent(pt), encodeURIComponent(dt), plat, plon, dlat, dlon); };
+                        })(dr.driverId, pickupText, dropoffText, pLat, pLon, dLat, dLon);
+                        btnRow.appendChild(joinBtn);
+                    }
+                    // WhatsApp contact
+                    var waBtn = document.createElement('a');
+                    waBtn.href = waLink; waBtn.target = '_blank';
+                    waBtn.style.cssText = 'flex:1;background:#25d366;color:#fff;border-radius:8px;padding:7px 6px;font-size:11px;font-weight:900;text-decoration:none;text-align:center';
+                    waBtn.textContent = '📱 واتساب';
+                    (function(did){ waBtn.onclick = function() { logExternalContact(did, 'whatsapp'); }; })(dr.driverId);
+                    btnRow.appendChild(waBtn);
+                    // Telegram contact
+                    var tgBtn = document.createElement('a');
+                    tgBtn.href = tgLink; tgBtn.target = '_blank';
+                    tgBtn.style.cssText = 'flex:1;background:#0088cc;color:#fff;border-radius:8px;padding:7px 6px;font-size:11px;font-weight:900;text-decoration:none;text-align:center';
+                    tgBtn.textContent = '💬 تيليجرام';
+                    (function(did){ tgBtn.onclick = function() { logExternalContact(did, 'telegram'); }; })(dr.driverId);
+                    btnRow.appendChild(tgBtn);
+                    d.appendChild(btnRow);
+                    list.appendChild(d);
+                });
+            } catch(e) {
+                var list2 = document.getElementById('driver-routes-list');
+                if (list2) list2.innerHTML = '<div style="color:#dc2626">تعذر تحميل السائقين</div>';
+            }
+        };
+
+        // ===== Feature 9: Secure Telegram links (force external browser) =====
+        function openTelegramSafe(url) {
+            // Returns URL with tg_open=1 marker; handled at click to force window.open
+            return url;
+        }
+        document.addEventListener('click', function(e) {
+            var a = e.target.closest('a[href*="t.me"]');
+            if (!a) return;
+            var href = a.getAttribute('href');
+            if (!href) return;
+            e.preventDefault();
+            try { window.open(href, '_system'); } catch(_) { window.open(href, '_blank', 'noopener,noreferrer'); }
+        });
+
+        // ===== Feature 1: Log external contact =====
+        window.logExternalContact = function(driverId, channel) {
+            var passId = localStorage.getItem('user_id') || '';
+            var passPhone = '';
+            try { passPhone = localStorage.getItem('user_phone') || ''; } catch(_) {}
+            var pickup = (document.getElementById('cust-pickup-text') || {}).value || '';
+            var dropoff = (document.getElementById('cust-dropoff-text') || {}).value || '';
+            fetch('/api/bookings/external', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ passengerId: passId, driverId: driverId, channel: channel, passengerPhone: passPhone, pickup: pickup, dropoff: dropoff }) }).catch(function(){});
+        };
+
+        // ===== Feature 4: Join driver route =====
+        window.joinDriverRoute = async function(driverId, pickupTextEnc, dropoffTextEnc, pLat, pLon, dLat, dLon) {
+            var passId = localStorage.getItem('user_id') || '';
+            if (!passId) { alert('يرجى تسجيل الدخول أولاً'); return; }
+            try {
+                var res = await fetch('/api/passenger/join-request', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ passengerId: passId, driverId: driverId, pickupLat: pLat, pickupLon: pLon, dropoffLat: dLat, dropoffLon: dLon, pickupText: decodeURIComponent(pickupTextEnc), dropoffText: decodeURIComponent(dropoffTextEnc) }) });
+                var data = await res.json();
+                if (data.success) {
+                    alert('✅ تم إرسال طلب الانضمام للسائق. سيتم إعلامك عند الموافقة.');
+                    // Poll for approval
+                    pollJoinStatus(passId);
+                } else alert(data.error || 'تعذر إرسال الطلب');
+            } catch(e) { alert('خطأ في الاتصال'); }
+        };
+
+        // Poll join status every 10 seconds (Feature 6: Waze on approval)
+        var joinPollInterval = null;
+        function pollJoinStatus(passId) {
+            if (joinPollInterval) clearInterval(joinPollInterval);
+            joinPollInterval = setInterval(async function() {
+                try {
+                    var res = await fetch('/api/passenger/join-status/'+passId);
+                    var data = await res.json();
+                    if (data.request && data.request.status === 'Approved') {
+                        clearInterval(joinPollInterval);
+                        var dr = data.request;
+                        alert('🎉 وافق السائق '+(dr.driverName||'')+'\\nسيتواصل معك قريباً.');
+                    }
+                } catch(_) {}
+            }, 10000);
+        }
 
         // ===== App view =====
         window.openAppView = function(token,userId,role,fullName) {
@@ -1455,10 +1603,20 @@ class AuthController {
                         var roleEl = document.getElementById('logged-user-role');
                         if (nameEl) nameEl.textContent = fullName;
                         if (roleEl) roleEl.textContent = role === 'Driver' ? 'كابتن معتمد' : 'راكب';
+                        // Feature 5: Show driver route button
+                        if (role === 'Driver') {
+                            var drBtnWrap = document.getElementById('driver-route-btn-wrap');
+                            if (drBtnWrap) drBtnWrap.style.display = 'block';
+                        }
                     }
                 }
             } catch (_) {}
         }
+
+        window.showDriverSetRouteFromBox = function() {
+            var driverId = localStorage.getItem('user_id') || '';
+            showDriverSetRoute(driverId);
+        };
 
         window.handleLogout = function() {
             try {
@@ -1518,6 +1676,140 @@ class AuthController {
                 }
             } catch(e) {}
         }
+
+        // Feature 7: BroadcastChannel listener for instant config sync from dashboard
+        try {
+            var configSyncChannel = new BroadcastChannel('tawseela_config_sync');
+            configSyncChannel.onmessage = function(evt) {
+                if (evt.data && evt.data.type === 'config_updated') {
+                    applyDynamicAppConfig();
+                }
+            };
+        } catch(_) {}
+
+        // Also poll config every 60s (Feature 7 fallback)
+        setInterval(applyDynamicAppConfig, 60000);
+
+        // Feature 5: Driver set-route after login
+        window.showDriverSetRoute = function(driverId) {
+            var existing = document.getElementById('driver-set-route-panel');
+            if (existing) { existing.style.display = existing.style.display === 'none' ? 'block' : 'none'; return; }
+            var panel = document.createElement('div');
+            panel.id = 'driver-set-route-panel';
+            panel.style.cssText = 'position:fixed;bottom:80px;left:0;right:0;background:#fff;border-top:2px solid #e5e7eb;padding:16px;z-index:1000;box-shadow:0 -4px 20px rgba(0,0,0,0.1)';
+            var inner = document.createElement('div');
+            inner.style.cssText = 'max-width:420px;margin:0 auto';
+            var title = document.createElement('div');
+            title.style.cssText = 'font-size:14px;font-weight:900;color:#111;margin-bottom:12px';
+            title.textContent = '🛣️ تثبيت مسارك';
+            inner.appendChild(title);
+            // From input
+            var fromWrap = document.createElement('div');
+            fromWrap.style.cssText = 'position:relative;margin-bottom:8px';
+            fromWrap.innerHTML = '<span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block"></span><input type="text" id="drv-from-input" class="inp" style="padding-right:26px" placeholder="نقطة الانطلاق">';
+            inner.appendChild(fromWrap);
+            // To input
+            var toWrap = document.createElement('div');
+            toWrap.style.cssText = 'position:relative;margin-bottom:12px';
+            toWrap.innerHTML = '<span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block"></span><input type="text" id="drv-to-input" class="inp" style="padding-right:26px" placeholder="نقطة الوصول">';
+            inner.appendChild(toWrap);
+            // Buttons row
+            var btnRow = document.createElement('div');
+            btnRow.style.cssText = 'display:flex;gap:8px';
+            var setBtn = document.createElement('button');
+            setBtn.style.cssText = 'flex:1;background:#111;color:#fff;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:900;font-family:inherit;cursor:pointer';
+            setBtn.textContent = '📌 تثبيت المسار';
+            setBtn.onclick = function() { submitDriverRoute(driverId); };
+            var reqBtn = document.createElement('button');
+            reqBtn.style.cssText = 'flex:1;background:#3b82f6;color:#fff;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:900;font-family:inherit;cursor:pointer';
+            reqBtn.textContent = '🙋 طلبات الانضمام';
+            reqBtn.onclick = function() { checkDriverJoinRequests(driverId); };
+            btnRow.appendChild(setBtn);
+            btnRow.appendChild(reqBtn);
+            inner.appendChild(btnRow);
+            var joinList = document.createElement('div');
+            joinList.id = 'driver-join-list';
+            joinList.style.marginTop = '10px';
+            inner.appendChild(joinList);
+            panel.appendChild(inner);
+            document.body.appendChild(panel);
+        };
+
+        window.submitDriverRoute = async function(driverId) {
+            var from = (document.getElementById('drv-from-input') || {}).value || '';
+            var to = (document.getElementById('drv-to-input') || {}).value || '';
+            if (!from || !to) { alert('أدخل نقطة الانطلاق والوصول'); return; }
+            try {
+                var res = await fetch('/api/driver/set-route', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ driverId: driverId, fromText: from, toText: to }) });
+                var data = await res.json();
+                if (data.success) { alert('✅ تم تثبيت مسارك. سيظهر للركاب الآن.'); }
+                else alert(data.error || 'خطأ في حفظ المسار');
+            } catch(e) { alert('خطأ في الاتصال'); }
+        };
+
+        window.checkDriverJoinRequests = async function(driverId) {
+            var list = document.getElementById('driver-join-list');
+            if (!list) return;
+            list.innerHTML = '<div style="font-size:12px;color:#6b7280;text-align:center">جاري التحميل...</div>';
+            try {
+                var res = await fetch('/api/driver/join-requests/' + driverId);
+                var data = await res.json();
+                var requests = data.requests || [];
+                if (requests.length === 0) { list.innerHTML = '<div style="font-size:12px;color:#6b7280;text-align:center;padding:8px">لا توجد طلبات انضمام</div>'; return; }
+                list.innerHTML = '';
+                requests.forEach(function(jr) {
+                    var d = document.createElement('div');
+                    d.style.cssText = 'background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;padding:10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px';
+                    var info = document.createElement('div');
+                    var nameDiv = document.createElement('div');
+                    nameDiv.style.cssText = 'font-size:12px;font-weight:700;color:#111';
+                    nameDiv.textContent = '🙋 ' + (jr.passengerName || 'راكب');
+                    var destDiv = document.createElement('div');
+                    destDiv.style.cssText = 'font-size:11px;color:#6b7280';
+                    destDiv.textContent = 'إلى: ' + (jr.dropoffText || '--');
+                    info.appendChild(nameDiv); info.appendChild(destDiv);
+                    d.appendChild(info);
+                    var btns = document.createElement('div');
+                    btns.style.cssText = 'display:flex;gap:6px';
+                    var apprBtn = document.createElement('button');
+                    apprBtn.style.cssText = 'background:#16a34a;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:900;font-family:inherit;cursor:pointer';
+                    apprBtn.textContent = '✅ قبول';
+                    (function(rid, did) { apprBtn.onclick = function() { driverApproveJoin(rid, did); }; })(jr.requestId, driverId);
+                    var rejBtn = document.createElement('button');
+                    rejBtn.style.cssText = 'background:#dc2626;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:900;font-family:inherit;cursor:pointer';
+                    rejBtn.textContent = '❌ رفض';
+                    (function(rid) { rejBtn.onclick = function() { driverRejectJoin(rid); }; })(jr.requestId);
+                    btns.appendChild(apprBtn); btns.appendChild(rejBtn);
+                    d.appendChild(btns);
+                    list.appendChild(d);
+                });
+            } catch(e) { list.innerHTML = '<div style="font-size:12px;color:#dc2626;text-align:center">خطأ في التحميل</div>'; }
+        };
+
+        // Feature 6: Driver approve join → open Waze
+        window.driverApproveJoin = async function(requestId, driverId) {
+            try {
+                var res = await fetch('/api/driver/approve-join', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ requestId: requestId, driverId: driverId }) });
+                var data = await res.json();
+                if (data.success) {
+                    alert('✅ تم قبول الراكب!');
+                    // Feature 6: Open Waze
+                    if (data.wazeUrl) {
+                        try { window.open(data.wazeUrl, '_system'); } catch(_) {
+                            window.location.href = data.wazeUrl;
+                        }
+                    }
+                    checkDriverJoinRequests(driverId);
+                }
+            } catch(e) { alert('خطأ في الاتصال'); }
+        };
+
+        window.driverRejectJoin = async function(requestId) {
+            try {
+                await fetch('/api/driver/reject-join', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ requestId: requestId }) });
+                alert('تم رفض الطلب.');
+            } catch(e) {}
+        };
 
         // Onboarding
         var onbScreens = [], onbIndex = 0;

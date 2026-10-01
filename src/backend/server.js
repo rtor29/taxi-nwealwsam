@@ -1840,6 +1840,159 @@ async function startServer() {
             return sendJson({ success: true });
         }
 
+        // ===== Feature 10: AI Router (model routing based on task complexity) =====
+        if (pathname === '/api/ai/route' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const { task, tokenBudget } = body;
+            const taskStr = (task || '').toLowerCase();
+            // Heuristic: complex tasks (analysis, matching, reports) → heavy model; simple (OTP, status) → light
+            const heavyKeywords = ['تحليل', 'تقرير', 'مطابقة', 'خوارزمية', 'analysis', 'report', 'matching', 'algorithm', 'forecast', 'complex'];
+            const isComplex = heavyKeywords.some(kw => taskStr.includes(kw));
+            const model = isComplex ? 'pro' : 'flash';
+            const estimatedTokens = isComplex ? Math.min(tokenBudget || 4000, 8000) : Math.min(tokenBudget || 1000, 2000);
+            return sendJson({ success: true, recommendedModel: model, estimatedTokens, isComplex });
+        }
+
+        // ===== External Booking (WhatsApp / Telegram contact) =====
+        if (pathname === '/api/bookings/external' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const { passengerId, driverId, channel, passengerPhone, driverPhone, pickup, dropoff } = body;
+            if (!channel) return sendJson({ success: false, error: 'channel required' }, 400);
+            const bk = {
+                bookingId: 'ext-' + Date.now(),
+                type: 'external',
+                channel: channel || 'whatsapp',
+                passengerId: passengerId || '',
+                driverId: driverId || '',
+                passengerPhone: passengerPhone || '',
+                driverPhone: driverPhone || '',
+                pickup: pickup || '',
+                dropoff: dropoff || '',
+                status: 'Confirmed',
+                createdAt: new Date().toISOString()
+            };
+            if (!db.memoryState.externalBookings) db.memoryState.externalBookings = [];
+            db.memoryState.externalBookings.unshift(bk);
+            if (db.memoryState.externalBookings.length > 500) db.memoryState.externalBookings = db.memoryState.externalBookings.slice(0, 500);
+            db.saveStateSnapshot();
+            try { telegramBot.sendAdminNotification('📲 حجز خارجي جديد عبر ' + channel + '\\nمن: ' + (passengerPhone || passengerId) + ' إلى سائق: ' + (driverPhone || driverId)); } catch(_) {}
+            return sendJson({ success: true, booking: bk });
+        }
+
+        if (pathname === '/api/fleet/external-bookings' && method === 'GET') {
+            return sendJson({ success: true, bookings: (db.memoryState.externalBookings || []) });
+        }
+
+        // ===== Driver sets own route =====
+        if (pathname === '/api/driver/set-route' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const { driverId, fromText, toText, fromLat, fromLon, toLat, toLon } = body;
+            if (!driverId) return sendJson({ success: false, error: 'driverId required' }, 400);
+            const driver = db.memoryState.drivers.find(d => d.driverId === driverId);
+            if (!driver) return sendJson({ success: false, error: 'Driver not found' }, 404);
+            driver.activeRoute = { fromText: fromText || '', toText: toText || '', fromLat: parseFloat(fromLat)||32.02, fromLon: parseFloat(fromLon)||44.32, toLat: parseFloat(toLat)||32.03, toLon: parseFloat(toLon)||44.37, setAt: new Date().toISOString() };
+            driver.currentLat = parseFloat(fromLat) || driver.currentLat || 32.02;
+            driver.currentLon = parseFloat(fromLon) || driver.currentLon || 44.32;
+            db.saveStateSnapshot();
+            return sendJson({ success: true, route: driver.activeRoute });
+        }
+
+        // ===== Get active driver routes for passenger =====
+        if (pathname === '/api/driver/active-routes' && method === 'GET') {
+            const activeRoutes = (db.memoryState.drivers || [])
+                .filter(d => !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' && (d.isVerified || d.status === 'Active' || d.status === 'Approved') && d.activeRoute)
+                .map(d => ({
+                    driverId: d.driverId,
+                    driverName: d.fullName,
+                    driverPhone: d.phoneNumber,
+                    vehicle: (d.vehicleMake || '') + ' ' + (d.vehiclePlate || ''),
+                    route: d.activeRoute,
+                    currentLat: d.currentLat || 32.02,
+                    currentLon: d.currentLon || 44.32,
+                    availableSeats: d.availableSeats || 3
+                }));
+            return sendJson({ success: true, routes: activeRoutes });
+        }
+
+        // ===== Passenger join request =====
+        if (pathname === '/api/passenger/join-request' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const { passengerId, driverId, pickupLat, pickupLon, dropoffLat, dropoffLon, pickupText, dropoffText } = body;
+            if (!passengerId || !driverId) return sendJson({ success: false, error: 'passengerId and driverId required' }, 400);
+            if (!db.memoryState.joinRequests) db.memoryState.joinRequests = [];
+            const existing = db.memoryState.joinRequests.find(j => j.passengerId === passengerId && j.driverId === driverId && j.status === 'Pending');
+            if (existing) return sendJson({ success: true, request: existing, alreadyPending: true });
+            const jr = { requestId: 'jr-' + Date.now(), passengerId, driverId, pickupLat: parseFloat(pickupLat)||32.02, pickupLon: parseFloat(pickupLon)||44.32, dropoffLat: parseFloat(dropoffLat)||32.03, dropoffLon: parseFloat(dropoffLon)||44.37, pickupText: pickupText||'', dropoffText: dropoffText||'', status: 'Pending', createdAt: new Date().toISOString() };
+            db.memoryState.joinRequests.unshift(jr);
+            if (db.memoryState.joinRequests.length > 1000) db.memoryState.joinRequests = db.memoryState.joinRequests.slice(0, 1000);
+            db.saveStateSnapshot();
+            const driver = db.memoryState.drivers.find(d => d.driverId === driverId);
+            const passenger = db.memoryState.customers.find(c => c.userId === passengerId);
+            try { telegramBot.sendAdminNotification('🙋 طلب انضمام جديد من راكب: ' + (passenger ? passenger.fullName : passengerId) + ' للسائق: ' + (driver ? driver.fullName : driverId)); } catch(_) {}
+            return sendJson({ success: true, request: jr });
+        }
+
+        // ===== Driver approves join request (triggers Waze for driver) =====
+        if (pathname === '/api/driver/approve-join' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const { requestId, driverId } = body;
+            if (!db.memoryState.joinRequests) db.memoryState.joinRequests = [];
+            const jr = db.memoryState.joinRequests.find(j => j.requestId === requestId);
+            if (!jr) return sendJson({ success: false, error: 'Request not found' }, 404);
+            jr.status = 'Approved';
+            jr.approvedAt = new Date().toISOString();
+            db.saveStateSnapshot();
+            // Return Waze deep link for driver
+            const wazeUrl = 'waze://ul?ll=' + jr.pickupLat + ',' + jr.pickupLon + '&navigate=yes';
+            return sendJson({ success: true, request: jr, wazeUrl, pickupLat: jr.pickupLat, pickupLon: jr.pickupLon, pickupText: jr.pickupText });
+        }
+
+        if (pathname === '/api/driver/reject-join' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const { requestId } = body;
+            if (!db.memoryState.joinRequests) db.memoryState.joinRequests = [];
+            const jr = db.memoryState.joinRequests.find(j => j.requestId === requestId);
+            if (jr) { jr.status = 'Rejected'; jr.rejectedAt = new Date().toISOString(); db.saveStateSnapshot(); }
+            return sendJson({ success: true });
+        }
+
+        // Get join requests for a driver
+        if (pathname.startsWith('/api/driver/join-requests/') && method === 'GET') {
+            const driverId = pathname.split('/').pop();
+            const requests = (db.memoryState.joinRequests || []).filter(j => j.driverId === driverId && j.status === 'Pending');
+            // For each request, include passenger name but NOT exact pickup location (hidden until approved)
+            const safe = requests.map(j => {
+                const passenger = db.memoryState.customers.find(c => c.userId === j.passengerId);
+                return { requestId: j.requestId, passengerId: j.passengerId, passengerName: passenger ? passenger.fullName : 'راكب', dropoffText: j.dropoffText, status: j.status, createdAt: j.createdAt };
+            });
+            return sendJson({ success: true, requests: safe });
+        }
+
+        // Get passenger's join request status
+        if (pathname.startsWith('/api/passenger/join-status/') && method === 'GET') {
+            const passengerId = pathname.split('/').pop();
+            const request = (db.memoryState.joinRequests || []).find(j => j.passengerId === passengerId && (j.status === 'Pending' || j.status === 'Approved'));
+            if (!request) return sendJson({ success: true, status: null });
+            const driver = db.memoryState.drivers.find(d => d.driverId === request.driverId);
+            const resp = { requestId: request.requestId, driverId: request.driverId, status: request.status, createdAt: request.createdAt };
+            if (request.status === 'Approved' && driver) {
+                resp.driverPhone = driver.phoneNumber;
+                resp.driverName = driver.fullName;
+                resp.wazeUrl = 'waze://ul?ll=' + request.pickupLat + ',' + request.pickupLon + '&navigate=yes';
+            }
+            return sendJson({ success: true, request: resp });
+        }
+
+        // Fleet operations log (all bookings + join requests + external)
+        if (pathname === '/api/fleet/operations-log' && method === 'GET') {
+            const ops = [];
+            (db.memoryState.bookings || []).slice(0, 50).forEach(b => ops.push({ type: 'booking', id: b.bookingId || b.id, status: b.status, from: b.pickupAddress || '', to: b.dropoffAddress || '', passengerName: (db.memoryState.customers.find(c=>c.userId===b.passengerId)||{}).fullName || b.passengerId, driverName: (db.memoryState.drivers.find(d=>d.driverId===b.driverId)||{}).fullName || b.driverId, createdAt: b.createdAt || '' }));
+            (db.memoryState.externalBookings || []).slice(0, 50).forEach(b => ops.push({ type: 'external', channel: b.channel, id: b.bookingId, status: b.status, passengerPhone: b.passengerPhone, driverPhone: b.driverPhone, from: b.pickup, to: b.dropoff, createdAt: b.createdAt }));
+            (db.memoryState.joinRequests || []).slice(0, 50).forEach(j => { const p=db.memoryState.customers.find(c=>c.userId===j.passengerId)||{}; const d=db.memoryState.drivers.find(dr=>dr.driverId===j.driverId)||{}; ops.push({ type: 'join', id: j.requestId, status: j.status, passengerName: p.fullName||j.passengerId, driverName: d.fullName||j.driverId, from: j.pickupText, to: j.dropoffText, createdAt: j.createdAt }); });
+            ops.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
+            return sendJson({ success: true, operations: ops.slice(0, 100) });
+        }
+
         if (pathname.startsWith('/uploads/')) {
             const rawRel = pathname.replace(/^\/uploads\//, '').replace(/\.\./g, '').replace(/^\/+/, '');
             const uploadFile = path.join(config.uploadsDir, rawRel);
