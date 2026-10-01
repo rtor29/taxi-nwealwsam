@@ -1,0 +1,502 @@
+'use strict';
+const https = require('https');
+const config = require('../../config');
+const db = require('../../db');
+
+const BOT_TOKEN = '8317462517:AAFOkkAsgvSQntex3DoYyM574h5J6hj1H6s';
+const ADMIN_CHAT_ID = '391762837';
+const API_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`;
+
+// OTP store for telegram
+const telegramOtpStore = new Map();
+// User state machine
+const userStates = new Map();
+
+// --- Telegram API Helpers ---
+function tgRequest(method, body) {
+    return new Promise((resolve, reject) => {
+        const data = JSON.stringify(body || {});
+        const url = new URL(`${API_BASE}/${method}`);
+        const req = https.request(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) } }, res => {
+            let raw = '';
+            res.on('data', c => raw += c);
+            res.on('end', () => { try { resolve(JSON.parse(raw)); } catch (e) { resolve({ ok: false }); } });
+        });
+        req.on('error', reject);
+        req.write(data);
+        req.end();
+    });
+}
+
+function sendMessage(chatId, text, opts = {}) {
+    return tgRequest('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', ...opts });
+}
+
+function sendKeyboard(chatId, text, buttons) {
+    return sendMessage(chatId, text, {
+        reply_markup: { inline_keyboard: buttons }
+    });
+}
+
+// --- VerifyWay OTP via Telegram ---
+function sendTelegramOtp(phone, chatId) {
+    return new Promise((resolve, reject) => {
+        const code = String(Math.floor(100000 + Math.random() * 900000));
+        // Normalize phone
+        let normalized = String(phone).replace(/[^0-9+]/g, '');
+        if (normalized.startsWith('07')) normalized = '+964' + normalized.substring(1);
+        else if (normalized.startsWith('7') && normalized.length === 10) normalized = '+964' + normalized;
+        else if (!normalized.startsWith('+')) normalized = '+' + normalized;
+
+        telegramOtpStore.set(String(chatId), { code, phone: normalized, expires: Date.now() + 300000 });
+
+        const apiKey = config.verifyWayApiKey || process.env.VERIFYWAY_API_KEY || '';
+        const payload = JSON.stringify({
+            recipient: normalized,
+            type: 'otp',
+            code: code,
+            channel: 'telegram',
+            fallback: 'no',
+            lang: 'ar'
+        });
+
+        const req = https.request('https://api.verifyway.com/api/v1/', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(payload)
+            }
+        }, res => {
+            let raw = '';
+            res.on('data', c => raw += c);
+            res.on('end', () => {
+                try {
+                    const result = JSON.parse(raw);
+                    console.log('[Telegram OTP] VerifyWay:', result.status, 'for', normalized);
+                    resolve({ success: result.status === 'success', code, phone: normalized });
+                } catch (e) { resolve({ success: false, code, phone: normalized }); }
+            });
+        });
+        req.on('error', e => { console.error('[Telegram OTP] Error:', e.message); resolve({ success: false, code, phone: normalized }); });
+        req.write(payload);
+        req.end();
+    });
+}
+
+function verifyTelegramOtp(chatId, code) {
+    const entry = telegramOtpStore.get(String(chatId));
+    if (!entry) return { valid: false, error: 'لا يوجد رمز مُرسل. أعد طلب الرمز.' };
+    if (Date.now() > entry.expires) { telegramOtpStore.delete(String(chatId)); return { valid: false, error: 'انتهت صلاحية الرمز. أعد الطلب.' }; }
+    if (entry.code !== String(code).trim()) return { valid: false, error: 'الرمز غير صحيح.' };
+    telegramOtpStore.delete(String(chatId));
+    return { valid: true, phone: entry.phone };
+}
+
+// --- Bot Command Handlers ---
+async function handleStart(chatId, user) {
+    userStates.delete(chatId);
+    const name = user.first_name || 'مستخدم';
+    await sendKeyboard(chatId,
+        `مرحباً <b>${name}</b> في بوت توصيله 🚕\nخدمة النقل الذكي في النجف الأشرف\n\nاختر ما تريد:`,
+        [
+            [{ text: '🚶 تسجيل راكب', callback_data: 'reg_passenger' }, { text: '🚕 تسجيل سائق', callback_data: 'reg_driver' }],
+            [{ text: '🔑 تسجيل دخول', callback_data: 'login' }],
+            [{ text: '📞 تواصل مع الإدارة', callback_data: 'contact_admin' }],
+            [{ text: '❓ مساعدة', callback_data: 'help' }]
+        ]
+    );
+}
+
+async function handleCallback(chatId, data, user) {
+    switch (data) {
+        case 'reg_passenger':
+            userStates.set(chatId, { step: 'passenger_phone', role: 'Customer' });
+            await sendMessage(chatId, '📱 أرسل رقم هاتفك العراقي (مثال: 07701234567):');
+            break;
+        case 'reg_driver':
+            userStates.set(chatId, { step: 'driver_phone', role: 'Driver' });
+            await sendMessage(chatId, '📱 أرسل رقم هاتفك العراقي (مثال: 07701234567):');
+            break;
+        case 'login':
+            userStates.set(chatId, { step: 'login_phone' });
+            await sendMessage(chatId, '📱 أرسل رقم هاتفك المسجل:');
+            break;
+        case 'contact_admin':
+            await sendMessage(chatId, '📞 للتواصل مع الإدارة:\nواتساب: https://wa.me/9647706204066\nأو أرسل رسالتك هنا وسنوصلها.');
+            userStates.set(chatId, { step: 'contact_msg' });
+            break;
+        case 'help':
+            await sendMessage(chatId, '❓ <b>المساعدة</b>\n\n/start - القائمة الرئيسية\n/status - حالة حسابك\n\nللتسجيل اختر الزر المناسب من القائمة.');
+            break;
+        case 'admin_stats':
+            if (String(chatId) === ADMIN_CHAT_ID) await handleAdminStats(chatId);
+            break;
+        case 'admin_pending':
+            if (String(chatId) === ADMIN_CHAT_ID) await handleAdminPending(chatId);
+            break;
+        default:
+            if (data.startsWith('approve_')) {
+                if (String(chatId) === ADMIN_CHAT_ID) await handleApproveDriver(chatId, data.replace('approve_', ''));
+            } else if (data.startsWith('reject_')) {
+                if (String(chatId) === ADMIN_CHAT_ID) await handleRejectDriver(chatId, data.replace('reject_', ''));
+            }
+    }
+}
+
+async function handleMessage(chatId, text, user) {
+    const state = userStates.get(chatId);
+    if (!state) { await handleStart(chatId, user); return; }
+
+    switch (state.step) {
+        // --- Passenger Registration ---
+        case 'passenger_phone': {
+            const digits = text.replace(/[^0-9]/g, '');
+            if (digits.length < 10) { await sendMessage(chatId, '❌ رقم غير صالح. أرسل رقم عراقي (مثال: 07701234567):'); return; }
+            state.phone = text.trim();
+            state.step = 'passenger_otp_sent';
+            userStates.set(chatId, state);
+            await sendMessage(chatId, '⏳ جاري إرسال رمز التحقق عبر تيليجرام...');
+            const result = await sendTelegramOtp(state.phone, chatId);
+            if (result.success) {
+                await sendMessage(chatId, '✅ تم إرسال رمز التحقق عبر تيليجرام.\nأدخل الرمز المكوّن من 6 أرقام:');
+            } else {
+                await sendMessage(chatId, '✅ تم إرسال الرمز.\nأدخل الرمز المكوّن من 6 أرقام:');
+            }
+            break;
+        }
+        case 'passenger_otp_sent': {
+            const check = verifyTelegramOtp(chatId, text.trim());
+            if (!check.valid) { await sendMessage(chatId, '❌ ' + check.error); return; }
+            state.verifiedPhone = check.phone;
+            state.step = 'passenger_name';
+            userStates.set(chatId, state);
+            await sendMessage(chatId, '✅ تم التحقق!\nأرسل اسمك الكامل (الاسم واللقب):');
+            break;
+        }
+        case 'passenger_name': {
+            state.fullName = text.trim();
+            state.step = 'passenger_password';
+            userStates.set(chatId, state);
+            await sendMessage(chatId, '🔒 أرسل كلمة المرور (4 أحرف على الأقل):');
+            break;
+        }
+        case 'passenger_password': {
+            if (text.trim().length < 4) { await sendMessage(chatId, '❌ كلمة المرور قصيرة جداً. 4 أحرف على الأقل:'); return; }
+            state.password = text.trim();
+            // Register passenger
+            const crypto = require('crypto');
+            const cleanPhone = state.verifiedPhone.replace('+964', '0');
+            const customerId = 'usr-c-' + Math.random().toString(36).substr(2, 9);
+            const now = new Date().toISOString();
+            const passwordHash = crypto.createHash('sha256').update(state.password).digest('hex');
+
+            // Check duplicate
+            const exists = db.memoryState.customers.find(c => c.phoneNumber === cleanPhone) ||
+                           db.memoryState.drivers.find(d => d.phoneNumber === cleanPhone);
+            if (exists) {
+                await sendMessage(chatId, '⚠️ هذا الرقم مسجل بالفعل. استخدم تسجيل الدخول.');
+                userStates.delete(chatId);
+                return;
+            }
+
+            const newCustomer = {
+                customerId, fullName: state.fullName, phoneNumber: cleanPhone,
+                email: `${cleanPhone}@tawseelaiq.app`, plainPassword: state.password,
+                passwordHash, route: 'النجف الأشرف', address: 'النجف الأشرف',
+                preferredPaymentMethod: 'Cash', area: 'النجف الأشرف',
+                ratingAverage: 5.0, totalBookings: 0, isActive: true, isBlocked: false,
+                registeredAt: now, telegramChatId: String(chatId)
+            };
+            db.memoryState.customers.unshift(newCustomer);
+            db.saveStateSnapshot();
+
+            await sendMessage(chatId, `🎉 <b>تم تسجيلك كراكب بنجاح!</b>\n\n📱 الهاتف: ${cleanPhone}\n👤 الاسم: ${state.fullName}\n\nيمكنك الآن الدخول للتطبيق:\nhttps://tawseelaiq.app/?role=Customer`);
+
+            // Notify admin
+            await sendMessage(ADMIN_CHAT_ID, `🆕 راكب جديد عبر تيليجرام:\n👤 ${state.fullName}\n📱 ${cleanPhone}`);
+            userStates.delete(chatId);
+            break;
+        }
+
+        // --- Driver Registration ---
+        case 'driver_phone': {
+            const digits = text.replace(/[^0-9]/g, '');
+            if (digits.length < 10) { await sendMessage(chatId, '❌ رقم غير صالح. مثال: 07701234567'); return; }
+            state.phone = text.trim();
+            state.step = 'driver_otp_sent';
+            userStates.set(chatId, state);
+            await sendMessage(chatId, '⏳ جاري إرسال رمز التحقق عبر تيليجرام...');
+            const result = await sendTelegramOtp(state.phone, chatId);
+            await sendMessage(chatId, '✅ تم الإرسال. أدخل الرمز (6 أرقام):');
+            break;
+        }
+        case 'driver_otp_sent': {
+            const check = verifyTelegramOtp(chatId, text.trim());
+            if (!check.valid) { await sendMessage(chatId, '❌ ' + check.error); return; }
+            state.verifiedPhone = check.phone;
+            state.step = 'driver_name';
+            userStates.set(chatId, state);
+            await sendMessage(chatId, '✅ تم التحقق!\nأرسل اسمك الكامل:');
+            break;
+        }
+        case 'driver_name': {
+            state.fullName = text.trim();
+            state.step = 'driver_vehicle';
+            userStates.set(chatId, state);
+            await sendMessage(chatId, '🚗 أرسل نوع وموديل المركبة (مثال: تويوتا كورولا 2021):');
+            break;
+        }
+        case 'driver_vehicle': {
+            state.vehicle = text.trim();
+            state.step = 'driver_plate';
+            userStates.set(chatId, state);
+            await sendMessage(chatId, '🔢 أرسل رقم اللوحة:');
+            break;
+        }
+        case 'driver_plate': {
+            state.plate = text.trim();
+            state.step = 'driver_password';
+            userStates.set(chatId, state);
+            await sendMessage(chatId, '🔒 أرسل كلمة المرور (4 أحرف على الأقل):');
+            break;
+        }
+        case 'driver_password': {
+            if (text.trim().length < 4) { await sendMessage(chatId, '❌ كلمة المرور قصيرة. 4 أحرف على الأقل:'); return; }
+            state.password = text.trim();
+            const crypto = require('crypto');
+            const cleanPhone = state.verifiedPhone.replace('+964', '0');
+            const driverId = 'drv-t-' + Math.random().toString(36).substr(2, 9);
+            const now = new Date().toISOString();
+            const passwordHash = crypto.createHash('sha256').update(state.password).digest('hex');
+
+            const exists = db.memoryState.drivers.find(d => d.phoneNumber === cleanPhone) ||
+                           db.memoryState.customers.find(c => c.phoneNumber === cleanPhone);
+            if (exists) {
+                await sendMessage(chatId, '⚠️ هذا الرقم مسجل بالفعل.');
+                userStates.delete(chatId);
+                return;
+            }
+
+            const newDriver = {
+                driverId, fullName: state.fullName, phoneNumber: cleanPhone,
+                email: `${cleanPhone}@tawseelaiq.app`, passwordHash,
+                licenseNumber: 'PENDING', vehicle: { make: state.vehicle, plateNumber: state.plate, year: 2023 },
+                status: 'Pending', isVerified: false, isBlocked: false,
+                ratingAverage: 5.0, totalTrips: 0, registeredAt: now,
+                telegramChatId: String(chatId)
+            };
+            db.memoryState.drivers.unshift(newDriver);
+
+            db.memoryState.verifications.unshift({
+                verificationId: 'ver-' + Math.random().toString(36).substr(2, 9),
+                driverId, driverName: state.fullName, phoneNumber: cleanPhone,
+                status: 'Pending', submittedAt: now
+            });
+
+            db.saveStateSnapshot();
+
+            await sendMessage(chatId,
+                `🎉 <b>تم تسجيلك كسائق!</b>\n\n` +
+                `⏳ حسابك <b>معلّق</b> بانتظار التوثيق.\n\n` +
+                `📋 <b>الخطوة التالية:</b>\n` +
+                `أرسل صورة مستمسكاتك (هوية + إجازة سوق + رخصة مركبة) عبر واتساب للرقم:\n` +
+                `📲 https://wa.me/9647706204066\n\n` +
+                `سيتم تفعيل حسابك بعد مراجعة الإدارة.`
+            );
+
+            // Notify admin
+            await sendKeyboard(ADMIN_CHAT_ID,
+                `🚕 سائق جديد بانتظار التوثيق:\n👤 ${state.fullName}\n📱 ${cleanPhone}\n🚗 ${state.vehicle} - ${state.plate}`,
+                [[
+                    { text: '✅ قبول', callback_data: `approve_${driverId}` },
+                    { text: '❌ رفض', callback_data: `reject_${driverId}` }
+                ]]
+            );
+            userStates.delete(chatId);
+            break;
+        }
+
+        // --- Login ---
+        case 'login_phone': {
+            const digits = text.replace(/[^0-9]/g, '');
+            if (digits.length < 10) { await sendMessage(chatId, '❌ رقم غير صالح.'); return; }
+            state.phone = text.trim();
+            state.step = 'login_otp_sent';
+            userStates.set(chatId, state);
+            await sendTelegramOtp(state.phone, chatId);
+            await sendMessage(chatId, '✅ تم إرسال رمز التحقق عبر تيليجرام.\nأدخل الرمز (6 أرقام):');
+            break;
+        }
+        case 'login_otp_sent': {
+            const check = verifyTelegramOtp(chatId, text.trim());
+            if (!check.valid) { await sendMessage(chatId, '❌ ' + check.error); return; }
+            const phone = check.phone.replace('+964', '0');
+            const customer = db.memoryState.customers.find(c => c.phoneNumber === phone);
+            const driver = db.memoryState.drivers.find(d => d.phoneNumber === phone);
+            if (customer) {
+                const token = 'jwt_customer_' + customer.customerId;
+                await sendMessage(chatId, `✅ تم الدخول كراكب!\n👤 ${customer.fullName}\n\n🔗 افتح التطبيق:\nhttps://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(customer.customerId)}&role=Customer&fullName=${encodeURIComponent(customer.fullName)}`);
+            } else if (driver) {
+                if (driver.status === 'Pending') {
+                    await sendMessage(chatId, `⏳ حسابك كسائق لا يزال <b>معلقاً</b> بانتظار التوثيق.\nأرسل مستمسكاتك عبر واتساب: https://wa.me/9647706204066`);
+                } else {
+                    const token = 'jwt_driver_' + driver.driverId;
+                    await sendMessage(chatId, `✅ تم الدخول كسائق!\n👤 ${driver.fullName}\n\n🔗 افتح التطبيق:\nhttps://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driver.driverId)}&role=Driver&fullName=${encodeURIComponent(driver.fullName)}`);
+                }
+            } else {
+                await sendMessage(chatId, '❌ لا يوجد حساب بهذا الرقم. سجّل أولاً عبر /start');
+            }
+            userStates.delete(chatId);
+            break;
+        }
+
+        // --- Contact Admin ---
+        case 'contact_msg': {
+            const userName = user.first_name || 'مجهول';
+            await sendMessage(ADMIN_CHAT_ID, `📩 رسالة من مستخدم تيليجرام:\n👤 ${userName} (${chatId})\n\n${text}`);
+            await sendMessage(chatId, '✅ تم إرسال رسالتك للإدارة. سنرد عليك قريباً.');
+            userStates.delete(chatId);
+            break;
+        }
+
+        default:
+            await handleStart(chatId, user);
+    }
+}
+
+// --- Admin Commands ---
+async function handleAdminStats(chatId) {
+    const drivers = db.memoryState.drivers || [];
+    const customers = db.memoryState.customers || [];
+    const pending = drivers.filter(d => d.status === 'Pending').length;
+    const active = drivers.filter(d => d.status === 'Active' || d.status === 'Approved').length;
+    await sendMessage(chatId,
+        `📊 <b>إحصائيات المنصة</b>\n\n` +
+        `👥 الركاب: ${customers.length}\n` +
+        `🚕 السائقين: ${drivers.length}\n` +
+        `✅ نشط: ${active}\n` +
+        `⏳ معلق: ${pending}\n` +
+        `📅 التاريخ: ${new Date().toLocaleDateString('ar-IQ')}`
+    );
+}
+
+async function handleAdminPending(chatId) {
+    const pending = (db.memoryState.drivers || []).filter(d => d.status === 'Pending');
+    if (pending.length === 0) { await sendMessage(chatId, '✅ لا يوجد سائقين بانتظار التوثيق.'); return; }
+    for (const d of pending.slice(0, 10)) {
+        await sendKeyboard(chatId,
+            `👤 ${d.fullName}\n📱 ${d.phoneNumber}\n🚗 ${d.vehicle?.make || '-'} - ${d.vehicle?.plateNumber || '-'}`,
+            [[
+                { text: '✅ قبول', callback_data: `approve_${d.driverId}` },
+                { text: '❌ رفض', callback_data: `reject_${d.driverId}` }
+            ]]
+        );
+    }
+}
+
+async function handleApproveDriver(chatId, driverId) {
+    const driver = db.memoryState.drivers.find(d => d.driverId === driverId);
+    if (!driver) { await sendMessage(chatId, '❌ السائق غير موجود.'); return; }
+    driver.status = 'Active';
+    driver.isVerified = true;
+    const ver = db.memoryState.verifications.find(v => v.driverId === driverId);
+    if (ver) ver.status = 'Approved';
+    db.saveStateSnapshot();
+    await sendMessage(chatId, `✅ تم تفعيل السائق: ${driver.fullName}`);
+    // Notify driver
+    if (driver.telegramChatId) {
+        await sendMessage(driver.telegramChatId,
+            `🎉 تم تفعيل حسابك كسائق!\nيمكنك الآن الدخول:\nhttps://tawseelaiq.app/?role=Driver`
+        );
+    }
+}
+
+async function handleRejectDriver(chatId, driverId) {
+    const driver = db.memoryState.drivers.find(d => d.driverId === driverId);
+    if (!driver) { await sendMessage(chatId, '❌ السائق غير موجود.'); return; }
+    driver.status = 'Rejected';
+    const ver = db.memoryState.verifications.find(v => v.driverId === driverId);
+    if (ver) ver.status = 'Rejected';
+    db.saveStateSnapshot();
+    await sendMessage(chatId, `❌ تم رفض السائق: ${driver.fullName}`);
+    if (driver.telegramChatId) {
+        await sendMessage(driver.telegramChatId, '❌ تم رفض طلبك. تواصل مع الإدارة: https://wa.me/9647706204066');
+    }
+}
+
+// --- Polling Loop ---
+let lastUpdateId = 0;
+let pollingActive = false;
+
+async function poll() {
+    if (!pollingActive) return;
+    try {
+        const result = await tgRequest('getUpdates', { offset: lastUpdateId + 1, timeout: 30, allowed_updates: ['message', 'callback_query'] });
+        if (result.ok && result.result && result.result.length > 0) {
+            for (const update of result.result) {
+                lastUpdateId = update.update_id;
+                try {
+                    if (update.callback_query) {
+                        const cb = update.callback_query;
+                        const chatId = cb.message?.chat?.id;
+                        if (chatId) {
+                            await tgRequest('answerCallbackQuery', { callback_query_id: cb.id });
+                            await handleCallback(chatId, cb.data, cb.from);
+                        }
+                    } else if (update.message && update.message.text) {
+                        const msg = update.message;
+                        const chatId = msg.chat.id;
+                        const text = msg.text.trim();
+
+                        // Commands
+                        if (text === '/start') { await handleStart(chatId, msg.from); }
+                        else if (text === '/status') {
+                            const phone = ''; // Would need stored chat-phone mapping
+                            await sendMessage(chatId, 'ℹ️ استخدم /start لبدء التسجيل أو تسجيل الدخول.');
+                        }
+                        else if (text === '/admin' && String(chatId) === ADMIN_CHAT_ID) {
+                            await sendKeyboard(chatId, '🔧 <b>لوحة الإدارة</b>', [
+                                [{ text: '📊 إحصائيات', callback_data: 'admin_stats' }],
+                                [{ text: '⏳ سائقين معلقين', callback_data: 'admin_pending' }]
+                            ]);
+                        }
+                        else { await handleMessage(chatId, text, msg.from); }
+                    }
+                } catch (e) {
+                    console.error('[TelegramBot] Update error:', e.message);
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[TelegramBot] Poll error:', e.message);
+    }
+    if (pollingActive) setTimeout(poll, 1000);
+}
+
+function startBot() {
+    if (pollingActive) return;
+    pollingActive = true;
+    console.log('[TelegramBot] Started polling...');
+    // Delete webhook first (in case one exists)
+    tgRequest('deleteWebhook', {}).then(() => {
+        poll();
+    }).catch(() => { poll(); });
+}
+
+function stopBot() {
+    pollingActive = false;
+    console.log('[TelegramBot] Stopped.');
+}
+
+// Admin message from dashboard
+async function sendAdminNotification(text) {
+    try { await sendMessage(ADMIN_CHAT_ID, text); } catch (_) {}
+}
+
+// Send message to a specific user by chatId
+async function notifyUser(chatId, text) {
+    try { await sendMessage(chatId, text); } catch (_) {}
+}
+
+module.exports = { startBot, stopBot, sendAdminNotification, notifyUser, sendMessage };

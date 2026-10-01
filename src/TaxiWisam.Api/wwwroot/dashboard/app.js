@@ -196,6 +196,10 @@ function switchTab(tabName) {
         case 'backup':
             loadDashboardStats();
             break;
+        case 'customization': loadCustomizationSettings(); break;
+        case 'custom-buttons': loadCustomButtons(); break;
+        case 'advertisements': loadAdvertisements(); break;
+        case 'telegram': break;
     }
 }
 
@@ -3275,3 +3279,182 @@ window.approveCancellationRequest = approveCancellationRequest;
 window.rejectCancellationRequest = rejectCancellationRequest;
 
 
+// ===== Customization Tab =====
+async function loadCustomizationSettings() {
+    try {
+        const res = await fetch('/api/admin/app-config', authHeaders());
+        const cfg = await res.json();
+        if (cfg.theme) {
+            document.getElementById('theme-primary-color').value = cfg.theme.primaryColor || '#111111';
+            document.getElementById('theme-bg-color').value = cfg.theme.bgColor || '#ffffff';
+            document.getElementById('theme-font').value = cfg.theme.fontFamily || 'Cairo';
+            document.getElementById('theme-app-name').value = cfg.theme.appName || 'توصيله';
+            document.getElementById('theme-logo-emoji').value = cfg.theme.logoEmoji || '🚕';
+            document.getElementById('theme-footer').value = cfg.theme.footerText || '';
+        }
+        if (cfg.staticTexts) {
+            document.getElementById('text-welcome-title').value = cfg.staticTexts.welcomeTitle || '';
+            document.getElementById('text-welcome-subtitle').value = cfg.staticTexts.welcomeSubtitle || '';
+            document.getElementById('text-driver-pending').value = cfg.staticTexts.driverPendingMsg || '';
+        }
+        if (cfg.onboarding && cfg.onboarding.screens) {
+            renderOnboardingScreens(cfg.onboarding.screens);
+        }
+    } catch(e) { console.error(e); }
+}
+
+function renderOnboardingScreens(screens) {
+    var list = document.getElementById('onboarding-screens-list');
+    if (!list) return;
+    list.innerHTML = screens.map(function(s, i) {
+        return '<div class="bg-slate-900 rounded-xl p-3 border border-slate-700"><div class="flex items-center gap-2 mb-2"><span class="text-xl">' + (s.icon||'📱') + '</span><input type="text" class="onb-title flex-1 bg-transparent border-b border-slate-600 text-white text-sm px-1 py-1" value="' + (s.title||'').replace(/"/g,'&quot;') + '" placeholder="العنوان"></div><input type="text" class="onb-desc w-full bg-transparent border-b border-slate-600 text-slate-300 text-xs px-1 py-1" value="' + (s.description||'').replace(/"/g,'&quot;') + '" placeholder="الوصف"><button onclick="this.parentElement.remove()" class="text-xs text-red-400 mt-1">حذف</button></div>';
+    }).join('');
+}
+
+function addOnboardingScreen() {
+    var list = document.getElementById('onboarding-screens-list');
+    if (!list) return;
+    var div = document.createElement('div');
+    div.className = 'bg-slate-900 rounded-xl p-3 border border-slate-700';
+    div.innerHTML = '<div class="flex items-center gap-2 mb-2"><span class="text-xl">📱</span><input type="text" class="onb-title flex-1 bg-transparent border-b border-slate-600 text-white text-sm px-1 py-1" value="" placeholder="العنوان"></div><input type="text" class="onb-desc w-full bg-transparent border-b border-slate-600 text-slate-300 text-xs px-1 py-1" value="" placeholder="الوصف"><button onclick="this.parentElement.remove()" class="text-xs text-red-400 mt-1">حذف</button>';
+    list.appendChild(div);
+}
+
+async function saveOnboarding() {
+    var items = document.querySelectorAll('#onboarding-screens-list > div');
+    var screens = [];
+    items.forEach(function(el) {
+        var title = el.querySelector('.onb-title');
+        var desc = el.querySelector('.onb-desc');
+        if (title && title.value.trim()) screens.push({ title: title.value.trim(), description: desc ? desc.value.trim() : '', icon: '📱' });
+    });
+    try {
+        await fetch('/api/admin/onboarding', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify({ enabled: true, screens }) });
+        showToast('تم حفظ الشاشات التوجيهية ✅');
+    } catch(e) { showToast('خطأ في الحفظ', 'error'); }
+}
+
+async function saveThemeSettings() {
+    var body = {
+        primaryColor: document.getElementById('theme-primary-color').value,
+        bgColor: document.getElementById('theme-bg-color').value,
+        fontFamily: document.getElementById('theme-font').value,
+        appName: document.getElementById('theme-app-name').value,
+        logoEmoji: document.getElementById('theme-logo-emoji').value,
+        footerText: document.getElementById('theme-footer').value
+    };
+    try {
+        await fetch('/api/admin/theme', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify(body) });
+        showToast('تم حفظ إعدادات الثيم ✅');
+    } catch(e) { showToast('خطأ', 'error'); }
+}
+
+async function saveStaticTexts() {
+    var body = {
+        staticTexts: {
+            welcomeTitle: document.getElementById('text-welcome-title').value,
+            welcomeSubtitle: document.getElementById('text-welcome-subtitle').value,
+            driverPendingMsg: document.getElementById('text-driver-pending').value
+        }
+    };
+    try {
+        await fetch('/api/admin/app-config', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify(body) });
+        showToast('تم حفظ النصوص ✅');
+    } catch(e) { showToast('خطأ', 'error'); }
+}
+
+// ===== Custom Buttons Tab =====
+async function loadCustomButtons() {
+    try {
+        var res = await fetch('/api/admin/custom-buttons', authHeaders());
+        var buttons = await res.json();
+        var list = document.getElementById('custom-buttons-list');
+        if (!list) return;
+        if (!buttons || buttons.length === 0) {
+            list.innerHTML = '<div class="col-span-2 text-center text-slate-500 py-8"><p class="text-4xl mb-2">🔗</p><p>لا توجد أزرار مخصصة بعد</p></div>';
+            return;
+        }
+        list.innerHTML = buttons.map(function(b) {
+            return '<div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700 flex items-center justify-between"><div class="flex items-center gap-3"><span class="text-2xl">' + (b.icon||'🔗') + '</span><div><div class="text-white font-bold text-sm">' + (b.label||'') + '</div><div class="text-slate-400 text-xs truncate max-w-[200px]">' + (b.url||'') + '</div></div></div><button onclick="deleteCustomButton(\'' + b.id + '\')" class="text-red-400 hover:text-red-300 text-sm"><i class="fa-solid fa-trash"></i></button></div>';
+        }).join('');
+    } catch(e) { console.error(e); }
+}
+
+function showAddButtonModal() { var m = document.getElementById('modal-add-button'); if(m){m.classList.remove('hidden');m.style.display='flex';} }
+function hideAddButtonModal() { var m = document.getElementById('modal-add-button'); if(m){m.classList.add('hidden');m.style.display='none';} }
+
+async function submitNewButton() {
+    var label = document.getElementById('btn-label').value.trim();
+    var url = document.getElementById('btn-url').value.trim();
+    var icon = document.getElementById('btn-icon').value.trim() || '🔗';
+    var color = document.getElementById('btn-color').value;
+    if (!label || !url) { showToast('أدخل النص والرابط', 'error'); return; }
+    try {
+        await fetch('/api/admin/custom-buttons', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify({label,url,icon,color}) });
+        hideAddButtonModal();
+        showToast('تم إضافة الزر ✅');
+        loadCustomButtons();
+    } catch(e) { showToast('خطأ', 'error'); }
+}
+
+async function deleteCustomButton(id) {
+    if (!confirm('حذف هذا الزر؟')) return;
+    try {
+        await fetch('/api/admin/custom-buttons', { method:'DELETE', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify({id}) });
+        showToast('تم الحذف ✅');
+        loadCustomButtons();
+    } catch(e) { showToast('خطأ', 'error'); }
+}
+
+// ===== Advertisements Tab =====
+async function loadAdvertisements() {
+    try {
+        var res = await fetch('/api/admin/advertisements', authHeaders());
+        var ads = await res.json();
+        var list = document.getElementById('ads-list');
+        if (!list) return;
+        if (!ads || ads.length === 0) {
+            list.innerHTML = '<div class="col-span-2 text-center text-slate-500 py-8"><p class="text-4xl mb-2">📢</p><p>لا توجد إعلانات</p></div>';
+            return;
+        }
+        list.innerHTML = ads.map(function(a) {
+            return '<div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700"><div class="flex items-center justify-between mb-2"><h4 class="text-white font-bold">' + (a.title||'إعلان') + '</h4><button onclick="deleteAd(\'' + a.id + '\')" class="text-red-400 hover:text-red-300"><i class="fa-solid fa-trash"></i></button></div><p class="text-slate-300 text-sm">' + (a.content||'') + '</p>' + (a.linkUrl ? '<a href="'+a.linkUrl+'" target="_blank" class="text-sky-400 text-xs mt-2 block">🔗 '+a.linkUrl+'</a>' : '') + '</div>';
+        }).join('');
+    } catch(e) { console.error(e); }
+}
+
+function showAddAdModal() { var m = document.getElementById('modal-add-ad'); if(m){m.classList.remove('hidden');m.style.display='flex';} }
+function hideAddAdModal() { var m = document.getElementById('modal-add-ad'); if(m){m.classList.add('hidden');m.style.display='none';} }
+
+async function submitNewAd() {
+    var title = document.getElementById('ad-title').value.trim();
+    var content = document.getElementById('ad-content').value.trim();
+    var linkUrl = document.getElementById('ad-link').value.trim();
+    if (!title) { showToast('أدخل عنوان الإعلان', 'error'); return; }
+    try {
+        await fetch('/api/admin/advertisements', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify({title,content,linkUrl}) });
+        hideAddAdModal();
+        showToast('تم نشر الإعلان ✅');
+        loadAdvertisements();
+    } catch(e) { showToast('خطأ', 'error'); }
+}
+
+async function deleteAd(id) {
+    if (!confirm('حذف هذا الإعلان؟')) return;
+    try {
+        await fetch('/api/admin/advertisements', { method:'DELETE', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify({id}) });
+        showToast('تم الحذف ✅');
+        loadAdvertisements();
+    } catch(e) { showToast('خطأ', 'error'); }
+}
+
+// ===== Telegram Notification =====
+async function sendTelegramNotification() {
+    var msg = document.getElementById('tg-notify-msg').value.trim();
+    if (!msg) { showToast('اكتب الرسالة أولاً', 'error'); return; }
+    try {
+        await fetch('/api/admin/telegram/notify', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify({message:msg}) });
+        showToast('تم الإرسال عبر تيليجرام ✅');
+        document.getElementById('tg-notify-msg').value = '';
+    } catch(e) { showToast('خطأ في الإرسال', 'error'); }
+}

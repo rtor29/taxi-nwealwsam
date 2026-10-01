@@ -62,24 +62,41 @@ class WhatsAppService {
     }
 
     /**
+     * Parse and normalize any Iraqi phone number format:
+     * - 0780580964 (10 digits)
+     * - 07701234567 (11 digits)
+     * - 780580964 (9 digits)
+     * - 7801234567 (10 digits)
+     * - +964780580964 / 00964780580964
+     */
+    parseIraqiPhone(phone) {
+        if (!phone) return null;
+        const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+        let clean = String(phone || '').replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
+
+        if (clean.startsWith('00964')) clean = clean.substring(5);
+        else if (clean.startsWith('964')) clean = clean.substring(3);
+        if (clean.startsWith('0')) clean = clean.substring(1);
+
+        if (!clean.startsWith('7') || clean.length < 9 || clean.length > 10) {
+            return null;
+        }
+
+        return {
+            clean,
+            localPhone: '0' + clean,
+            normalized: '964' + clean,
+            recipient: '+964' + clean
+        };
+    }
+
+    /**
      * Normalize Iraqi phone numbers to E.164 without '+'
      * e.g., '0780580964' -> '964780580964'
      */
     normalizePhone(phone) {
-        if (!phone) return '';
-        const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-        let clean = String(phone).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
-        
-        if (clean.startsWith('00964')) {
-            clean = clean.substring(2);
-        } else if (clean.startsWith('0')) {
-            clean = '964' + clean.substring(1);
-        } else if (clean.startsWith('7') && clean.length === 10) {
-            clean = '964' + clean;
-        } else if (!clean.startsWith('964') && clean.length >= 9) {
-            clean = '964' + clean;
-        }
-        return clean;
+        const parsed = this.parseIraqiPhone(phone);
+        return parsed ? parsed.normalized : String(phone || '').replace(/[^0-9]/g, '');
     }
 
     /**
@@ -144,54 +161,109 @@ class WhatsAppService {
      * Generate 6-digit OTP code and store with 5 min expiration
      */
     generateOtp(phone) {
-        const normalized = this.normalizePhone(phone);
-        // Generate secure 6-digit random code
+        const parsed = this.parseIraqiPhone(phone) || {
+            clean: String(phone),
+            localPhone: String(phone),
+            normalized: String(phone),
+            recipient: String(phone)
+        };
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
-        this.otpStore.set(normalized, {
+        const record = {
             code,
             expiresAt,
             attempts: 0,
-            createdAt: Date.now()
-        });
+            createdAt: Date.now(),
+            phoneInfo: parsed
+        };
 
-        return { code, expiresAt, normalized };
+        // Store under all formats to guarantee instant lookup
+        this.otpStore.set(parsed.normalized, record);
+        this.otpStore.set(parsed.localPhone, record);
+        this.otpStore.set(parsed.recipient, record);
+        this.otpStore.set(parsed.clean, record);
+
+        return { code, expiresAt, parsed };
     }
 
     /**
-     * Send OTP via VerifyWay WhatsApp API
+     * Send OTP via Meta Cloud API template
      */
-    async sendOtp(phone, customCode = null) {
-        const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-        let clean = String(phone || '').replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
+    async sendOtpViaMeta(parsed, code) {
+        if (!this.accessToken) return { success: false, error: 'NO_META_TOKEN' };
 
-        if (clean.startsWith('00964')) clean = clean.substring(5);
-        else if (clean.startsWith('964')) clean = clean.substring(3);
-        if (clean.length === 10 && clean.startsWith('7')) clean = '0' + clean;
+        const templatePayload = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: parsed.normalized,
+            type: 'template',
+            template: {
+                name: this.templateName || 'auth_otp',
+                language: { code: 'ar' },
+                components: [
+                    {
+                        type: 'body',
+                        parameters: [
+                            { type: 'text', text: String(code) }
+                        ]
+                    },
+                    {
+                        type: 'button',
+                        sub_type: 'url',
+                        index: '0',
+                        parameters: [
+                            { type: 'text', text: String(code) }
+                        ]
+                    }
+                ]
+            }
+        };
 
-        if (!clean.startsWith('07') || clean.length !== 11) {
-            return {
-                success: false,
-                error: 'يقبل فقط الرقم العراقي (07xxxxxxxx)'
-            };
+        console.log(`[WhatsApp] Attempting Meta Template "${this.templateName}" to ${parsed.normalized}...`);
+        const res = await this._callGraphApi('messages', templatePayload);
+        if (res.success) {
+            return { success: true, provider: 'meta_template', data: res.data };
         }
 
-        const recipient = '+964' + clean.substring(1);
-        const normalized = '964' + clean.substring(1);
+        // If button template failed, try simple body parameter
+        if (res.error && (res.statusCode === 400 || res.statusCode === 404)) {
+            const simpleTemplate = {
+                messaging_product: 'whatsapp',
+                recipient_type: 'individual',
+                to: parsed.normalized,
+                type: 'template',
+                template: {
+                    name: this.templateName || 'auth_otp',
+                    language: { code: 'ar' },
+                    components: [
+                        {
+                            type: 'body',
+                            parameters: [
+                                { type: 'text', text: String(code) }
+                            ]
+                        }
+                    ]
+                }
+            };
+            const resSimple = await this._callGraphApi('messages', simpleTemplate);
+            if (resSimple.success) {
+                return { success: true, provider: 'meta_template_simple', data: resSimple.data };
+            }
+        }
 
-        const otpData = customCode 
-            ? { code: customCode, expiresAt: Date.now() + 5 * 60 * 1000, normalized } 
-            : this.generateOtp(clean);
-            
-        const code = otpData.code;
-        // Also register in otpStore under alternative formats
-        this.otpStore.set(normalized, otpData);
-        this.otpStore.set(clean, otpData);
+        return { success: false, error: res.error, statusCode: res.statusCode };
+    }
 
+    /**
+     * Send OTP via VerifyWay WhatsApp gateway
+     */
+    async sendOtpViaVerifyWay(parsed, code) {
         const apiKey = this.verifyWayKey || process.env.VERIFYWAY_API_KEY || '';
+        if (!apiKey) return { success: false, error: 'NO_VERIFYWAY_KEY' };
+
         const payload = JSON.stringify({
-            recipient: recipient,
+            recipient: parsed.recipient,
             type: "otp",
             channel: "whatsapp",
             fallback: "no",
@@ -199,7 +271,8 @@ class WhatsAppService {
             lang: "ar"
         });
 
-        const result = await new Promise((resolve) => {
+        console.log(`[WhatsApp] Calling VerifyWay for ${parsed.recipient}...`);
+        return new Promise((resolve) => {
             const req = https.request({
                 hostname: 'api.verifyway.com',
                 port: 443,
@@ -216,11 +289,13 @@ class WhatsAppService {
                 res.on('data', chunk => { data += chunk; });
                 res.on('end', () => {
                     try {
-                        const parsed = JSON.parse(data);
-                        if (parsed.status === 'success' || (res.statusCode >= 200 && res.statusCode < 300)) {
-                            resolve({ success: true, data: parsed });
+                        const parsedRes = JSON.parse(data);
+                        if (parsedRes.status === 'success' || (res.statusCode >= 200 && res.statusCode < 300)) {
+                            console.log('[WhatsApp VerifyWay Success]:', JSON.stringify(parsedRes));
+                            resolve({ success: true, provider: 'verifyway', data: parsedRes });
                         } else {
-                            resolve({ success: false, error: parsed });
+                            console.error('[WhatsApp VerifyWay Error]:', data);
+                            resolve({ success: false, error: parsedRes });
                         }
                     } catch (e) {
                         resolve({ success: false, error: data });
@@ -236,20 +311,78 @@ class WhatsAppService {
             req.write(payload);
             req.end();
         });
+    }
 
-        if (!result.success) {
+    /**
+     * Send OTP via WhatsApp (Tries VerifyWay first, falls back to Meta Cloud API)
+     */
+    async sendOtp(phone, customCode = null) {
+        const parsed = this.parseIraqiPhone(phone);
+        if (!parsed) {
             return {
                 success: false,
-                error: result.error?.message || result.error || 'فشل إرسال رمز التحقق',
-                phone: clean
+                error: 'يرجى إدخال رقم هاتف عراقي صالح (مثال: 07801234567 أو 07701234567)'
             };
         }
 
+        const otpData = customCode 
+            ? { code: customCode, expiresAt: Date.now() + 5 * 60 * 1000, parsed } 
+            : this.generateOtp(phone);
+            
+        const code = otpData.code;
+
+        // Register in store under all phone representations
+        const record = {
+            code,
+            expiresAt: Date.now() + 5 * 60 * 1000,
+            attempts: 0,
+            createdAt: Date.now(),
+            phoneInfo: parsed
+        };
+        this.otpStore.set(parsed.normalized, record);
+        this.otpStore.set(parsed.localPhone, record);
+        this.otpStore.set(parsed.recipient, record);
+        this.otpStore.set(parsed.clean, record);
+
+        console.log(`[WhatsApp] Sending OTP [${code}] to ${parsed.localPhone} (${parsed.recipient})`);
+
+        // 1. Try VerifyWay Gateway first
+        const vwRes = await this.sendOtpViaVerifyWay(parsed, code);
+        if (vwRes.success) {
+            return {
+                success: true,
+                phone: parsed.localPhone,
+                normalized: parsed.normalized,
+                code: code,
+                provider: 'verifyway',
+                apiResult: vwRes
+            };
+        }
+
+        console.warn('[WhatsApp] VerifyWay gateway returned error, trying Meta API...', vwRes.error);
+
+        // 2. Fallback to Meta Cloud API template
+        const metaRes = await this.sendOtpViaMeta(parsed, code);
+        if (metaRes.success) {
+            return {
+                success: true,
+                phone: parsed.localPhone,
+                normalized: parsed.normalized,
+                code: code,
+                provider: 'meta',
+                apiResult: metaRes
+            };
+        }
+
+        console.error('[WhatsApp] All WhatsApp dispatch providers failed:', {
+            verifyWayError: vwRes.error,
+            metaError: metaRes.error
+        });
+
         return {
-            success: true,
-            phone: clean,
-            code: code,
-            apiResult: result
+            success: false,
+            error: 'تعذر إرسال رمز التحقق عبر واتساب حالياً، يرجى التحقق من الرقم والمحاولة ثانية',
+            phone: parsed.localPhone
         };
     }
 
@@ -257,29 +390,48 @@ class WhatsAppService {
      * Verify OTP entered by user
      */
     verifyOtp(phone, inputCode) {
-        const normalized = this.normalizePhone(phone);
-        const record = this.otpStore.get(normalized);
+        if (!phone || !inputCode) {
+            return { valid: false, error: 'رقم الهاتف ورمز التحقق مطلوبان' };
+        }
+
+        const parsed = this.parseIraqiPhone(phone);
+        const searchKeys = parsed 
+            ? [parsed.normalized, parsed.localPhone, parsed.recipient, parsed.clean]
+            : [this.normalizePhone(phone), String(phone).trim()];
+
+        let record = null;
+        let matchedKey = null;
+        for (const k of searchKeys) {
+            if (this.otpStore.has(k)) {
+                record = this.otpStore.get(k);
+                matchedKey = k;
+                break;
+            }
+        }
 
         if (!record) {
             return { valid: false, error: 'لم يتم طلب رمز تحقق لهذا الرقم أو انتهت صلاحيته' };
         }
 
         if (Date.now() > record.expiresAt) {
-            this.otpStore.delete(normalized);
+            searchKeys.forEach(k => this.otpStore.delete(k));
             return { valid: false, error: 'انتهت صلاحية رمز التحقق، يرجى طلب رمز جديد' };
         }
 
         record.attempts = (record.attempts || 0) + 1;
         if (record.attempts > 5) {
-            this.otpStore.delete(normalized);
+            searchKeys.forEach(k => this.otpStore.delete(k));
             return { valid: false, error: 'تم تجاوز الحد الأقصى للمحاولات، اطلب رمزاً جديداً' };
         }
 
-        if (record.verified && Date.now() < (record.verifiedUntil || 0)) {
-            return { valid: true };
-        }
+        const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+        const persDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+        const cleanInputCode = String(inputCode)
+            .replace(/[٠-٩]/g, d => arabicDigits.indexOf(d))
+            .replace(/[۰-۹]/g, d => persDigits.indexOf(d))
+            .trim();
 
-        if (String(record.code).trim() === String(inputCode).trim()) {
+        if (String(record.code).trim() === cleanInputCode) {
             record.verified = true;
             record.verifiedUntil = Date.now() + 15 * 60 * 1000;
             return { valid: true };

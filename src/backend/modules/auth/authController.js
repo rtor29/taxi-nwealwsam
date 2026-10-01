@@ -344,6 +344,16 @@ class AuthController {
     </div>
 
     <!-- Main Content -->
+    <!-- Onboarding Tutorial -->
+    <div id="onboarding-overlay" style="display:none;position:fixed;inset:0;z-index:99998;background:#ffffff;align-items:center;justify-content:center;flex-direction:column">
+        <div id="onboarding-content" style="max-width:380px;width:90%;text-align:center;padding:40px 20px">
+            <div id="onb-icon" style="font-size:64px;margin-bottom:16px"></div>
+            <h2 id="onb-title" style="font-size:20px;font-weight:900;color:#111;margin:0 0 8px"></h2>
+            <p id="onb-desc" style="font-size:14px;color:#6b7280;margin:0 0 24px"></p>
+            <div id="onb-dots" style="display:flex;justify-content:center;gap:8px;margin-bottom:24px"></div>
+            <button id="onb-next-btn" onclick="nextOnboardingScreen()" style="background:#111;color:#fff;border:none;border-radius:12px;padding:14px 40px;font-family:'Cairo',sans-serif;font-weight:900;font-size:15px;cursor:pointer">التالي</button>
+        </div>
+    </div>
     <main style="max-width:480px;width:100%;margin:0 auto;padding:24px 16px 40px">
 
         <!-- Logo & Title -->
@@ -505,6 +515,10 @@ class AuthController {
                                     <div style="font-weight:700;color:#b91c1c;margin-bottom:2px">🔴 نقطة الوصول</div>
                                     <div id="dropoff-addr-display" style="color:#374151;font-size:11px">النجف الأشرف</div>
                                 </div>
+                            </div>
+                            <div style="margin-top:8px;display:flex;gap:8px">
+                                <div id="route-info-display" style="flex:1;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:700;color:#374151;text-align:center">📏 -- كم · ⏱️ -- دقيقة</div>
+                                <div id="nearest-driver-info" style="flex:1;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:700;color:#374151;text-align:center">🚕 أقرب سائق: --</div>
                             </div>
                         </div>
 
@@ -684,6 +698,8 @@ class AuthController {
         <footer style="text-align:center;margin-top:28px;font-size:12px;color:#9ca3af">
             © 2026 توصيله (Tawseela IQ) · النجف الأشرف
         </footer>
+        <div id="custom-buttons-container" style="margin-top:16px"></div>
+        <div id="ads-container" style="margin-top:12px"></div>
     </main>
 
     <style>
@@ -1185,6 +1201,8 @@ class AuthController {
                 pickupMarker.on('dragend',function(){var p=pickupMarker.getLngLat();updatePickupPoint(p.lng,p.lat,true);});
             } else if(pickupMarker) pickupMarker.setLngLat([lng,lat]);
             if(doReverse) reverseGeocodeLocation(lng,lat,'pickup');
+            drawRouteLine();
+            showNearestDriver();
         }
 
         function updateDropoffPoint(lng,lat,doReverse) {
@@ -1195,6 +1213,7 @@ class AuthController {
                 dropoffMarker.on('dragend',function(){var p=dropoffMarker.getLngLat();updateDropoffPoint(p.lng,p.lat,true);});
             } else if(dropoffMarker) dropoffMarker.setLngLat([lng,lat]);
             if(doReverse) reverseGeocodeLocation(lng,lat,'dropoff');
+            drawRouteLine();
         }
 
         function getCurrentGpsLocation() {
@@ -1234,6 +1253,63 @@ class AuthController {
                     else updateDropoffPoint(e.lngLat.lng,e.lngLat.lat,true);
                 });
             } catch(e){console.error('Mapbox error:',e);}
+        }
+
+        // Draw route between pickup and dropoff
+        async function drawRouteLine() {
+            if (!passengerMap || !window.mapboxgl) return;
+            try {
+                var pLat = document.getElementById('cust-pickup-lat').value;
+                var pLon = document.getElementById('cust-pickup-lon').value;
+                var dLat = document.getElementById('cust-dropoff-lat').value;
+                var dLon = document.getElementById('cust-dropoff-lon').value;
+                if (!pLat || !dLat) return;
+                var token = mapboxgl.accessToken;
+                var url = 'https://api.mapbox.com/directions/v5/mapbox/driving/' + pLon+','+pLat+';'+dLon+','+dLat+'?geometries=geojson&overview=full&access_token='+token;
+                var res = await fetch(url);
+                var data = await res.json();
+                if (!data.routes || !data.routes[0]) return;
+                var route = data.routes[0].geometry;
+                if (passengerMap.getSource('route-line')) {
+                    passengerMap.getSource('route-line').setData({ type:'Feature', geometry: route });
+                } else {
+                    passengerMap.addSource('route-line', { type:'geojson', data:{ type:'Feature', geometry: route } });
+                    passengerMap.addLayer({ id:'route-line-layer', type:'line', source:'route-line', paint:{ 'line-color':'#111111', 'line-width':4, 'line-opacity':0.85 }, layout:{ 'line-cap':'round', 'line-join':'round' } });
+                }
+                // Show distance and time
+                var dist = (data.routes[0].distance/1000).toFixed(1);
+                var mins = Math.round(data.routes[0].duration/60);
+                var info = document.getElementById('route-info-display');
+                if (info) info.innerHTML = '📏 '+dist+' كم · ⏱️ '+mins+' دقيقة';
+            } catch(e) { console.error('Route error:', e); }
+        }
+
+        // Show nearest driver on map
+        var nearestDriverMarker = null;
+        async function showNearestDriver() {
+            if (!passengerMap) return;
+            try {
+                var pLat = parseFloat(document.getElementById('cust-pickup-lat').value) || 32.02;
+                var pLon = parseFloat(document.getElementById('cust-pickup-lon').value) || 44.32;
+                var res = await fetch('/api/fleet/active-drivers');
+                var data = await res.json();
+                var drivers = (data.drivers || data || []).filter(function(d) { return d.lat && d.lon; });
+                if (drivers.length === 0) return;
+                var closest = null, minDist = Infinity;
+                drivers.forEach(function(d) {
+                    var dx = d.lat - pLat, dy = d.lon - pLon;
+                    var dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < minDist) { minDist = dist; closest = d; }
+                });
+                if (!closest) return;
+                if (nearestDriverMarker) nearestDriverMarker.remove();
+                var el = document.createElement('div');
+                el.style.cssText = 'width:32px;height:32px;background:#111;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3)';
+                el.textContent = '🚕';
+                nearestDriverMarker = new mapboxgl.Marker({ element: el }).setLngLat([closest.lon, closest.lat]).addTo(passengerMap);
+                var ndi = document.getElementById('nearest-driver-info');
+                if (ndi) ndi.innerHTML = '🚕 أقرب سائق: ' + (closest.name||'متاح') + ' (' + (minDist*111).toFixed(1) + ' كم)';
+            } catch(e) {}
         }
 
         // Search autocomplete
@@ -1333,7 +1409,68 @@ class AuthController {
             window.location.replace('/');
         };
 
+        // Onboarding
+        var onbScreens = [], onbIndex = 0;
+        async function initOnboarding() {
+            try {
+                var res = await fetch('/api/admin/onboarding');
+                var data = await res.json();
+                if (!data.enabled || !data.screens || data.screens.length === 0) return;
+                if (localStorage.getItem('onboarding_done')) return;
+                onbScreens = data.screens;
+                onbIndex = 0;
+                showOnboardingScreen();
+            } catch(e) {}
+        }
+        function showOnboardingScreen() {
+            if (onbIndex >= onbScreens.length) { finishOnboarding(); return; }
+            var s = onbScreens[onbIndex];
+            var overlay = document.getElementById('onboarding-overlay');
+            if (!overlay) return;
+            overlay.style.display = 'flex';
+            document.getElementById('onb-icon').textContent = s.icon || '📱';
+            document.getElementById('onb-title').textContent = s.title || '';
+            document.getElementById('onb-desc').textContent = s.description || '';
+            var dots = document.getElementById('onb-dots');
+            dots.innerHTML = onbScreens.map(function(_,i) { return '<span style="width:8px;height:8px;border-radius:50%;background:'+(i===onbIndex?'#111':'#d1d5db')+'"></span>'; }).join('');
+            document.getElementById('onb-next-btn').textContent = onbIndex === onbScreens.length-1 ? 'ابدأ الآن' : 'التالي';
+        }
+        function nextOnboardingScreen() { onbIndex++; showOnboardingScreen(); }
+        function finishOnboarding() {
+            localStorage.setItem('onboarding_done', '1');
+            var o = document.getElementById('onboarding-overlay'); if(o) o.style.display='none';
+        }
+
+        // Load custom buttons
+        async function loadAppCustomButtons() {
+            try {
+                var res = await fetch('/api/admin/custom-buttons');
+                var buttons = await res.json();
+                var container = document.getElementById('custom-buttons-container');
+                if (!container || !buttons || buttons.length === 0) return;
+                container.innerHTML = buttons.filter(function(b){return b.visible;}).map(function(b) {
+                    return '<a href="'+b.url+'" target="'+(b.target||'_blank')+'" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:12px;background:'+(b.color||'#111')+';color:#fff;font-weight:900;font-size:14px;text-decoration:none;margin-bottom:8px;font-family:Cairo,sans-serif">'+(b.icon||'🔗')+' '+(b.label||'')+'</a>';
+                }).join('');
+            } catch(e) {}
+        }
+
+        async function loadAppAds() {
+            try {
+                var res = await fetch('/api/admin/advertisements');
+                var ads = await res.json();
+                var container = document.getElementById('ads-container');
+                if (!container || !ads || ads.length === 0) return;
+                container.innerHTML = ads.filter(function(a){return a.active;}).map(function(a) {
+                    var link = a.linkUrl ? ' onclick="window.open(\''+a.linkUrl+'\',\'_blank\')" style="cursor:pointer"' : '';
+                    return '<div'+link+' style="background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:12px;padding:14px;margin-bottom:8px"><div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px">'+(a.title||'')+'</div><div style="font-size:12px;color:#6b7280">'+(a.content||'')+'</div></div>';
+                }).join('');
+            } catch(e) {}
+        }
+
         (function() {
+            initOnboarding();
+            loadAppCustomButtons();
+            loadAppAds();
             checkUserSession();
             var urlParams=new URLSearchParams(window.location.search);
             var role=urlParams.get('role');

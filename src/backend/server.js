@@ -9,22 +9,39 @@ const db = require('./db');
 const authController = require('./modules/auth/authController');
 const adminController = require('./modules/admin/adminController');
 const whatsappService = require('./modules/whatsapp/whatsappService');
+const telegramBot = require('./modules/telegram/telegramBot');
 
 // ---[ Rate Limiter: in-memory, per IP ]---
 const _rateLimitMap = new Map(); // ip -> { count, resetAt }
-function _rateLimit(ip, maxRequests = 60, windowMs = 60000) {
+function _rateLimit(key, maxRequests = 60, windowMs = 60000) {
     const now = Date.now();
-    let entry = _rateLimitMap.get(ip);
+    let entry = _rateLimitMap.get(key);
     if (!entry || now > entry.resetAt) {
         entry = { count: 1, resetAt: now + windowMs };
-        _rateLimitMap.set(ip, entry);
-        return false; // not limited
+        _rateLimitMap.set(key, entry);
+        return false;
     }
     entry.count++;
     return entry.count > maxRequests;
 }
-// Strict rate limiter for sensitive auth endpoints (10 req/min per IP)
-function _authRateLimit(ip) { return _rateLimit(ip, 10, 60000); }
+
+// Dedicated namespaced rate limiters
+function _authRateLimit(ip) { 
+    if (!ip || ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') return false;
+    return _rateLimit(`auth:${ip}`, 30, 60000); 
+}
+
+function _otpRateLimit(phone, ip) {
+    const cleanP = String(phone || '').replace(/[^0-9]/g, '');
+    if (cleanP && _rateLimit(`otp_phone:${cleanP}`, 6, 600000)) {
+        return true;
+    }
+    if (ip && ip !== '127.0.0.1' && ip !== '::1' && ip !== '::ffff:127.0.0.1') {
+        if (_rateLimit(`otp_ip:${ip}`, 30, 600000)) return true;
+    }
+    return false;
+}
+
 // Cleanup every 5 min to prevent memory leak
 setInterval(() => {
     const now = Date.now();
@@ -80,6 +97,21 @@ function serveCompressedFile(filePath, req, res) {
     });
 }
 
+function sanitizeObject(obj) {
+    if (typeof obj === 'string') {
+        return obj.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
+    } else if (Array.isArray(obj)) {
+        return obj.map(sanitizeObject);
+    } else if (obj !== null && typeof obj === 'object') {
+        const newObj = {};
+        for (const key in obj) {
+            newObj[key] = sanitizeObject(obj[key]);
+        }
+        return newObj;
+    }
+    return obj;
+}
+
 function parseJsonBody(req) {
     return new Promise((resolve) => {
         let body = '';
@@ -92,7 +124,8 @@ function parseJsonBody(req) {
         });
         req.on('end', () => {
             try {
-                resolve(body ? JSON.parse(body) : {});
+                const parsed = body ? JSON.parse(body) : {};
+                resolve(sanitizeObject(parsed));
             } catch (e) {
                 resolve({});
             }
@@ -103,6 +136,7 @@ function parseJsonBody(req) {
 async function startServer() {
     // 1. Initialize PostgreSQL & Database state
     await db.init();
+    try { telegramBot.startBot(); } catch(e) { console.error('[TelegramBot] Start error:', e.message); }
 
     const server = http.createServer(async (req, res) => {
         // ---[ Security Headers ]---
@@ -126,11 +160,13 @@ async function startServer() {
             return res.end();
         }
 
-        // ---[ Global Rate Limit: 120 req/min per IP ]---
+        // ---[ Global Rate Limit: 300 req/min per IP ]---
         const clientIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-        if (_rateLimit(clientIp, 120, 60000)) {
-            res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '60' });
-            return res.end(JSON.stringify({ success: false, error: 'Too Many Requests - حاول بعد دقيقة' }));
+        if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1' && clientIp !== '::ffff:127.0.0.1') {
+            if (_rateLimit(`req:${clientIp}`, 300, 60000)) {
+                res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '60' });
+                return res.end(JSON.stringify({ success: false, error: 'Too Many Requests - حاول بعد دقيقة' }));
+            }
         }
 
         const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -257,37 +293,32 @@ async function startServer() {
             }
         }
 
-        // WhatsApp OTP Endpoints for Registration
-        if (pathname === '/api/auth/send-whatsapp-otp' && method === 'POST') {
-            if (_authRateLimit(clientIp)) {
-                res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '60' });
-                return res.end(JSON.stringify({ success: false, error: 'محاولات كثيرة جداً. انتظر دقيقة.' }));
-            }
+        // WhatsApp OTP Endpoints for Registration (Web & Flutter App Aliases)
+        if ((pathname === '/api/auth/send-whatsapp-otp' || pathname === '/auth/send-whatsapp-otp' || pathname === '/api/auth/send-otp' || pathname === '/auth/send-otp') && method === 'POST') {
             const body = await parseJsonBody(req);
-            const { phoneNumber } = body;
+            const phoneNumber = (body.phoneNumber || body.phone || '').trim();
             if (!phoneNumber || typeof phoneNumber !== 'string' || phoneNumber.length > 30) {
                 return sendJson({ success: false, error: 'رقم الهاتف مطلوب' }, 400);
             }
 
-            // Normalization & Duplicate Pre-check
-            const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-            let norm = String(phoneNumber || '').replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
-            if (norm.startsWith('00964')) norm = norm.substring(5);
-            else if (norm.startsWith('964')) norm = norm.substring(3);
-            if (norm.length === 10 && norm.startsWith('7')) norm = '0' + norm;
+            if (_otpRateLimit(phoneNumber, clientIp)) {
+                res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '60' });
+                return res.end(JSON.stringify({ success: false, error: 'تم إرسال عدة رسائل لهذا الرقم مؤخراً. يرجى الانتظار بضع دقائق.' }));
+            }
+
+            const parsed = whatsappService.parseIraqiPhone(phoneNumber);
+            if (!parsed) {
+                return sendJson({ success: false, error: 'يرجى إدخال رقم هاتف عراقي صالح (مثال: 07801234567 أو 07701234567)' }, 400);
+            }
 
             const cleanPhone = (p) => {
-                if (!p) return '';
-                let s = String(p).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
-                if (s.startsWith('00964')) s = s.substring(5);
-                else if (s.startsWith('964')) s = s.substring(3);
-                if (s.length === 10 && s.startsWith('7')) s = '0' + s;
-                return s;
+                const pr = whatsappService.parseIraqiPhone(p);
+                return pr ? pr.clean : '';
             };
 
-            const existsInDrivers = (db.memoryState.drivers || []).some(d => cleanPhone(d.phoneNumber) === norm || (norm.length >= 6 && cleanPhone(d.phoneNumber).endsWith(norm)));
-            const existsInCustomers = (db.memoryState.customers || []).some(c => cleanPhone(c.phoneNumber) === norm || (norm.length >= 6 && cleanPhone(c.phoneNumber).endsWith(norm)));
-            if (norm.length >= 6 && (existsInDrivers || existsInCustomers)) {
+            const existsInDrivers = (db.memoryState.drivers || []).some(d => cleanPhone(d.phoneNumber) === parsed.clean);
+            const existsInCustomers = (db.memoryState.customers || []).some(c => cleanPhone(c.phoneNumber) === parsed.clean);
+            if (existsInDrivers || existsInCustomers) {
                 return sendJson({
                     success: false,
                     duplicate: true,
@@ -296,16 +327,26 @@ async function startServer() {
             }
 
             const result = await whatsappService.sendOtp(phoneNumber);
+            if (!result.success) {
+                return sendJson({
+                    success: false,
+                    error: result.error || 'تعذر إرسال رمز التحقق عبر واتساب، يرجى المحاولة لاحقاً'
+                }, 400);
+            }
+
             return sendJson({
                 success: true,
                 message: 'تم إرسال رمز التحقق عبر واتساب بنجاح',
-                phone: result.phone
+                phone: result.phone,
+                normalized: result.normalized,
+                otpDisplayUrl: `https://tawseelaiq.app/otp?phone=${result.phone}`
             });
         }
 
-        if (pathname === '/api/auth/verify-whatsapp-otp' && method === 'POST') {
+        if ((pathname === '/api/auth/verify-whatsapp-otp' || pathname === '/auth/verify-whatsapp-otp' || pathname === '/api/auth/verify-otp' || pathname === '/auth/verify-otp') && method === 'POST') {
             const body = await parseJsonBody(req);
-            const { phoneNumber, code } = body;
+            const phoneNumber = (body.phoneNumber || body.phone || '').trim();
+            const code = (body.code || body.otp || '').trim();
             if (!phoneNumber || !code) {
                 return sendJson({ success: false, error: 'رقم الهاتف ورمز التحقق مطلوبان' }, 400);
             }
@@ -1653,6 +1694,120 @@ async function startServer() {
                 db.saveStateSnapshot();
                 return sendJson(newAd);
             }
+        }
+
+        // ===== Dynamic App Config APIs =====
+        if (pathname === '/api/admin/app-config' && method === 'GET') {
+            if (!db.memoryState.appConfig) {
+                db.memoryState.appConfig = {
+                    theme: { primaryColor: '#111111', bgColor: '#ffffff', fontFamily: 'Cairo', logoEmoji: '🚕', appName: 'توصيله', footerText: '© 2026 توصيله (Tawseela IQ) · النجف الأشرف' },
+                    customButtons: [],
+                    ads: [],
+                    staticTexts: { welcomeTitle: 'منصة توصيله', welcomeSubtitle: 'النجف الأشرف - سجّل دخولك أو أنشئ حسابك', driverPendingMsg: 'حسابك معلّق بانتظار التوثيق. أرسل مستمسكاتك عبر واتساب.' },
+                    registrationFields: { passenger: ['phone','firstName','lastName','tripType','map','password'], driver: ['phone','fullName','license','vehicle','plate','password'] },
+                    onboarding: { enabled: true, screens: [
+                        { title: 'مرحباً بك في توصيله', description: 'خدمة النقل الذكي في النجف الأشرف', icon: '🚕' },
+                        { title: 'اختر وجهتك', description: 'حدد نقطة الانطلاق والوصول على الخريطة', icon: '📍' },
+                        { title: 'سائق قريب منك', description: 'نعثر لك على أقرب سائق متاح', icon: '🚗' }
+                    ]}
+                };
+            }
+            return sendJson(db.memoryState.appConfig);
+        }
+
+        if (pathname === '/api/admin/app-config' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            if (!db.memoryState.appConfig) db.memoryState.appConfig = {};
+            Object.assign(db.memoryState.appConfig, body);
+            db.saveStateSnapshot();
+            return sendJson({ success: true, message: 'تم تحديث الإعدادات' });
+        }
+
+        // Custom Buttons CRUD
+        if (pathname === '/api/admin/custom-buttons' && method === 'GET') {
+            return sendJson((db.memoryState.appConfig && db.memoryState.appConfig.customButtons) || []);
+        }
+        if (pathname === '/api/admin/custom-buttons' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            if (!db.memoryState.appConfig) db.memoryState.appConfig = {};
+            if (!db.memoryState.appConfig.customButtons) db.memoryState.appConfig.customButtons = [];
+            const btn = { id: 'btn-' + Date.now(), label: body.label || '', url: body.url || '', icon: body.icon || '🔗', color: body.color || '#111111', order: body.order || 0, visible: body.visible !== false, target: body.target || '_blank', createdAt: new Date().toISOString() };
+            db.memoryState.appConfig.customButtons.push(btn);
+            db.saveStateSnapshot();
+            return sendJson({ success: true, button: btn });
+        }
+        if (pathname === '/api/admin/custom-buttons' && method === 'DELETE') {
+            const body = await parseJsonBody(req);
+            if (db.memoryState.appConfig && db.memoryState.appConfig.customButtons) {
+                db.memoryState.appConfig.customButtons = db.memoryState.appConfig.customButtons.filter(b => b.id !== body.id);
+                db.saveStateSnapshot();
+            }
+            return sendJson({ success: true });
+        }
+
+        // Ads Management
+        if (pathname === '/api/admin/advertisements' && method === 'GET') {
+            return sendJson((db.memoryState.appConfig && db.memoryState.appConfig.ads) || []);
+        }
+        if (pathname === '/api/admin/advertisements' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            if (!db.memoryState.appConfig) db.memoryState.appConfig = {};
+            if (!db.memoryState.appConfig.ads) db.memoryState.appConfig.ads = [];
+            const ad = { id: 'ad-' + Date.now(), title: body.title || '', content: body.content || '', imageUrl: body.imageUrl || '', linkUrl: body.linkUrl || '', active: body.active !== false, order: body.order || 0, createdAt: new Date().toISOString() };
+            db.memoryState.appConfig.ads.push(ad);
+            db.saveStateSnapshot();
+            return sendJson({ success: true, ad });
+        }
+        if (pathname === '/api/admin/advertisements' && method === 'DELETE') {
+            const body = await parseJsonBody(req);
+            if (db.memoryState.appConfig && db.memoryState.appConfig.ads) {
+                db.memoryState.appConfig.ads = db.memoryState.appConfig.ads.filter(a => a.id !== body.id);
+                db.saveStateSnapshot();
+            }
+            return sendJson({ success: true });
+        }
+
+        // Theme Management
+        if (pathname === '/api/admin/theme' && method === 'GET') {
+            return sendJson((db.memoryState.appConfig && db.memoryState.appConfig.theme) || {});
+        }
+        if (pathname === '/api/admin/theme' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            if (!db.memoryState.appConfig) db.memoryState.appConfig = {};
+            db.memoryState.appConfig.theme = { ...(db.memoryState.appConfig.theme || {}), ...body };
+            db.saveStateSnapshot();
+            return sendJson({ success: true });
+        }
+
+        // Onboarding screens
+        if (pathname === '/api/admin/onboarding' && method === 'GET') {
+            return sendJson((db.memoryState.appConfig && db.memoryState.appConfig.onboarding) || { enabled: false, screens: [] });
+        }
+        if (pathname === '/api/admin/onboarding' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            if (!db.memoryState.appConfig) db.memoryState.appConfig = {};
+            db.memoryState.appConfig.onboarding = body;
+            db.saveStateSnapshot();
+            return sendJson({ success: true });
+        }
+
+        // Telegram bot admin
+        if (pathname === '/api/admin/telegram/notify' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            try { telegramBot.sendAdminNotification(body.message || ''); } catch(_) {}
+            return sendJson({ success: true });
+        }
+
+        // Registration fields config
+        if (pathname === '/api/admin/registration-fields' && method === 'GET') {
+            return sendJson((db.memoryState.appConfig && db.memoryState.appConfig.registrationFields) || {});
+        }
+        if (pathname === '/api/admin/registration-fields' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            if (!db.memoryState.appConfig) db.memoryState.appConfig = {};
+            db.memoryState.appConfig.registrationFields = body;
+            db.saveStateSnapshot();
+            return sendJson({ success: true });
         }
 
         if (pathname.startsWith('/uploads/')) {
