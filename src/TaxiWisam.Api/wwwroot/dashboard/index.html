@@ -341,6 +341,10 @@
                 <i class="fa-solid fa-palette w-5 text-center"></i>
                 <span>التخصيص والمظهر</span>
             </button>
+            <button id="tab-btn-ui-management" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-right" onclick="switchTab('ui-management')" aria-label="إدارة الواجهة">
+                <i class="fa-solid fa-shapes w-5 text-center text-amber-400"></i>
+                <span>إدارة الواجهة (الأزرار والإعلانات)</span>
+            </button>
             <button id="tab-btn-custom-buttons" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-right" onclick="switchTab('custom-buttons')" aria-label="أزرار مخصصة">
                 <i class="fa-solid fa-square-plus w-5 text-center"></i>
                 <span>أزرار مخصصة</span>
@@ -1145,13 +1149,21 @@
                 <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700">
                     <h3 class="text-lg font-bold text-white mb-4">🎨 الثيم والألوان</h3>
                     <div class="space-y-4">
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">اللون الأساسي</label><input type="color" id="theme-primary-color" value="#111111" class="w-full h-10 rounded-lg cursor-pointer"></div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">لون الخلفية</label><input type="color" id="theme-bg-color" value="#ffffff" class="w-full h-10 rounded-lg cursor-pointer"></div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون الخط والنصوص (Font Color) - مزامنة فورية ⚡</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="theme-font-color" value="#111111" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveFontColor(this.value)">
+                                <input type="text" id="theme-font-color-hex" value="#111111" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveFontColor(this.value)">
+                            </div>
+                            <span class="text-[11px] text-amber-400/80 mt-1 block">يتغير لون كافة خطوط تطبيق الويب فوراً في نفس اللحظة</span>
+                        </div>
+                        <div><label class="block text-xs font-bold text-slate-400 mb-1">اللون الأساسي</label><input type="color" id="theme-primary-color" value="#111111" class="w-full h-10 rounded-lg cursor-pointer" oninput="syncLivePrimaryColor(this.value)"></div>
+                        <div><label class="block text-xs font-bold text-slate-400 mb-1">لون الخلفية</label><input type="color" id="theme-bg-color" value="#ffffff" class="w-full h-10 rounded-lg cursor-pointer" oninput="syncLiveBgColor(this.value)"></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">الخط</label><select id="theme-font" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"><option value="Cairo">Cairo</option><option value="Tajawal">Tajawal</option><option value="Almarai">Almarai</option></select></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">اسم التطبيق</label><input type="text" id="theme-app-name" value="توصيله" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">أيقونة التطبيق (Emoji)</label><input type="text" id="theme-logo-emoji" value="🚕" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm text-center text-2xl"></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">نص الحقوق (Footer)</label><input type="text" id="theme-footer" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
-                        <button onclick="saveThemeSettings()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-xl">💾 حفظ إعدادات الثيم</button>
+                        <button onclick="saveThemeSettings()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-xl">💾 حفظ إعدادات الثيم والألوان</button>
                     </div>
                 </div>
                 <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700">
@@ -1172,6 +1184,44 @@
             </div>
         </section>
 
+        <!-- Dedicated UI Management Tab (إدارة الواجهة: الأزرار والإعلانات) -->
+        <section id="tab-ui-management" class="tab-content hidden" style="display:none">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h2 class="text-xl font-black text-white">🎨 إدارة الواجهة (الأزرار والإعلانات)</h2>
+                    <p class="text-slate-400 text-sm mt-1">التحكم الكامل (إضافة، تعديل، حذف) بالأزرار المخصصة والإعلانات المنشورة في تطبيق الويب</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- 1. الأزرار المخصصة -->
+                <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700">
+                    <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-700">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">🔗</span>
+                            <h3 class="text-base font-bold text-white">الأزرار المخصصة</h3>
+                        </div>
+                        <button onclick="showAddButtonModal()" class="bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-3 py-1.5 rounded-xl text-xs">+ إضافة زر جديد</button>
+                    </div>
+                    <p class="text-slate-400 text-xs mb-3">تظهر كأزرار اتصال وروابط سريعة في أسفل واجهة التطبيق الرئيسية</p>
+                    <div id="ui-buttons-list" class="space-y-3"></div>
+                </div>
+
+                <!-- 2. الإعلانات -->
+                <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700">
+                    <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-700">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">📢</span>
+                            <h3 class="text-base font-bold text-white">الإعلانات المعروضة</h3>
+                        </div>
+                        <button onclick="showAddAdModal()" class="bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-3 py-1.5 rounded-xl text-xs">+ إضافة إعلان جديد</button>
+                    </div>
+                    <p class="text-slate-400 text-xs mb-3">تظهر كبطاقات ترويجية وإعلانات تنبيهية للمستخدمين</p>
+                    <div id="ui-ads-list" class="space-y-3"></div>
+                </div>
+            </div>
+        </section>
+
         <!-- Custom Buttons Tab -->
         <section id="tab-custom-buttons" class="tab-content hidden" style="display:none">
             <div class="flex items-center justify-between mb-6">
@@ -1180,23 +1230,25 @@
             </div>
             <p class="text-slate-400 text-sm mb-4">أضف أزرار مخصصة تظهر للمستخدمين في التطبيق (مثال: زر تيليجرام، زر واتساب، رابط خارجي...)</p>
             <div id="custom-buttons-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-            <!-- Add Button Modal -->
-            <div id="modal-add-button" class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center" style="display:none">
-                <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-slate-600">
-                    <h3 class="text-lg font-bold text-white mb-4">إضافة زر مخصص</h3>
-                    <div class="space-y-3">
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">نص الزر</label><input type="text" id="btn-label" placeholder="مثال: التواصل عبر تيليجرام" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">الرابط (URL)</label><input type="url" id="btn-url" placeholder="https://t.me/YourBot" dir="ltr" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">الأيقونة (Emoji)</label><input type="text" id="btn-icon" value="🔗" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm text-center text-xl"></div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">اللون</label><input type="color" id="btn-color" value="#111111" class="w-full h-10 rounded-lg"></div>
-                        <div class="flex gap-3 pt-2">
-                            <button onclick="submitNewButton()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-xl">حفظ الزر</button>
-                            <button onclick="hideAddButtonModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl">إلغاء</button>
-                        </div>
+        </section>
+
+        <!-- Add / Edit Button Modal -->
+        <div id="modal-add-button" class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center" style="display:none">
+            <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-slate-600">
+                <h3 id="modal-button-title" class="text-lg font-bold text-white mb-4">إضافة زر مخصص</h3>
+                <input type="hidden" id="btn-id" value="">
+                <div class="space-y-3">
+                    <div><label class="block text-xs font-bold text-slate-400 mb-1">نص الزر</label><input type="text" id="btn-label" placeholder="مثال: التواصل عبر تيليجرام" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
+                    <div><label class="block text-xs font-bold text-slate-400 mb-1">الرابط (URL)</label><input type="url" id="btn-url" placeholder="https://t.me/YourBot" dir="ltr" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
+                    <div><label class="block text-xs font-bold text-slate-400 mb-1">الأيقونة (Emoji)</label><input type="text" id="btn-icon" value="🔗" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm text-center text-xl"></div>
+                    <div><label class="block text-xs font-bold text-slate-400 mb-1">اللون</label><input type="color" id="btn-color" value="#111111" class="w-full h-10 rounded-lg"></div>
+                    <div class="flex gap-3 pt-2">
+                        <button onclick="submitNewButton()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-xl">حفظ الزر</button>
+                        <button onclick="hideAddButtonModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl">إلغاء</button>
                     </div>
                 </div>
             </div>
-        </section>
+        </div>
 
         <!-- Advertisements Tab -->
         <section id="tab-advertisements" class="tab-content hidden" style="display:none">
@@ -1205,21 +1257,24 @@
                 <button onclick="showAddAdModal()" class="bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-4 py-2 rounded-xl text-sm">+ إعلان جديد</button>
             </div>
             <div id="ads-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-            <div id="modal-add-ad" class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center" style="display:none">
-                <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-slate-600">
-                    <h3 class="text-lg font-bold text-white mb-4">إضافة إعلان</h3>
-                    <div class="space-y-3">
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">عنوان الإعلان</label><input type="text" id="ad-title" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">نص الإعلان</label><textarea id="ad-content" rows="3" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></textarea></div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">رابط (اختياري)</label><input type="url" id="ad-link" dir="ltr" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
-                        <div class="flex gap-3 pt-2">
-                            <button onclick="submitNewAd()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-xl">نشر الإعلان</button>
-                            <button onclick="hideAddAdModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl">إلغاء</button>
-                        </div>
+        </section>
+
+        <!-- Add / Edit Ad Modal -->
+        <div id="modal-add-ad" class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center" style="display:none">
+            <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-slate-600">
+                <h3 id="modal-ad-title" class="text-lg font-bold text-white mb-4">إضافة إعلان</h3>
+                <input type="hidden" id="ad-id" value="">
+                <div class="space-y-3">
+                    <div><label class="block text-xs font-bold text-slate-400 mb-1">عنوان الإعلان</label><input type="text" id="ad-title" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
+                    <div><label class="block text-xs font-bold text-slate-400 mb-1">نص الإعلان</label><textarea id="ad-content" rows="3" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></textarea></div>
+                    <div><label class="block text-xs font-bold text-slate-400 mb-1">رابط (اختياري)</label><input type="url" id="ad-link" dir="ltr" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
+                    <div class="flex gap-3 pt-2">
+                        <button onclick="submitNewAd()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-xl">نشر الإعلان</button>
+                        <button onclick="hideAddAdModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl">إلغاء</button>
                     </div>
                 </div>
             </div>
-        </section>
+        </div>
 
         <!-- Telegram Tab -->
         <section id="tab-telegram" class="tab-content hidden" style="display:none">

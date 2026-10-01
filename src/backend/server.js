@@ -1757,10 +1757,26 @@ async function startServer() {
         if (pathname === '/api/admin/custom-buttons' && method === 'GET') {
             return sendJson((db.memoryState.appConfig && db.memoryState.appConfig.customButtons) || []);
         }
-        if (pathname === '/api/admin/custom-buttons' && method === 'POST') {
+        if (pathname === '/api/admin/custom-buttons' && (method === 'POST' || method === 'PUT')) {
             const body = await parseJsonBody(req);
             if (!db.memoryState.appConfig) db.memoryState.appConfig = {};
             if (!db.memoryState.appConfig.customButtons) db.memoryState.appConfig.customButtons = [];
+            if (body.id) {
+                const idx = db.memoryState.appConfig.customButtons.findIndex(b => b.id === body.id);
+                if (idx !== -1) {
+                    db.memoryState.appConfig.customButtons[idx] = {
+                        ...db.memoryState.appConfig.customButtons[idx],
+                        label: body.label !== undefined ? body.label : db.memoryState.appConfig.customButtons[idx].label,
+                        url: body.url !== undefined ? body.url : db.memoryState.appConfig.customButtons[idx].url,
+                        icon: body.icon !== undefined ? body.icon : db.memoryState.appConfig.customButtons[idx].icon,
+                        color: body.color !== undefined ? body.color : db.memoryState.appConfig.customButtons[idx].color,
+                        visible: body.visible !== undefined ? body.visible : db.memoryState.appConfig.customButtons[idx].visible,
+                        updatedAt: new Date().toISOString()
+                    };
+                    db.saveStateSnapshot();
+                    return sendJson({ success: true, button: db.memoryState.appConfig.customButtons[idx] });
+                }
+            }
             const btn = { id: 'btn-' + Date.now(), label: body.label || '', url: body.url || '', icon: body.icon || '🔗', color: body.color || '#111111', order: body.order || 0, visible: body.visible !== false, target: body.target || '_blank', createdAt: new Date().toISOString() };
             db.memoryState.appConfig.customButtons.push(btn);
             db.saveStateSnapshot();
@@ -1779,10 +1795,25 @@ async function startServer() {
         if (pathname === '/api/admin/advertisements' && method === 'GET') {
             return sendJson((db.memoryState.appConfig && db.memoryState.appConfig.ads) || []);
         }
-        if (pathname === '/api/admin/advertisements' && method === 'POST') {
+        if (pathname === '/api/admin/advertisements' && (method === 'POST' || method === 'PUT')) {
             const body = await parseJsonBody(req);
             if (!db.memoryState.appConfig) db.memoryState.appConfig = {};
             if (!db.memoryState.appConfig.ads) db.memoryState.appConfig.ads = [];
+            if (body.id) {
+                const idx = db.memoryState.appConfig.ads.findIndex(a => a.id === body.id);
+                if (idx !== -1) {
+                    db.memoryState.appConfig.ads[idx] = {
+                        ...db.memoryState.appConfig.ads[idx],
+                        title: body.title !== undefined ? body.title : db.memoryState.appConfig.ads[idx].title,
+                        content: body.content !== undefined ? body.content : db.memoryState.appConfig.ads[idx].content,
+                        linkUrl: body.linkUrl !== undefined ? body.linkUrl : db.memoryState.appConfig.ads[idx].linkUrl,
+                        active: body.active !== undefined ? body.active : db.memoryState.appConfig.ads[idx].active,
+                        updatedAt: new Date().toISOString()
+                    };
+                    db.saveStateSnapshot();
+                    return sendJson({ success: true, ad: db.memoryState.appConfig.ads[idx] });
+                }
+            }
             const ad = { id: 'ad-' + Date.now(), title: body.title || '', content: body.content || '', imageUrl: body.imageUrl || '', linkUrl: body.linkUrl || '', active: body.active !== false, order: body.order || 0, createdAt: new Date().toISOString() };
             db.memoryState.appConfig.ads.push(ad);
             db.saveStateSnapshot();
@@ -1888,11 +1919,24 @@ async function startServer() {
             const body = await parseJsonBody(req);
             const { driverId, fromText, toText, fromLat, fromLon, toLat, toLon } = body;
             if (!driverId) return sendJson({ success: false, error: 'driverId required' }, 400);
+            if (!fromText || !toText || !fromText.trim() || !toText.trim()) {
+                return sendJson({ success: false, error: 'يجب تحديد نقطة الانطلاق ونقطة الوصول الفعلية للمسار' }, 400);
+            }
             const driver = db.memoryState.drivers.find(d => d.driverId === driverId);
             if (!driver) return sendJson({ success: false, error: 'Driver not found' }, 404);
-            driver.activeRoute = { fromText: fromText || '', toText: toText || '', fromLat: parseFloat(fromLat)||32.02, fromLon: parseFloat(fromLon)||44.32, toLat: parseFloat(toLat)||32.03, toLon: parseFloat(toLon)||44.37, setAt: new Date().toISOString() };
-            driver.currentLat = parseFloat(fromLat) || driver.currentLat || 32.02;
-            driver.currentLon = parseFloat(fromLon) || driver.currentLon || 44.32;
+            driver.activeRoute = {
+                fromText: fromText.trim(),
+                toText: toText.trim(),
+                fromLat: parseFloat(fromLat) || 0,
+                fromLon: parseFloat(fromLon) || 0,
+                toLat: parseFloat(toLat) || 0,
+                toLon: parseFloat(toLon) || 0,
+                setAt: new Date().toISOString()
+            };
+            if (fromLat && fromLon) {
+                driver.currentLat = parseFloat(fromLat);
+                driver.currentLon = parseFloat(fromLon);
+            }
             db.saveStateSnapshot();
             return sendJson({ success: true, route: driver.activeRoute });
         }

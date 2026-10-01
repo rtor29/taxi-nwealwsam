@@ -197,6 +197,7 @@ function switchTab(tabName) {
             loadDashboardStats();
             break;
         case 'customization': loadCustomizationSettings(); break;
+        case 'ui-management': loadCustomButtons(); loadAdvertisements(); break;
         case 'custom-buttons': loadCustomButtons(); break;
         case 'advertisements': loadAdvertisements(); break;
         case 'telegram': break;
@@ -3287,6 +3288,11 @@ async function loadCustomizationSettings() {
         if (cfg.theme) {
             document.getElementById('theme-primary-color').value = cfg.theme.primaryColor || '#111111';
             document.getElementById('theme-bg-color').value = cfg.theme.bgColor || '#ffffff';
+            var fc = cfg.theme.fontColor || cfg.theme.textColor || '#111111';
+            var fcEl = document.getElementById('theme-font-color');
+            var fcHexEl = document.getElementById('theme-font-color-hex');
+            if (fcEl) fcEl.value = fc;
+            if (fcHexEl) fcHexEl.value = fc;
             document.getElementById('theme-font').value = cfg.theme.fontFamily || 'Cairo';
             document.getElementById('theme-app-name').value = cfg.theme.appName || 'توصيله';
             document.getElementById('theme-logo-emoji').value = cfg.theme.logoEmoji || '🚕';
@@ -3307,6 +3313,33 @@ async function loadCustomizationSettings() {
             renderOnboardingScreens(cfg.onboarding.screens);
         }
     } catch(e) { console.error(e); }
+}
+
+function broadcastLiveThemeSync(theme) {
+    try {
+        var bc = new BroadcastChannel('tawseela_config_sync');
+        bc.postMessage({ type: 'config_updated', config: { theme: theme } });
+        bc.close();
+    } catch(_) {}
+}
+
+function syncLiveFontColor(color) {
+    if (!color) return;
+    var hexEl = document.getElementById('theme-font-color-hex');
+    var pickerEl = document.getElementById('theme-font-color');
+    if (hexEl && hexEl !== document.activeElement) hexEl.value = color;
+    if (pickerEl && pickerEl !== document.activeElement) pickerEl.value = color;
+    broadcastLiveThemeSync({ fontColor: color, textColor: color });
+}
+
+function syncLivePrimaryColor(color) {
+    if (!color) return;
+    broadcastLiveThemeSync({ primaryColor: color });
+}
+
+function syncLiveBgColor(color) {
+    if (!color) return;
+    broadcastLiveThemeSync({ bgColor: color });
 }
 
 function renderOnboardingScreens(screens) {
@@ -3341,9 +3374,14 @@ async function saveOnboarding() {
 }
 
 async function saveThemeSettings() {
+    var fc = document.getElementById('theme-font-color') ? document.getElementById('theme-font-color').value : '#111111';
+    var prim = document.getElementById('theme-primary-color').value;
+    var bg = document.getElementById('theme-bg-color').value;
     var body = {
-        primaryColor: document.getElementById('theme-primary-color').value,
-        bgColor: document.getElementById('theme-bg-color').value,
+        primaryColor: prim,
+        bgColor: bg,
+        fontColor: fc,
+        textColor: fc,
         fontFamily: document.getElementById('theme-font').value,
         appName: document.getElementById('theme-app-name').value,
         logoEmoji: document.getElementById('theme-logo-emoji').value,
@@ -3351,7 +3389,8 @@ async function saveThemeSettings() {
     };
     try {
         await fetch('/api/admin/theme', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify(body) });
-        showToast('تم حفظ إعدادات الثيم ✅');
+        broadcastLiveThemeSync(body);
+        showToast('تم حفظ إعدادات الثيم ومزامنة الألوان فوراً ✅');
     } catch(e) { showToast('خطأ', 'error'); }
 }
 
@@ -3371,89 +3410,218 @@ async function saveStaticTexts() {
     } catch(e) { showToast('خطأ', 'error'); }
 }
 
-// ===== Custom Buttons Tab =====
+// ===== Custom Buttons & UI Management =====
+window.__cachedButtons = [];
+window.__cachedAds = [];
+
 async function loadCustomButtons() {
     try {
         var res = await fetch('/api/admin/custom-buttons', authHeaders());
         var buttons = await res.json();
-        var list = document.getElementById('custom-buttons-list');
-        if (!list) return;
-        if (!buttons || buttons.length === 0) {
-            list.innerHTML = '<div class="col-span-2 text-center text-slate-500 py-8"><p class="text-4xl mb-2">🔗</p><p>لا توجد أزرار مخصصة بعد</p></div>';
-            return;
-        }
-        list.innerHTML = buttons.map(function(b) {
-            return '<div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700 flex items-center justify-between"><div class="flex items-center gap-3"><span class="text-2xl">' + (b.icon||'🔗') + '</span><div><div class="text-white font-bold text-sm">' + (b.label||'') + '</div><div class="text-slate-400 text-xs truncate max-w-[200px]">' + (b.url||'') + '</div></div></div><button onclick="deleteCustomButton(\'' + b.id + '\')" class="text-red-400 hover:text-red-300 text-sm"><i class="fa-solid fa-trash"></i></button></div>';
-        }).join('');
+        window.__cachedButtons = buttons || [];
+        var lists = [document.getElementById('custom-buttons-list'), document.getElementById('ui-buttons-list')];
+        lists.forEach(function(list) {
+            if (!list) return;
+            if (!buttons || buttons.length === 0) {
+                list.innerHTML = '<div class="col-span-2 text-center text-slate-500 py-6"><p class="text-3xl mb-2">🔗</p><p class="text-xs">لا توجد أزرار مخصصة بعد</p></div>';
+                return;
+            }
+            list.innerHTML = buttons.map(function(b) {
+                return '<div class="bg-slate-800/80 rounded-xl p-3.5 border border-slate-700 flex items-center justify-between gap-3">' +
+                    '<div class="flex items-center gap-3 min-w-0">' +
+                        '<span class="text-2xl flex-shrink-0">' + (b.icon||'🔗') + '</span>' +
+                        '<div class="min-w-0">' +
+                            '<div class="text-white font-bold text-sm truncate">' + (b.label||'') + '</div>' +
+                            '<div class="text-slate-400 text-xs truncate max-w-[200px]" dir="ltr">' + (b.url||'') + '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="flex items-center gap-1.5 flex-shrink-0">' +
+                        '<button onclick="editCustomButton(\'' + b.id + '\')" class="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 rounded-lg text-xs font-bold transition flex items-center gap-1"><i class="fa-solid fa-pen-to-square"></i> تعديل</button>' +
+                        '<button onclick="deleteCustomButton(\'' + b.id + '\')" class="px-2.5 py-1 bg-red-500/20 hover:bg-red-500/40 text-red-400 rounded-lg text-xs font-bold transition flex items-center gap-1"><i class="fa-solid fa-trash"></i> حذف</button>' +
+                    '</div>' +
+                '</div>';
+            }).join('');
+        });
     } catch(e) { console.error(e); }
 }
 
-function showAddButtonModal() { var m = document.getElementById('modal-add-button'); if(m){m.classList.remove('hidden');m.style.display='flex';} }
-function hideAddButtonModal() { var m = document.getElementById('modal-add-button'); if(m){m.classList.add('hidden');m.style.display='none';} }
+function showAddButtonModal() {
+    var m = document.getElementById('modal-add-button');
+    if (!m) return;
+    var titleEl = document.getElementById('modal-button-title');
+    if (titleEl) titleEl.textContent = 'إضافة زر مخصص جديد';
+    var idEl = document.getElementById('btn-id');
+    if (idEl) idEl.value = '';
+    document.getElementById('btn-label').value = '';
+    document.getElementById('btn-url').value = '';
+    document.getElementById('btn-icon').value = '🔗';
+    document.getElementById('btn-color').value = '#111111';
+    m.classList.remove('hidden');
+    m.style.display = 'flex';
+}
+
+function editCustomButton(id) {
+    var b = (window.__cachedButtons || []).find(function(item) { return item.id === id; });
+    if (!b) return;
+    var m = document.getElementById('modal-add-button');
+    if (!m) return;
+    var titleEl = document.getElementById('modal-button-title');
+    if (titleEl) titleEl.textContent = 'تعديل الزر المخصص ✏️';
+    var idEl = document.getElementById('btn-id');
+    if (idEl) idEl.value = b.id;
+    document.getElementById('btn-label').value = b.label || '';
+    document.getElementById('btn-url').value = b.url || '';
+    document.getElementById('btn-icon').value = b.icon || '🔗';
+    document.getElementById('btn-color').value = b.color || '#111111';
+    m.classList.remove('hidden');
+    m.style.display = 'flex';
+}
+
+function hideAddButtonModal() {
+    var m = document.getElementById('modal-add-button');
+    if (m) { m.classList.add('hidden'); m.style.display = 'none'; }
+}
 
 async function submitNewButton() {
+    var id = (document.getElementById('btn-id') || {}).value || '';
     var label = document.getElementById('btn-label').value.trim();
     var url = document.getElementById('btn-url').value.trim();
     var icon = document.getElementById('btn-icon').value.trim() || '🔗';
     var color = document.getElementById('btn-color').value;
-    if (!label || !url) { showToast('أدخل النص والرابط', 'error'); return; }
+    if (!label || !url) { showToast('أدخل نص الزر والرابط', 'error'); return; }
     try {
-        await fetch('/api/admin/custom-buttons', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify({label,url,icon,color}) });
-        hideAddButtonModal();
-        showToast('تم إضافة الزر ✅');
-        loadCustomButtons();
-    } catch(e) { showToast('خطأ', 'error'); }
+        var payload = { label: label, url: url, icon: icon, color: color };
+        if (id) payload.id = id;
+        var res = await fetch('/api/admin/custom-buttons', {
+            method: id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('admin_token') },
+            body: JSON.stringify(payload)
+        });
+        var data = await res.json();
+        if (data.success) {
+            hideAddButtonModal();
+            showToast(id ? 'تم تعديل الزر بنجاح ✅' : 'تم إضافة الزر بنجاح ✅');
+            loadCustomButtons();
+        } else {
+            showToast(data.error || 'فشلت العملية', 'error');
+        }
+    } catch(e) { showToast('خطأ في الاتصال', 'error'); }
 }
 
 async function deleteCustomButton(id) {
-    if (!confirm('حذف هذا الزر؟')) return;
+    if (!confirm('هل أنت متأكد من حذف هذا الزر؟')) return;
     try {
-        await fetch('/api/admin/custom-buttons', { method:'DELETE', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify({id}) });
-        showToast('تم الحذف ✅');
+        await fetch('/api/admin/custom-buttons', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('admin_token') },
+            body: JSON.stringify({ id: id })
+        });
+        showToast('تم حذف الزر ✅');
         loadCustomButtons();
-    } catch(e) { showToast('خطأ', 'error'); }
+    } catch(e) { showToast('خطأ في الحذف', 'error'); }
 }
 
-// ===== Advertisements Tab =====
+// ===== Advertisements Tab & UI Management =====
 async function loadAdvertisements() {
     try {
         var res = await fetch('/api/admin/advertisements', authHeaders());
         var ads = await res.json();
-        var list = document.getElementById('ads-list');
-        if (!list) return;
-        if (!ads || ads.length === 0) {
-            list.innerHTML = '<div class="col-span-2 text-center text-slate-500 py-8"><p class="text-4xl mb-2">📢</p><p>لا توجد إعلانات</p></div>';
-            return;
-        }
-        list.innerHTML = ads.map(function(a) {
-            return '<div class="bg-slate-800/60 rounded-xl p-4 border border-slate-700"><div class="flex items-center justify-between mb-2"><h4 class="text-white font-bold">' + (a.title||'إعلان') + '</h4><button onclick="deleteAd(\'' + a.id + '\')" class="text-red-400 hover:text-red-300"><i class="fa-solid fa-trash"></i></button></div><p class="text-slate-300 text-sm">' + (a.content||'') + '</p>' + (a.linkUrl ? '<a href="'+a.linkUrl+'" target="_blank" class="text-sky-400 text-xs mt-2 block">🔗 '+a.linkUrl+'</a>' : '') + '</div>';
-        }).join('');
+        window.__cachedAds = ads || [];
+        var lists = [document.getElementById('ads-list'), document.getElementById('ui-ads-list')];
+        lists.forEach(function(list) {
+            if (!list) return;
+            if (!ads || ads.length === 0) {
+                list.innerHTML = '<div class="col-span-2 text-center text-slate-500 py-6"><p class="text-3xl mb-2">📢</p><p class="text-xs">لا توجد إعلانات منشورة</p></div>';
+                return;
+            }
+            list.innerHTML = ads.map(function(a) {
+                return '<div class="bg-slate-800/80 rounded-xl p-3.5 border border-slate-700 space-y-2">' +
+                    '<div class="flex items-center justify-between gap-2">' +
+                        '<h4 class="text-white font-bold text-sm truncate">' + (a.title||'إعلان') + '</h4>' +
+                        '<div class="flex items-center gap-1.5 flex-shrink-0">' +
+                            '<button onclick="editAd(\'' + a.id + '\')" class="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 rounded-lg text-xs font-bold transition flex items-center gap-1"><i class="fa-solid fa-pen-to-square"></i> تعديل</button>' +
+                            '<button onclick="deleteAd(\'' + a.id + '\')" class="px-2.5 py-1 bg-red-500/20 hover:bg-red-500/40 text-red-400 rounded-lg text-xs font-bold transition flex items-center gap-1"><i class="fa-solid fa-trash"></i> حذف</button>' +
+                        '</div>' +
+                    '</div>' +
+                    '<p class="text-slate-300 text-xs line-clamp-2">' + (a.content||'') + '</p>' +
+                    (a.linkUrl ? '<a href="' + a.linkUrl + '" target="_blank" class="text-sky-400 text-xs block truncate" dir="ltr">🔗 ' + a.linkUrl + '</a>' : '') +
+                '</div>';
+            }).join('');
+        });
     } catch(e) { console.error(e); }
 }
 
-function showAddAdModal() { var m = document.getElementById('modal-add-ad'); if(m){m.classList.remove('hidden');m.style.display='flex';} }
-function hideAddAdModal() { var m = document.getElementById('modal-add-ad'); if(m){m.classList.add('hidden');m.style.display='none';} }
+function showAddAdModal() {
+    var m = document.getElementById('modal-add-ad');
+    if (!m) return;
+    var titleEl = document.getElementById('modal-ad-title');
+    if (titleEl) titleEl.textContent = 'إضافة إعلان جديد';
+    var idEl = document.getElementById('ad-id');
+    if (idEl) idEl.value = '';
+    document.getElementById('ad-title').value = '';
+    document.getElementById('ad-content').value = '';
+    document.getElementById('ad-link').value = '';
+    m.classList.remove('hidden');
+    m.style.display = 'flex';
+}
+
+function editAd(id) {
+    var a = (window.__cachedAds || []).find(function(item) { return item.id === id; });
+    if (!a) return;
+    var m = document.getElementById('modal-add-ad');
+    if (!m) return;
+    var titleEl = document.getElementById('modal-ad-title');
+    if (titleEl) titleEl.textContent = 'تعديل الإعلان ✏️';
+    var idEl = document.getElementById('ad-id');
+    if (idEl) idEl.value = a.id;
+    document.getElementById('ad-title').value = a.title || '';
+    document.getElementById('ad-content').value = a.content || '';
+    document.getElementById('ad-link').value = a.linkUrl || '';
+    m.classList.remove('hidden');
+    m.style.display = 'flex';
+}
+
+function hideAddAdModal() {
+    var m = document.getElementById('modal-add-ad');
+    if (m) { m.classList.add('hidden'); m.style.display = 'none'; }
+}
 
 async function submitNewAd() {
+    var id = (document.getElementById('ad-id') || {}).value || '';
     var title = document.getElementById('ad-title').value.trim();
     var content = document.getElementById('ad-content').value.trim();
     var linkUrl = document.getElementById('ad-link').value.trim();
     if (!title) { showToast('أدخل عنوان الإعلان', 'error'); return; }
     try {
-        await fetch('/api/admin/advertisements', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify({title,content,linkUrl}) });
-        hideAddAdModal();
-        showToast('تم نشر الإعلان ✅');
-        loadAdvertisements();
-    } catch(e) { showToast('خطأ', 'error'); }
+        var payload = { title: title, content: content, linkUrl: linkUrl };
+        if (id) payload.id = id;
+        var res = await fetch('/api/admin/advertisements', {
+            method: id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('admin_token') },
+            body: JSON.stringify(payload)
+        });
+        var data = await res.json();
+        if (data.success) {
+            hideAddAdModal();
+            showToast(id ? 'تم تعديل الإعلان بنجاح ✅' : 'تم نشر الإعلان بنجاح ✅');
+            loadAdvertisements();
+        } else {
+            showToast(data.error || 'فشلت العملية', 'error');
+        }
+    } catch(e) { showToast('خطأ في الاتصال', 'error'); }
 }
 
 async function deleteAd(id) {
-    if (!confirm('حذف هذا الإعلان؟')) return;
+    if (!confirm('هل أنت متأكد من حذف هذا الإعلان؟')) return;
     try {
-        await fetch('/api/admin/advertisements', { method:'DELETE', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify({id}) });
-        showToast('تم الحذف ✅');
+        await fetch('/api/admin/advertisements', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('admin_token') },
+            body: JSON.stringify({ id: id })
+        });
+        showToast('تم حذف الإعلان ✅');
         loadAdvertisements();
-    } catch(e) { showToast('خطأ', 'error'); }
+    } catch(e) { showToast('خطأ في الحذف', 'error'); }
 }
 
 // ===== Telegram Notification =====

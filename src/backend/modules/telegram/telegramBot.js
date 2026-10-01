@@ -97,15 +97,24 @@ function verifyTelegramOtp(chatId, code) {
 async function handleStart(chatId, user) {
     userStates.delete(chatId);
     const name = user.first_name || 'مستخدم';
+    const isRegisteredCustomer = (db.memoryState.customers || []).some(c => String(c.telegramChatId) === String(chatId));
+
+    const keyboard = [
+        [{ text: '🚶 تسجيل راكب', callback_data: 'reg_passenger' }, { text: '🚕 تسجيل سائق', callback_data: 'reg_driver' }],
+        [{ text: '🔑 تسجيل دخول', callback_data: 'login' }]
+    ];
+
+    // خيار معرفة السائقين القريبين يظهر للراكب فقط بعد إكمال عملية التسجيل بالكامل
+    if (isRegisteredCustomer) {
+        keyboard.push([{ text: '🗺️ السائقون القريبون', callback_data: 'nearby_drivers' }]);
+    }
+
+    keyboard.push([{ text: '📞 تواصل مع الإدارة', callback_data: 'contact_admin' }]);
+    keyboard.push([{ text: '❓ مساعدة', callback_data: 'help' }]);
+
     await sendKeyboard(chatId,
         `مرحباً <b>${name}</b> في بوت توصيله 🚕\nخدمة النقل الذكي في النجف الأشرف\n\nاختر ما تريد:`,
-        [
-            [{ text: '🚶 تسجيل راكب', callback_data: 'reg_passenger' }, { text: '🚕 تسجيل سائق', callback_data: 'reg_driver' }],
-            [{ text: '🔑 تسجيل دخول', callback_data: 'login' }],
-            [{ text: '🗺️ السائقون القريبون', callback_data: 'nearby_drivers' }],
-            [{ text: '📞 تواصل مع الإدارة', callback_data: 'contact_admin' }],
-            [{ text: '❓ مساعدة', callback_data: 'help' }]
-        ]
+        keyboard
     );
 }
 
@@ -124,7 +133,13 @@ async function handleCallback(chatId, data, user) {
             await sendMessage(chatId, '📱 أرسل رقم هاتفك المسجل:');
             break;
         case 'nearby_drivers': {
-            // Feature 2: Show nearby active drivers directly in bot
+            // التحقق من أن المستخدم راكب مسجل بالفعل
+            const isRegisteredCustomer = (db.memoryState.customers || []).some(c => String(c.telegramChatId) === String(chatId));
+            if (!isRegisteredCustomer) {
+                await sendMessage(chatId, '⚠️ <b>عذراً!</b> خيار معرفة السائقين القريبين متاح فقط للركاب بعد إكمال عملية التسجيل بالكامل.\n\nاضغط على <b>تسجيل راكب</b> للتسجيل أولاً.');
+                break;
+            }
+
             const drivers = (db.memoryState.drivers || []).filter(d =>
                 !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' &&
                 (d.isVerified || d.status === 'Active' || d.status === 'Approved') && d.activeRoute
@@ -241,7 +256,13 @@ async function handleMessage(chatId, text, user) {
             db.memoryState.customers.unshift(newCustomer);
             db.saveStateSnapshot();
 
-            await sendMessage(chatId, `🎉 <b>تم تسجيلك كراكب بنجاح!</b>\n\n📱 الهاتف: ${cleanPhone}\n👤 الاسم: ${state.fullName}\n\nيمكنك الآن الدخول للتطبيق:\nhttps://tawseelaiq.app/?role=Customer`);
+            await sendKeyboard(chatId,
+                `🎉 <b>تم تسجيلك كراكب بنجاح!</b>\n\n📱 الهاتف: ${cleanPhone}\n👤 الاسم: ${state.fullName}\n\nيمكنك الآن استعراض السائقين القريبين أو الدخول لتطبيق الويب:`,
+                [
+                    [{ text: '🗺️ السائقون القريبون', callback_data: 'nearby_drivers' }],
+                    [{ text: '🚗 الدخول لتطبيق الويب', url: 'https://tawseelaiq.app/?role=Customer' }]
+                ]
+            );
 
             // Notify admin
             await sendMessage(ADMIN_CHAT_ID, `🆕 راكب جديد عبر تيليجرام:\n👤 ${state.fullName}\n📱 ${cleanPhone}`);
@@ -368,8 +389,13 @@ async function handleMessage(chatId, text, user) {
             const customer = db.memoryState.customers.find(c => c.phoneNumber === phone);
             const driver = db.memoryState.drivers.find(d => d.phoneNumber === phone);
             if (customer) {
+                customer.telegramChatId = String(chatId);
+                db.saveStateSnapshot();
                 const token = 'jwt_customer_' + customer.customerId;
-                await sendMessage(chatId, `✅ تم الدخول كراكب!\n👤 ${customer.fullName}\n\n🔗 افتح التطبيق:\nhttps://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(customer.customerId)}&role=Customer&fullName=${encodeURIComponent(customer.fullName)}`);
+                await sendKeyboard(chatId, `✅ تم الدخول كراكب!\n👤 ${customer.fullName}\n\nيمكنك الآن استعراض السائقين القريبين:`, [
+                    [{ text: '🗺️ السائقون القريبون', callback_data: 'nearby_drivers' }],
+                    [{ text: '🚗 افتح التطبيق', url: `https://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(customer.customerId)}&role=Customer&fullName=${encodeURIComponent(customer.fullName)}` }]
+                ]);
             } else if (driver) {
                 if (driver.status === 'Pending' || !driver.isVerified) {
                     const cfg = db.memoryState.appConfig || {};

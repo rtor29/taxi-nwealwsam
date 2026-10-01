@@ -530,20 +530,20 @@ class AuthController {
                             <div id="nearby-driver-routes" style="margin-top:10px;display:none"></div>
                         </div>
 
-                        <!-- Hidden coords -->
-                        <input type="hidden" id="cust-pickup-lat" value="32.0200">
-                        <input type="hidden" id="cust-pickup-lon" value="44.3200">
-                        <input type="hidden" id="cust-dropoff-lat" value="32.0321">
-                        <input type="hidden" id="cust-dropoff-lon" value="44.3725">
+                        <!-- Hidden coords (empty until selected by user on map) -->
+                        <input type="hidden" id="cust-pickup-lat" value="">
+                        <input type="hidden" id="cust-pickup-lon" value="">
+                        <input type="hidden" id="cust-dropoff-lat" value="">
+                        <input type="hidden" id="cust-dropoff-lon" value="">
 
-                        <!-- Route / Address (auto-filled from map, editable) -->
+                        <!-- Route / Address (auto-filled from map or typed by user) -->
                         <div style="margin-bottom:12px">
-                            <label for="cust-reg-address" class="label">عنوان الانطلاق بالتفصيل</label>
-                            <input type="text" id="cust-reg-address" class="inp" placeholder="مثال: النجف - حي الجامعة" aria-label="عنوان الانطلاق">
+                            <label for="cust-reg-address" class="label">عنوان الانطلاق بالتفصيل <span style="color:#dc2626">*</span></label>
+                            <input type="text" id="cust-reg-address" class="inp" placeholder="حدد الانطلاق من الخريطة أو اكتبه هنا" aria-label="عنوان الانطلاق">
                         </div>
                         <div style="margin-bottom:12px">
-                            <label for="cust-reg-route" class="label">عنوان الوصول بالتفصيل</label>
-                            <input type="text" id="cust-reg-route" class="inp" placeholder="مثال: جامعة الكوفة" aria-label="عنوان الوصول">
+                            <label for="cust-reg-route" class="label">عنوان الوصول بالتفصيل <span style="color:#dc2626">*</span></label>
+                            <input type="text" id="cust-reg-route" class="inp" placeholder="حدد الوصول من الخريطة أو اكتبه هنا" aria-label="عنوان الوصول">
                         </div>
 
                         <!-- Password -->
@@ -671,14 +671,14 @@ class AuthController {
                         </div>
                         <!-- Driver Route (من/إلى) -->
                         <div style="border:1.5px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:16px">
-                            <div style="font-size:12px;font-weight:700;color:#111;margin-bottom:8px">🛣️ مسارك الافتراضي (اختياري - يمكن تغييره لاحقاً)</div>
+                            <div style="font-size:12px;font-weight:700;color:#111;margin-bottom:8px">🛣️ مسارك الفعلي (إلزامي) <span style="color:#dc2626">*</span></div>
                             <div style="position:relative;margin-bottom:8px">
                                 <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block"></span>
-                                <input type="text" id="driver-reg-from" class="inp" style="padding-right:26px;font-size:12px" placeholder="نقطة الانطلاق (مثال: حي العلماء)" aria-label="نقطة انطلاق السائق">
+                                <input type="text" id="driver-reg-from" required class="inp" style="padding-right:26px;font-size:12px" placeholder="نقطة انطلاقك الفعلية (حي/شارع)" aria-label="نقطة انطلاق السائق">
                             </div>
                             <div style="position:relative">
                                 <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block"></span>
-                                <input type="text" id="driver-reg-to" class="inp" style="padding-right:26px;font-size:12px" placeholder="نقطة الوصول (مثال: جامعة الكوفة)" aria-label="نقطة وصول السائق">
+                                <input type="text" id="driver-reg-to" required class="inp" style="padding-right:26px;font-size:12px" placeholder="نقطة وصولك الفعلية (حي/شارع)" aria-label="نقطة وصول السائق">
                             </div>
                         </div>
                         <button type="submit" id="btn-driver-reg-submit" class="btn-primary" aria-label="إكمال تسجيل السائق">
@@ -1031,14 +1031,26 @@ class AuthController {
             if (!password) { alert('يرجى إدخال كلمة المرور'); return; }
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التسجيل...';
-            var pickupLat = document.getElementById('cust-pickup-lat')?.value||'32.0200';
-            var pickupLon = document.getElementById('cust-pickup-lon')?.value||'44.3200';
-            var dropoffLat = document.getElementById('cust-dropoff-lat')?.value||'32.0321';
-            var dropoffLon = document.getElementById('cust-dropoff-lon')?.value||'44.3725';
+            var pickupText = (document.getElementById('cust-pickup-text')?.value||'').trim();
+            var dropoffText = (document.getElementById('cust-dropoff-text')?.value||'').trim();
+            var address = (document.getElementById('cust-reg-address').value||'').trim() || pickupText;
+            var route = (document.getElementById('cust-reg-route').value||'').trim() || dropoffText;
+            var pickupLat = document.getElementById('cust-pickup-lat')?.value;
+            var pickupLon = document.getElementById('cust-pickup-lon')?.value;
+            var dropoffLat = document.getElementById('cust-dropoff-lat')?.value;
+            var dropoffLon = document.getElementById('cust-dropoff-lon')?.value;
+
+            if (!pickupLat || !pickupLon || !dropoffLat || !dropoffLon || !address || !route) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> إكمال تسجيل الحساب';
+                alert('⚠️ يجب تحديد مسارك الفعلي (نقطة الانطلاق ونقطة الوصول) على الخريطة أولاً لإكمال التسجيل');
+                return;
+            }
+
             try {
                 var res = await fetch('/api/auth/complete-passenger-registration', {
                     method:'POST', headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({fullName,phoneNumber:phone,route,address,password,otpCode:window.__verifiedOtpCode||'',pickupLat:parseFloat(pickupLat)||32.02,pickupLon:parseFloat(pickupLon)||44.32,dropoffLat:parseFloat(dropoffLat)||32.0321,dropoffLon:parseFloat(dropoffLon)||44.3725,tripType:selectedRegTripType||'short'})
+                    body:JSON.stringify({fullName,phoneNumber:phone,route,address,password,otpCode:window.__verifiedOtpCode||'',pickupLat:parseFloat(pickupLat),pickupLon:parseFloat(pickupLon),dropoffLat:parseFloat(dropoffLat),dropoffLon:parseFloat(dropoffLon),tripType:selectedRegTripType||'short'})
                 });
                 var data = await res.json();
                 if (res.ok && data.success) {
@@ -1147,12 +1159,18 @@ class AuthController {
             var vehicle=(document.getElementById('driver-reg-vehicle')?.value||'').trim();
             var plate=(document.getElementById('driver-reg-plate')?.value||'').trim();
             var password=document.getElementById('driver-reg-password').value;
+            var fromRoute=(document.getElementById('driver-reg-from')?.value||'').trim();
+            var toRoute=(document.getElementById('driver-reg-to')?.value||'').trim();
             var submitBtn=document.getElementById('btn-driver-reg-submit');
-            if(!name||!phone||!password){alert('يرجى ملء جميع الحقول');return;}
+            if(!name||!phone||!password){alert('يرجى ملء جميع الحقول المطلوبة');return;}
+            if(!fromRoute||!toRoute){alert('⚠️ يجب تحديد مسارك الفعلي (نقطة الانطلاق ونقطة الوصول) لإكمال التسجيل');return;}
             submitBtn.disabled=true;
             submitBtn.innerHTML='<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التسجيل...';
             try {
-                var res = await fetch('/api/auth/complete-driver-registration',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fullName:name,phoneNumber:phone,licenseNumber:license,vehicleMake:vehicle,vehiclePlate:plate,password,otpCode:window.__verifiedDriverOtpCode||''})});
+                var res = await fetch('/api/auth/complete-driver-registration',{
+                    method:'POST',headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({fullName:name,phoneNumber:phone,licenseNumber:license,vehicleMake:vehicle,vehiclePlate:plate,password,fromRoute,toRoute,route:(fromRoute+' ➔ '+toRoute),otpCode:window.__verifiedDriverOtpCode||''})
+                });
                 var data = await res.json();
                 if (res.ok && data.success) {
                     submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> تم استلام الطلب!';
@@ -1307,8 +1325,7 @@ class AuthController {
                 }
                 passengerMap.addControl(new mapboxgl.NavigationControl({showCompass:true}),'top-left');
                 passengerMap.on('load',function(){
-                    updatePickupPoint(44.3200,32.0200,false);
-                    updateDropoffPoint(44.3500,32.0300,false);
+                    // Map loads clean without static default route
                 });
                 passengerMap.on('click',function(e){
                     if(currentPinMode==='pickup') updatePickupPoint(e.lngLat.lng,e.lngLat.lat,true);
@@ -1435,15 +1452,23 @@ class AuthController {
 
         // ===== Fix passenger route + show nearby drivers (Feature 4) =====
         window.fixPassengerRoute = async function() {
+            var pLatVal = (document.getElementById('cust-pickup-lat') || {}).value;
+            var pLonVal = (document.getElementById('cust-pickup-lon') || {}).value;
+            var dLatVal = (document.getElementById('cust-dropoff-lat') || {}).value;
+            var dLonVal = (document.getElementById('cust-dropoff-lon') || {}).value;
+            var pickupText = ((document.getElementById('cust-pickup-text') || {}).value || '').trim();
+            var dropoffText = ((document.getElementById('cust-dropoff-text') || {}).value || '').trim();
+            if (!pLatVal || !pLonVal || !dLatVal || !dLonVal || !pickupText || !dropoffText) {
+                alert('⚠️ يرجى تحديد نقطة الانطلاق ونقطة الوصول الفعلية على الخريطة لتثبيت المسار');
+                return;
+            }
             await initPassengerMapbox();
             drawRouteLine();
             showNearestDriver();
-            var pLat = parseFloat(document.getElementById('cust-pickup-lat').value) || 32.02;
-            var pLon = parseFloat(document.getElementById('cust-pickup-lon').value) || 44.32;
-            var dLat = parseFloat(document.getElementById('cust-dropoff-lat').value) || 32.03;
-            var dLon = parseFloat(document.getElementById('cust-dropoff-lon').value) || 44.37;
-            var pickupText = (document.getElementById('cust-pickup-text') || {}).value || '';
-            var dropoffText = (document.getElementById('cust-dropoff-text') || {}).value || '';
+            var pLat = parseFloat(pLatVal);
+            var pLon = parseFloat(pLonVal);
+            var dLat = parseFloat(dLatVal);
+            var dLon = parseFloat(dLonVal);
             var container = document.getElementById('nearby-driver-routes');
             if (!container) return;
             container.style.display = 'block';
@@ -1655,12 +1680,39 @@ class AuthController {
                         var footEl = document.getElementById('app-main-footer');
                         if (footEl) footEl.textContent = cfg.theme.footerText;
                     }
+                    var fontColor = cfg.theme.fontColor || cfg.theme.textColor;
+                    if (fontColor) {
+                        var fStyle = document.getElementById('dynamic-theme-font-style');
+                        if (!fStyle) {
+                            fStyle = document.createElement('style');
+                            fStyle.id = 'dynamic-theme-font-style';
+                            document.head.appendChild(fStyle);
+                        }
+                        fStyle.textContent = 'body, label, .label, input, select, textarea, button, p, span, h1, h2, h3, h4, div:not(.trip-card):not(.badge-green) { color: ' + fontColor + ' !important; } ::placeholder { color: ' + fontColor + ' !important; opacity: 0.65; }';
+                    }
                     if (cfg.theme.primaryColor) {
                         var btns = document.querySelectorAll('.btn-primary');
                         btns.forEach(function(b) { b.style.backgroundColor = cfg.theme.primaryColor; });
+                        var pStyle = document.getElementById('dynamic-theme-primary-style');
+                        if (!pStyle) {
+                            pStyle = document.createElement('style');
+                            pStyle.id = 'dynamic-theme-primary-style';
+                            document.head.appendChild(pStyle);
+                        }
+                        pStyle.textContent = '.btn-primary { background-color: ' + cfg.theme.primaryColor + ' !important; }';
                     }
                     if (cfg.theme.bgColor) {
                         document.body.style.backgroundColor = cfg.theme.bgColor;
+                        var bStyle = document.getElementById('dynamic-theme-bg-style');
+                        if (!bStyle) {
+                            bStyle = document.createElement('style');
+                            bStyle.id = 'dynamic-theme-bg-style';
+                            document.head.appendChild(bStyle);
+                        }
+                        bStyle.textContent = 'body { background-color: ' + cfg.theme.bgColor + ' !important; }';
+                    }
+                    if (cfg.theme.fontFamily) {
+                        document.body.style.fontFamily = '"' + cfg.theme.fontFamily + '", sans-serif';
                     }
                 }
 
@@ -1677,11 +1729,31 @@ class AuthController {
             } catch(e) {}
         }
 
-        // Feature 7: BroadcastChannel listener for instant config sync from dashboard
+        // Real-time config sync via BroadcastChannel (instant reflection on font & color changes)
         try {
             var configSyncChannel = new BroadcastChannel('tawseela_config_sync');
             configSyncChannel.onmessage = function(evt) {
                 if (evt.data && evt.data.type === 'config_updated') {
+                    if (evt.data.config && evt.data.config.theme) {
+                        var th = evt.data.config.theme;
+                        var fc = th.fontColor || th.textColor;
+                        if (fc) {
+                            var fs = document.getElementById('dynamic-theme-font-style');
+                            if (!fs) { fs = document.createElement('style'); fs.id = 'dynamic-theme-font-style'; document.head.appendChild(fs); }
+                            fs.textContent = 'body, label, .label, input, select, textarea, button, p, span, h1, h2, h3, h4, div:not(.trip-card):not(.badge-green) { color: ' + fc + ' !important; } ::placeholder { color: ' + fc + ' !important; opacity: 0.65; }';
+                        }
+                        if (th.bgColor) {
+                            document.body.style.backgroundColor = th.bgColor;
+                            var bs = document.getElementById('dynamic-theme-bg-style');
+                            if (!bs) { bs = document.createElement('style'); bs.id = 'dynamic-theme-bg-style'; document.head.appendChild(bs); }
+                            bs.textContent = 'body { background-color: ' + th.bgColor + ' !important; }';
+                        }
+                        if (th.primaryColor) {
+                            var ps = document.getElementById('dynamic-theme-primary-style');
+                            if (!ps) { ps = document.createElement('style'); ps.id = 'dynamic-theme-primary-style'; document.head.appendChild(ps); }
+                            ps.textContent = '.btn-primary { background-color: ' + th.primaryColor + ' !important; }';
+                        }
+                    }
                     applyDynamicAppConfig();
                 }
             };
@@ -2000,7 +2072,11 @@ class AuthController {
         const customerId = 'usr-c-' + Math.random().toString(36).substr(2, 9);
         const now = new Date().toISOString();
         const userRoute = (route || area || 'النجف الأشرف').trim();
-        const userAddress = (address || area || 'النجف الأشرف').trim();
+        const userAddress = (address || area || '').trim();
+        if (!pickupLat || !dropoffLat || !userAddress || !userRoute) {
+            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(JSON.stringify({ success: false, error: 'يجب تحديد نقطة الانطلاق ونقطة الوصول الفعلية على الخريطة' }));
+        }
 
         const newCustomer = {
             customerId,
@@ -2014,10 +2090,10 @@ class AuthController {
             googleId: googleId || null,
             preferredPaymentMethod: paymentMethod || 'Cash',
             area: userAddress,
-            pickupLat: pickupLat ? parseFloat(pickupLat) : 32.0200,
-            pickupLon: pickupLon ? parseFloat(pickupLon) : 44.3200,
-            dropoffLat: dropoffLat ? parseFloat(dropoffLat) : 32.0321,
-            dropoffLon: dropoffLon ? parseFloat(dropoffLon) : 44.3725,
+            pickupLat: parseFloat(pickupLat),
+            pickupLon: parseFloat(pickupLon),
+            dropoffLat: parseFloat(dropoffLat),
+            dropoffLon: parseFloat(dropoffLon),
             ratingAverage: 5.0,
             totalBookings: 0,
             isActive: true,
@@ -2167,6 +2243,7 @@ class AuthController {
                 year: parseInt(vehicleYear, 10) || 2023
             },
             route: route || null,
+            activeRoute: (body.fromRoute && body.toRoute) ? { fromText: body.fromRoute.trim(), toText: body.toRoute.trim(), setAt: now } : null,
             documents: docUrls,
             status: 'Pending',
             isVerified: false,
