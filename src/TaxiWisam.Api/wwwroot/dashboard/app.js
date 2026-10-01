@@ -3297,6 +3297,12 @@ async function loadCustomizationSettings() {
             document.getElementById('text-welcome-subtitle').value = cfg.staticTexts.welcomeSubtitle || '';
             document.getElementById('text-driver-pending').value = cfg.staticTexts.driverPendingMsg || '';
         }
+        if (document.getElementById('theme-telegram-link')) {
+            document.getElementById('theme-telegram-link').value = cfg.telegramAdminLink || 'https://t.me/tawseela_iq_bot';
+        }
+        if (document.getElementById('theme-whatsapp-link')) {
+            document.getElementById('theme-whatsapp-link').value = cfg.whatsappAdminLink || 'https://wa.me/9647706204066';
+        }
         if (cfg.onboarding && cfg.onboarding.screens) {
             renderOnboardingScreens(cfg.onboarding.screens);
         }
@@ -3355,11 +3361,13 @@ async function saveStaticTexts() {
             welcomeTitle: document.getElementById('text-welcome-title').value,
             welcomeSubtitle: document.getElementById('text-welcome-subtitle').value,
             driverPendingMsg: document.getElementById('text-driver-pending').value
-        }
+        },
+        telegramAdminLink: document.getElementById('theme-telegram-link') ? document.getElementById('theme-telegram-link').value.trim() : 'https://t.me/tawseela_iq_bot',
+        whatsappAdminLink: document.getElementById('theme-whatsapp-link') ? document.getElementById('theme-whatsapp-link').value.trim() : 'https://wa.me/9647706204066'
     };
     try {
         await fetch('/api/admin/app-config', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify(body) });
-        showToast('تم حفظ النصوص ✅');
+        showToast('تم حفظ النصوص وحسابات التواصل بنجاح ✅');
     } catch(e) { showToast('خطأ', 'error'); }
 }
 

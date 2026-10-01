@@ -333,6 +333,9 @@ class AuthController {
             <button class="btn-primary" id="btn-open-app" onclick="confirmTripTypeAndOpen()" disabled style="opacity:0.5">
                 متابعة وفتح التطبيق
             </button>
+            <button type="button" onclick="closeTripTypeModal()" style="margin-top:10px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;color:#6b7280;cursor:pointer;width:100%">
+                إلغاء ✕
+            </button>
         </div>
     </div>
 
@@ -346,6 +349,7 @@ class AuthController {
     <!-- Main Content -->
     <!-- Onboarding Tutorial -->
     <div id="onboarding-overlay" style="display:none;position:fixed;inset:0;z-index:99998;background:#ffffff;align-items:center;justify-content:center;flex-direction:column">
+        <button type="button" onclick="finishOnboarding()" style="position:absolute;top:16px;left:16px;background:#f3f4f6;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;color:#6b7280;cursor:pointer;font-family:'Cairo',sans-serif">تخطي ✕</button>
         <div id="onboarding-content" style="max-width:380px;width:90%;text-align:center;padding:40px 20px">
             <div id="onb-icon" style="font-size:64px;margin-bottom:16px"></div>
             <h2 id="onb-title" style="font-size:20px;font-weight:900;color:#111;margin:0 0 8px"></h2>
@@ -358,9 +362,9 @@ class AuthController {
 
         <!-- Logo & Title -->
         <header style="text-align:center;padding:20px 0 24px">
-            <div style="font-size:40px;margin-bottom:10px">🚕</div>
-            <h1 style="font-size:22px;font-weight:900;margin:0 0 6px;color:#111">منصة توصيله</h1>
-            <p style="font-size:13px;color:#6b7280;margin:0">النجف الأشرف - سجّل دخولك أو أنشئ حسابك</p>
+            <div id="app-main-logo" style="font-size:40px;margin-bottom:10px">🚕</div>
+            <h1 id="app-main-title" style="font-size:22px;font-weight:900;margin:0 0 6px;color:#111">منصة توصيله</h1>
+            <p id="app-main-subtitle" style="font-size:13px;color:#6b7280;margin:0">النجف الأشرف - سجّل دخولك أو أنشئ حسابك</p>
         </header>
 
         <!-- Role Tabs -->
@@ -395,6 +399,9 @@ class AuthController {
                 <span style="font-size:12px;font-weight:700;color:#6b7280">الحالة:</span>
                 <span style="font-size:12px;font-weight:900;color:#15803d">✅ نشط ومعتمد</span>
             </div>
+            <button type="button" onclick="openUserAppNow()" class="btn-primary" style="margin-top:12px;padding:11px 14px;font-size:13px">
+                <i class="fa-solid fa-play" aria-hidden="true"></i> متابعة وفتح تطبيق الرحلات
+            </button>
         </div>
 
         <!-- ===== PASSENGER SECTION ===== -->
@@ -695,7 +702,7 @@ class AuthController {
             <p id="loading-text" style="font-size:13px;color:#6b7280;font-weight:700">جاري المعالجة...</p>
         </div>
 
-        <footer style="text-align:center;margin-top:28px;font-size:12px;color:#9ca3af">
+        <footer id="app-main-footer" style="text-align:center;margin-top:28px;font-size:12px;color:#9ca3af">
             © 2026 توصيله (Tawseela IQ) · النجف الأشرف
         </footer>
         <div id="custom-buttons-container" style="margin-top:16px"></div>
@@ -858,6 +865,26 @@ class AuthController {
             if (modal) { modal.style.display = 'flex'; }
         }
 
+        window.closeTripTypeModal = function() {
+            var modal = document.getElementById('trip-type-modal');
+            if (modal) modal.style.display = 'none';
+        };
+
+        window.openUserAppNow = function() {
+            var token = localStorage.getItem('auth_token');
+            var userId = localStorage.getItem('user_id') || 'usr-current';
+            var role = localStorage.getItem('user_role') || 'Customer';
+            var fullName = localStorage.getItem('user_fullname') || (role === 'Driver' ? 'كابتن توصيله' : 'راكب توصيله');
+            var status = localStorage.getItem('driver_status') || '';
+            if (role === 'Driver' && (status === 'Pending' || status === 'Rejected')) {
+                alert('⚠️ حسابك معلّق بانتظار التوثيق من قبل إدارة المنصة.\\nيرجى إرسال المستمسكات عبر الواتساب أو التيليجرام للاعتماد.');
+                return;
+            }
+            if (token) {
+                showTripTypeModal(token, userId, role, fullName);
+            }
+        };
+
         // ===== Captain Login =====
         async function handleCaptainLogin(event) {
             event.preventDefault();
@@ -871,6 +898,12 @@ class AuthController {
                 var res = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({identifier,password,role:'Driver'}) });
                 var data = await res.json();
                 if (res.ok && data.success) {
+                    if (data.status === 'Pending' || data.isVerified === false) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> دخول';
+                        alert('⚠️ حسابك معلّق بانتظار التوثيق من قبل إدارة المنصة.\\nيرجى إرسال المستمسكات عبر الواتساب أو التيليجرام للاعتماد.');
+                        return;
+                    }
                     persistSession(data);
                     submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> تم الدخول!';
                     setTimeout(function(){ showTripTypeModal(data.token, data.userId, data.role||'Driver', data.fullName||'كابتن توصيله'); }, 200);
@@ -1108,10 +1141,26 @@ class AuthController {
             try {
                 var res = await fetch('/api/auth/complete-driver-registration',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fullName:name,phoneNumber:phone,licenseNumber:license,vehicleMake:vehicle,vehiclePlate:plate,password,otpCode:window.__verifiedDriverOtpCode||''})});
                 var data = await res.json();
-                if(res.ok&&data.success){
-                    persistSession(data);
-                    submitBtn.innerHTML='<i class="fa-solid fa-check"></i> تم التسجيل!';
-                    setTimeout(function(){openAppView(data.token,data.userId,'Driver',data.fullName||'كابتن توصيله');},200);
+                if (res.ok && data.success) {
+                    submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> تم استلام الطلب!';
+                    var formBox = document.getElementById('driver-register-form');
+                    var tgLink = window.__telegramAdminLink || 'https://t.me/tawseela_iq_bot';
+                    var waLink = window.__whatsappAdminLink || 'https://wa.me/9647706204066';
+                    if (formBox) {
+                        formBox.innerHTML = '<div style="background:#fffbeb;border:2px solid #fde68a;border-radius:14px;padding:22px 18px;text-align:center">' +
+                            '<div style="font-size:38px;margin-bottom:10px">⏳</div>' +
+                            '<h3 style="font-size:16px;font-weight:900;color:#92400e;margin:0 0 8px">تم تسجيل طلبك بنجاح - الحساب معلّق</h3>' +
+                            '<p style="font-size:13px;color:#78350f;margin:0 0 16px;line-height:1.6">حسابك الآن بانتظار توثيق الإدارة. لن تتمكن من الدخول أو استقبال الطلبات حتى إرسال مستمسكاتك واعتماد الحساب من لوحة التحكم.</p>' +
+                            '<div style="background:#ffffff;border:1.5px solid #fcd34d;border-radius:12px;padding:14px;text-align:right;margin-bottom:16px">' +
+                                '<div style="font-weight:900;font-size:13px;color:#92400e;margin-bottom:10px">📋 يرجى إرسال المستمسكات (البطاقة، إجازة السوق، السنوية) عبر:</div>' +
+                                '<div style="display:flex;flex-direction:column;gap:8px">' +
+                                    '<a href="' + waLink + '" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#25d366;color:#fff;padding:11px;border-radius:10px;font-weight:900;font-size:13px;text-decoration:none">📱 إرسال عبر واتساب الإدارة</a>' +
+                                    '<a href="' + tgLink + '" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#0088cc;color:#fff;padding:11px;border-radius:10px;font-weight:900;font-size:13px;text-decoration:none">💬 إرسال عبر تيليجرام الإدارة</a>' +
+                                '</div>' +
+                            '</div>' +
+                            '<p style="font-size:12px;color:#a16207;font-weight:700;margin:0">سيتم تفعيل حسابك من قبل الإدارة بعد مراجعة المستمسكات.</p>' +
+                        '</div>';
+                    }
                 } else {
                     submitBtn.disabled=false;
                     submitBtn.innerHTML='<i class="fa-solid fa-taxi"></i> إكمال تسجيل حساب السائق';
@@ -1389,14 +1438,26 @@ class AuthController {
 
         function checkUserSession() {
             try {
-                var token=localStorage.getItem('auth_token');
-                var userId=localStorage.getItem('user_id')||'usr-current';
-                var role=localStorage.getItem('user_role')||'Customer';
-                var fullName=localStorage.getItem('user_fullname')||(role==='Driver'?'كابتن توصيله':'راكب توصيله');
-                if(token&&token.length>5) {
-                    showTripTypeModal(token,userId,role,fullName);
+                var token = localStorage.getItem('auth_token');
+                var userId = localStorage.getItem('user_id') || 'usr-current';
+                var role = localStorage.getItem('user_role') || 'Customer';
+                var fullName = localStorage.getItem('user_fullname') || (role === 'Driver' ? 'كابتن توصيله' : 'راكب توصيله');
+                var status = localStorage.getItem('driver_status') || '';
+
+                if (token && token.length > 5) {
+                    if (role === 'Driver' && (status === 'Pending' || status === 'Rejected')) {
+                        return;
+                    }
+                    var box = document.getElementById('user-logged-in-box');
+                    if (box) {
+                        box.style.display = 'block';
+                        var nameEl = document.getElementById('logged-user-name');
+                        var roleEl = document.getElementById('logged-user-role');
+                        if (nameEl) nameEl.textContent = fullName;
+                        if (roleEl) roleEl.textContent = role === 'Driver' ? 'كابتن معتمد' : 'راكب';
+                    }
                 }
-            } catch(_) {}
+            } catch (_) {}
         }
 
         window.handleLogout = function() {
@@ -1409,11 +1470,60 @@ class AuthController {
             window.location.replace('/');
         };
 
+        // Dynamic Config from Dashboard
+        window.__telegramAdminLink = 'https://t.me/tawseela_iq_bot';
+        window.__whatsappAdminLink = 'https://wa.me/9647706204066';
+
+        async function applyDynamicAppConfig() {
+            try {
+                var res = await fetch('/api/admin/app-config?t=' + Date.now());
+                var cfg = await res.json();
+                if (!cfg) return;
+
+                if (cfg.telegramAdminLink) window.__telegramAdminLink = cfg.telegramAdminLink;
+                if (cfg.whatsappAdminLink) window.__whatsappAdminLink = cfg.whatsappAdminLink;
+
+                if (cfg.theme) {
+                    if (cfg.theme.appName) {
+                        var titleEl = document.getElementById('app-main-title');
+                        if (titleEl) titleEl.textContent = cfg.theme.appName;
+                        document.title = cfg.theme.appName + ' | التسجيل والدخول';
+                    }
+                    if (cfg.theme.logoEmoji) {
+                        var logoEl = document.getElementById('app-main-logo');
+                        if (logoEl) logoEl.textContent = cfg.theme.logoEmoji;
+                    }
+                    if (cfg.theme.footerText) {
+                        var footEl = document.getElementById('app-main-footer');
+                        if (footEl) footEl.textContent = cfg.theme.footerText;
+                    }
+                    if (cfg.theme.primaryColor) {
+                        var btns = document.querySelectorAll('.btn-primary');
+                        btns.forEach(function(b) { b.style.backgroundColor = cfg.theme.primaryColor; });
+                    }
+                    if (cfg.theme.bgColor) {
+                        document.body.style.backgroundColor = cfg.theme.bgColor;
+                    }
+                }
+
+                if (cfg.staticTexts) {
+                    if (cfg.staticTexts.welcomeTitle) {
+                        var wt = document.getElementById('app-main-title');
+                        if (wt) wt.textContent = cfg.staticTexts.welcomeTitle;
+                    }
+                    if (cfg.staticTexts.welcomeSubtitle) {
+                        var ws = document.getElementById('app-main-subtitle');
+                        if (ws) ws.textContent = cfg.staticTexts.welcomeSubtitle;
+                    }
+                }
+            } catch(e) {}
+        }
+
         // Onboarding
         var onbScreens = [], onbIndex = 0;
         async function initOnboarding() {
             try {
-                var res = await fetch('/api/admin/onboarding');
+                var res = await fetch('/api/admin/onboarding?t=' + Date.now());
                 var data = await res.json();
                 if (!data.enabled || !data.screens || data.screens.length === 0) return;
                 if (localStorage.getItem('onboarding_done')) return;
@@ -1444,37 +1554,50 @@ class AuthController {
         // Load custom buttons
         async function loadAppCustomButtons() {
             try {
-                var res = await fetch('/api/admin/custom-buttons');
+                var res = await fetch('/api/admin/custom-buttons?t=' + Date.now());
                 var buttons = await res.json();
                 var container = document.getElementById('custom-buttons-container');
-                if (!container || !buttons || buttons.length === 0) return;
-                container.innerHTML = buttons.filter(function(b){return b.visible;}).map(function(b) {
-                    return '<a href="'+b.url+'" target="'+(b.target||'_blank')+'" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:12px;background:'+(b.color||'#111')+';color:#fff;font-weight:900;font-size:14px;text-decoration:none;margin-bottom:8px;font-family:Cairo,sans-serif">'+(b.icon||'🔗')+' '+(b.label||'')+'</a>';
-                }).join('');
+                if (!container || !buttons || !Array.isArray(buttons) || buttons.length === 0) return;
+                container.innerHTML = '';
+                buttons.filter(function(b){ return b.visible !== false; }).forEach(function(b) {
+                    var a = document.createElement('a');
+                    a.href = b.url || '#';
+                    a.target = b.target || '_blank';
+                    a.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:12px;background:' + (b.color || '#111') + ';color:#fff;font-weight:900;font-size:14px;text-decoration:none;margin-bottom:8px;font-family:Cairo,sans-serif';
+                    a.textContent = (b.icon || '🔗') + ' ' + (b.label || '');
+                    container.appendChild(a);
+                });
             } catch(e) {}
         }
 
         async function loadAppAds() {
             try {
-                var res = await fetch('/api/admin/advertisements');
+                var res = await fetch('/api/admin/advertisements?t=' + Date.now());
                 var ads = await res.json();
                 var container = document.getElementById('ads-container');
-                if (!container || !ads || ads.length === 0) return;
-                container.innerHTML = ads.filter(function(a){return a.active;}).map(function(a) {
-                    var link = a.linkUrl ? ' onclick="window.open(\''+a.linkUrl+'\',\'_blank\')" style="cursor:pointer"' : '';
-                    return '<div'+link+' style="background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:12px;padding:14px;margin-bottom:8px"><div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px">'+(a.title||'')+'</div><div style="font-size:12px;color:#6b7280">'+(a.content||'')+'</div></div>';
-                }).join('');
+                if (!container || !ads || !Array.isArray(ads) || ads.length === 0) return;
+                container.innerHTML = '';
+                ads.filter(function(a){ return a.active !== false; }).forEach(function(a) {
+                    var d = document.createElement('div');
+                    d.style.cssText = 'background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:12px;padding:14px;margin-bottom:8px' + (a.linkUrl ? ';cursor:pointer' : '');
+                    d.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px">' + (a.title || '') + '</div><div style="font-size:12px;color:#6b7280">' + (a.content || '') + '</div>';
+                    if (a.linkUrl) {
+                        d.onclick = function() { window.open(a.linkUrl, '_blank'); };
+                    }
+                    container.appendChild(d);
+                });
             } catch(e) {}
         }
 
         (function() {
+            applyDynamicAppConfig();
             initOnboarding();
             loadAppCustomButtons();
             loadAppAds();
             checkUserSession();
-            var urlParams=new URLSearchParams(window.location.search);
-            var role=urlParams.get('role');
-            if(role==='Customer'||role==='customer') window.switchRole('Customer');
+            var urlParams = new URLSearchParams(window.location.search);
+            var role = urlParams.get('role');
+            if (role === 'Customer' || role === 'customer') window.switchRole('Customer');
             else window.switchRole('Driver');
         })();
     </script>
@@ -1836,16 +1959,14 @@ class AuthController {
 
         db.saveStateSnapshot();
 
-        const token = 'jwt_driver_' + driverId;
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         return res.end(JSON.stringify({
             success: true,
-            token,
             userId: driverId,
             role: 'Driver',
             fullName,
             status: 'Pending',
-            redirectUrl: `/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driverId)}&role=Driver&fullName=${encodeURIComponent(fullName)}`
+            message: 'تم استلام طلب التسجيل بنجاح. حسابك معلّق بانتظار التوثيق من قبل إدارة المنصة.'
         }));
     }
 

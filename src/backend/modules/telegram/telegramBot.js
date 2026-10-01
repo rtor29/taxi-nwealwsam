@@ -122,10 +122,14 @@ async function handleCallback(chatId, data, user) {
             userStates.set(chatId, { step: 'login_phone' });
             await sendMessage(chatId, '📱 أرسل رقم هاتفك المسجل:');
             break;
-        case 'contact_admin':
-            await sendMessage(chatId, '📞 للتواصل مع الإدارة:\nواتساب: https://wa.me/9647706204066\nأو أرسل رسالتك هنا وسنوصلها.');
+        case 'contact_admin': {
+            const cfg = db.memoryState.appConfig || {};
+            const tgLink = cfg.telegramAdminLink || 'https://t.me/tawseela_iq_bot';
+            const waLink = cfg.whatsappAdminLink || 'https://wa.me/9647706204066';
+            await sendMessage(chatId, `📞 <b>للتواصل مع إدارة المنصة:</b>\n\n💬 تيليجرام الإدارة: ${tgLink}\n📱 واتساب الإدارة: ${waLink}\n\nأو يمكنك كتابة رسالتك هنا وسنوصلها للإدارة مباشرة.`);
             userStates.set(chatId, { step: 'contact_msg' });
             break;
+        }
         case 'help':
             await sendMessage(chatId, '❓ <b>المساعدة</b>\n\n/start - القائمة الرئيسية\n/status - حالة حسابك\n\nللتسجيل اختر الزر المناسب من القائمة.');
             break;
@@ -296,23 +300,26 @@ async function handleMessage(chatId, text, user) {
 
             db.saveStateSnapshot();
 
+            const cfg = db.memoryState.appConfig || {};
+            const tgAdminLink = cfg.telegramAdminLink || 'https://t.me/tawseela_iq_bot';
+            const waAdminLink = cfg.whatsappAdminLink || 'https://wa.me/9647706204066';
+
             await sendMessage(chatId,
-                `🎉 <b>تم تسجيلك كسائق!</b>\n\n` +
-                `⏳ حسابك <b>معلّق</b> بانتظار التوثيق.\n\n` +
-                `📋 <b>الخطوة التالية:</b>\n` +
-                `أرسل صورة مستمسكاتك (هوية + إجازة سوق + رخصة مركبة) عبر واتساب للرقم:\n` +
-                `📲 https://wa.me/9647706204066\n\n` +
-                `سيتم تفعيل حسابك بعد مراجعة الإدارة.`
+                `🎉 <b>تم استلام طلب التسجيل بنجاح!</b>\n\n` +
+                `⏳ <b>حسابك معلّق حالياً بانتظار توثيق وموافقة الإدارة</b>\n` +
+                `لن تتمكن من استقبال الطلبات أو استخدام التطبيق حتى إرسال مستمسكاتك واعتماد حسابك.\n\n` +
+                `📋 <b>يرجى إرسال المستمسكات الثبوتية (البطاقة الموحدة / الهوية، إجازة السوق، السنوية) عبر:</b>\n` +
+                `📱 <b>واتساب الإدارة:</b> ${waAdminLink}\n` +
+                `💬 <b>تيليجرام الإدارة:</b> ${tgAdminLink}\n\n` +
+                `سيتم تدقيق المستمسكات وتفعيل حسابك من قبل إدارة المنصة في أقرب وقت.`
             );
 
-            // Notify admin
-            await sendKeyboard(ADMIN_CHAT_ID,
-                `🚕 سائق جديد بانتظار التوثيق:\n👤 ${state.fullName}\n📱 ${cleanPhone}\n🚗 ${state.vehicle} - ${state.plate}`,
-                [[
-                    { text: '✅ قبول', callback_data: `approve_${driverId}` },
-                    { text: '❌ رفض', callback_data: `reject_${driverId}` }
-                ]]
-            );
+            // Notify admin about the new pending driver
+            if (String(chatId) !== String(ADMIN_CHAT_ID)) {
+                await sendMessage(ADMIN_CHAT_ID,
+                    `🚕 <b>سائق جديد بانتظار التوثيق في لوحة التحكم:</b>\n👤 الاسم: ${state.fullName}\n📱 الهاتف: ${cleanPhone}\n🚗 المركبة: ${state.vehicle} - ${state.plate}\n\nيرجى الدخول للوحة التحكم لمراجعة المستمسكات والموافقة على الحساب.`
+                );
+            }
             userStates.delete(chatId);
             break;
         }
@@ -338,8 +345,17 @@ async function handleMessage(chatId, text, user) {
                 const token = 'jwt_customer_' + customer.customerId;
                 await sendMessage(chatId, `✅ تم الدخول كراكب!\n👤 ${customer.fullName}\n\n🔗 افتح التطبيق:\nhttps://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(customer.customerId)}&role=Customer&fullName=${encodeURIComponent(customer.fullName)}`);
             } else if (driver) {
-                if (driver.status === 'Pending') {
-                    await sendMessage(chatId, `⏳ حسابك كسائق لا يزال <b>معلقاً</b> بانتظار التوثيق.\nأرسل مستمسكاتك عبر واتساب: https://wa.me/9647706204066`);
+                if (driver.status === 'Pending' || !driver.isVerified) {
+                    const cfg = db.memoryState.appConfig || {};
+                    const tgAdminLink = cfg.telegramAdminLink || 'https://t.me/tawseela_iq_bot';
+                    const waAdminLink = cfg.whatsappAdminLink || 'https://wa.me/9647706204066';
+                    await sendMessage(chatId,
+                        `⏳ حسابك كسائق لا يزال <b>معلّقاً</b> بانتظار التوثيق من قبل إدارة المنصة.\n\n` +
+                        `📋 <b>يرجى إرسال المستمسكات عبر:</b>\n` +
+                        `📱 واتساب: ${waAdminLink}\n` +
+                        `💬 تيليجرام: ${tgAdminLink}\n\n` +
+                        `سيتم التفعيل بعد مراجعة الإدارة في لوحة التحكم.`
+                    );
                 } else {
                     const token = 'jwt_driver_' + driver.driverId;
                     await sendMessage(chatId, `✅ تم الدخول كسائق!\n👤 ${driver.fullName}\n\n🔗 افتح التطبيق:\nhttps://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driver.driverId)}&role=Driver&fullName=${encodeURIComponent(driver.fullName)}`);

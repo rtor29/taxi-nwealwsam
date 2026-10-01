@@ -698,6 +698,17 @@ async function startServer() {
                 }
             }
 
+            // Drivers must be approved by admin before accessing web app
+            if (userRole === 'Driver') {
+                if (user.status === 'Pending' || user.status === 'Unverified' || !user.isVerified) {
+                    return sendJson({
+                        success: false,
+                        pending: true,
+                        error: 'حسابك معلّق بانتظار التوثيق من قبل إدارة المنصة. يرجى إرسال المستمسكات عبر الواتساب أو التيليجرام للاعتماد.'
+                    }, 403);
+                }
+            }
+
             const id = user.driverId || user.customerId;
             const token = `jwt_${userRole.toLowerCase()}_` + id;
             return sendJson({
@@ -1193,7 +1204,7 @@ async function startServer() {
             const lon = parseFloat(parsedUrl.searchParams.get('lon') || config.najafDefaults.longitude);
             
             const activeDrivers = db.memoryState.drivers
-                .filter(d => !d.isBlocked && (d.isVerified || d.status === 'Approved' || d.status === 'Online'))
+                .filter(d => !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' && (d.isVerified === true || d.status === 'Approved' || d.status === 'Active'))
                 .map((d, idx) => ({
                     driverId: d.driverId,
                     driverName: d.fullName || 'كابتن توصيله',
@@ -1212,6 +1223,18 @@ async function startServer() {
                 }));
 
             return sendJson(activeDrivers);
+        }
+
+        if (pathname === '/api/fleet/active-drivers') {
+            const activeDrivers = (db.memoryState.drivers || [])
+                .filter(d => !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' && (d.isVerified === true || d.status === 'Approved' || d.status === 'Active'))
+                .map(d => ({
+                    id: d.driverId,
+                    name: d.fullName,
+                    lat: d.currentLat ? parseFloat(d.currentLat) : 32.025,
+                    lon: d.currentLon ? parseFloat(d.currentLon) : 44.33
+                }));
+            return sendJson({ success: true, drivers: activeDrivers });
         }
 
         // Driver Live Location Update Broadcast
@@ -1390,7 +1413,12 @@ async function startServer() {
 
         if (pathname === '/api/matching/find-routes' || pathname === '/api/driver/routes' || pathname === '/api/routes') {
             const activeRoutes = (db.memoryState.routes || [])
-                .filter(r => r.status === 'Active' || !r.status)
+                .filter(r => {
+                    if (r.status && r.status !== 'Active') return false;
+                    const drv = (db.memoryState.drivers || []).find(d => d.driverId === r.driverId);
+                    if (drv && (drv.status === 'Pending' || drv.status === 'Rejected' || !drv.isVerified || drv.isBlocked)) return false;
+                    return true;
+                })
                 .map(r => ({
                     driverRouteId: r.id || r.routeId,
                     id: r.id || r.routeId,
@@ -1703,15 +1731,17 @@ async function startServer() {
                     theme: { primaryColor: '#111111', bgColor: '#ffffff', fontFamily: 'Cairo', logoEmoji: '🚕', appName: 'توصيله', footerText: '© 2026 توصيله (Tawseela IQ) · النجف الأشرف' },
                     customButtons: [],
                     ads: [],
-                    staticTexts: { welcomeTitle: 'منصة توصيله', welcomeSubtitle: 'النجف الأشرف - سجّل دخولك أو أنشئ حسابك', driverPendingMsg: 'حسابك معلّق بانتظار التوثيق. أرسل مستمسكاتك عبر واتساب.' },
+                    telegramAdminLink: 'https://t.me/tawseela_iq_bot',
+                    whatsappAdminLink: 'https://wa.me/9647706204066',
+                    staticTexts: { welcomeTitle: 'منصة توصيله', welcomeSubtitle: 'النجف الأشرف - سجّل دخولك أو أنشئ حسابك', driverPendingMsg: 'حسابك معلّق بانتظار التوثيق. أرسل مستمسكاتك عبر واتساب أو تيليجرام.' },
                     registrationFields: { passenger: ['phone','firstName','lastName','tripType','map','password'], driver: ['phone','fullName','license','vehicle','plate','password'] },
-                    onboarding: { enabled: true, screens: [
-                        { title: 'مرحباً بك في توصيله', description: 'خدمة النقل الذكي في النجف الأشرف', icon: '🚕' },
-                        { title: 'اختر وجهتك', description: 'حدد نقطة الانطلاق والوصول على الخريطة', icon: '📍' },
-                        { title: 'سائق قريب منك', description: 'نعثر لك على أقرب سائق متاح', icon: '🚗' }
-                    ]}
+                    onboarding: { enabled: false, screens: [] }
                 };
+            } else {
+                if (!db.memoryState.appConfig.telegramAdminLink) db.memoryState.appConfig.telegramAdminLink = 'https://t.me/tawseela_iq_bot';
+                if (!db.memoryState.appConfig.whatsappAdminLink) db.memoryState.appConfig.whatsappAdminLink = 'https://wa.me/9647706204066';
             }
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
             return sendJson(db.memoryState.appConfig);
         }
 
