@@ -254,129 +254,15 @@ async function handleMessage(chatId, text, user) {
             db.persistNewCustomer(newCustomer).catch(()=>{});
 
             await sendKeyboard(chatId,
-                `🎉 <b>تم تسجيلك كراكب بنجاح!</b>\n\n📱 الهاتف: ${cleanPhone}\n👤 الاسم: ${state.fullName}\n\nيمكنك الآن استعراض السائقين القريبين أو الدخول لتطبيق الويب:`,
+                `🎉 <b>تم تسجيلك كراكب بنجاح!</b>\n\n📱 الهاتف: ${cleanPhone}\n👤 الاسم: ${state.fullName}\n\n📌 الخطوة التالية: ثبّت مسارك الدائمي على الخريطة ليظهر للسائقين القريبين منك:`,
                 [
-                    [{ text: '🗺️ السائقون القريبون', callback_data: 'nearby_drivers' }],
-                    [{ text: '🚗 الدخول لتطبيق الويب', url: 'https://tawseelaiq.app/?role=Customer' }]
-                ]
-            );
-
-            // Notify admin
-            await sendMessage(ADMIN_CHAT_ID, `🆕 راكب جديد عبر تيليجرام:\n👤 ${state.fullName}\n📱 ${cleanPhone}`);
+                    [{ text: '🗺️ فتح الخريطة لتثبيت مسارك الدائمي 📌', url: 'https://tawseelaiq.app/?role=Customer&showMap=1' }],
+                    [{ text: '🚗 السائقون القريبون', callback_data: 'nearby_drivers' }]
+                ]);
             userStates.delete(chatId);
             break;
         }
 
-        // --- Driver Registration ---
-        case 'driver_phone': {
-            const digits = text.replace(/[^0-9]/g, '');
-            if (digits.length < 10) { await sendMessage(chatId, '❌ رقم غير صالح. مثال: 07701234567'); return; }
-            state.phone = text.trim();
-            state.step = 'driver_otp_sent';
-            userStates.set(chatId, state);
-            await sendTelegramOtp(state.phone, chatId);
-            break;
-        }
-        case 'driver_otp_sent': {
-            const check = verifyTelegramOtp(chatId, text.trim());
-            if (!check.valid) { await sendMessage(chatId, '❌ ' + check.error); return; }
-            state.verifiedPhone = check.phone;
-            state.step = 'driver_name';
-            userStates.set(chatId, state);
-            await sendMessage(chatId, '✅ تم التحقق!\nأرسل اسمك الكامل:');
-            break;
-        }
-        case 'driver_name': {
-            state.fullName = text.trim();
-            state.step = 'driver_vehicle';
-            userStates.set(chatId, state);
-            await sendMessage(chatId, '🚗 أرسل نوع وموديل المركبة (مثال: تويوتا كورولا 2021):');
-            break;
-        }
-        case 'driver_vehicle': {
-            state.vehicle = text.trim();
-            state.step = 'driver_plate';
-            userStates.set(chatId, state);
-            await sendMessage(chatId, '🔢 أرسل رقم اللوحة:');
-            break;
-        }
-        case 'driver_plate': {
-            state.plate = text.trim();
-            state.step = 'driver_password';
-            userStates.set(chatId, state);
-            await sendMessage(chatId, '🔒 أرسل كلمة المرور (4 أحرف على الأقل):');
-            break;
-        }
-        case 'driver_password': {
-            if (text.trim().length < 4) { await sendMessage(chatId, '❌ كلمة المرور قصيرة. 4 أحرف على الأقل:'); return; }
-            state.password = text.trim();
-            const crypto = require('crypto');
-            const cleanPhone = state.verifiedPhone.replace('+964', '0');
-            const driverId = 'drv-t-' + Math.random().toString(36).substr(2, 9);
-            const now = new Date().toISOString();
-            const passwordHash = crypto.createHash('sha256').update(state.password).digest('hex');
-
-            const exists = db.memoryState.drivers.find(d => d.phoneNumber === cleanPhone) ||
-                           db.memoryState.customers.find(c => c.phoneNumber === cleanPhone);
-            if (exists) {
-                await sendMessage(chatId, '⚠️ هذا الرقم مسجل بالفعل.');
-                userStates.delete(chatId);
-                return;
-            }
-
-            const newDriver = {
-                driverId, fullName: state.fullName, phoneNumber: cleanPhone,
-                email: `${cleanPhone}@tawseelaiq.app`, passwordHash,
-                licenseNumber: 'PENDING', vehicle: { make: state.vehicle, plateNumber: state.plate, year: 2023 },
-                status: 'Pending', isVerified: false, isBlocked: false,
-                ratingAverage: 5.0, totalTrips: 0, registeredAt: now,
-                telegramChatId: String(chatId)
-            };
-            db.memoryState.drivers.unshift(newDriver);
-            db.persistNewDriver(newDriver).catch(()=>{});
-
-            db.memoryState.verifications.unshift({
-                verificationId: 'ver-' + Math.random().toString(36).substr(2, 9),
-                driverId, driverName: state.fullName, phoneNumber: cleanPhone,
-                status: 'Pending', submittedAt: now
-            });
-
-            db.saveStateSnapshot();
-
-            const cfg = db.memoryState.appConfig || {};
-            const tgAdminLink = cfg.telegramAdminLink || 'https://t.me/tawseela_iq_bot';
-            const waAdminLink = cfg.whatsappAdminLink || 'https://wa.me/9647706204066';
-
-            await sendMessage(chatId,
-                `🎉 <b>تم استلام طلب التسجيل بنجاح!</b>\n\n` +
-                `⏳ <b>حسابك معلّق حالياً بانتظار توثيق وموافقة الإدارة</b>\n` +
-                `لن تتمكن من استقبال الطلبات أو استخدام التطبيق حتى إرسال مستمسكاتك واعتماد حسابك.\n\n` +
-                `📋 <b>يرجى إرسال المستمسكات الثبوتية (البطاقة الموحدة / الهوية، إجازة السوق، السنوية) عبر:</b>\n` +
-                `📱 <b>واتساب الإدارة:</b> ${waAdminLink}\n` +
-                `💬 <b>تيليجرام الإدارة:</b> ${tgAdminLink}\n\n` +
-                `سيتم تدقيق المستمسكات وتفعيل حسابك من قبل إدارة المنصة في أقرب وقت.`
-            );
-
-            // Notify admin about the new pending driver
-            if (String(chatId) !== String(ADMIN_CHAT_ID)) {
-                await sendMessage(ADMIN_CHAT_ID,
-                    `🚕 <b>سائق جديد بانتظار التوثيق في لوحة التحكم:</b>\n👤 الاسم: ${state.fullName}\n📱 الهاتف: ${cleanPhone}\n🚗 المركبة: ${state.vehicle} - ${state.plate}\n\nيرجى الدخول للوحة التحكم لمراجعة المستمسكات والموافقة على الحساب.`
-                );
-            }
-            userStates.delete(chatId);
-            break;
-        }
-
-        // --- Login ---
-        case 'login_phone': {
-            const digits = text.replace(/[^0-9]/g, '');
-            if (digits.length < 10) { await sendMessage(chatId, '❌ رقم غير صالح.'); return; }
-            state.phone = text.trim();
-            state.step = 'login_otp_sent';
-            userStates.set(chatId, state);
-            await sendTelegramOtp(state.phone, chatId);
-            break;
-        }
         case 'login_otp_sent': {
             const check = verifyTelegramOtp(chatId, text.trim());
             if (!check.valid) { await sendMessage(chatId, '❌ ' + check.error); return; }
@@ -389,7 +275,7 @@ async function handleMessage(chatId, text, user) {
                 const token = 'jwt_customer_' + customer.customerId;
                 await sendKeyboard(chatId, `✅ تم الدخول كراكب!\n👤 ${customer.fullName}\n\nيمكنك الآن استعراض السائقين القريبين:`, [
                     [{ text: '🗺️ السائقون القريبون', callback_data: 'nearby_drivers' }],
-                    [{ text: '🚗 افتح التطبيق', url: `https://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(customer.customerId)}&role=Customer&fullName=${encodeURIComponent(customer.fullName)}` }]
+                    [{ text: '🚗 افتح التطبيق', url: 'https://tawseelaiq.app/?login_token=' + encodeURIComponent(token) + '&userId=' + encodeURIComponent(customer.customerId) + '&role=Customer&fullName=' + encodeURIComponent(customer.fullName) }]
                 ]);
             } else if (driver) {
                 if (driver.status === 'Pending' || !driver.isVerified) {
@@ -469,8 +355,12 @@ async function handleApproveDriver(chatId, driverId) {
     await sendMessage(chatId, `✅ تم تفعيل السائق: ${driver.fullName}`);
     // Notify driver
     if (driver.telegramChatId) {
-        await sendMessage(driver.telegramChatId,
-            `🎉 تم تفعيل حسابك كسائق!\nيمكنك الآن الدخول:\nhttps://tawseelaiq.app/?role=Driver`
+        await sendKeyboard(driver.telegramChatId,
+            '🎉 <b>تم تفعيل حسابك كسائق!</b>\n\n📌 ثبّت موقعك الدائمي على الخريطة ليتمكن الركاب من إيجادك:',
+            [
+                [{ text: '🗺️ فتح الخريطة لتثبيت موقعك الدائمي 📌', url: 'https://tawseelaiq.app/?role=Driver&showMap=1' }],
+                [{ text: '🚗 الدخول للتطبيق', url: 'https://tawseelaiq.app/?role=Driver' }]
+            ]
         );
     }
 }

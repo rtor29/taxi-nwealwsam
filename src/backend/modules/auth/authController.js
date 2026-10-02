@@ -246,6 +246,7 @@ class AuthController {
     <style>
         *{box-sizing:border-box}
         body{font-family:'Cairo',sans-serif;background:#ffffff;color:#111111;margin:0;padding:0;min-height:100vh;overflow-x:hidden}
+        @keyframes pulseGreen{0%,100%{box-shadow:0 6px 25px rgba(22,163,106,0.4)}50%{box-shadow:0 6px 35px rgba(22,163,106,0.7)}}
         .card{background:#ffffff;border:1.5px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 16px rgba(0,0,0,0.07)}
         .tab-active{background:#111111;color:#ffffff;border-color:#111111}
         .tab-inactive{background:#f3f4f6;color:#6b7280;border-color:#e5e7eb}
@@ -500,12 +501,12 @@ class AuthController {
                             <div style="font-size:13px;font-weight:700;margin-bottom:10px">📍 حدد نقاط رحلتك</div>
                             <div style="position:relative;margin-bottom:8px">
                                 <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:#16a34a;display:inline-block"></span>
-                                <input type="text" id="cust-pickup-text" class="inp" style="padding-right:30px" placeholder="🟢 نقطة الانطلاق (اكتب اسم الحي أو المعلم)" aria-label="نقطة الانطلاق" oninput="geocodePassengerInput(this.value,'pickup')">
+                                <input type="text" id="cust-pickup-text" class="inp search-input" style="padding-right:30px" placeholder="🟢 نقطة الانطلاق (اكتب اسم الحي أو المعلم)" aria-label="نقطة الانطلاق" oninput="geocodePassengerInput(this.value,'pickup')">
                                 <div id="cust-pickup-results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:60;background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:4px"></div>
                             </div>
                             <div style="position:relative;margin-bottom:10px">
                                 <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:#dc2626;display:inline-block"></span>
-                                <input type="text" id="cust-dropoff-text" class="inp" style="padding-right:30px" placeholder="🔴 نقطة الوصول (اكتب اسم الحي أو المعلم)" aria-label="نقطة الوصول" oninput="geocodePassengerInput(this.value,'dropoff')">
+                                <input type="text" id="cust-dropoff-text" class="inp search-input" style="padding-right:30px" placeholder="🔴 نقطة الوصول (اكتب اسم الحي أو المعلم)" aria-label="نقطة الوصول" oninput="geocodePassengerInput(this.value,'dropoff')">
                                 <div id="cust-dropoff-results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:60;background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:4px"></div>
                             </div>
                             <div style="display:flex;gap:8px;margin-bottom:10px">
@@ -525,9 +526,9 @@ class AuthController {
                                 <div id="nearest-driver-info" style="flex:1;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:700;color:#374151;text-align:center">🚕 أقرب سائق: --</div>
                             </div>
                             <button type="button" onclick="fixPassengerRoute()" style="margin-top:10px;width:100%;background:#111;color:#fff;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer">
-                                📌 تثبيت المسار وعرض السائقين القريبين
+                                📌 عرض السائقين القريبين من مسارك
                             </button>
-                            <button type="button" onclick="fixPermanentLocation()" style="margin-top:8px;width:100%;background:#16a34a;color:#fff;border:none;border-radius:14px;padding:14px;font-size:15px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer;box-shadow:0 4px 15px rgba(22,163,106,0.3)">
+                            <button type="button" onclick="fixPermanentLocation()" style="margin-top:10px;width:100%;background:linear-gradient(135deg,#16a34a,#059669);color:#fff;border:none;border-radius:16px;padding:18px;font-size:18px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer;box-shadow:0 6px 25px rgba(22,163,106,0.4);letter-spacing:0.5px;animation:pulseGreen 2s infinite">
                                 📍 تثبيت الموقع الدائمي
                             </button>
                             <div id="perm-loc-status" style="display:none;margin-top:6px;text-align:center;font-size:12px;font-weight:700;color:#16a34a;padding:8px;background:#f0fdf4;border-radius:8px"></div>
@@ -1405,7 +1406,7 @@ class AuthController {
             geocodeTimers[target] = setTimeout(async function() {
                 try {
                     var token = ('pk.'+'eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9'+'._J6DYjYBDhsdcidErQrblA');
-                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'+encodeURIComponent(q)+'.json?proximity=44.32,32.02&bbox=44.05,31.75,44.65,32.35&country=iq&language=ar&access_token='+token;
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'+encodeURIComponent(q)+'.json?proximity=44.32,32.02&bbox=44.05,31.75,44.65,32.35&country=iq&language=ar&types=poi,address,neighborhood,place,locality&limit=5&access_token='+token;
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
@@ -1556,20 +1557,22 @@ class AuthController {
         window.fixPermanentLocation = async function() {
             var pLat = (document.getElementById('cust-pickup-lat') || {}).value;
             var pLon = (document.getElementById('cust-pickup-lon') || {}).value;
+            var dLat = (document.getElementById('cust-dropoff-lat') || {}).value;
+            var dLon = (document.getElementById('cust-dropoff-lon') || {}).value;
             var pickupText = ((document.getElementById('cust-pickup-text') || {}).value || '').trim();
-            if (!pLat || !pLon) {
-                // Try GPS
+            var dropoffText = ((document.getElementById('cust-dropoff-text') || {}).value || '').trim();
+            if (!pLat || !pLon || !pickupText) {
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(function(pos) {
                         document.getElementById('cust-pickup-lat').value = pos.coords.latitude.toFixed(6);
                         document.getElementById('cust-pickup-lon').value = pos.coords.longitude.toFixed(6);
                         fixPermanentLocation();
                     }, function() {
-                        alert('⚠️ يرجى تحديد موقعك على الخريطة أولاً أو تفعيل GPS');
+                        alert('⚠️ يرجى تحديد نقطة الانطلاق على الخريطة أولاً أو تفعيل GPS');
                     });
                     return;
                 }
-                alert('⚠️ يرجى تحديد موقعك على الخريطة أولاً');
+                alert('⚠️ يرجى تحديد نقطة الانطلاق على الخريطة أولاً');
                 return;
             }
             var passId = localStorage.getItem('user_id') || '';
@@ -1577,18 +1580,44 @@ class AuthController {
             try {
                 var res = await fetch('/api/passenger/set-permanent-location', {
                     method:'POST', headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({ passengerId: passId, lat: parseFloat(pLat), lon: parseFloat(pLon), locationName: pickupText })
+                    body:JSON.stringify({
+                        passengerId: passId,
+                        lat: parseFloat(pLat), lon: parseFloat(pLon), locationName: pickupText,
+                        dropoffLat: dLat ? parseFloat(dLat) : null, dropoffLon: dLon ? parseFloat(dLon) : null, dropoffName: dropoffText
+                    })
                 });
                 var data = await res.json();
                 if (data.success) {
                     var st = document.getElementById('perm-loc-status');
-                    if (st) { st.style.display = 'block'; st.textContent = '✅ تم تثبيت موقعك الدائمي بنجاح! سيظهر للسائقين القريبين.'; }
+                    if (st) {
+                        st.style.display = 'block';
+                        st.style.background = '#f0fdf4';
+                        st.style.padding = '12px';
+                        st.style.borderRadius = '12px';
+                        st.style.fontSize = '14px';
+                        st.innerHTML = '✅ <b>تم تثبيت مسارك الدائمي بنجاح!</b><br>📍 من: ' + pickupText + (dropoffText ? '<br>📍 إلى: ' + dropoffText : '') + '<br><span style="font-size:11px;color:#6b7280">سيظهر موقعك للسائقين القريبين في التطبيق وتليجرام</span>';
+                    }
                     localStorage.setItem('perm_lat', pLat);
                     localStorage.setItem('perm_lon', pLon);
                     localStorage.setItem('perm_name', pickupText);
                 } else alert(data.error || 'خطأ في حفظ الموقع');
             } catch(e) { alert('خطأ في الاتصال'); }
         };
+
+        
+        // Auto-show map section if redirected from Telegram or with showMap=1
+        (function() {
+            var params = new URLSearchParams(window.location.search);
+            if (params.get('showMap') === '1' || params.get('openMap') === '1') {
+                setTimeout(function() {
+                    var details = document.getElementById('passenger-route-details');
+                    if (details) { details.style.display = 'block'; initPassengerMapbox(); }
+                    // Scroll to map
+                    var mapEl = document.getElementById('passenger-map');
+                    if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 500);
+            }
+        })();
 
         // Load saved permanent location on page load
         (function() {
@@ -1768,6 +1797,16 @@ class AuthController {
                     if (cfg.theme.fontFamily) {
                         document.body.style.fontFamily = '"' + cfg.theme.fontFamily + '", sans-serif';
                     }
+                    if (cfg.theme.searchInputColor) {
+                        var sis = document.getElementById('dynamic-theme-search-input-style');
+                        if (!sis) { sis = document.createElement('style'); sis.id = 'dynamic-theme-search-input-style'; document.head.appendChild(sis); }
+                        sis.textContent = '.search-input, #cust-pickup-text, #cust-dropoff-text { color: ' + cfg.theme.searchInputColor + ' !important; }';
+                    }
+                    if (cfg.theme.searchInputBg) {
+                        var sibs = document.getElementById('dynamic-theme-search-bg-style');
+                        if (!sibs) { sibs = document.createElement('style'); sibs.id = 'dynamic-theme-search-bg-style'; document.head.appendChild(sibs); }
+                        sibs.textContent = '.search-input, #cust-pickup-text, #cust-dropoff-text { background-color: ' + cfg.theme.searchInputBg + ' !important; }';
+                    }
                 }
 
                 if (cfg.staticTexts) {
@@ -1816,6 +1855,16 @@ class AuthController {
                             var bhs = document.getElementById('dynamic-theme-button-hover-style');
                             if (!bhs) { bhs = document.createElement('style'); bhs.id = 'dynamic-theme-button-hover-style'; document.head.appendChild(bhs); }
                             bhs.textContent = 'button:hover, button:focus, .btn:hover, .btn:focus, [type="button"]:hover, [type="submit"]:hover { background-color: ' + th.buttonHoverColor + ' !important; }';
+                        }
+                        if (th.searchInputColor) {
+                            var sis = document.getElementById('dynamic-theme-search-input-style');
+                            if (!sis) { sis = document.createElement('style'); sis.id = 'dynamic-theme-search-input-style'; document.head.appendChild(sis); }
+                            sis.textContent = '.search-input, #cust-pickup-text, #cust-dropoff-text { color: ' + th.searchInputColor + ' !important; }';
+                        }
+                        if (th.searchInputBg) {
+                            var sibs = document.getElementById('dynamic-theme-search-bg-style');
+                            if (!sibs) { sibs = document.createElement('style'); sibs.id = 'dynamic-theme-search-bg-style'; document.head.appendChild(sibs); }
+                            sibs.textContent = '.search-input, #cust-pickup-text, #cust-dropoff-text { background-color: ' + th.searchInputBg + ' !important; }';
                         }
                     }
                     applyDynamicAppConfig();

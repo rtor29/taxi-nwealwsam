@@ -2012,6 +2012,9 @@ async function startServer() {
             customer.permanentLat = parseFloat(lat);
             customer.permanentLon = parseFloat(lon);
             customer.permanentLocationName = locationName || '';
+            if (body.dropoffLat) customer.permanentDropoffLat = parseFloat(body.dropoffLat);
+            if (body.dropoffLon) customer.permanentDropoffLon = parseFloat(body.dropoffLon);
+            if (body.dropoffName !== undefined) customer.permanentDropoffName = body.dropoffName || '';
             db.saveStateSnapshot();
             return sendJson({ success: true, message: 'تم تثبيت الموقع الدائمي بنجاح' });
         }

@@ -3308,6 +3308,8 @@ async function loadCustomizationSettings() {
         }
         if (document.getElementById('theme-telegram-link')) {
             document.getElementById('theme-telegram-link').value = cfg.telegramAdminLink || 'https://t.me/tawseela_iq_bot';
+        if (cfg.theme && cfg.theme.searchInputColor && document.getElementById('theme-search-input-color')) document.getElementById('theme-search-input-color').value = cfg.theme.searchInputColor;
+        if (cfg.theme && cfg.theme.searchInputBg && document.getElementById('theme-search-input-bg')) document.getElementById('theme-search-input-bg').value = cfg.theme.searchInputBg;
         }
         if (document.getElementById('theme-whatsapp-link')) {
             document.getElementById('theme-whatsapp-link').value = cfg.whatsappAdminLink || 'https://wa.me/9647706204066';
@@ -3351,6 +3353,12 @@ function syncLiveButtonColor(color) {
 function syncLiveButtonHoverColor(color) {
     broadcastLiveThemeSync({ buttonHoverColor: color });
 }
+function syncLiveSearchInputColor(color) {
+    broadcastLiveThemeSync({ searchInputColor: color });
+}
+function syncLiveSearchInputBg(color) {
+    broadcastLiveThemeSync({ searchInputBg: color });
+}
 
 function renderOnboardingScreens(screens) {
     var list = document.getElementById('onboarding-screens-list');
@@ -3387,12 +3395,14 @@ async function saveThemeSettings() {
     var fc = document.getElementById('theme-font-color') ? document.getElementById('theme-font-color').value : '#111111';
         var btnColor = document.getElementById('theme-button-color') ? document.getElementById('theme-button-color').value : '#111111';
         var btnHoverColor = document.getElementById('theme-button-hover-color') ? document.getElementById('theme-button-hover-color').value : '#374151';
+        var searchInputColor = document.getElementById('theme-search-input-color') ? document.getElementById('theme-search-input-color').value : '#111111';
+        var searchInputBg = document.getElementById('theme-search-input-bg') ? document.getElementById('theme-search-input-bg').value : '#fafafa';
     var prim = document.getElementById('theme-primary-color').value;
     var bg = document.getElementById('theme-bg-color').value;
     var body = {
         primaryColor: prim,
         bgColor: bg,
-        fontColor: fc, buttonColor: btnColor, buttonHoverColor: btnHoverColor,
+        fontColor: fc, buttonColor: btnColor, buttonHoverColor: btnHoverColor, searchInputColor: searchInputColor, searchInputBg: searchInputBg,
         textColor: fc,
         fontFamily: document.getElementById('theme-font').value,
         appName: document.getElementById('theme-app-name').value,
