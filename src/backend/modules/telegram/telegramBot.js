@@ -256,7 +256,7 @@ async function handleMessage(chatId, text, user) {
             await sendKeyboard(chatId,
                 `🎉 <b>تم تسجيلك كراكب بنجاح!</b>\n\n📱 الهاتف: ${cleanPhone}\n👤 الاسم: ${state.fullName}\n\n📌 الخطوة التالية: ثبّت مسارك الدائمي على الخريطة ليظهر للسائقين القريبين منك:`,
                 [
-                    [{ text: '🗺️ فتح الخريطة لتثبيت مسارك الدائمي 📌', url: 'https://tawseelaiq.app/?role=Customer&showMap=1' }],
+                    [{ text: '🗺️ فتح الخريطة لتثبيت مسارك الدائمي 📌', url: 'https://tawseelaiq.app/?login_token=' + encodeURIComponent('jwt_customer_' + customerId) + '&userId=' + encodeURIComponent(customerId) + '&role=Customer&fullName=' + encodeURIComponent(state.fullName) + '&showMap=1' }],
                     [{ text: '🚗 السائقون القريبون', callback_data: 'nearby_drivers' }]
                 ]);
             userStates.delete(chatId);
@@ -358,7 +358,7 @@ async function handleApproveDriver(chatId, driverId) {
         await sendKeyboard(driver.telegramChatId,
             '🎉 <b>تم تفعيل حسابك كسائق!</b>\n\n📌 ثبّت موقعك الدائمي على الخريطة ليتمكن الركاب من إيجادك:',
             [
-                [{ text: '🗺️ فتح الخريطة لتثبيت موقعك الدائمي 📌', url: 'https://tawseelaiq.app/?role=Driver&showMap=1' }],
+                [{ text: '🗺️ فتح الخريطة لتثبيت موقعك الدائمي 📌', url: 'https://tawseelaiq.app/?login_token=' + encodeURIComponent('jwt_driver_' + driver.driverId) + '&userId=' + encodeURIComponent(driver.driverId) + '&role=Driver&fullName=' + encodeURIComponent(driver.fullName) + '&showMap=1' }],
                 [{ text: '🚗 الدخول للتطبيق', url: 'https://tawseelaiq.app/?role=Driver' }]
             ]
         );

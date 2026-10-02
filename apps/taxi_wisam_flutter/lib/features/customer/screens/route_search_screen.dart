@@ -29,11 +29,11 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
   final MapController _mapController = MapController();
 
   // Najaf landmarks default coordinates
-  LatLng _pickupPoint = const LatLng(31.9961, 44.3168); // ساحة ثورة العشرين
-  LatLng _dropoffPoint = const LatLng(32.0300, 44.3700); // جامعة الكوفة
+  LatLng _pickupPoint = const LatLng(32.0000, 44.3168); // مركز النجف (محايد)
+  LatLng _dropoffPoint = const LatLng(32.0000, 44.3168); // مركز النجف (محايد)
 
-  final _pickupController = TextEditingController(text: 'مركز النجف الأشرف (ساحة ثورة العشرين)');
-  final _dropoffController = TextEditingController(text: 'جامعة الكوفة - مجمع الكليات');
+  final _pickupController = TextEditingController();
+  final _dropoffController = TextEditingController();
 
   String _activePinMode = 'pickup'; // 'pickup' or 'dropoff'
   int _seatsNeeded = 1;
@@ -47,6 +47,8 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
   int? _roadDurationMinutes;
   double? _roadDistanceKm;
   bool _isLoadingDirections = false;
+  bool _isSavingPermanent = false;
+  bool _permanentSaved = false;
 
   // Caching for driver road routes snapped to streets via Mapbox
   final Map<String, List<LatLng>> _driverRoadRoutes = {};
@@ -914,8 +916,9 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
                   Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     decoration: BoxDecoration(
-                      color: Colors.white12,
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
                     ),
                     child: TextField(
                       controller: _placeSearchController,
@@ -927,7 +930,7 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
                         prefixIcon: const Icon(Icons.search, color: Color(0xFFF59E0B), size: 18),
                         suffixIcon: _placeSearchController.text.isNotEmpty
                             ? IconButton(
-                                icon: const Icon(Icons.clear, color: Colors.white54, size: 16),
+                                icon: const Icon(Icons.clear, color: Color(0xFF6B7280), size: 16),
                                 onPressed: () {
                                   _placeSearchController.clear();
                                   setState(() => _placeSearchResults = []);
@@ -1081,6 +1084,29 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
                       ],
                     ),
                   ],
+
+                  // ===== زر تثبيت المسار الدائمي =====
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _isSavingPermanent ? null : _savePermanentRoute,
+                      icon: _isSavingPermanent
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : Icon(_permanentSaved ? Icons.check_circle : Icons.pin_drop_rounded, size: 20),
+                      label: Text(
+                        _permanentSaved ? '✅ تم تثبيت المسار الدائمي' : '📌 تثبيت المسار الدائمي',
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _permanentSaved ? const Color(0xFF16A34A) : const Color(0xFF059669),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: 4,
+                      ),
+                    ),
+                  ),
 
                   // Proximity Legend (أخضر=قريب / أحمر=بعيد / بنفسجي=بعيد جداً)
                   const SizedBox(height: 8),
@@ -1288,5 +1314,66 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
         ],
       ),
     );
+
   }
+  // ===== Save Permanent Route to Backend =====
+  Future<void> _savePermanentRoute() async {
+    if (_pickupController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('⚠️ يرجى تحديد نقطة الانطلاق أولاً'), backgroundColor: Colors.orange),
+      );
+      return;
+    }
+    setState(() => _isSavingPermanent = true);
+    try {
+      final userId = await widget.storageService.getUserId();
+      final role = await widget.storageService.getUserRole();
+      if (userId == null || userId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('يرجى تسجيل الدخول أولاً'), backgroundColor: Colors.red),
+        );
+        setState(() => _isSavingPermanent = false);
+        return;
+      }
+      final isDriver = role == 'Driver';
+      final endpoint = isDriver
+          ? '/api/admin/driver/set-permanent-location'
+          : '/api/passenger/set-permanent-location';
+      final idKey = isDriver ? 'driverId' : 'passengerId';
+      final body = {
+        idKey: userId,
+        'lat': _pickupPoint.latitude,
+        'lon': _pickupPoint.longitude,
+        'locationName': _pickupController.text.trim(),
+        'dropoffLat': _dropoffPoint.latitude,
+        'dropoffLon': _dropoffPoint.longitude,
+        'dropoffName': _dropoffController.text.trim(),
+        'fromText': _pickupController.text.trim(),
+        'toText': _dropoffController.text.trim(),
+        'fromLat': _pickupPoint.latitude,
+        'fromLon': _pickupPoint.longitude,
+        'toLat': _dropoffPoint.latitude,
+        'toLon': _dropoffPoint.longitude,
+      };
+      await widget.apiClient.post(endpoint, data: body);
+      setState(() { _isSavingPermanent = false; _permanentSaved = true; });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('✅ تم تثبيت مسارك الدائمي بنجاح! يظهر الآن في الداش بورد والتطبيق.'),
+            backgroundColor: const Color(0xFF16A34A),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isSavingPermanent = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ في الحفظ: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
 }

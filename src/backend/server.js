@@ -2037,6 +2037,9 @@ async function startServer() {
             driver.permanentLat = parseFloat(lat);
             driver.permanentLon = parseFloat(lon);
             driver.permanentLocationName = locationName || '';
+            if (body.dropoffLat) driver.permanentDropoffLat = parseFloat(body.dropoffLat);
+            if (body.dropoffLon) driver.permanentDropoffLon = parseFloat(body.dropoffLon);
+            if (body.dropoffName !== undefined) driver.permanentDropoffName = body.dropoffName || '';
             db.saveStateSnapshot();
             return sendJson({ success: true, message: 'تم تثبيت موقع السائق الدائمي' });
         }

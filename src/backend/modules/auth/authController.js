@@ -496,45 +496,6 @@ class AuthController {
                             </div>
                         </div>
 
-                        <!-- Route text inputs + Map section -->
-                        <div style="border:1.5px solid #e5e7eb;border-radius:12px;padding:14px;margin-bottom:12px">
-                            <div style="font-size:13px;font-weight:700;margin-bottom:10px">📍 حدد نقاط رحلتك</div>
-                            <div style="position:relative;margin-bottom:8px">
-                                <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:#16a34a;display:inline-block"></span>
-                                <input type="text" id="cust-pickup-text" class="inp search-input" style="padding-right:30px" placeholder="🟢 نقطة الانطلاق (اكتب اسم الحي أو المعلم)" aria-label="نقطة الانطلاق" oninput="geocodePassengerInput(this.value,'pickup')">
-                                <div id="cust-pickup-results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:60;background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:4px"></div>
-                            </div>
-                            <div style="position:relative;margin-bottom:10px">
-                                <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:#dc2626;display:inline-block"></span>
-                                <input type="text" id="cust-dropoff-text" class="inp search-input" style="padding-right:30px" placeholder="🔴 نقطة الوصول (اكتب اسم الحي أو المعلم)" aria-label="نقطة الوصول" oninput="geocodePassengerInput(this.value,'dropoff')">
-                                <div id="cust-dropoff-results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:60;background:#fff;border:1.5px solid #e5e7eb;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:4px"></div>
-                            </div>
-                            <div style="display:flex;gap:8px;margin-bottom:10px">
-                                <button type="button" id="btn-cust-gps" onclick="getCurrentGpsLocation()" class="btn-small" aria-label="موقعي الحالي">
-                                    <i class="fa-solid fa-crosshairs" aria-hidden="true"></i> موقعي
-                                </button>
-                                <button type="button" id="btn-mode-pickup" onclick="setMapPinMode('pickup')" class="map-mode-btn active-pickup" style="flex:1" aria-label="نقطة الانطلاق">
-                                    <span style="width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block"></span> انطلاق
-                                </button>
-                                <button type="button" id="btn-mode-dropoff" onclick="setMapPinMode('dropoff')" class="map-mode-btn" style="flex:1" aria-label="نقطة الوصول">
-                                    <span style="width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block"></span> وصول
-                                </button>
-                            </div>
-                            <div id="passenger-map" style="height:200px;width:100%;border-radius:10px;border:1.5px solid #e5e7eb" role="region" aria-label="خريطة تحديد الموقع"></div>
-                            <div style="margin-top:8px;display:flex;gap:8px">
-                                <div id="route-info-display" style="flex:1;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:700;color:#374151;text-align:center">📏 -- كم · ⏱️ -- دقيقة</div>
-                                <div id="nearest-driver-info" style="flex:1;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:700;color:#374151;text-align:center">🚕 أقرب سائق: --</div>
-                            </div>
-                            <button type="button" onclick="fixPassengerRoute()" style="margin-top:10px;width:100%;background:#111;color:#fff;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer">
-                                📌 عرض السائقين القريبين من مسارك
-                            </button>
-                            <button type="button" onclick="fixPermanentLocation()" style="margin-top:10px;width:100%;background:linear-gradient(135deg,#16a34a,#059669);color:#fff;border:none;border-radius:16px;padding:18px;font-size:18px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer;box-shadow:0 6px 25px rgba(22,163,106,0.4);letter-spacing:0.5px;animation:pulseGreen 2s infinite">
-                                📍 تثبيت الموقع الدائمي
-                            </button>
-                            <div id="perm-loc-status" style="display:none;margin-top:6px;text-align:center;font-size:12px;font-weight:700;color:#16a34a;padding:8px;background:#f0fdf4;border-radius:8px"></div>
-                            <div id="nearby-driver-routes" style="margin-top:10px;display:none"></div>
-                        </div>
-
                         <!-- Hidden coords (empty until selected by user on map) -->
                         <input type="hidden" id="cust-pickup-lat" value="">
                         <input type="hidden" id="cust-pickup-lon" value="">
@@ -1605,17 +1566,30 @@ class AuthController {
         };
 
         
-        // Auto-show map section if redirected from Telegram or with showMap=1
+        // Auto-show Flutter app if redirected from Telegram or with showMap=1
         (function() {
             var params = new URLSearchParams(window.location.search);
             if (params.get('showMap') === '1' || params.get('openMap') === '1') {
-                setTimeout(function() {
-                    var details = document.getElementById('passenger-route-details');
-                    if (details) { details.style.display = 'block'; initPassengerMapbox(); }
-                    // Scroll to map
-                    var mapEl = document.getElementById('passenger-map');
-                    if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }, 500);
+                var token = params.get('login_token') || localStorage.getItem('auth_token') || '';
+                var userId = params.get('userId') || localStorage.getItem('user_id') || '';
+                var role = params.get('role') || localStorage.getItem('user_role') || 'Customer';
+                var fullName = params.get('fullName') || localStorage.getItem('user_fullname') || '';
+                
+                if (token) {
+                    // Save to local storage in case we need it
+                    localStorage.setItem('auth_token', token);
+                    localStorage.setItem('user_id', userId);
+                    localStorage.setItem('user_role', role);
+                    if (fullName) localStorage.setItem('user_fullname', fullName);
+                    
+                    setTimeout(function() {
+                        window.openAppView(token, userId, role, fullName, true);
+                    }, 100);
+                } else {
+                    setTimeout(function() {
+                        alert('يرجى تسجيل الدخول أولاً لتثبيت المسار الدائمي.');
+                    }, 500);
+                }
             }
         })();
 
@@ -1673,11 +1647,11 @@ class AuthController {
         }
 
         // ===== App view =====
-        window.openAppView = function(token,userId,role,fullName) {
+        window.openAppView = function(token,userId,role,fullName, forceMap) {
             var container=document.getElementById('app-view-container');
             var frame=document.getElementById('app-frame');
             if(!container||!frame) return;
-            var targetHash=(role==='Driver'||role==='driver')?'/driver':'/customer';
+            var targetHash=(role==='Driver'||role==='driver') && !forceMap ?'/driver':'/customer';
             var targetUrl='/app-view/#'+targetHash+'?login_token='+encodeURIComponent(token)+'&userId='+encodeURIComponent(userId)+'&role='+encodeURIComponent(role)+'&fullName='+encodeURIComponent(fullName);
             frame.src=targetUrl;
             container.style.display='block';
