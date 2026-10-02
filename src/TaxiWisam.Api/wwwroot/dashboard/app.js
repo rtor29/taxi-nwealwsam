@@ -3424,6 +3424,7 @@ window.handleAdminLogin = handleAdminLogin;
 window.logoutAdmin = logoutAdmin;
 window.switchTab = switchTab;
 window.toggleMobileSidebar = toggleMobileSidebar;
+function openDocumentModal() {}
 window.openDocumentModal = openDocumentModal;
 window.closeDocumentModal = closeDocumentModal;
 window.openZoomImage = openZoomImage;
@@ -3645,6 +3646,7 @@ var DASHBOARD_PRESETS = {
         dashActiveColor: '#f59e0b',
         dashBorderColor: '#e2e8f0',
         dashFontFamily: 'Cairo',
+        dashFontSize: '14px',
         dashFontStrokeColor: '#000000',
         dashFontStrokeWidth: '0px'
     },
@@ -3659,6 +3661,7 @@ var DASHBOARD_PRESETS = {
         dashActiveColor: '#f59e0b',
         dashBorderColor: '#334155',
         dashFontFamily: 'Cairo',
+        dashFontSize: '14px',
         dashFontStrokeColor: '#000000',
         dashFontStrokeWidth: '0px'
     },
@@ -3673,6 +3676,7 @@ var DASHBOARD_PRESETS = {
         dashActiveColor: '#2563eb',
         dashBorderColor: '#e2e8f0',
         dashFontFamily: 'Cairo',
+        dashFontSize: '14px',
         dashFontStrokeColor: '#000000',
         dashFontStrokeWidth: '0px'
     },
@@ -3687,6 +3691,7 @@ var DASHBOARD_PRESETS = {
         dashActiveColor: '#fbbf24',
         dashBorderColor: '#3f3f46',
         dashFontFamily: 'Cairo',
+        dashFontSize: '14px',
         dashFontStrokeColor: '#000000',
         dashFontStrokeWidth: '0px'
     },
@@ -3701,6 +3706,7 @@ var DASHBOARD_PRESETS = {
         dashActiveColor: '#34d399',
         dashBorderColor: '#047857',
         dashFontFamily: 'Tajawal',
+        dashFontSize: '14px',
         dashFontStrokeColor: '#000000',
         dashFontStrokeWidth: '0px'
     },
@@ -3715,6 +3721,7 @@ var DASHBOARD_PRESETS = {
         dashActiveColor: '#60a5fa',
         dashBorderColor: '#1e3a5f',
         dashFontFamily: 'Almarai',
+        dashFontSize: '14px',
         dashFontStrokeColor: '#000000',
         dashFontStrokeWidth: '0px'
     },
@@ -3729,6 +3736,7 @@ var DASHBOARD_PRESETS = {
         dashActiveColor: '#c084fc',
         dashBorderColor: '#3b2368',
         dashFontFamily: 'Alexandria',
+        dashFontSize: '14px',
         dashFontStrokeColor: '#000000',
         dashFontStrokeWidth: '0px'
     }
@@ -3751,8 +3759,19 @@ function applyDashboardPreset(presetKey) {
     var ffEl = document.getElementById('dash-font-family');
     if (ffEl) ffEl.value = p.dashFontFamily || 'Cairo';
     
+    var fsEl = document.getElementById('dash-font-size');
+    if (fsEl) fsEl.value = p.dashFontSize || '14px';
+
     var swEl = document.getElementById('dash-font-stroke-width');
     if (swEl) swEl.value = p.dashFontStrokeWidth || '0px';
+
+    document.querySelectorAll('.dash-preset-btn').forEach(function(b) {
+        b.classList.remove('ring-2', 'ring-amber-400', 'border-amber-400');
+    });
+    var selDashBtn = document.getElementById('dash-preset-' + presetKey);
+    if (selDashBtn) {
+        selDashBtn.classList.add('ring-2', 'ring-amber-400', 'border-amber-400');
+    }
 
     if (presetKey === 'default') {
         var styleEl = document.getElementById('dynamic-dashboard-theme-style');
@@ -3788,7 +3807,8 @@ function syncLiveDashboardTheme() {
         dashBorderColor: getColorPairVal('dash-border-color', 'dash-border-color-hex', '#e2e8f0'),
         dashFontStrokeColor: getColorPairVal('dash-font-stroke-color', 'dash-font-stroke-color-hex', '#000000'),
         dashFontStrokeWidth: document.getElementById('dash-font-stroke-width') ? document.getElementById('dash-font-stroke-width').value : '0px',
-        dashFontFamily: document.getElementById('dash-font-family') ? document.getElementById('dash-font-family').value : 'Cairo'
+        dashFontFamily: document.getElementById('dash-font-family') ? document.getElementById('dash-font-family').value : 'Cairo',
+        dashFontSize: document.getElementById('dash-font-size') ? document.getElementById('dash-font-size').value : '14px'
     };
     applyDashboardTheme(dt);
 }
@@ -3806,6 +3826,7 @@ function applyDashboardTheme(th) {
     var activeColor = th.dashActiveColor || '#f59e0b';
     var borderColor = th.dashBorderColor || '#e2e8f0';
     var fontFamily = th.dashFontFamily || 'Cairo';
+    var fontSize = th.dashFontSize || '14px';
     var strokeColor = th.dashFontStrokeColor || '#000000';
     var strokeWidth = th.dashFontStrokeWidth || '0px';
 
@@ -3824,6 +3845,12 @@ function applyDashboardTheme(th) {
         body, html, input, button, select, textarea, p, h1, h2, h3, h4, h5, h6, table, th, td, label, div, span:not([class*="fa"]):not([class*="badge"]) {
             font-family: '${fontFamily}', 'Cairo', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
             ${strokeCss}
+        }
+        body, html {
+            font-size: ${fontSize} !important;
+        }
+        p, label, table, th, td, input, select, textarea {
+            font-size: ${fontSize} !important;
         }
         i, i[class*="fa"], i[class*="fa-"], .fa, .fas, .far, .fab, .fa-solid, .fa-regular, .fa-brands, [class^="fa-"], [class*=" fa-"] {
             font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands", "FontAwesome" !important;
@@ -3893,7 +3920,8 @@ async function saveDashboardTheme() {
         dashBorderColor: getColorPairVal('dash-border-color', 'dash-border-color-hex', '#e2e8f0'),
         dashFontStrokeColor: getColorPairVal('dash-font-stroke-color', 'dash-font-stroke-color-hex', '#000000'),
         dashFontStrokeWidth: document.getElementById('dash-font-stroke-width') ? document.getElementById('dash-font-stroke-width').value : '0px',
-        dashFontFamily: document.getElementById('dash-font-family') ? document.getElementById('dash-font-family').value : 'Cairo'
+        dashFontFamily: document.getElementById('dash-font-family') ? document.getElementById('dash-font-family').value : 'Cairo',
+        dashFontSize: document.getElementById('dash-font-size') ? document.getElementById('dash-font-size').value : '14px'
     };
     try {
         localStorage.setItem('tawseela_dashboard_theme', JSON.stringify(dt));
@@ -3934,8 +3962,17 @@ function resetDashboardTheme() {
         var ffEl = document.getElementById('dash-font-family');
         if (ffEl) ffEl.value = p.dashFontFamily || 'Cairo';
         
+        var fsEl = document.getElementById('dash-font-size');
+        if (fsEl) fsEl.value = p.dashFontSize || '14px';
+
         var swEl = document.getElementById('dash-font-stroke-width');
         if (swEl) swEl.value = p.dashFontStrokeWidth || '0px';
+
+        document.querySelectorAll('.dash-preset-btn').forEach(function(b) {
+            b.classList.remove('ring-2', 'ring-amber-400', 'border-amber-400');
+        });
+        var defBtn = document.getElementById('dash-preset-default');
+        if (defBtn) defBtn.classList.add('ring-2', 'ring-amber-400', 'border-amber-400');
 
         fetch('/api/admin/theme', {
             method: 'POST',
@@ -3952,6 +3989,115 @@ function resetDashboardTheme() {
     }
 }
 window.resetDashboardTheme = resetDashboardTheme;
+
+// Web App Presets
+var WEB_APP_PRESETS = {
+    amber: {
+        fontColor: '#111111',
+        bgColor: '#ffffff',
+        primaryColor: '#f59e0b',
+        buttonColor: '#111111',
+        buttonHoverColor: '#1f2937',
+        activeTabColor: '#f59e0b',
+        searchInputColor: '#111111',
+        searchInputBg: '#f9fafb',
+        fontFamily: 'Cairo',
+        fontSize: '16px'
+    },
+    dark: {
+        fontColor: '#f8fafc',
+        bgColor: '#0f172a',
+        primaryColor: '#f59e0b',
+        buttonColor: '#1e293b',
+        buttonHoverColor: '#334155',
+        activeTabColor: '#f59e0b',
+        searchInputColor: '#ffffff',
+        searchInputBg: '#1e293b',
+        fontFamily: 'Cairo',
+        fontSize: '16px'
+    },
+    emerald: {
+        fontColor: '#064e3b',
+        bgColor: '#f0fdf4',
+        primaryColor: '#10b981',
+        buttonColor: '#065f46',
+        buttonHoverColor: '#047857',
+        activeTabColor: '#10b981',
+        searchInputColor: '#064e3b',
+        searchInputBg: '#ffffff',
+        fontFamily: 'Tajawal',
+        fontSize: '16px'
+    },
+    navy: {
+        fontColor: '#0f172a',
+        bgColor: '#f8fafc',
+        primaryColor: '#2563eb',
+        buttonColor: '#1e40af',
+        buttonHoverColor: '#1d4ed8',
+        activeTabColor: '#2563eb',
+        searchInputColor: '#0f172a',
+        searchInputBg: '#ffffff',
+        fontFamily: 'Almarai',
+        fontSize: '16px'
+    },
+    crimson: {
+        fontColor: '#18181b',
+        bgColor: '#ffffff',
+        primaryColor: '#e11d48',
+        buttonColor: '#9f1239',
+        buttonHoverColor: '#be123c',
+        activeTabColor: '#e11d48',
+        searchInputColor: '#18181b',
+        searchInputBg: '#fff1f2',
+        fontFamily: 'Alexandria',
+        fontSize: '16px'
+    },
+    violet: {
+        fontColor: '#3b0764',
+        bgColor: '#faf5ff',
+        primaryColor: '#9333ea',
+        buttonColor: '#7e22ce',
+        buttonHoverColor: '#6b21a8',
+        activeTabColor: '#9333ea',
+        searchInputColor: '#3b0764',
+        searchInputBg: '#ffffff',
+        fontFamily: 'Readex Pro',
+        fontSize: '16px'
+    }
+};
+
+function applyWebAppPreset(presetKey) {
+    var p = WEB_APP_PRESETS[presetKey];
+    if (!p) return;
+
+    setColorPair('theme-font-color', 'theme-font-color-hex', p.fontColor);
+    setColorPair('theme-bg-color', 'theme-bg-color-hex', p.bgColor);
+    setColorPair('theme-primary-color', 'theme-primary-color-hex', p.primaryColor);
+    setColorPair('theme-button-color', 'theme-button-color-hex', p.buttonColor);
+    setColorPair('theme-button-hover-color', 'theme-button-hover-color-hex', p.buttonHoverColor);
+    setColorPair('theme-active-tab-color', 'theme-active-tab-color-hex', p.activeTabColor);
+    setColorPair('theme-search-input-color', 'theme-search-input-color-hex', p.searchInputColor);
+    setColorPair('theme-search-input-bg', 'theme-search-input-bg-hex', p.searchInputBg);
+
+    if (document.getElementById('theme-font')) document.getElementById('theme-font').value = p.fontFamily || 'Cairo';
+    if (document.getElementById('theme-font-size')) document.getElementById('theme-font-size').value = p.fontSize || '16px';
+
+    applyActiveTabColorStyle(p.activeTabColor);
+    broadcastLiveThemeSync(p);
+
+    document.querySelectorAll('.webapp-preset-btn').forEach(function(b) {
+        b.classList.remove('ring-2', 'ring-amber-400', 'border-amber-400');
+    });
+    var selBtn = document.getElementById('webapp-preset-' + presetKey);
+    if (selBtn) {
+        selBtn.classList.add('ring-2', 'ring-amber-400', 'border-amber-400');
+    }
+
+    if (typeof showToast === 'function') {
+        showToast('تم تطبيق النمط الجاهز على تطبيق الويب (' + presetKey + ') ✨');
+    }
+}
+window.applyWebAppPreset = applyWebAppPreset;
 
 function syncColorInputPair(pickerId, hexId, value) {
     if (!value) return '';
@@ -4007,6 +4153,7 @@ async function loadCustomizationSettings() {
             setColorPair('theme-search-input-bg', 'theme-search-input-bg-hex', cfg.theme.searchInputBg || '#fafafa');
 
             if (document.getElementById('theme-font')) document.getElementById('theme-font').value = cfg.theme.fontFamily || 'Cairo';
+            if (document.getElementById('theme-font-size')) document.getElementById('theme-font-size').value = cfg.theme.fontSize || '16px';
             if (document.getElementById('theme-app-name')) document.getElementById('theme-app-name').value = cfg.theme.appName || 'توصيله';
             if (document.getElementById('theme-logo-emoji')) document.getElementById('theme-logo-emoji').value = cfg.theme.logoEmoji || '🚕';
             if (document.getElementById('theme-footer')) document.getElementById('theme-footer').value = cfg.theme.footerText || '';
@@ -4027,6 +4174,7 @@ async function loadCustomizationSettings() {
                 setColorPair('dash-font-stroke-color', 'dash-font-stroke-color-hex', dt.dashFontStrokeColor || '#000000');
                 if (document.getElementById('dash-font-stroke-width')) document.getElementById('dash-font-stroke-width').value = dt.dashFontStrokeWidth || '0px';
                 if (document.getElementById('dash-font-family')) document.getElementById('dash-font-family').value = dt.dashFontFamily || 'Cairo';
+                if (document.getElementById('dash-font-size')) document.getElementById('dash-font-size').value = dt.dashFontSize || '14px';
                 applyDashboardTheme(dt);
                 localStorage.setItem('tawseela_dashboard_theme', JSON.stringify(dt));
             } else {
@@ -4046,6 +4194,7 @@ async function loadCustomizationSettings() {
                         setColorPair('dash-font-stroke-color', 'dash-font-stroke-color-hex', dt.dashFontStrokeColor || '#000000');
                         if (document.getElementById('dash-font-stroke-width')) document.getElementById('dash-font-stroke-width').value = dt.dashFontStrokeWidth || '0px';
                         if (document.getElementById('dash-font-family')) document.getElementById('dash-font-family').value = dt.dashFontFamily || 'Cairo';
+                        if (document.getElementById('dash-font-size')) document.getElementById('dash-font-size').value = dt.dashFontSize || '14px';
                         applyDashboardTheme(dt);
                     } catch(_) {}
                 }
@@ -4075,6 +4224,7 @@ function broadcastLiveThemeSync(theme) {
         bc.close();
     } catch(_) {}
 }
+window.broadcastLiveThemeSync = broadcastLiveThemeSync;
 
 function syncLiveActiveTabColor(color) {
     var c = syncColorInputPair('theme-active-tab-color', 'theme-active-tab-color-hex', color);
@@ -4198,6 +4348,7 @@ async function saveThemeSettings() {
         searchInputBg: searchInputBg,
         textColor: fc,
         fontFamily: document.getElementById('theme-font').value,
+        fontSize: document.getElementById('theme-font-size') ? document.getElementById('theme-font-size').value : '16px',
         appName: document.getElementById('theme-app-name').value,
         logoEmoji: document.getElementById('theme-logo-emoji').value,
         footerText: document.getElementById('theme-footer').value

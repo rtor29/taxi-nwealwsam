@@ -1215,46 +1215,60 @@
                     <p class="text-xs text-slate-400">اختر نمطاً جاهزاً لتطبيقه فوراً على لوحة التحكم بالكامل:</p>
                     
                     <div class="grid grid-cols-2 gap-2.5 pt-2">
-                        <button type="button" onclick="applyDashboardPreset('default')" class="p-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
+                        <button type="button" id="dash-preset-default" onclick="applyDashboardPreset('default')" class="dash-preset-btn p-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
                             <span class="text-base">⚡</span>
                             <span>الافتراضي الأصلي</span>
                         </button>
-                        <button type="button" onclick="applyDashboardPreset('dark')" class="p-3 bg-slate-900 hover:bg-slate-950 text-white rounded-xl border border-slate-700 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
+                        <button type="button" id="dash-preset-dark" onclick="applyDashboardPreset('dark')" class="dash-preset-btn p-3 bg-slate-900 hover:bg-slate-950 text-white rounded-xl border border-slate-700 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
                             <span class="text-base">🌙</span>
                             <span>الوضع الداكن (Dark)</span>
                         </button>
-                        <button type="button" onclick="applyDashboardPreset('light')" class="p-3 bg-slate-100 hover:bg-white text-slate-900 rounded-xl border border-slate-300 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
+                        <button type="button" id="dash-preset-light" onclick="applyDashboardPreset('light')" class="dash-preset-btn p-3 bg-slate-100 hover:bg-white text-slate-900 rounded-xl border border-slate-300 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
                             <span class="text-base">☀️</span>
                             <span>الوضع الفاتح (Light)</span>
                         </button>
-                        <button type="button" onclick="applyDashboardPreset('amber')" class="p-3 bg-zinc-900 hover:bg-black text-amber-400 rounded-xl border border-amber-500/50 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
+                        <button type="button" id="dash-preset-amber" onclick="applyDashboardPreset('amber')" class="dash-preset-btn p-3 bg-zinc-900 hover:bg-black text-amber-400 rounded-xl border border-amber-500/50 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
                             <span class="text-base">🚕</span>
                             <span>توصيلة ذهبي وأسود</span>
                         </button>
-                        <button type="button" onclick="applyDashboardPreset('emerald')" class="p-3 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 rounded-xl border border-emerald-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
+                        <button type="button" id="dash-preset-emerald" onclick="applyDashboardPreset('emerald')" class="dash-preset-btn p-3 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 rounded-xl border border-emerald-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
                             <span class="text-base">💎</span>
                             <span>الزمرد الملكي</span>
                         </button>
-                        <button type="button" onclick="applyDashboardPreset('navy')" class="p-3 bg-blue-950 hover:bg-blue-900 text-blue-300 rounded-xl border border-blue-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
+                        <button type="button" id="dash-preset-navy" onclick="applyDashboardPreset('navy')" class="dash-preset-btn p-3 bg-blue-950 hover:bg-blue-900 text-blue-300 rounded-xl border border-blue-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
                             <span class="text-base">🔷</span>
                             <span>الأزرق الكحلي</span>
                         </button>
-                        <button type="button" onclick="applyDashboardPreset('violet')" class="p-3 bg-purple-950 hover:bg-purple-900 text-purple-300 rounded-xl border border-purple-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer col-span-2">
+                        <button type="button" id="dash-preset-violet" onclick="applyDashboardPreset('violet')" class="dash-preset-btn p-3 bg-purple-950 hover:bg-purple-900 text-purple-300 rounded-xl border border-purple-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer col-span-2">
                             <span class="text-base">🟣</span>
                             <span>البنفسجي الملكي</span>
                         </button>
                     </div>
 
-                    <div class="pt-4 border-t border-slate-700">
-                        <label class="block text-xs font-bold text-slate-300 mb-2">نوع الخط في الداش بورد (Dashboard Font Family)</label>
-                        <select id="dash-font-family" onchange="syncLiveDashboardTheme()" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm">
-                            <option value="Cairo">Cairo (الافتراضي - كلاسيكي وأنيق)</option>
-                            <option value="Tajawal">Tajawal (تجوال - عصري ومريح)</option>
-                            <option value="Almarai">Almarai (المراعي - واضح وعريض)</option>
-                            <option value="IBM Plex Sans Arabic">IBM Plex Sans Arabic (تقني ومميز)</option>
-                            <option value="Alexandria">Alexandria (الإسكندرية - حديث وفخم)</option>
-                            <option value="Readex Pro">Readex Pro (ريدكس برو - هندسي ناعم)</option>
-                        </select>
+                    <div class="pt-4 border-t border-slate-700 space-y-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-300 mb-2">نوع الخط في الداش بورد (Dashboard Font Family)</label>
+                            <select id="dash-font-family" onchange="syncLiveDashboardTheme()" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm">
+                                <option value="Cairo">Cairo (الافتراضي - كلاسيكي وأنيق)</option>
+                                <option value="Tajawal">Tajawal (تجوال - عصري ومريح)</option>
+                                <option value="Almarai">Almarai (المراعي - واضح وعريض)</option>
+                                <option value="IBM Plex Sans Arabic">IBM Plex Sans Arabic (تقني ومميز)</option>
+                                <option value="Alexandria">Alexandria (الإسكندرية - حديث وفخم)</option>
+                                <option value="Readex Pro">Readex Pro (ريدكس برو - هندسي ناعم)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-300 mb-2">حجم الخط في الداش بورد (Dashboard Font Size) 🔍</label>
+                            <select id="dash-font-size" onchange="syncLiveDashboardTheme()" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm">
+                                <option value="12px">12px (صغير ومركّز)</option>
+                                <option value="13px">13px (مدمج)</option>
+                                <option value="14px" selected>14px (قياسي - الافتراضي)</option>
+                                <option value="15px">15px (متوسط واضح)</option>
+                                <option value="16px">16px (كبير ومريح)</option>
+                                <option value="17px">17px (كبير جداً)</option>
+                                <option value="18px">18px (واضح وعريض)</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -1372,73 +1386,146 @@
             </div>
 
             <!-- 2. SUB-VIEW: WEB APP THEME (الركاب والسائقين) -->
-            <div id="custom-view-web-theme" class="grid grid-cols-1 md:grid-cols-2 gap-6 hidden" style="display:none">
-                <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700">
-                    <h3 class="text-lg font-bold text-white mb-4">🎨 ثيم وألوان تطبيق الويب (المستخدمين)</h3>
-                    <div class="space-y-4">
+            <div id="custom-view-web-theme" class="grid grid-cols-1 lg:grid-cols-2 gap-6 hidden" style="display:none">
+                <!-- Column 1: Presets & General Settings -->
+                <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700 space-y-4">
+                    <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
+                        <span>الأنماط الجاهزة لتطبيق الويب (Presets)</span>
+                    </h3>
+                    <p class="text-xs text-slate-400">اختر نمطاً متناسقاً لتطبيقه فوراً على تطبيق المستخدمين:</p>
+                    
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
+                        <button type="button" id="webapp-preset-amber" onclick="applyWebAppPreset('amber')" class="webapp-preset-btn p-3 bg-zinc-900 hover:bg-black text-amber-400 rounded-xl border border-amber-500/40 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
+                            <span class="text-base">🚕</span>
+                            <span>توصيلة ذهبي</span>
+                        </button>
+                        <button type="button" id="webapp-preset-dark" onclick="applyWebAppPreset('dark')" class="webapp-preset-btn p-3 bg-slate-900 hover:bg-slate-950 text-white rounded-xl border border-slate-700 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
+                            <span class="text-base">🌙</span>
+                            <span>داكن عصري</span>
+                        </button>
+                        <button type="button" id="webapp-preset-emerald" onclick="applyWebAppPreset('emerald')" class="webapp-preset-btn p-3 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 rounded-xl border border-emerald-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
+                            <span class="text-base">💎</span>
+                            <span>زمردي هادئ</span>
+                        </button>
+                        <button type="button" id="webapp-preset-navy" onclick="applyWebAppPreset('navy')" class="webapp-preset-btn p-3 bg-blue-950 hover:bg-blue-900 text-blue-300 rounded-xl border border-blue-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
+                            <span class="text-base">🔷</span>
+                            <span>أزرق كحلي</span>
+                        </button>
+                        <button type="button" id="webapp-preset-crimson" onclick="applyWebAppPreset('crimson')" class="webapp-preset-btn p-3 bg-rose-950 hover:bg-rose-900 text-rose-300 rounded-xl border border-rose-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
+                            <span class="text-base">🔴</span>
+                            <span>عنابي جريء</span>
+                        </button>
+                        <button type="button" id="webapp-preset-violet" onclick="applyWebAppPreset('violet')" class="webapp-preset-btn p-3 bg-purple-950 hover:bg-purple-900 text-purple-300 rounded-xl border border-purple-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
+                            <span class="text-base">🟣</span>
+                            <span>بنفسجي ملكي</span>
+                        </button>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-700 space-y-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">نوع الخط في تطبيق الويب</label>
+                            <select id="theme-font" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm">
+                                <option value="Cairo">Cairo (الافتراضي)</option>
+                                <option value="Tajawal">Tajawal</option>
+                                <option value="Almarai">Almarai</option>
+                                <option value="IBM Plex Sans Arabic">IBM Plex Sans Arabic</option>
+                                <option value="Alexandria">Alexandria</option>
+                                <option value="Readex Pro">Readex Pro</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">حجم الخط في تطبيق الويب (Font Size) 🔍</label>
+                            <select id="theme-font-size" onchange="broadcastLiveThemeSync({ fontSize: this.value })" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm">
+                                <option value="14px">14px (صغير ومركّز)</option>
+                                <option value="15px">15px (ناعم)</option>
+                                <option value="16px" selected>16px (قياسي - الافتراضي)</option>
+                                <option value="17px">17px (متوسط ومريح)</option>
+                                <option value="18px">18px (كبير وواضح)</option>
+                                <option value="20px">20px (كبير جداً)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">اسم التطبيق</label>
+                            <input type="text" id="theme-app-name" value="توصيله" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">أيقونة التطبيق (Emoji)</label>
+                            <input type="text" id="theme-logo-emoji" value="🚕" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm text-center text-2xl">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">نص الحقوق (Footer)</label>
+                            <input type="text" id="theme-footer" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm">
+                        </div>
+                        <button onclick="saveThemeSettings()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3.5 rounded-xl text-sm transition shadow-lg shadow-amber-500/10">💾 حفظ إعدادات ثيم تطبيق الويب</button>
+                    </div>
+                </div>
+
+                <!-- Column 2: Detailed Colors -->
+                <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700 space-y-4">
+                    <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-palette text-amber-400"></i>
+                        <span>تخصيص ألوان تطبيق الويب بالتفصيل</span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mb-2">تتزامن التغييرات فورياً مع المستخدمين في نفس اللحظة:</p>
+
+                    <div class="space-y-3.5">
                         <div>
                             <label class="block text-xs font-bold text-slate-400 mb-1">لون الخط والنصوص (Font Color) - مزامنة فورية ⚡</label>
                             <div class="flex items-center gap-2">
                                 <input type="color" id="theme-font-color" value="#111111" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveFontColor(this.value)">
                                 <input type="text" id="theme-font-color-hex" value="#111111" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveFontColor(this.value)">
                             </div>
-                            <span class="text-[11px] text-amber-400/80 mt-1 block">يتغير لون كافة خطوط تطبيق الويب فوراً في نفس اللحظة</span>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-400 mb-1">لون الزر والتبويب النشط عند التنقل (Active Tab / Navigation Color) - مزامنة فورية ⚡</label>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون الزر والتبويب النشط عند التنقل (Active Tab / Navigation Color) ⚡</label>
                             <div class="flex items-center gap-2">
                                 <input type="color" id="theme-active-tab-color" value="#f59e0b" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveActiveTabColor(this.value)">
                                 <input type="text" id="theme-active-tab-color-hex" value="#f59e0b" placeholder="#f59e0b" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveActiveTabColor(this.value)">
                             </div>
-                            <span class="text-[11px] text-amber-400/80 mt-1 block">اللون الذي يتغير إليه الزر أو التبويب عند التنقل والضغط عليه (يمكنك إدخال كود اللون مثل #f59e0b)</span>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-400 mb-1">اللون الأساسي (Primary Color) - مزامنة فورية ⚡</label>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">اللون الأساسي (Primary Color) ⚡</label>
                             <div class="flex items-center gap-2">
                                 <input type="color" id="theme-primary-color" value="#111111" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLivePrimaryColor(this.value)">
                                 <input type="text" id="theme-primary-color-hex" value="#111111" placeholder="#111111" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLivePrimaryColor(this.value)">
                             </div>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-400 mb-1">لون الأزرار (Button Color) - مزامنة فورية ⚡</label>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون الأزرار (Button Color) ⚡</label>
                             <div class="flex items-center gap-2">
                                 <input type="color" id="theme-button-color" value="#111111" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveButtonColor(this.value)">
                                 <input type="text" id="theme-button-color-hex" value="#111111" placeholder="#111111" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveButtonColor(this.value)">
                             </div>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-400 mb-1">لون الزر عند التمرير/التركيز (Hover) - مزامنة فورية ⚡</label>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون الزر عند التمرير (Button Hover) ⚡</label>
                             <div class="flex items-center gap-2">
                                 <input type="color" id="theme-button-hover-color" value="#374151" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveButtonHoverColor(this.value)">
                                 <input type="text" id="theme-button-hover-color-hex" value="#374151" placeholder="#374151" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveButtonHoverColor(this.value)">
                             </div>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-400 mb-1">لون نص مربع البحث والمدخلات (Search & Input Text Color)</label>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون نص مربع البحث والمدخلات (Search Input Text Color)</label>
                             <div class="flex items-center gap-2">
                                 <input type="color" id="theme-search-input-color" value="#111111" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveSearchInputColor(this.value)">
                                 <input type="text" id="theme-search-input-color-hex" value="#111111" placeholder="#111111" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveSearchInputColor(this.value)">
                             </div>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-400 mb-1">لون خلفية مربع البحث والمدخلات (Search & Input Background)</label>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون خلفية مربع البحث والمدخلات (Search Input Background)</label>
                             <div class="flex items-center gap-2">
                                 <input type="color" id="theme-search-input-bg" value="#fafafa" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveSearchInputBg(this.value)">
                                 <input type="text" id="theme-search-input-bg-hex" value="#fafafa" placeholder="#fafafa" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveSearchInputBg(this.value)">
                             </div>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-400 mb-1">لون خلفية التطبيق (Background Color) - مزامنة فورية ⚡</label>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون خلفية التطبيق (Background Color) ⚡</label>
                             <div class="flex items-center gap-2">
                                 <input type="color" id="theme-bg-color" value="#ffffff" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveBgColor(this.value)">
                                 <input type="text" id="theme-bg-color-hex" value="#ffffff" placeholder="#ffffff" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveBgColor(this.value)">
                             </div>
                         </div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">نوع الخط في تطبيق الويب</label><select id="theme-font" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"><option value="Cairo">Cairo</option><option value="Tajawal">Tajawal</option><option value="Almarai">Almarai</option><option value="IBM Plex Sans Arabic">IBM Plex Sans Arabic</option><option value="Alexandria">Alexandria</option><option value="Readex Pro">Readex Pro</option></select></div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">اسم التطبيق</label><input type="text" id="theme-app-name" value="توصيله" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">أيقونة التطبيق (Emoji)</label><input type="text" id="theme-logo-emoji" value="🚕" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm text-center text-2xl"></div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">نص الحقوق (Footer)</label><input type="text" id="theme-footer" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
-                        <button onclick="saveThemeSettings()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3.5 rounded-xl text-sm transition">💾 حفظ إعدادات ثيم تطبيق الويب</button>
                     </div>
                 </div>
             </div>
@@ -2428,6 +2515,6 @@
         });
     </script>
 
-    <script src="/dashboard/app.js?v=20261003_v3"></script>
+    <script src="/dashboard/app.js?v=20261003_v4"></script>
 </body>
 </html>

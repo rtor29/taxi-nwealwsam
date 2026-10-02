@@ -1741,6 +1741,15 @@ class AuthController {
             if (th.fontFamily) {
                 document.body.style.fontFamily = '"' + th.fontFamily + '", sans-serif';
             }
+            if (th.fontSize) {
+                var fsStyle = document.getElementById('dynamic-theme-fontsize-style');
+                if (!fsStyle) {
+                    fsStyle = document.createElement('style');
+                    fsStyle.id = 'dynamic-theme-fontsize-style';
+                    document.head.appendChild(fsStyle);
+                }
+                fsStyle.textContent = 'body, p, label, .label, input, select, textarea, button, .sub-btn, .trip-card { font-size: ' + th.fontSize + ' !important; }';
+            }
 
             // 1. Font color
             if (fontColor) {
