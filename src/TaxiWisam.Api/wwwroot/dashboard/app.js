@@ -3342,14 +3342,14 @@ function syncLivePrimaryColor(color) {
 
 function syncLiveBgColor(color) {
     if (!color) return;
-    broadcastLiveThemeSync({ bgColor: color }
+    broadcastLiveThemeSync({ bgColor: color });
+}
+
 function syncLiveButtonColor(color) {
     broadcastLiveThemeSync({ buttonColor: color });
 }
 function syncLiveButtonHoverColor(color) {
     broadcastLiveThemeSync({ buttonHoverColor: color });
-}
-);
 }
 
 function renderOnboardingScreens(screens) {
