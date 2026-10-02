@@ -38,50 +38,20 @@ function sendKeyboard(chatId, text, buttons) {
     });
 }
 
-// --- VerifyWay OTP via Telegram ---
-function sendTelegramOtp(phone, chatId) {
-    return new Promise((resolve, reject) => {
-        const code = String(Math.floor(100000 + Math.random() * 900000));
-        // Normalize phone
-        let normalized = String(phone).replace(/[^0-9+]/g, '');
-        if (normalized.startsWith('07')) normalized = '+964' + normalized.substring(1);
-        else if (normalized.startsWith('7') && normalized.length === 10) normalized = '+964' + normalized;
-        else if (!normalized.startsWith('+')) normalized = '+' + normalized;
+// --- Direct Local Telegram OTP (VerifyWay Completely Removed) ---
+async function sendTelegramOtp(phone, chatId) {
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    // Normalize phone
+    let normalized = String(phone).replace(/[^0-9+]/g, '');
+    if (normalized.startsWith('07')) normalized = '+964' + normalized.substring(1);
+    else if (normalized.startsWith('7') && normalized.length === 10) normalized = '+964' + normalized;
+    else if (!normalized.startsWith('+')) normalized = '+' + normalized;
 
-        telegramOtpStore.set(String(chatId), { code, phone: normalized, expires: Date.now() + 300000 });
+    telegramOtpStore.set(String(chatId), { code, phone: normalized, expires: Date.now() + 300000 });
 
-        const apiKey = config.verifyWayApiKey || process.env.VERIFYWAY_API_KEY || '';
-        const payload = JSON.stringify({
-            recipient: normalized,
-            type: 'otp',
-            code: code,
-            channel: 'telegram',
-            fallback: 'no',
-            lang: 'ar'
-        });
-
-        const req = https.request('https://api.verifyway.com/api/v1/', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(payload)
-            }
-        }, res => {
-            let raw = '';
-            res.on('data', c => raw += c);
-            res.on('end', () => {
-                try {
-                    const result = JSON.parse(raw);
-                    console.log('[Telegram OTP] VerifyWay:', result.status, 'for', normalized);
-                    resolve({ success: result.status === 'success', code, phone: normalized });
-                } catch (e) { resolve({ success: false, code, phone: normalized }); }
-            });
-        });
-        req.on('error', e => { console.error('[Telegram OTP] Error:', e.message); resolve({ success: false, code, phone: normalized }); });
-        req.write(payload);
-        req.end();
-    });
+    const text = `🔐 رمز التحقق الخاص بك هو: <code>${code}</code>\n\n👆 <i>اضغط على الرمز لنسخه مباشرة</i>\nقم بإرسال هذا الرمز هنا لتأكيد رقمك وإكمال التسجيل:`;
+    await sendMessage(chatId, text);
+    return { success: true, code, phone: normalized };
 }
 
 function verifyTelegramOtp(chatId, code) {
@@ -134,28 +104,51 @@ async function handleCallback(chatId, data, user) {
             break;
         case 'nearby_drivers': {
             // التحقق من أن المستخدم راكب مسجل بالفعل
-            const isRegisteredCustomer = (db.memoryState.customers || []).some(c => String(c.telegramChatId) === String(chatId));
-            if (!isRegisteredCustomer) {
+            const passenger = (db.memoryState.customers || []).find(c => String(c.telegramChatId) === String(chatId));
+            if (!passenger) {
                 await sendMessage(chatId, '⚠️ <b>عذراً!</b> خيار معرفة السائقين القريبين متاح فقط للركاب بعد إكمال عملية التسجيل بالكامل.\n\nاضغط على <b>تسجيل راكب</b> للتسجيل أولاً.');
                 break;
             }
 
-            const drivers = (db.memoryState.drivers || []).filter(d =>
+            // Use permanent locations to find nearby drivers
+            const pLat = passenger.permanentLat;
+            const pLon = passenger.permanentLon;
+            const allDrivers = (db.memoryState.drivers || []).filter(d =>
                 !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' &&
-                (d.isVerified || d.status === 'Active' || d.status === 'Approved') && d.activeRoute
+                (d.isVerified || d.status === 'Active' || d.status === 'Approved')
             );
-            if (drivers.length === 0) {
-                await sendMessage(chatId, '🚕 <b>لا يوجد سائقون نشطون حالياً.</b>\n\nجرب مرة أخرى خلال دقائق.');
+
+            // Sort by distance from passenger permanent location (if available)
+            let drivers = allDrivers;
+            if (pLat && pLon) {
+                const toRad = (deg) => deg * Math.PI / 180;
+                const haversine = (lat1, lon1, lat2, lon2) => {
+                    const R = 6371;
+                    const dLat = toRad(lat2 - lat1);
+                    const dLon = toRad(lon2 - lon1);
+                    const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
+                    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                };
+                drivers = allDrivers.map(d => {
+                    const dLat = d.permanentLat || (d.activeRoute ? d.activeRoute.fromLat : null);
+                    const dLon = d.permanentLon || (d.activeRoute ? d.activeRoute.fromLon : null);
+                    const dist = (dLat && dLon) ? haversine(pLat, pLon, dLat, dLon) : 9999;
+                    return { ...d, _dist: dist };
+                }).filter(d => d._dist < 50).sort((a, b) => a._dist - b._dist);
             } else {
-                let msg = '🗺️ <b>السائقون المتاحون حالياً في النجف:</b>\n\n';
+                drivers = allDrivers.filter(d => d.activeRoute || d.permanentLat);
+            }
+
+            if (drivers.length === 0) {
+                await sendMessage(chatId, '🚕 <b>لا يوجد سائقون قريبون حالياً.</b>\n\n' + (pLat ? '' : '💡 <i>لم تقم بتثبيت موقعك الدائمي بعد. ادخل تطبيق الويب واضغط "تثبيت الموقع" لعرض أقرب السائقين.</i>\n\n') + 'جرب مرة أخرى خلال دقائق.');
+            } else {
+                let msg = '🗺️ <b>السائقون القريبون منك:</b>\n\n';
                 drivers.slice(0, 10).forEach((d, i) => {
-                    const cfg = db.memoryState.appConfig || {};
                     const waNum = (d.phoneNumber || '').replace(/[^0-9]/g, '').replace(/^07/, '9647');
-                    const from = d.activeRoute ? d.activeRoute.fromText : '--';
-                    const to = d.activeRoute ? d.activeRoute.toText : '--';
-                    msg += `${i+1}. 🚕 <b>${d.fullName}</b>\n`;
-                    msg += `   📍 ${from} ← → ${to}\n`;
-                    msg += `   🚗 ${d.vehicleMake || ''} ${d.vehiclePlate || ''}\n`;
+                    const locName = d.permanentLocationName || (d.activeRoute ? (d.activeRoute.fromText + ' → ' + d.activeRoute.toText) : '--');
+                    const distText = d._dist ? (' (' + d._dist.toFixed(1) + ' كم)') : '';
+                    msg += `${i+1}. 🚕 <b>${d.fullName}</b>${distText}\n`;
+                    msg += `   📍 ${locName}\n`;
                     msg += `   📞 <a href="https://wa.me/${waNum}">واتساب</a>\n\n`;
                 });
                 msg += '💡 لحجز مباشر، اضغط على رابط الواتساب للتواصل مع السائق.';
@@ -201,13 +194,7 @@ async function handleMessage(chatId, text, user) {
             state.phone = text.trim();
             state.step = 'passenger_otp_sent';
             userStates.set(chatId, state);
-            await sendMessage(chatId, '⏳ جاري إرسال رمز التحقق عبر تيليجرام...');
-            const result = await sendTelegramOtp(state.phone, chatId);
-            if (result.success) {
-                await sendMessage(chatId, '✅ تم إرسال رمز التحقق عبر تيليجرام.\nأدخل الرمز المكوّن من 6 أرقام:');
-            } else {
-                await sendMessage(chatId, '✅ تم إرسال الرمز.\nأدخل الرمز المكوّن من 6 أرقام:');
-            }
+            await sendTelegramOtp(state.phone, chatId);
             break;
         }
         case 'passenger_otp_sent': {
@@ -278,9 +265,7 @@ async function handleMessage(chatId, text, user) {
             state.phone = text.trim();
             state.step = 'driver_otp_sent';
             userStates.set(chatId, state);
-            await sendMessage(chatId, '⏳ جاري إرسال رمز التحقق عبر تيليجرام...');
-            const result = await sendTelegramOtp(state.phone, chatId);
-            await sendMessage(chatId, '✅ تم الإرسال. أدخل الرمز (6 أرقام):');
+            await sendTelegramOtp(state.phone, chatId);
             break;
         }
         case 'driver_otp_sent': {
@@ -381,7 +366,6 @@ async function handleMessage(chatId, text, user) {
             state.step = 'login_otp_sent';
             userStates.set(chatId, state);
             await sendTelegramOtp(state.phone, chatId);
-            await sendMessage(chatId, '✅ تم إرسال رمز التحقق عبر تيليجرام.\nأدخل الرمز (6 أرقام):');
             break;
         }
         case 'login_otp_sent': {
@@ -569,4 +553,29 @@ async function notifyUser(chatId, text) {
     try { await sendMessage(chatId, text); } catch (_) {}
 }
 
-module.exports = { startBot, stopBot, sendAdminNotification, notifyUser, sendMessage };
+// Broadcast message to all registered users (customers and drivers with telegramChatId + admin)
+async function broadcastNotification(text) {
+    const recipients = new Set();
+    if (ADMIN_CHAT_ID) recipients.add(String(ADMIN_CHAT_ID));
+    (db.memoryState.customers || []).forEach(c => {
+        if (c.telegramChatId) recipients.add(String(c.telegramChatId));
+    });
+    (db.memoryState.drivers || []).forEach(d => {
+        if (d.telegramChatId) recipients.add(String(d.telegramChatId));
+    });
+
+    let sentCount = 0;
+    let failedCount = 0;
+    const formattedMsg = `📢 <b>إشعار عام من إدارة منصة توصيله:</b>\n\n${text}`;
+    for (const chatId of recipients) {
+        try {
+            await sendMessage(chatId, formattedMsg);
+            sentCount++;
+        } catch (e) {
+            failedCount++;
+        }
+    }
+    return { success: true, sentCount, failedCount, total: recipients.size };
+}
+
+module.exports = { startBot, stopBot, sendAdminNotification, broadcastNotification, notifyUser, sendMessage };

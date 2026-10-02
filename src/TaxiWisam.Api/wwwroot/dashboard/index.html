@@ -1158,6 +1158,8 @@
                             <span class="text-[11px] text-amber-400/80 mt-1 block">يتغير لون كافة خطوط تطبيق الويب فوراً في نفس اللحظة</span>
                         </div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">اللون الأساسي</label><input type="color" id="theme-primary-color" value="#111111" class="w-full h-10 rounded-lg cursor-pointer" oninput="syncLivePrimaryColor(this.value)"></div>
+                        <div><label class="block text-xs font-bold text-slate-400 mb-1">لون الأزرار (Button Color)</label><input type="color" id="theme-button-color" value="#111111" class="w-full h-10 rounded-lg cursor-pointer" oninput="syncLiveButtonColor(this.value)"></div>
+                        <div><label class="block text-xs font-bold text-slate-400 mb-1">لون الزر عند التمرير/التركيز (Hover)</label><input type="color" id="theme-button-hover-color" value="#374151" class="w-full h-10 rounded-lg cursor-pointer" oninput="syncLiveButtonHoverColor(this.value)"></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">لون الخلفية</label><input type="color" id="theme-bg-color" value="#ffffff" class="w-full h-10 rounded-lg cursor-pointer" oninput="syncLiveBgColor(this.value)"></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">الخط</label><select id="theme-font" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"><option value="Cairo">Cairo</option><option value="Tajawal">Tajawal</option><option value="Almarai">Almarai</option></select></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">اسم التطبيق</label><input type="text" id="theme-app-name" value="توصيله" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
@@ -1184,7 +1186,36 @@
             </div>
         </section>
 
-        <!-- Dedicated UI Management Tab (إدارة الواجهة: الأزرار والإعلانات) -->
+
+                <!-- Driver Permanent Location Section -->
+                <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700 mt-6">
+                    <h3 class="text-lg font-bold text-white mb-4">📍 تثبيت موقع السائق الدائمي</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">اختر السائق</label>
+                            <select id="driver-perm-select" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm" onchange="loadDriverPermLocation()"></select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-400 mb-1">خط العرض (Lat)</label>
+                                <input type="number" step="0.000001" id="driver-perm-lat" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm font-mono" dir="ltr" placeholder="31.9961">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-400 mb-1">خط الطول (Lon)</label>
+                                <input type="number" step="0.000001" id="driver-perm-lon" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm font-mono" dir="ltr" placeholder="44.3168">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">اسم الموقع (اختياري)</label>
+                            <input type="text" id="driver-perm-name" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm" placeholder="مثال: ساحة الصدرين">
+                        </div>
+                        <div id="driver-perm-map" style="height:250px;border-radius:12px;border:1px solid #475569;overflow:hidden"></div>
+                        <button onclick="saveDriverPermanentLocation()" class="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-black py-3 rounded-xl text-sm">📍 تثبيت موقع السائق الدائمي</button>
+                        <div id="driver-perm-status" class="hidden text-center text-emerald-400 text-xs font-bold p-2 bg-emerald-950/50 rounded-xl"></div>
+                    </div>
+                </div>
+
+                <!-- Dedicated UI Management Tab (إدارة الواجهة: الأزرار والإعلانات) -->
         <section id="tab-ui-management" class="tab-content hidden" style="display:none">
             <div class="flex items-center justify-between mb-6">
                 <div>
@@ -1297,7 +1328,7 @@
                 <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700">
                     <h3 class="text-lg font-bold text-white mb-4">📤 إرسال إشعار عبر البوت</h3>
                     <div class="space-y-3">
-                        <textarea id="tg-notify-msg" rows="4" placeholder="اكتب الرسالة المراد إرسالها للمشرف عبر تيليجرام..." class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></textarea>
+                        <textarea id="tg-notify-msg" rows="4" placeholder="اكتب الرسالة المراد إرسالها لجميع المستخدمين المشتركين بالبوت..." class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></textarea>
                         <button onclick="sendTelegramNotification()" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-xl"><i class="fa-brands fa-telegram"></i> إرسال عبر تيليجرام</button>
                     </div>
                 </div>
@@ -1768,7 +1799,7 @@
                     <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
                         <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                             <span class="text-[10px] text-slate-400 block font-bold">الانطلاق:</span>
-                            <span id="admin-route-start-label" class="text-xs font-bold text-emerald-800 truncate block">مركز النجف (ساحة ثورة العشرين)</span>
+                            <span id="admin-route-start-label" class="text-xs font-bold text-emerald-800 truncate block">نقطة الانطلاق</span>
                         </div>
                         <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                             <span class="text-[10px] text-slate-400 block font-bold">الوصول:</span>

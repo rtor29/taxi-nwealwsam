@@ -2213,9 +2213,9 @@ let adminPickMode = null; // 'start' | 'dest' | null
 let createdCaptainData = null;
 
 const ADMIN_NAJAF_PLACES = [
-    { name: "ساحة ثورة العشرين - المركز", lat: 31.9961, lon: 44.3168 },
+    
     { name: "مرقد الإمام علي (ع) - المدينة القديمة", lat: 31.9957, lon: 44.3143 },
-    { name: "جامعة الكوفة - مجمع الكليات (الشارع الرئيسي)", lat: 32.0321, lon: 44.3725 },
+    
     { name: "جامعة الكوفة - كلية الطب ومستشفى الصدر", lat: 32.0285, lon: 44.3650 },
     { name: "مطار النجف الأشرف الدولي", lat: 31.9897, lon: 44.4042 },
     { name: "حي الحنانة", lat: 32.0100, lon: 44.3400 },
@@ -3342,7 +3342,14 @@ function syncLivePrimaryColor(color) {
 
 function syncLiveBgColor(color) {
     if (!color) return;
-    broadcastLiveThemeSync({ bgColor: color });
+    broadcastLiveThemeSync({ bgColor: color }
+function syncLiveButtonColor(color) {
+    broadcastLiveThemeSync({ buttonColor: color });
+}
+function syncLiveButtonHoverColor(color) {
+    broadcastLiveThemeSync({ buttonHoverColor: color });
+}
+);
 }
 
 function renderOnboardingScreens(screens) {
@@ -3378,12 +3385,14 @@ async function saveOnboarding() {
 
 async function saveThemeSettings() {
     var fc = document.getElementById('theme-font-color') ? document.getElementById('theme-font-color').value : '#111111';
+        var btnColor = document.getElementById('theme-button-color') ? document.getElementById('theme-button-color').value : '#111111';
+        var btnHoverColor = document.getElementById('theme-button-hover-color') ? document.getElementById('theme-button-hover-color').value : '#374151';
     var prim = document.getElementById('theme-primary-color').value;
     var bg = document.getElementById('theme-bg-color').value;
     var body = {
         primaryColor: prim,
         bgColor: bg,
-        fontColor: fc,
+        fontColor: fc, buttonColor: btnColor, buttonHoverColor: btnHoverColor,
         textColor: fc,
         fontFamily: document.getElementById('theme-font').value,
         appName: document.getElementById('theme-app-name').value,
@@ -3746,3 +3755,69 @@ async function adminRejectJoin(requestId) {
 // ===== Feature 7: Auto-reload theme in portal via BroadcastChannel =====
 // This runs in dashboard; portal listens via its own BroadcastChannel listener
 // (Portal's applyDynamicAppConfig is called from the portal's own polling)
+
+// ===== Driver Permanent Location =====
+async function populateDriverPermSelect() {
+    var sel = document.getElementById('driver-perm-select');
+    if (!sel) return;
+    try {
+        var res = await fetch(API_BASE + '/drivers', { headers: authHeaders() });
+        var data = await res.json();
+        sel.innerHTML = '<option value="">-- اختر سائق --</option>';
+        (data.drivers || []).forEach(function(d) {
+            var opt = document.createElement('option');
+            opt.value = d.driverId;
+            opt.textContent = d.fullName + ' (' + (d.phoneNumber || '') + ')';
+            sel.appendChild(opt);
+        });
+    } catch(e) {}
+}
+async function loadDriverPermLocation() {
+    var sel = document.getElementById('driver-perm-select');
+    if (!sel || !sel.value) return;
+    try {
+        var res = await fetch(API_BASE + '/drivers', { headers: authHeaders() });
+        var data = await res.json();
+        var drv = (data.drivers || []).find(function(d) { return d.driverId === sel.value; });
+        if (drv) {
+            document.getElementById('driver-perm-lat').value = drv.permanentLat || '';
+            document.getElementById('driver-perm-lon').value = drv.permanentLon || '';
+            document.getElementById('driver-perm-name').value = drv.permanentLocationName || '';
+        }
+    } catch(e) {}
+}
+async function saveDriverPermanentLocation() {
+    var driverId = (document.getElementById('driver-perm-select') || {}).value;
+    var lat = (document.getElementById('driver-perm-lat') || {}).value;
+    var lon = (document.getElementById('driver-perm-lon') || {}).value;
+    var name = (document.getElementById('driver-perm-name') || {}).value;
+    if (!driverId || !lat || !lon) { showToast('اختر السائق وأدخل الإحداثيات', 'error'); return; }
+    try {
+        var res = await fetch('/api/admin/driver/set-permanent-location', {
+            method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()},
+            body:JSON.stringify({ driverId: driverId, lat: parseFloat(lat), lon: parseFloat(lon), locationName: name })
+        });
+        var data = await res.json();
+        if (data.success) {
+            showToast('تم تثبيت موقع السائق الدائمي ✅');
+            var st = document.getElementById('driver-perm-status');
+            if (st) { st.classList.remove('hidden'); st.textContent = '✅ ' + data.message; }
+        } else showToast(data.error || 'خطأ', 'error');
+    } catch(e) { showToast('خطأ في الاتصال', 'error'); }
+}
+
+// Auto-populate driver select on customization tab
+(function() {
+    var origSwitch = window.switchTab;
+    if (origSwitch) {
+        var _origSwitchTab = origSwitch;
+    }
+})();
+// Populate on customization tab load
+var _origSwitchAfterDef = switchTab;
+switchTab = function(tab) {
+    _origSwitchAfterDef(tab);
+    if (tab === 'customization') {
+        populateDriverPermSelect();
+    }
+};

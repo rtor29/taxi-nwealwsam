@@ -1502,7 +1502,7 @@ async function startServer() {
                 customerId: body.customerId || ('cust-' + Math.random().toString(36).substr(2, 7)),
                 customerName: body.customerName || body.fullName || 'راكب توصيله',
                 customerPhone: body.customerPhone || body.phoneNumber || '',
-                pickupLocation: body.pickupLocation || body.pickup || body.pickupName || (targetRoute ? targetRoute.startName : 'ساحة ثورة العشرين'),
+                pickupLocation: body.pickupLocation || body.pickup || body.pickupName || (targetRoute ? targetRoute.startName : ''),
                 dropoffLocation: body.dropoffLocation || body.destination || body.dropoffName || (targetRoute ? targetRoute.endName : 'جامعة الكوفة'),
                 pickupLat: parseFloat(body.pickupLat || (targetRoute ? targetRoute.startLat : 31.9961)),
                 pickupLon: parseFloat(body.pickupLon || (targetRoute ? targetRoute.startLon : 44.3168)),
@@ -1674,7 +1674,7 @@ async function startServer() {
             return sendJson({
                 success: true,
                 locations: [
-                    { name: "ساحة ثورة العشرين", lat: 31.9961, lon: 44.3168 },
+                    
                     { name: "جامعة الكوفة", lat: 32.0321, lon: 44.3725 },
                     { name: "مطار النجف الأشرف الدولي", lat: 31.9897, lon: 44.4042 },
                     { name: "مرقد الإمام علي (ع)", lat: 31.9957, lon: 44.3143 }
@@ -1855,8 +1855,18 @@ async function startServer() {
         // Telegram bot admin
         if (pathname === '/api/admin/telegram/notify' && method === 'POST') {
             const body = await parseJsonBody(req);
-            try { telegramBot.sendAdminNotification(body.message || ''); } catch(_) {}
-            return sendJson({ success: true });
+            const msg = body.message || '';
+            let result = { success: true, sentCount: 1 };
+            try {
+                if (typeof telegramBot.broadcastNotification === 'function') {
+                    result = await telegramBot.broadcastNotification(msg);
+                } else {
+                    await telegramBot.sendAdminNotification(msg);
+                }
+            } catch(e) {
+                console.error('[BroadcastNotification Error]:', e.message);
+            }
+            return sendJson(result);
         }
 
         // Registration fields config
@@ -1989,6 +1999,43 @@ async function startServer() {
             // Return Waze deep link for driver
             const wazeUrl = 'waze://ul?ll=' + jr.pickupLat + ',' + jr.pickupLon + '&navigate=yes';
             return sendJson({ success: true, request: jr, wazeUrl, pickupLat: jr.pickupLat, pickupLon: jr.pickupLon, pickupText: jr.pickupText });
+        }
+
+
+        // Passenger: Set permanent location
+        if (pathname === '/api/passenger/set-permanent-location' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const { passengerId, lat, lon, locationName } = body;
+            if (!passengerId || !lat || !lon) return sendJson({ success: false, error: 'بيانات ناقصة' });
+            const customer = db.memoryState.customers.find(c => c.customerId === passengerId);
+            if (!customer) return sendJson({ success: false, error: 'الراكب غير موجود' });
+            customer.permanentLat = parseFloat(lat);
+            customer.permanentLon = parseFloat(lon);
+            customer.permanentLocationName = locationName || '';
+            db.saveStateSnapshot();
+            return sendJson({ success: true, message: 'تم تثبيت الموقع الدائمي بنجاح' });
+        }
+
+        // Get passenger permanent location
+        if (pathname.startsWith('/api/passenger/permanent-location/') && method === 'GET') {
+            const passengerId = pathname.split('/').pop();
+            const customer = db.memoryState.customers.find(c => c.customerId === passengerId);
+            if (!customer) return sendJson({ success: false });
+            return sendJson({ success: true, lat: customer.permanentLat || null, lon: customer.permanentLon || null, locationName: customer.permanentLocationName || '' });
+        }
+
+        // Admin: Set driver permanent location
+        if (pathname === '/api/admin/driver/set-permanent-location' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const { driverId, lat, lon, locationName } = body;
+            if (!driverId || !lat || !lon) return sendJson({ success: false, error: 'بيانات ناقصة' });
+            const driver = db.memoryState.drivers.find(d => d.driverId === driverId);
+            if (!driver) return sendJson({ success: false, error: 'السائق غير موجود' });
+            driver.permanentLat = parseFloat(lat);
+            driver.permanentLon = parseFloat(lon);
+            driver.permanentLocationName = locationName || '';
+            db.saveStateSnapshot();
+            return sendJson({ success: true, message: 'تم تثبيت موقع السائق الدائمي' });
         }
 
         if (pathname === '/api/driver/reject-join' && method === 'POST') {

@@ -527,6 +527,10 @@ class AuthController {
                             <button type="button" onclick="fixPassengerRoute()" style="margin-top:10px;width:100%;background:#111;color:#fff;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer">
                                 📌 تثبيت المسار وعرض السائقين القريبين
                             </button>
+                            <button type="button" onclick="fixPermanentLocation()" style="margin-top:8px;width:100%;background:#16a34a;color:#fff;border:none;border-radius:14px;padding:14px;font-size:15px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer;box-shadow:0 4px 15px rgba(22,163,106,0.3)">
+                                📍 تثبيت الموقع الدائمي
+                            </button>
+                            <div id="perm-loc-status" style="display:none;margin-top:6px;text-align:center;font-size:12px;font-weight:700;color:#16a34a;padding:8px;background:#f0fdf4;border-radius:8px"></div>
                             <div id="nearby-driver-routes" style="margin-top:10px;display:none"></div>
                         </div>
 
@@ -1547,6 +1551,56 @@ class AuthController {
             try { window.open(href, '_system'); } catch(_) { window.open(href, '_blank', 'noopener,noreferrer'); }
         });
 
+
+        // ===== Feature: Permanent Location =====
+        window.fixPermanentLocation = async function() {
+            var pLat = (document.getElementById('cust-pickup-lat') || {}).value;
+            var pLon = (document.getElementById('cust-pickup-lon') || {}).value;
+            var pickupText = ((document.getElementById('cust-pickup-text') || {}).value || '').trim();
+            if (!pLat || !pLon) {
+                // Try GPS
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(function(pos) {
+                        document.getElementById('cust-pickup-lat').value = pos.coords.latitude.toFixed(6);
+                        document.getElementById('cust-pickup-lon').value = pos.coords.longitude.toFixed(6);
+                        fixPermanentLocation();
+                    }, function() {
+                        alert('⚠️ يرجى تحديد موقعك على الخريطة أولاً أو تفعيل GPS');
+                    });
+                    return;
+                }
+                alert('⚠️ يرجى تحديد موقعك على الخريطة أولاً');
+                return;
+            }
+            var passId = localStorage.getItem('user_id') || '';
+            if (!passId) { alert('يرجى تسجيل الدخول أولاً'); return; }
+            try {
+                var res = await fetch('/api/passenger/set-permanent-location', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({ passengerId: passId, lat: parseFloat(pLat), lon: parseFloat(pLon), locationName: pickupText })
+                });
+                var data = await res.json();
+                if (data.success) {
+                    var st = document.getElementById('perm-loc-status');
+                    if (st) { st.style.display = 'block'; st.textContent = '✅ تم تثبيت موقعك الدائمي بنجاح! سيظهر للسائقين القريبين.'; }
+                    localStorage.setItem('perm_lat', pLat);
+                    localStorage.setItem('perm_lon', pLon);
+                    localStorage.setItem('perm_name', pickupText);
+                } else alert(data.error || 'خطأ في حفظ الموقع');
+            } catch(e) { alert('خطأ في الاتصال'); }
+        };
+
+        // Load saved permanent location on page load
+        (function() {
+            var savedLat = localStorage.getItem('perm_lat');
+            var savedLon = localStorage.getItem('perm_lon');
+            var savedName = localStorage.getItem('perm_name');
+            if (savedLat && savedLon) {
+                var st = document.getElementById('perm-loc-status');
+                if (st) { st.style.display = 'block'; st.textContent = '📍 موقعك الدائمي المثبت: ' + (savedName || savedLat + ',' + savedLon); }
+            }
+        })();
+
         // ===== Feature 1: Log external contact =====
         window.logExternalContact = function(driverId, channel) {
             var passId = localStorage.getItem('user_id') || '';
@@ -1752,6 +1806,16 @@ class AuthController {
                             var ps = document.getElementById('dynamic-theme-primary-style');
                             if (!ps) { ps = document.createElement('style'); ps.id = 'dynamic-theme-primary-style'; document.head.appendChild(ps); }
                             ps.textContent = '.btn-primary { background-color: ' + th.primaryColor + ' !important; }';
+                        }
+                        if (th.buttonColor) {
+                            var bs = document.getElementById('dynamic-theme-button-style');
+                            if (!bs) { bs = document.createElement('style'); bs.id = 'dynamic-theme-button-style'; document.head.appendChild(bs); }
+                            bs.textContent = 'button, .btn, [type="button"], [type="submit"] { background-color: ' + th.buttonColor + ' !important; }';
+                        }
+                        if (th.buttonHoverColor) {
+                            var bhs = document.getElementById('dynamic-theme-button-hover-style');
+                            if (!bhs) { bhs = document.createElement('style'); bhs.id = 'dynamic-theme-button-hover-style'; document.head.appendChild(bhs); }
+                            bhs.textContent = 'button:hover, button:focus, .btn:hover, .btn:focus, [type="button"]:hover, [type="submit"]:hover { background-color: ' + th.buttonHoverColor + ' !important; }';
                         }
                     }
                     applyDynamicAppConfig();
