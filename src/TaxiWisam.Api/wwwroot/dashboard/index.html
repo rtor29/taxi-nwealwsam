@@ -28,7 +28,7 @@
     <!-- Tailwind CSS with defer -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Google Arabic Fonts with font-display: swap -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -39,20 +39,22 @@
             var cachedDashTheme = localStorage.getItem('tawseela_dashboard_theme');
             if (cachedDashTheme) {
                 var th = JSON.parse(cachedDashTheme);
-                var bg = th.dashBgColor || '#0f172a';
-                var sidebarBg = th.dashSidebarBg || '#0f172a';
-                var cardBg = th.dashCardBg || '#1e293b';
-                var headerBg = th.dashHeaderBg || '#0f172a';
-                var textColor = th.dashTextColor || '#94a3b8';
-                var headingColor = th.dashHeadingColor || '#f8fafc';
-                var primaryColor = th.dashPrimaryColor || '#f59e0b';
-                var activeColor = th.dashActiveColor || '#f59e0b';
-                var borderColor = th.dashBorderColor || '#334155';
-                var fontFamily = th.dashFontFamily || 'Cairo';
-                var s = document.createElement('style');
-                s.id = 'dynamic-dashboard-theme-style';
-                s.textContent = 'body, html, * { font-family: "' + fontFamily + '", "Cairo", sans-serif !important; } body { background-color: ' + bg + ' !important; } main { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } #sidebar-drawer { background-color: ' + sidebarBg + ' !important; border-color: ' + borderColor + ' !important; } header, header.bg-slate-900 { background-color: ' + headerBg + ' !important; border-color: ' + borderColor + ' !important; } .bg-white, .bg-slate-800\\/60, .bg-slate-900\\/80 { background-color: ' + cardBg + ' !important; border-color: ' + borderColor + ' !important; } .text-slate-900, .text-slate-800, h1, h2, h3, .font-black { color: ' + headingColor + ' !important; } .text-slate-500, .text-slate-600, .text-slate-700, .text-slate-400, p, span:not(.badge):not(#cancellations-count-badge):not(.tab-btn *) { color: ' + textColor + ' !important; } .border-slate-200, .border-slate-700, .border-slate-800 { border-color: ' + borderColor + ' !important; } .tab-btn.active { color: ' + activeColor + ' !important; border-color: ' + activeColor + ' !important; box-shadow: 0 4px 14px -2px ' + activeColor + '50 !important; } .tab-btn.active i, .tab-btn.active span { color: ' + activeColor + ' !important; } .btn-theme-primary { background-color: ' + primaryColor + ' !important; color: #0f172a !important; }';
-                document.head.appendChild(s);
+                if (th && th.dashBgColor) {
+                    var bg = th.dashBgColor || '#f8fafc';
+                    var sidebarBg = th.dashSidebarBg || '#0f172a';
+                    var cardBg = th.dashCardBg || '#ffffff';
+                    var headerBg = th.dashHeaderBg || '#0f172a';
+                    var textColor = th.dashTextColor || '#475569';
+                    var headingColor = th.dashHeadingColor || '#0f172a';
+                    var primaryColor = th.dashPrimaryColor || '#f59e0b';
+                    var activeColor = th.dashActiveColor || '#f59e0b';
+                    var borderColor = th.dashBorderColor || '#e2e8f0';
+                    var fontFamily = th.dashFontFamily || 'Cairo';
+                    var s = document.createElement('style');
+                    s.id = 'dynamic-dashboard-theme-style';
+                    s.textContent = 'body, html, input, button, select, textarea, p, h1, h2, h3, h4, h5, h6, table, th, td, label { font-family: "' + fontFamily + '", "Cairo", sans-serif !important; } i, i[class*="fa"], .fa, .fas, .far, .fab, .fa-solid, .fa-regular, .fa-brands, [class^="fa-"], [class*=" fa-"] { font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands", "FontAwesome" !important; font-style: normal !important; } body { background-color: ' + bg + ' !important; } main { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } #sidebar-drawer { background-color: ' + sidebarBg + ' !important; border-color: ' + borderColor + ' !important; } header, header.bg-slate-900 { background-color: ' + headerBg + ' !important; border-color: ' + borderColor + ' !important; } .bg-white, .bg-slate-50, .bg-slate-800\\/60, .bg-slate-900\\/80 { background-color: ' + cardBg + ' !important; border-color: ' + borderColor + ' !important; } .text-slate-900, .text-slate-800, h1, h2, h3, .font-black { color: ' + headingColor + ' !important; } .text-slate-500, .text-slate-600, .text-slate-700, .text-slate-400, p { color: ' + textColor + ' !important; } .border-slate-200, .border-slate-300, .border-slate-700, .border-slate-800 { border-color: ' + borderColor + ' !important; } .tab-btn.active { color: ' + activeColor + ' !important; border-color: ' + activeColor + ' !important; box-shadow: 0 4px 14px -2px ' + activeColor + '50 !important; } .tab-btn.active i, .tab-btn.active span { color: ' + activeColor + ' !important; } .btn-theme-primary { background-color: ' + primaryColor + ' !important; color: #ffffff !important; }';
+                    document.head.appendChild(s);
+                }
             }
         } catch(_) {}
     </script>
@@ -1207,27 +1209,31 @@
                     <p class="text-xs text-slate-400">اختر نمطاً جاهزاً لتطبيقه فوراً على لوحة التحكم بالكامل:</p>
                     
                     <div class="grid grid-cols-2 gap-2.5 pt-2">
-                        <button type="button" onclick="applyDashboardPreset('dark')" class="p-3 bg-slate-900 hover:bg-slate-950 text-white rounded-xl border border-slate-700 text-xs font-bold flex flex-col items-center gap-1.5 transition">
+                        <button type="button" onclick="applyDashboardPreset('default')" class="p-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
+                            <span class="text-base">⚡</span>
+                            <span>الافتراضي الأصلي</span>
+                        </button>
+                        <button type="button" onclick="applyDashboardPreset('dark')" class="p-3 bg-slate-900 hover:bg-slate-950 text-white rounded-xl border border-slate-700 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
                             <span class="text-base">🌙</span>
                             <span>الوضع الداكن (Dark)</span>
                         </button>
-                        <button type="button" onclick="applyDashboardPreset('light')" class="p-3 bg-slate-100 hover:bg-white text-slate-900 rounded-xl border border-slate-300 text-xs font-bold flex flex-col items-center gap-1.5 transition">
+                        <button type="button" onclick="applyDashboardPreset('light')" class="p-3 bg-slate-100 hover:bg-white text-slate-900 rounded-xl border border-slate-300 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
                             <span class="text-base">☀️</span>
                             <span>الوضع الفاتح (Light)</span>
                         </button>
-                        <button type="button" onclick="applyDashboardPreset('amber')" class="p-3 bg-zinc-900 hover:bg-black text-amber-400 rounded-xl border border-amber-500/50 text-xs font-bold flex flex-col items-center gap-1.5 transition">
+                        <button type="button" onclick="applyDashboardPreset('amber')" class="p-3 bg-zinc-900 hover:bg-black text-amber-400 rounded-xl border border-amber-500/50 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
                             <span class="text-base">🚕</span>
                             <span>توصيلة ذهبي وأسود</span>
                         </button>
-                        <button type="button" onclick="applyDashboardPreset('emerald')" class="p-3 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 rounded-xl border border-emerald-600 text-xs font-bold flex flex-col items-center gap-1.5 transition">
+                        <button type="button" onclick="applyDashboardPreset('emerald')" class="p-3 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 rounded-xl border border-emerald-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
                             <span class="text-base">💎</span>
                             <span>الزمرد الملكي</span>
                         </button>
-                        <button type="button" onclick="applyDashboardPreset('navy')" class="p-3 bg-blue-950 hover:bg-blue-900 text-blue-300 rounded-xl border border-blue-600 text-xs font-bold flex flex-col items-center gap-1.5 transition">
+                        <button type="button" onclick="applyDashboardPreset('navy')" class="p-3 bg-blue-950 hover:bg-blue-900 text-blue-300 rounded-xl border border-blue-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer">
                             <span class="text-base">🔷</span>
                             <span>الأزرق الكحلي</span>
                         </button>
-                        <button type="button" onclick="applyDashboardPreset('violet')" class="p-3 bg-purple-950 hover:bg-purple-900 text-purple-300 rounded-xl border border-purple-600 text-xs font-bold flex flex-col items-center gap-1.5 transition">
+                        <button type="button" onclick="applyDashboardPreset('violet')" class="p-3 bg-purple-950 hover:bg-purple-900 text-purple-300 rounded-xl border border-purple-600 text-xs font-bold flex flex-col items-center gap-1.5 transition cursor-pointer col-span-2">
                             <span class="text-base">🟣</span>
                             <span>البنفسجي الملكي</span>
                         </button>
