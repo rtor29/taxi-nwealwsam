@@ -65,6 +65,9 @@ function verifyTelegramOtp(chatId, code) {
 
 // --- Bot Command Handlers ---
 async function handleStart(chatId, user) {
+    if (!db.memoryState.botSubscribers) db.memoryState.botSubscribers = [];
+    if (!db.memoryState.botSubscribers.includes(String(chatId))) { db.memoryState.botSubscribers.push(String(chatId)); db.saveStateSnapshot(); }
+
     userStates.delete(chatId);
     const name = user.first_name || 'مستخدم';
     const isRegisteredCustomer = (db.memoryState.customers || []).some(c => String(c.telegramChatId) === String(chatId));
@@ -89,6 +92,9 @@ async function handleStart(chatId, user) {
 }
 
 async function handleCallback(chatId, data, user) {
+    if (!db.memoryState.botSubscribers) db.memoryState.botSubscribers = [];
+    if (!db.memoryState.botSubscribers.includes(String(chatId))) { db.memoryState.botSubscribers.push(String(chatId)); db.saveStateSnapshot(); }
+
     switch (data) {
         case 'reg_passenger':
             userStates.set(chatId, { step: 'passenger_phone', role: 'Customer' });
@@ -183,6 +189,9 @@ async function handleCallback(chatId, data, user) {
 }
 
 async function handleMessage(chatId, text, user) {
+    if (!db.memoryState.botSubscribers) db.memoryState.botSubscribers = [];
+    if (!db.memoryState.botSubscribers.includes(String(chatId))) { db.memoryState.botSubscribers.push(String(chatId)); db.saveStateSnapshot(); }
+
     const state = userStates.get(chatId);
     if (!state) { await handleStart(chatId, user); return; }
 
@@ -557,19 +566,30 @@ async function notifyUser(chatId, text) {
 async function broadcastNotification(text) {
     const recipients = new Set();
     if (ADMIN_CHAT_ID) recipients.add(String(ADMIN_CHAT_ID));
+    
+    // Add known registered users
     (db.memoryState.customers || []).forEach(c => {
         if (c.telegramChatId) recipients.add(String(c.telegramChatId));
     });
     (db.memoryState.drivers || []).forEach(d => {
         if (d.telegramChatId) recipients.add(String(d.telegramChatId));
     });
+    
+    // Add all tracked subscribers
+    (db.memoryState.botSubscribers || []).forEach(chatId => {
+        recipients.add(String(chatId));
+    });
 
     let sentCount = 0;
     let failedCount = 0;
-    const formattedMsg = `📢 <b>إشعار عام من إدارة منصة توصيله:</b>\n\n${text}`;
+    // Just plain text, no HTML tags (since user said only text)
+    // Actually, sending as plain text to avoid parse errors and just be normal text.
+    const cleanText = text.replace(/<[^>]*>?/gm, ''); // remove html if any
+    const formattedMsg = `📢 إشعار عام من إدارة المنصة:\n\n${cleanText}`;
+    
     for (const chatId of recipients) {
         try {
-            await sendMessage(chatId, formattedMsg);
+            await sendMessage(chatId, formattedMsg, { parse_mode: '' }); // send as plain text
             sentCount++;
         } catch (e) {
             failedCount++;
