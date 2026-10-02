@@ -68,3 +68,4 @@ data/uploads/
 data/backups/
 data/*.sql
 data/state_backup_*.json
+CREDENTIALS_AND_AI_REFERENCE.md

@@ -1157,6 +1157,14 @@
                             </div>
                             <span class="text-[11px] text-amber-400/80 mt-1 block">يتغير لون كافة خطوط تطبيق الويب فوراً في نفس اللحظة</span>
                         </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون الزر والتبويب النشط عند التنقل (Active Tab / Navigation Color) - مزامنة فورية ⚡</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="theme-active-tab-color" value="#f59e0b" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveActiveTabColor(this.value)">
+                                <input type="text" id="theme-active-tab-color-hex" value="#f59e0b" placeholder="#f59e0b" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveActiveTabColor(this.value)">
+                            </div>
+                            <span class="text-[11px] text-amber-400/80 mt-1 block">اللون الذي يتغير إليه الزر أو التبويب عند التنقل والضغط عليه (يمكنك إدخال كود اللون مثل #f59e0b)</span>
+                        </div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">اللون الأساسي</label><input type="color" id="theme-primary-color" value="#111111" class="w-full h-10 rounded-lg cursor-pointer" oninput="syncLivePrimaryColor(this.value)"></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">لون الأزرار (Button Color)</label><input type="color" id="theme-button-color" value="#111111" class="w-full h-10 rounded-lg cursor-pointer" oninput="syncLiveButtonColor(this.value)"></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">لون الزر عند التمرير/التركيز (Hover)</label><input type="color" id="theme-button-hover-color" value="#374151" class="w-full h-10 rounded-lg cursor-pointer" oninput="syncLiveButtonHoverColor(this.value)"></div>

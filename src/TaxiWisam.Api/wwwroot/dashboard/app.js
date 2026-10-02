@@ -46,6 +46,7 @@ function checkAdminAuth() {
         }
         try { loadDashboardStats(); } catch(e) { console.warn(e); }
         try { loadMatchingSettings(); } catch(e) { console.warn(e); }
+        try { loadCustomizationSettings(); } catch(e) { console.warn(e); }
         // Auto-refresh stats & cancellation badge every 30 seconds
         setInterval(() => { try { loadDashboardStats(); } catch(e) {} }, 30000);
     } else {
@@ -89,6 +90,7 @@ function handleAdminLogin(event) {
         showToast('مرحباً بك في لوحة تحكم منصة توصيله! 🚖');
         try { loadDashboardStats(); } catch(e) { console.warn(e); }
         try { loadMatchingSettings(); } catch(e) { console.warn(e); }
+        try { loadCustomizationSettings(); } catch(e) { console.warn(e); }
     } else {
         if (errorBox) {
             errorBox.innerText = 'بيانات الدخول غير صحيحة! يرجى إدخال اسم المستخدم admin وكلمة المرور 1122 أو ١١٢٢';
@@ -3621,6 +3623,12 @@ async function loadCustomizationSettings() {
             document.getElementById('theme-app-name').value = cfg.theme.appName || 'توصيله';
             document.getElementById('theme-logo-emoji').value = cfg.theme.logoEmoji || '🚕';
             document.getElementById('theme-footer').value = cfg.theme.footerText || '';
+            var atc = cfg.theme.activeTabColor || cfg.theme.activeColor || '#f59e0b';
+            var atcEl = document.getElementById('theme-active-tab-color');
+            var atcHexEl = document.getElementById('theme-active-tab-color-hex');
+            if (atcEl) atcEl.value = atc;
+            if (atcHexEl) atcHexEl.value = atc;
+            applyActiveTabColorStyle(atc);
         }
         if (cfg.staticTexts) {
             document.getElementById('text-welcome-title').value = cfg.staticTexts.welcomeTitle || '';
@@ -3647,6 +3655,36 @@ function broadcastLiveThemeSync(theme) {
         bc.postMessage({ type: 'config_updated', config: { theme: theme } });
         bc.close();
     } catch(_) {}
+}
+
+function syncLiveActiveTabColor(color) {
+    if (!color) return;
+    var hexEl = document.getElementById('theme-active-tab-color-hex');
+    var pickerEl = document.getElementById('theme-active-tab-color');
+    if (hexEl && hexEl !== document.activeElement) hexEl.value = color;
+    if (pickerEl && pickerEl !== document.activeElement && /^#[0-9A-Fa-f]{6}$/.test(color)) pickerEl.value = color;
+    applyActiveTabColorStyle(color);
+    broadcastLiveThemeSync({ activeTabColor: color, activeColor: color });
+}
+
+function applyActiveTabColorStyle(color) {
+    if (!color) return;
+    var styleEl = document.getElementById('dynamic-active-tab-style');
+    if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'dynamic-active-tab-style';
+        document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = `
+        .tab-btn.active {
+            color: ${color} !important;
+            border-color: ${color} !important;
+            box-shadow: 0 4px 14px -2px ${color}50 !important;
+        }
+        .tab-btn.active i, .tab-btn.active svg, .tab-btn.active span {
+            color: ${color} !important;
+        }
+    `;
 }
 
 function syncLiveFontColor(color) {
@@ -3714,15 +3752,18 @@ async function saveOnboarding() {
 
 async function saveThemeSettings() {
     var fc = document.getElementById('theme-font-color') ? document.getElementById('theme-font-color').value : '#111111';
-        var btnColor = document.getElementById('theme-button-color') ? document.getElementById('theme-button-color').value : '#111111';
-        var btnHoverColor = document.getElementById('theme-button-hover-color') ? document.getElementById('theme-button-hover-color').value : '#374151';
-        var searchInputColor = document.getElementById('theme-search-input-color') ? document.getElementById('theme-search-input-color').value : '#111111';
-        var searchInputBg = document.getElementById('theme-search-input-bg') ? document.getElementById('theme-search-input-bg').value : '#fafafa';
+    var btnColor = document.getElementById('theme-button-color') ? document.getElementById('theme-button-color').value : '#111111';
+    var btnHoverColor = document.getElementById('theme-button-hover-color') ? document.getElementById('theme-button-hover-color').value : '#374151';
+    var searchInputColor = document.getElementById('theme-search-input-color') ? document.getElementById('theme-search-input-color').value : '#111111';
+    var searchInputBg = document.getElementById('theme-search-input-bg') ? document.getElementById('theme-search-input-bg').value : '#fafafa';
+    var atc = document.getElementById('theme-active-tab-color') ? document.getElementById('theme-active-tab-color').value : (document.getElementById('theme-active-tab-color-hex') ? document.getElementById('theme-active-tab-color-hex').value : '#f59e0b');
     var prim = document.getElementById('theme-primary-color').value;
     var bg = document.getElementById('theme-bg-color').value;
     var body = {
         primaryColor: prim,
         bgColor: bg,
+        activeTabColor: atc,
+        activeColor: atc,
         fontColor: fc, buttonColor: btnColor, buttonHoverColor: btnHoverColor, searchInputColor: searchInputColor, searchInputBg: searchInputBg,
         textColor: fc,
         fontFamily: document.getElementById('theme-font').value,
@@ -3730,6 +3771,7 @@ async function saveThemeSettings() {
         logoEmoji: document.getElementById('theme-logo-emoji').value,
         footerText: document.getElementById('theme-footer').value
     };
+    applyActiveTabColorStyle(atc);
     try {
         await fetch('/api/admin/theme', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify(body) });
         broadcastLiveThemeSync(body);
