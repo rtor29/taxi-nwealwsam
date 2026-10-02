@@ -198,7 +198,7 @@ function switchTab(tabName) {
         case 'backup':
             loadDashboardStats();
             break;
-        case 'customization': loadCustomizationSettings(); break;
+        case 'customization': loadCustomizationSettings(); populateDriverPermSelect(); break;
         case 'ui-management': loadCustomButtons(); loadAdvertisements(); break;
         case 'custom-buttons': loadCustomButtons(); break;
         case 'advertisements': loadAdvertisements(); break;
@@ -3806,18 +3806,3 @@ async function saveDriverPermanentLocation() {
     } catch(e) { showToast('خطأ في الاتصال', 'error'); }
 }
 
-// Auto-populate driver select on customization tab
-(function() {
-    var origSwitch = window.switchTab;
-    if (origSwitch) {
-        var _origSwitchTab = origSwitch;
-    }
-})();
-// Populate on customization tab load
-var _origSwitchAfterDef = switchTab;
-switchTab = function(tab) {
-    _origSwitchAfterDef(tab);
-    if (tab === 'customization') {
-        populateDriverPermSelect();
-    }
-};
