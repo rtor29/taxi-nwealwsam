@@ -1165,12 +1165,48 @@
                             </div>
                             <span class="text-[11px] text-amber-400/80 mt-1 block">اللون الذي يتغير إليه الزر أو التبويب عند التنقل والضغط عليه (يمكنك إدخال كود اللون مثل #f59e0b)</span>
                         </div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">اللون الأساسي</label><input type="color" id="theme-primary-color" value="#111111" class="w-full h-10 rounded-lg cursor-pointer" oninput="syncLivePrimaryColor(this.value)"></div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">لون الأزرار (Button Color)</label><input type="color" id="theme-button-color" value="#111111" class="w-full h-10 rounded-lg cursor-pointer" oninput="syncLiveButtonColor(this.value)"></div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">لون الزر عند التمرير/التركيز (Hover)</label><input type="color" id="theme-button-hover-color" value="#374151" class="w-full h-10 rounded-lg cursor-pointer" oninput="syncLiveButtonHoverColor(this.value)"></div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">لون نص مربع البحث (Search Text Color)</label><input type="color" id="theme-search-input-color" value="#111111" class="w-full h-10 rounded-lg cursor-pointer" oninput="syncLiveSearchInputColor(this.value)"></div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">لون خلفية مربع البحث (Search Background)</label><input type="color" id="theme-search-input-bg" value="#fafafa" class="w-full h-10 rounded-lg cursor-pointer" oninput="syncLiveSearchInputBg(this.value)"></div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">لون الخلفية</label><input type="color" id="theme-bg-color" value="#ffffff" class="w-full h-10 rounded-lg cursor-pointer" oninput="syncLiveBgColor(this.value)"></div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">اللون الأساسي (Primary Color) - مزامنة فورية ⚡</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="theme-primary-color" value="#111111" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLivePrimaryColor(this.value)">
+                                <input type="text" id="theme-primary-color-hex" value="#111111" placeholder="#111111" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLivePrimaryColor(this.value)">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون الأزرار (Button Color) - مزامنة فورية ⚡</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="theme-button-color" value="#111111" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveButtonColor(this.value)">
+                                <input type="text" id="theme-button-color-hex" value="#111111" placeholder="#111111" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveButtonColor(this.value)">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون الزر عند التمرير/التركيز (Hover) - مزامنة فورية ⚡</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="theme-button-hover-color" value="#374151" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveButtonHoverColor(this.value)">
+                                <input type="text" id="theme-button-hover-color-hex" value="#374151" placeholder="#374151" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveButtonHoverColor(this.value)">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون نص مربع البحث والمدخلات (Search & Input Text Color)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="theme-search-input-color" value="#111111" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveSearchInputColor(this.value)">
+                                <input type="text" id="theme-search-input-color-hex" value="#111111" placeholder="#111111" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveSearchInputColor(this.value)">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون خلفية مربع البحث والمدخلات (Search & Input Background)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="theme-search-input-bg" value="#fafafa" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveSearchInputBg(this.value)">
+                                <input type="text" id="theme-search-input-bg-hex" value="#fafafa" placeholder="#fafafa" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveSearchInputBg(this.value)">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون خلفية التطبيق (Background Color) - مزامنة فورية ⚡</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="theme-bg-color" value="#ffffff" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveBgColor(this.value)">
+                                <input type="text" id="theme-bg-color-hex" value="#ffffff" placeholder="#ffffff" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveBgColor(this.value)">
+                            </div>
+                        </div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">الخط</label><select id="theme-font" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"><option value="Cairo">Cairo</option><option value="Tajawal">Tajawal</option><option value="Almarai">Almarai</option></select></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">اسم التطبيق</label><input type="text" id="theme-app-name" value="توصيله" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">أيقونة التطبيق (Emoji)</label><input type="text" id="theme-logo-emoji" value="🚕" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm text-center text-2xl"></div>

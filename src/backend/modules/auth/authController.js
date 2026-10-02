@@ -1714,6 +1714,98 @@ class AuthController {
         window.__telegramAdminLink = 'https://t.me/tawseela_iq_bot';
         window.__whatsappAdminLink = 'https://wa.me/9647706204066';
 
+        function applyDynamicTheme(th) {
+            if (!th) return;
+            var fontColor = th.fontColor || th.textColor;
+            var primaryColor = th.primaryColor || '#111111';
+            var buttonColor = th.buttonColor || primaryColor;
+            var buttonHoverColor = th.buttonHoverColor || '#374151';
+            var activeTabColor = th.activeTabColor || th.activeColor || '#f59e0b';
+            var bgColor = th.bgColor;
+            var searchInputColor = th.searchInputColor;
+            var searchInputBg = th.searchInputBg;
+
+            if (th.appName) {
+                var titleEl = document.getElementById('app-main-title');
+                if (titleEl) titleEl.textContent = th.appName;
+                document.title = th.appName + ' | التسجيل والدخول';
+            }
+            if (th.logoEmoji) {
+                var logoEl = document.getElementById('app-main-logo');
+                if (logoEl) logoEl.textContent = th.logoEmoji;
+            }
+            if (th.footerText) {
+                var footEl = document.getElementById('app-main-footer');
+                if (footEl) footEl.textContent = th.footerText;
+            }
+            if (th.fontFamily) {
+                document.body.style.fontFamily = '"' + th.fontFamily + '", sans-serif';
+            }
+
+            // 1. Font color
+            if (fontColor) {
+                var fStyle = document.getElementById('dynamic-theme-font-style');
+                if (!fStyle) {
+                    fStyle = document.createElement('style');
+                    fStyle.id = 'dynamic-theme-font-style';
+                    document.head.appendChild(fStyle);
+                }
+                fStyle.textContent = 'body, label, .label, input, select, textarea, p, h1, h2, h3, h4, div:not(.trip-card):not(.badge-green):not(.tab-active):not(.btn-primary) { color: ' + fontColor + ' !important; } ::placeholder { color: ' + fontColor + ' !important; opacity: 0.65; }';
+            }
+
+            // 2. Background color
+            if (bgColor) {
+                document.body.style.backgroundColor = bgColor;
+                var bStyle = document.getElementById('dynamic-theme-bg-style');
+                if (!bStyle) {
+                    bStyle = document.createElement('style');
+                    bStyle.id = 'dynamic-theme-bg-style';
+                    document.head.appendChild(bStyle);
+                }
+                bStyle.textContent = 'body { background-color: ' + bgColor + ' !important; }';
+            }
+
+            // 3. Search & Text inputs
+            if (searchInputColor || searchInputBg) {
+                var sis = document.getElementById('dynamic-theme-search-input-style');
+                if (!sis) { sis = document.createElement('style'); sis.id = 'dynamic-theme-search-input-style'; document.head.appendChild(sis); }
+                var rules = '';
+                if (searchInputColor) rules += 'color: ' + searchInputColor + ' !important; ';
+                if (searchInputBg) rules += 'background-color: ' + searchInputBg + ' !important; ';
+                sis.textContent = '.search-input, .inp, #cust-pickup-text, #cust-dropoff-text, #cust-phone-input, #driver-phone-input, #cust-fullname-input, #driver-fullname-input { ' + rules + '}';
+            }
+
+            // 4. Buttons, Tab Active/Inactive, Trip Cards, and Sub-buttons
+            var btnStyle = document.getElementById('dynamic-theme-button-style');
+            if (!btnStyle) {
+                btnStyle = document.createElement('style');
+                btnStyle.id = 'dynamic-theme-button-style';
+                document.head.appendChild(btnStyle);
+            }
+            btnStyle.textContent = 
+                '.btn-primary, button.btn-primary, [type="submit"], #cust-submit-btn, #driver-submit-btn, #btn-open-app { background-color: ' + buttonColor + ' !important; color: #ffffff !important; border: none !important; } ' +
+                '.btn-primary:hover, button.btn-primary:hover, [type="submit"]:hover, #cust-submit-btn:hover, #driver-submit-btn:hover, #btn-open-app:hover { background-color: ' + buttonHoverColor + ' !important; color: #ffffff !important; } ' +
+                '.btn-primary:active, button.btn-primary:active, [type="submit"]:active, #cust-submit-btn:active, #driver-submit-btn:active { transform: scale(0.98); } ' +
+                '.tab-active, button.tab-active, #tab-btn-customer.tab-active, #tab-btn-driver.tab-active { background-color: ' + activeTabColor + ' !important; border-color: ' + activeTabColor + ' !important; color: #ffffff !important; } ' +
+                '.tab-active *, button.tab-active *, #tab-btn-customer.tab-active *, #tab-btn-driver.tab-active * { color: #ffffff !important; } ' +
+                '.tab-inactive, button.tab-inactive, #tab-btn-customer.tab-inactive, #tab-btn-driver.tab-inactive { background-color: #f3f4f6 !important; border-color: #e5e7eb !important; color: #6b7280 !important; } ' +
+                '.tab-inactive *, button.tab-inactive *, #tab-btn-customer.tab-inactive *, #tab-btn-driver.tab-inactive * { color: #6b7280 !important; } ' +
+                '.tab-inactive:hover, #tab-btn-customer.tab-inactive:hover, #tab-btn-driver.tab-inactive:hover { background-color: #e5e7eb !important; color: #111111 !important; } ' +
+                '.tab-inactive:hover *, #tab-btn-customer.tab-inactive:hover *, #tab-btn-driver.tab-inactive:hover * { color: #111111 !important; } ' +
+                '.sub-btn.on { background-color: ' + activeTabColor + ' !important; color: #ffffff !important; } ' +
+                '.sub-btn.on * { color: #ffffff !important; } ' +
+                '.sub-btn.off { background-color: transparent !important; color: #6b7280 !important; } ' +
+                '.sub-btn.off:hover { color: #111111 !important; } ' +
+                '.trip-card.selected { background-color: ' + activeTabColor + ' !important; border-color: ' + activeTabColor + ' !important; color: #ffffff !important; } ' +
+                '.trip-card.selected * { color: #ffffff !important; } ' +
+                '.trip-card:not(.selected) { background-color: #fafafa !important; border-color: #e5e7eb !important; } ' +
+                '.trip-card:not(.selected):hover { border-color: #9ca3af !important; background-color: #f3f4f6 !important; } ' +
+                '.btn-secondary { background-color: #f3f4f6 !important; color: #111111 !important; border-color: #e5e7eb !important; } ' +
+                '.btn-secondary:hover { background-color: #e5e7eb !important; } ' +
+                '.btn-small { background-color: #f3f4f6 !important; color: #374151 !important; border-color: #d1d5db !important; } ' +
+                '.btn-small:hover { background-color: #e5e7eb !important; }';
+        }
+
         async function applyDynamicAppConfig() {
             try {
                 var res = await fetch('/api/admin/app-config?t=' + Date.now());
@@ -1724,63 +1816,7 @@ class AuthController {
                 if (cfg.whatsappAdminLink) window.__whatsappAdminLink = cfg.whatsappAdminLink;
 
                 if (cfg.theme) {
-                    if (cfg.theme.appName) {
-                        var titleEl = document.getElementById('app-main-title');
-                        if (titleEl) titleEl.textContent = cfg.theme.appName;
-                        document.title = cfg.theme.appName + ' | التسجيل والدخول';
-                    }
-                    if (cfg.theme.logoEmoji) {
-                        var logoEl = document.getElementById('app-main-logo');
-                        if (logoEl) logoEl.textContent = cfg.theme.logoEmoji;
-                    }
-                    if (cfg.theme.footerText) {
-                        var footEl = document.getElementById('app-main-footer');
-                        if (footEl) footEl.textContent = cfg.theme.footerText;
-                    }
-                    var fontColor = cfg.theme.fontColor || cfg.theme.textColor;
-                    if (fontColor) {
-                        var fStyle = document.getElementById('dynamic-theme-font-style');
-                        if (!fStyle) {
-                            fStyle = document.createElement('style');
-                            fStyle.id = 'dynamic-theme-font-style';
-                            document.head.appendChild(fStyle);
-                        }
-                        fStyle.textContent = 'body, label, .label, input, select, textarea, button, p, span, h1, h2, h3, h4, div:not(.trip-card):not(.badge-green) { color: ' + fontColor + ' !important; } ::placeholder { color: ' + fontColor + ' !important; opacity: 0.65; }';
-                    }
-                    if (cfg.theme.primaryColor) {
-                        var btns = document.querySelectorAll('.btn-primary');
-                        btns.forEach(function(b) { b.style.backgroundColor = cfg.theme.primaryColor; });
-                        var pStyle = document.getElementById('dynamic-theme-primary-style');
-                        if (!pStyle) {
-                            pStyle = document.createElement('style');
-                            pStyle.id = 'dynamic-theme-primary-style';
-                            document.head.appendChild(pStyle);
-                        }
-                        pStyle.textContent = 'button, .btn, .role-btn, [type="button"], [type="submit"], .btn-primary { background-color: ' + cfg.theme.primaryColor + ' !important; }';
-                    }
-                    if (cfg.theme.bgColor) {
-                        document.body.style.backgroundColor = cfg.theme.bgColor;
-                        var bStyle = document.getElementById('dynamic-theme-bg-style');
-                        if (!bStyle) {
-                            bStyle = document.createElement('style');
-                            bStyle.id = 'dynamic-theme-bg-style';
-                            document.head.appendChild(bStyle);
-                        }
-                        bStyle.textContent = 'body { background-color: ' + cfg.theme.bgColor + ' !important; }';
-                    }
-                    if (cfg.theme.fontFamily) {
-                        document.body.style.fontFamily = '"' + cfg.theme.fontFamily + '", sans-serif';
-                    }
-                    if (cfg.theme.searchInputColor) {
-                        var sis = document.getElementById('dynamic-theme-search-input-style');
-                        if (!sis) { sis = document.createElement('style'); sis.id = 'dynamic-theme-search-input-style'; document.head.appendChild(sis); }
-                        sis.textContent = '.search-input, #cust-pickup-text, #cust-dropoff-text { color: ' + cfg.theme.searchInputColor + ' !important; }';
-                    }
-                    if (cfg.theme.searchInputBg) {
-                        var sibs = document.getElementById('dynamic-theme-search-bg-style');
-                        if (!sibs) { sibs = document.createElement('style'); sibs.id = 'dynamic-theme-search-bg-style'; document.head.appendChild(sibs); }
-                        sibs.textContent = '.search-input, #cust-pickup-text, #cust-dropoff-text { background-color: ' + cfg.theme.searchInputBg + ' !important; }';
-                    }
+                    applyDynamicTheme(cfg.theme);
                 }
 
                 if (cfg.staticTexts) {
@@ -1802,44 +1838,7 @@ class AuthController {
             configSyncChannel.onmessage = function(evt) {
                 if (evt.data && evt.data.type === 'config_updated') {
                     if (evt.data.config && evt.data.config.theme) {
-                        var th = evt.data.config.theme;
-                        var fc = th.fontColor || th.textColor;
-                        if (fc) {
-                            var fs = document.getElementById('dynamic-theme-font-style');
-                            if (!fs) { fs = document.createElement('style'); fs.id = 'dynamic-theme-font-style'; document.head.appendChild(fs); }
-                            fs.textContent = 'body, label, .label, input, select, textarea, button, p, span, h1, h2, h3, h4, div:not(.trip-card):not(.badge-green) { color: ' + fc + ' !important; } ::placeholder { color: ' + fc + ' !important; opacity: 0.65; }';
-                        }
-                        if (th.bgColor) {
-                            document.body.style.backgroundColor = th.bgColor;
-                            var bs = document.getElementById('dynamic-theme-bg-style');
-                            if (!bs) { bs = document.createElement('style'); bs.id = 'dynamic-theme-bg-style'; document.head.appendChild(bs); }
-                            bs.textContent = 'body { background-color: ' + th.bgColor + ' !important; }';
-                        }
-                        if (th.primaryColor) {
-                            var ps = document.getElementById('dynamic-theme-primary-style');
-                            if (!ps) { ps = document.createElement('style'); ps.id = 'dynamic-theme-primary-style'; document.head.appendChild(ps); }
-                            ps.textContent = 'button, .btn, .role-btn, [type="button"], [type="submit"], .btn-primary { background-color: ' + th.primaryColor + ' !important; }';
-                        }
-                        if (th.buttonColor) {
-                            var bs = document.getElementById('dynamic-theme-button-style');
-                            if (!bs) { bs = document.createElement('style'); bs.id = 'dynamic-theme-button-style'; document.head.appendChild(bs); }
-                            bs.textContent = 'button, .btn, [type="button"], [type="submit"] { background-color: ' + th.buttonColor + ' !important; }';
-                        }
-                        if (th.buttonHoverColor) {
-                            var bhs = document.getElementById('dynamic-theme-button-hover-style');
-                            if (!bhs) { bhs = document.createElement('style'); bhs.id = 'dynamic-theme-button-hover-style'; document.head.appendChild(bhs); }
-                            bhs.textContent = 'button:hover, button:focus, .btn:hover, .btn:focus, [type="button"]:hover, [type="submit"]:hover { background-color: ' + th.buttonHoverColor + ' !important; }';
-                        }
-                        if (th.searchInputColor) {
-                            var sis = document.getElementById('dynamic-theme-search-input-style');
-                            if (!sis) { sis = document.createElement('style'); sis.id = 'dynamic-theme-search-input-style'; document.head.appendChild(sis); }
-                            sis.textContent = '.search-input, #cust-pickup-text, #cust-dropoff-text { color: ' + th.searchInputColor + ' !important; }';
-                        }
-                        if (th.searchInputBg) {
-                            var sibs = document.getElementById('dynamic-theme-search-bg-style');
-                            if (!sibs) { sibs = document.createElement('style'); sibs.id = 'dynamic-theme-search-bg-style'; document.head.appendChild(sibs); }
-                            sibs.textContent = '.search-input, #cust-pickup-text, #cust-dropoff-text { background-color: ' + th.searchInputBg + ' !important; }';
-                        }
+                        applyDynamicTheme(evt.data.config.theme);
                     }
                     applyDynamicAppConfig();
                 }

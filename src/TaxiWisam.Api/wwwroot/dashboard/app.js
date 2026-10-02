@@ -3607,27 +3607,63 @@ window.rejectCancellationRequest = rejectCancellationRequest;
 
 
 // ===== Customization Tab =====
+function syncColorInputPair(pickerId, hexId, value) {
+    if (!value) return '';
+    var picker = document.getElementById(pickerId);
+    var hex = document.getElementById(hexId);
+    var cleanVal = String(value).trim();
+    if (!cleanVal.startsWith('#') && /^[0-9a-fA-F]{3,8}$/.test(cleanVal)) {
+        cleanVal = '#' + cleanVal;
+    }
+    if (hex && hex !== document.activeElement) {
+        hex.value = cleanVal;
+    }
+    if (picker && /^#[0-9a-fA-F]{6}$/i.test(cleanVal)) {
+        picker.value = cleanVal;
+    }
+    return cleanVal;
+}
+
+function setColorPair(pickerId, hexId, value) {
+    var val = value || '#111111';
+    var p = document.getElementById(pickerId);
+    var h = document.getElementById(hexId);
+    if (p) p.value = val;
+    if (h) h.value = val;
+}
+
+function getColorPairVal(pickerId, hexId, fallback) {
+    var hexEl = document.getElementById(hexId);
+    var pickerEl = document.getElementById(pickerId);
+    if (hexEl && hexEl.value && hexEl.value.trim()) {
+        var v = hexEl.value.trim();
+        if (!v.startsWith('#') && /^[0-9a-fA-F]{3,8}$/.test(v)) v = '#' + v;
+        return v;
+    }
+    if (pickerEl && pickerEl.value) return pickerEl.value;
+    return fallback;
+}
+
 async function loadCustomizationSettings() {
     try {
         const res = await fetch('/api/admin/app-config', authHeaders());
         const cfg = await res.json();
         if (cfg.theme) {
-            document.getElementById('theme-primary-color').value = cfg.theme.primaryColor || '#111111';
-            document.getElementById('theme-bg-color').value = cfg.theme.bgColor || '#ffffff';
+            setColorPair('theme-primary-color', 'theme-primary-color-hex', cfg.theme.primaryColor || '#111111');
+            setColorPair('theme-bg-color', 'theme-bg-color-hex', cfg.theme.bgColor || '#ffffff');
             var fc = cfg.theme.fontColor || cfg.theme.textColor || '#111111';
-            var fcEl = document.getElementById('theme-font-color');
-            var fcHexEl = document.getElementById('theme-font-color-hex');
-            if (fcEl) fcEl.value = fc;
-            if (fcHexEl) fcHexEl.value = fc;
+            setColorPair('theme-font-color', 'theme-font-color-hex', fc);
+            var atc = cfg.theme.activeTabColor || cfg.theme.activeColor || '#f59e0b';
+            setColorPair('theme-active-tab-color', 'theme-active-tab-color-hex', atc);
+            setColorPair('theme-button-color', 'theme-button-color-hex', cfg.theme.buttonColor || '#111111');
+            setColorPair('theme-button-hover-color', 'theme-button-hover-color-hex', cfg.theme.buttonHoverColor || '#374151');
+            setColorPair('theme-search-input-color', 'theme-search-input-color-hex', cfg.theme.searchInputColor || '#111111');
+            setColorPair('theme-search-input-bg', 'theme-search-input-bg-hex', cfg.theme.searchInputBg || '#fafafa');
+
             document.getElementById('theme-font').value = cfg.theme.fontFamily || 'Cairo';
             document.getElementById('theme-app-name').value = cfg.theme.appName || 'توصيله';
             document.getElementById('theme-logo-emoji').value = cfg.theme.logoEmoji || '🚕';
             document.getElementById('theme-footer').value = cfg.theme.footerText || '';
-            var atc = cfg.theme.activeTabColor || cfg.theme.activeColor || '#f59e0b';
-            var atcEl = document.getElementById('theme-active-tab-color');
-            var atcHexEl = document.getElementById('theme-active-tab-color-hex');
-            if (atcEl) atcEl.value = atc;
-            if (atcHexEl) atcHexEl.value = atc;
             applyActiveTabColorStyle(atc);
         }
         if (cfg.staticTexts) {
@@ -3637,8 +3673,6 @@ async function loadCustomizationSettings() {
         }
         if (document.getElementById('theme-telegram-link')) {
             document.getElementById('theme-telegram-link').value = cfg.telegramAdminLink || 'https://t.me/tawseela_iq_bot';
-        if (cfg.theme && cfg.theme.searchInputColor && document.getElementById('theme-search-input-color')) document.getElementById('theme-search-input-color').value = cfg.theme.searchInputColor;
-        if (cfg.theme && cfg.theme.searchInputBg && document.getElementById('theme-search-input-bg')) document.getElementById('theme-search-input-bg').value = cfg.theme.searchInputBg;
         }
         if (document.getElementById('theme-whatsapp-link')) {
             document.getElementById('theme-whatsapp-link').value = cfg.whatsappAdminLink || 'https://wa.me/9647706204066';
@@ -3658,13 +3692,10 @@ function broadcastLiveThemeSync(theme) {
 }
 
 function syncLiveActiveTabColor(color) {
-    if (!color) return;
-    var hexEl = document.getElementById('theme-active-tab-color-hex');
-    var pickerEl = document.getElementById('theme-active-tab-color');
-    if (hexEl && hexEl !== document.activeElement) hexEl.value = color;
-    if (pickerEl && pickerEl !== document.activeElement && /^#[0-9A-Fa-f]{6}$/.test(color)) pickerEl.value = color;
-    applyActiveTabColorStyle(color);
-    broadcastLiveThemeSync({ activeTabColor: color, activeColor: color });
+    var c = syncColorInputPair('theme-active-tab-color', 'theme-active-tab-color-hex', color);
+    if (!c) return;
+    applyActiveTabColorStyle(c);
+    broadcastLiveThemeSync({ activeTabColor: c, activeColor: c });
 }
 
 function applyActiveTabColorStyle(color) {
@@ -3688,35 +3719,45 @@ function applyActiveTabColorStyle(color) {
 }
 
 function syncLiveFontColor(color) {
-    if (!color) return;
-    var hexEl = document.getElementById('theme-font-color-hex');
-    var pickerEl = document.getElementById('theme-font-color');
-    if (hexEl && hexEl !== document.activeElement) hexEl.value = color;
-    if (pickerEl && pickerEl !== document.activeElement) pickerEl.value = color;
-    broadcastLiveThemeSync({ fontColor: color, textColor: color });
+    var c = syncColorInputPair('theme-font-color', 'theme-font-color-hex', color);
+    if (!c) return;
+    broadcastLiveThemeSync({ fontColor: c, textColor: c });
 }
 
 function syncLivePrimaryColor(color) {
-    if (!color) return;
-    broadcastLiveThemeSync({ primaryColor: color });
+    var c = syncColorInputPair('theme-primary-color', 'theme-primary-color-hex', color);
+    if (!c) return;
+    broadcastLiveThemeSync({ primaryColor: c });
 }
 
 function syncLiveBgColor(color) {
-    if (!color) return;
-    broadcastLiveThemeSync({ bgColor: color });
+    var c = syncColorInputPair('theme-bg-color', 'theme-bg-color-hex', color);
+    if (!c) return;
+    broadcastLiveThemeSync({ bgColor: c });
 }
 
 function syncLiveButtonColor(color) {
-    broadcastLiveThemeSync({ buttonColor: color });
+    var c = syncColorInputPair('theme-button-color', 'theme-button-color-hex', color);
+    if (!c) return;
+    broadcastLiveThemeSync({ buttonColor: c });
 }
+
 function syncLiveButtonHoverColor(color) {
-    broadcastLiveThemeSync({ buttonHoverColor: color });
+    var c = syncColorInputPair('theme-button-hover-color', 'theme-button-hover-color-hex', color);
+    if (!c) return;
+    broadcastLiveThemeSync({ buttonHoverColor: c });
 }
+
 function syncLiveSearchInputColor(color) {
-    broadcastLiveThemeSync({ searchInputColor: color });
+    var c = syncColorInputPair('theme-search-input-color', 'theme-search-input-color-hex', color);
+    if (!c) return;
+    broadcastLiveThemeSync({ searchInputColor: c });
 }
+
 function syncLiveSearchInputBg(color) {
-    broadcastLiveThemeSync({ searchInputBg: color });
+    var c = syncColorInputPair('theme-search-input-bg', 'theme-search-input-bg-hex', color);
+    if (!c) return;
+    broadcastLiveThemeSync({ searchInputBg: c });
 }
 
 function renderOnboardingScreens(screens) {
@@ -3751,20 +3792,25 @@ async function saveOnboarding() {
 }
 
 async function saveThemeSettings() {
-    var fc = document.getElementById('theme-font-color') ? document.getElementById('theme-font-color').value : '#111111';
-    var btnColor = document.getElementById('theme-button-color') ? document.getElementById('theme-button-color').value : '#111111';
-    var btnHoverColor = document.getElementById('theme-button-hover-color') ? document.getElementById('theme-button-hover-color').value : '#374151';
-    var searchInputColor = document.getElementById('theme-search-input-color') ? document.getElementById('theme-search-input-color').value : '#111111';
-    var searchInputBg = document.getElementById('theme-search-input-bg') ? document.getElementById('theme-search-input-bg').value : '#fafafa';
-    var atc = document.getElementById('theme-active-tab-color') ? document.getElementById('theme-active-tab-color').value : (document.getElementById('theme-active-tab-color-hex') ? document.getElementById('theme-active-tab-color-hex').value : '#f59e0b');
-    var prim = document.getElementById('theme-primary-color').value;
-    var bg = document.getElementById('theme-bg-color').value;
+    var fc = getColorPairVal('theme-font-color', 'theme-font-color-hex', '#111111');
+    var btnColor = getColorPairVal('theme-button-color', 'theme-button-color-hex', '#111111');
+    var btnHoverColor = getColorPairVal('theme-button-hover-color', 'theme-button-hover-color-hex', '#374151');
+    var searchInputColor = getColorPairVal('theme-search-input-color', 'theme-search-input-color-hex', '#111111');
+    var searchInputBg = getColorPairVal('theme-search-input-bg', 'theme-search-input-bg-hex', '#fafafa');
+    var atc = getColorPairVal('theme-active-tab-color', 'theme-active-tab-color-hex', '#f59e0b');
+    var prim = getColorPairVal('theme-primary-color', 'theme-primary-color-hex', '#111111');
+    var bg = getColorPairVal('theme-bg-color', 'theme-bg-color-hex', '#ffffff');
+
     var body = {
         primaryColor: prim,
         bgColor: bg,
         activeTabColor: atc,
         activeColor: atc,
-        fontColor: fc, buttonColor: btnColor, buttonHoverColor: btnHoverColor, searchInputColor: searchInputColor, searchInputBg: searchInputBg,
+        fontColor: fc,
+        buttonColor: btnColor,
+        buttonHoverColor: btnHoverColor,
+        searchInputColor: searchInputColor,
+        searchInputBg: searchInputBg,
         textColor: fc,
         fontFamily: document.getElementById('theme-font').value,
         appName: document.getElementById('theme-app-name').value,

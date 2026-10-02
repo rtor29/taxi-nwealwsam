@@ -222,438 +222,498 @@ class AuthController {
             tokenReq.end();
         } catch (e) {
             console.error('[GoogleAuth] Callback error:', e);
-            res.writeHead(302, { 'Location': '/app/?error=exception' });
+            res.writeHead(302, { 'Location': '/?error=exception' });
             res.end();
         }
     }
 
     /**
-     * Renders the Unified Smart Dark Web Portal for Tawseela
-     * Passengers register/login via Web App tab
-     * Captains login via Dashboard-authorized credentials with direct WhatsApp/Call
+     * Renders the main portal - clean white/black design
      */
     renderMainPortalHtml(res, preselectedRole = 'Driver', reqHost) {
         const html = `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>توصيله | بوابة الدخول والتسجيل الذكية - النجف الأشرف</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
-    <!-- Mapbox GL JS -->
-    <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet">
-    <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
-    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js"></script>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="منصة توصيلة - خدمة حجز وتنظيم رحلات التوصيل اليومية والسائقين في النجف الأشرف.">
+    <title>توصيله | التسجيل والدخول</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet" media="print" onload="this.media='all'">
+    <script src="https://cdn.tailwindcss.com" defer></script>
+    <style>
+        *{box-sizing:border-box}
+        body{font-family:'Cairo',sans-serif;background:#ffffff;color:#111111;margin:0;padding:0;min-height:100vh;overflow-x:hidden}
+        @keyframes pulseGreen{0%,100%{box-shadow:0 6px 25px rgba(22,163,106,0.4)}50%{box-shadow:0 6px 35px rgba(22,163,106,0.7)}}
+        .card{background:#ffffff;border:1.5px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 16px rgba(0,0,0,0.07)}
+        .tab-active{background:#111111;color:#ffffff;border-color:#111111}
+        .tab-inactive{background:#f3f4f6;color:#6b7280;border-color:#e5e7eb}
+        .tab-inactive:hover{background:#e5e7eb;color:#111111}
+        .btn-primary{background:#111111;color:#ffffff;border:none;border-radius:12px;padding:14px;font-family:'Cairo',sans-serif;font-weight:900;font-size:15px;cursor:pointer;width:100%;transition:background .2s}
+        .btn-primary:hover{background:#333333}
+        .btn-primary:disabled{background:#9ca3af;cursor:not-allowed}
+        .btn-secondary{background:#f3f4f6;color:#111111;border:1.5px solid #e5e7eb;border-radius:12px;padding:12px;font-family:'Cairo',sans-serif;font-weight:700;font-size:13px;cursor:pointer;width:100%;transition:background .2s}
+        .btn-secondary:hover{background:#e5e7eb}
+        .btn-small{background:#f3f4f6;color:#374151;border:1.5px solid #d1d5db;border-radius:10px;padding:8px 14px;font-family:'Cairo',sans-serif;font-weight:700;font-size:12px;cursor:pointer;transition:background .2s;white-space:nowrap}
+        .btn-small:hover{background:#e5e7eb}
+        .inp{width:100%;border:1.5px solid #d1d5db;border-radius:12px;padding:13px 14px;font-family:'Cairo',sans-serif;font-size:14px;color:#111111;background:#fafafa;outline:none;transition:border .2s}
+        .inp:focus{border-color:#111111;background:#ffffff}
+        .inp::placeholder{color:#9ca3af}
+        .label{display:block;font-size:13px;font-weight:700;color:#374151;margin-bottom:6px}
+        .alert-error{background:#fef2f2;border:1.5px solid #fecaca;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:700;color:#b91c1c;display:none}
+        .badge-green{background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;display:none;align-items:center;gap:8px}
+        .trip-card{border:2px solid #e5e7eb;border-radius:14px;padding:18px 16px;cursor:pointer;transition:all .2s;background:#fafafa;text-align:center}
+        .trip-card:hover{border-color:#111111;background:#f9f9f9}
+        .trip-card.selected{border-color:#111111;background:#111111;color:#ffffff}
+        .trip-card.selected .trip-icon{filter:invert(1)}
+        .map-mode-btn{border:1.5px solid #d1d5db;border-radius:10px;padding:9px 12px;font-size:12px;font-weight:700;font-family:'Cairo',sans-serif;cursor:pointer;display:flex;align-items:center;gap:6px;background:#f9fafb;color:#374151;transition:all .2s;flex:1;justify-content:center}
+        .map-mode-btn.active-pickup{background:#f0fdf4;border-color:#16a34a;color:#15803d}
+        .map-mode-btn.active-dropoff{background:#fef2f2;border-color:#dc2626;color:#b91c1c}
+        .search-result-item{padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f3f4f6;color:#111111;display:flex;align-items:center;gap:8px}
+        .search-result-item:hover{background:#f3f4f6}
+        .sub-toggle{display:flex;background:#f3f4f6;border-radius:10px;padding:3px;gap:3px;margin-bottom:16px}
+        .sub-btn{flex:1;padding:9px;font-size:13px;font-weight:700;font-family:'Cairo',sans-serif;border:none;border-radius:8px;cursor:pointer;transition:all .2s}
+        .sub-btn.on{background:#111111;color:#ffffff}
+        .sub-btn.off{background:transparent;color:#6b7280}
+        .sub-btn.off:hover{color:#111111}
+        ::placeholder{color:#9ca3af;opacity:1}
+    </style>
+
     <script>
         window.forcePurgeAndReload = async function() {
-            var btn = document.getElementById('btn-purge-cache');
-            if (btn) btn.innerHTML = '<span>⏳</span><span>جاري تحديث التطبيق...</span>';
             try {
                 if ('serviceWorker' in navigator) {
-                    var registrations = await navigator.serviceWorker.getRegistrations();
-                    for (var i = 0; i < registrations.length; i++) await registrations[i].unregister();
+                    var regs = await navigator.serviceWorker.getRegistrations();
+                    for (var r of regs) await r.unregister();
                 }
-            } catch (_) {}
-            try {
                 if ('caches' in window) {
                     var keys = await caches.keys();
-                    for (var j = 0; j < keys.length; j++) await caches.delete(keys[j]);
+                    for (var k of keys) await caches.delete(k);
                 }
-            } catch (_) {}
-            try { sessionStorage.clear(); } catch (_) {}
-            window.location.replace(window.location.origin + window.location.pathname + '?purge=' + Date.now());
+            } catch(_) {}
+            try { sessionStorage.clear(); } catch(_) {}
+            window.location.replace(window.location.origin + window.location.pathname);
         };
-
-        window.currentRole = '${preselectedRole}';
-        window.switchRole = function(role) {
-            window.currentRole = role;
-            var btnDrv = document.getElementById('tab-btn-driver');
-            var btnCust = document.getElementById('tab-btn-customer');
-            var boxDrv = document.getElementById('driver-section');
-            var boxCust = document.getElementById('customer-section');
-            
-            if (!btnDrv || !btnCust || !boxDrv || !boxCust) return;
-
-            if (role === 'Driver') {
-                btnDrv.className = 'py-4 px-4 sm:px-6 rounded-2xl text-xs sm:text-base font-black flex items-center justify-center gap-2.5 transition border cursor-pointer tab-btn-active-driver glow-amber';
-                btnCust.className = 'py-4 px-4 sm:px-6 rounded-2xl text-xs sm:text-base font-black flex items-center justify-center gap-2.5 transition border cursor-pointer tab-btn-inactive';
-                boxDrv.style.display = 'block';
-                boxCust.style.display = 'none';
-            } else {
-                btnCust.className = 'py-4 px-4 sm:px-6 rounded-2xl text-xs sm:text-base font-black flex items-center justify-center gap-2.5 transition border cursor-pointer tab-btn-active-customer glow-blue';
-                btnDrv.className = 'py-4 px-4 sm:px-6 rounded-2xl text-xs sm:text-base font-black flex items-center justify-center gap-2.5 transition border cursor-pointer tab-btn-inactive';
-                boxCust.style.display = 'block';
-                boxDrv.style.display = 'none';
-                setTimeout(function() {
-                    if (typeof initPassengerMapbox === 'function') initPassengerMapbox();
-                    if (window.passengerMap) { try { window.passengerMap.resize(); } catch(e){} }
-                }, 150);
-            }
-        };
-
-        window.togglePasswordVisibility = function(inputId, eyeIconId) {
-            var input = document.getElementById(inputId);
-            var icon = document.getElementById(eyeIconId);
-            if (!input) return;
-            if (input.type === 'password') {
-                input.type = 'text';
-                if (icon) { icon.className = 'fa-solid fa-eye-slash'; }
-            } else {
-                input.type = 'password';
-                if (icon) { icon.className = 'fa-solid fa-eye'; }
-            }
-        };
-
-        window.switchPassengerMode = function(mode) {
-            var formReg = document.getElementById('cust-register-form');
-            var formLog = document.getElementById('cust-login-form');
-            var btnReg = document.getElementById('sub-btn-cust-reg');
-            var btnLog = document.getElementById('sub-btn-cust-login');
-
-            if (mode === 'register') {
-                if (formReg) formReg.style.display = 'block';
-                if (formLog) formLog.style.display = 'none';
-                if (btnReg) btnReg.className = 'px-4 py-2 rounded-xl text-xs font-black bg-blue-600 text-white transition shadow-md';
-                if (btnLog) btnLog.className = 'px-4 py-2 rounded-xl text-xs font-black text-slate-400 hover:text-white transition';
-            } else {
-                if (formReg) formReg.style.display = 'none';
-                if (formLog) formLog.style.display = 'block';
-                if (btnLog) btnLog.className = 'px-4 py-2 rounded-xl text-xs font-black bg-blue-600 text-white transition shadow-md';
-                if (btnReg) btnReg.className = 'px-4 py-2 rounded-xl text-xs font-black text-slate-400 hover:text-white transition';
-            }
+        window.normalizeArabicDigits = function(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
+                .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
         };
     </script>
-
-    <style>
-        body {
-            font-family: 'Cairo', sans-serif;
-            background-color: #0b1120;
-            color: #f8fafc;
-            overflow-x: hidden;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .glow-amber {
-            box-shadow: 0 0 35px rgba(245, 158, 11, 0.28);
-        }
-        .glow-blue {
-            box-shadow: 0 0 35px rgba(37, 99, 235, 0.28);
-        }
-        .glass-card {
-            background: rgba(15, 23, 42, 0.88);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-        }
-        .tab-btn-active-driver {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
-            color: #020617 !important;
-            border-color: #fbbf24 !important;
-            box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.5) !important;
-        }
-        .tab-btn-active-customer {
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-            color: #ffffff !important;
-            border-color: #60a5fa !important;
-            box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.5) !important;
-        }
-        .tab-btn-inactive {
-            background: rgba(30, 41, 59, 0.6) !important;
-            color: #94a3b8 !important;
-            border-color: #334155 !important;
-        }
-        .tab-btn-inactive:hover {
-            background: rgba(51, 65, 85, 0.6) !important;
-            color: #f8fafc !important;
-        }
-    </style>
 </head>
-<body class="min-h-screen relative flex flex-col justify-between py-6 px-3 sm:px-6">
+<body>
 
-    <!-- Floating Quick Update App Button -->
-    <div style="position:fixed; bottom:16px; left:16px; z-index:99999; direction:rtl;">
-        <button onclick="forcePurgeAndReload()" id="btn-purge-cache" title="تحديث التطبيق ومسح الذاكرة المؤقتة"
-                class="bg-slate-900/90 hover:bg-amber-500 hover:text-slate-950 text-amber-400 border border-amber-500/80 text-xs font-bold py-2.5 px-4 rounded-full shadow-2xl flex items-center gap-2 transition cursor-pointer backdrop-blur-md">
-            <span>🔄</span>
-            <span>تحديث التطبيق</span>
+    <!-- App view iframe (shown after login) -->
+    <div id="app-view-container" style="display:none;position:fixed;inset:0;width:100vw;height:100vh;z-index:999999;background:#1a1a2e">
+        <iframe id="app-frame" style="width:100%;height:100%;border:none" allow="geolocation *; microphone *; camera *" title="تطبيق توصيلة"></iframe>
+    </div>
+
+    <!-- Trip type selection (shown after login, before opening app) -->
+    <div id="trip-type-modal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center">
+        <div class="card" style="max-width:380px;width:92%;margin:0 auto;padding:28px 20px">
+            <div style="text-align:center;margin-bottom:20px">
+                <div style="font-size:32px;margin-bottom:8px">🚕</div>
+                <h2 style="font-size:18px;font-weight:900;margin:0 0 4px;color:#111">اختر نوع الرحلة</h2>
+                <p style="font-size:13px;color:#6b7280;margin:0">حدد ما يناسبك قبل فتح التطبيق</p>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+                <div class="trip-card" id="trip-short" onclick="selectTripType('short')">
+                    <div style="font-size:28px;margin-bottom:8px">⚡</div>
+                    <div style="font-size:14px;font-weight:900;margin-bottom:4px">مشوار قصير</div>
+                    <div style="font-size:12px;color:#6b7280">رحلة فورية من نقطة لأخرى</div>
+                </div>
+                <div class="trip-card" id="trip-daily" onclick="selectTripType('daily')">
+                    <div style="font-size:28px;margin-bottom:8px">🔄</div>
+                    <div style="font-size:14px;font-weight:900;margin-bottom:4px">خط دائمي</div>
+                    <div style="font-size:12px;color:#6b7280">اشتراك يومي على مسار ثابت</div>
+                </div>
+            </div>
+            <button class="btn-primary" id="btn-open-app" onclick="confirmTripTypeAndOpen()" disabled style="opacity:0.5">
+                متابعة وفتح التطبيق
+            </button>
+            <button type="button" onclick="closeTripTypeModal()" style="margin-top:10px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;color:#6b7280;cursor:pointer;width:100%">
+                إلغاء ✕
+            </button>
+        </div>
+    </div>
+
+    <!-- Floating refresh button -->
+    <div style="position:fixed;bottom:16px;left:16px;z-index:9999">
+        <button onclick="forcePurgeAndReload()" style="background:#fff;border:1.5px solid #d1d5db;border-radius:999px;padding:10px 16px;font-size:12px;font-weight:700;font-family:'Cairo',sans-serif;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+            <span>🔄</span><span>تحديث</span>
         </button>
     </div>
 
-    <!-- Background Ambient Glow -->
-    <div class="fixed inset-0 overflow-hidden pointer-events-none -z-10">
-        <div class="absolute -top-40 -right-40 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl"></div>
-        <div class="absolute -bottom-40 -left-40 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
+    <!-- Main Content -->
+    <!-- Onboarding Tutorial -->
+    <div id="onboarding-overlay" style="display:none;position:fixed;inset:0;z-index:99998;background:#ffffff;align-items:center;justify-content:center;flex-direction:column">
+        <button type="button" onclick="finishOnboarding()" style="position:absolute;top:16px;left:16px;background:#f3f4f6;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;color:#6b7280;cursor:pointer;font-family:'Cairo',sans-serif">تخطي ✕</button>
+        <div id="onboarding-content" style="max-width:380px;width:90%;text-align:center;padding:40px 20px">
+            <div id="onb-icon" style="font-size:64px;margin-bottom:16px"></div>
+            <h2 id="onb-title" style="font-size:20px;font-weight:900;color:#111;margin:0 0 8px"></h2>
+            <p id="onb-desc" style="font-size:14px;color:#6b7280;margin:0 0 24px"></p>
+            <div id="onb-dots" style="display:flex;justify-content:center;gap:8px;margin-bottom:24px"></div>
+            <button id="onb-next-btn" onclick="nextOnboardingScreen()" style="background:#111;color:#fff;border:none;border-radius:12px;padding:14px 40px;font-family:'Cairo',sans-serif;font-weight:900;font-size:15px;cursor:pointer">التالي</button>
+        </div>
     </div>
+    <main style="max-width:480px;width:100%;margin:0 auto;padding:24px 16px 40px">
 
-    <div class="max-w-2xl w-full mx-auto my-auto space-y-6">
+        <!-- Logo & Title -->
+        <header style="text-align:center;padding:20px 0 24px">
+            <div id="app-main-logo" style="font-size:40px;margin-bottom:10px">🚕</div>
+            <h1 id="app-main-title" style="font-size:22px;font-weight:900;margin:0 0 6px;color:#111">منصة توصيله</h1>
+            <p id="app-main-subtitle" style="font-size:13px;color:#6b7280;margin:0">النجف الأشرف - سجّل دخولك أو أنشئ حسابك</p>
+        </header>
 
-        <!-- Top Header & Branding -->
-        <div class="text-center space-y-2">
-            <div class="inline-flex items-center justify-center w-20 h-20 bg-amber-500/20 text-amber-400 rounded-3xl text-4xl shadow-xl border border-amber-500/30">
-                🚕
-            </div>
-            <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                منصة توصيله الذكية
-            </h1>
-            <p class="text-xs sm:text-sm text-slate-400 font-semibold">
-                بوابة التوثيق والاشتراك اليومي - النجف الأشرف
-            </p>
-        </div>
-
-        <!-- Role Selector Tabs -->
-        <div class="grid grid-cols-2 gap-3 p-2 bg-slate-950/90 rounded-3xl border border-slate-800 shadow-2xl backdrop-blur-md">
-            <button type="button" id="tab-btn-customer" onclick="switchRole('Customer'); return false;"
-                    class="py-4 px-4 sm:px-6 rounded-2xl text-xs sm:text-base font-black flex items-center justify-center gap-2.5 transition border cursor-pointer ${preselectedRole === 'Driver' ? 'tab-btn-inactive' : 'tab-btn-active-customer glow-blue'}">
-                <i class="fa-solid fa-user text-base sm:text-lg"></i>
-                <span>حساب راكب (مستخدم)</span>
+        <!-- Role Tabs -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px">
+            <button id="tab-btn-customer" type="button" onclick="switchRole('Customer')"
+                    style="padding:13px;border-radius:12px;font-family:'Cairo',sans-serif;font-size:14px;font-weight:900;cursor:pointer;border:2px solid;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px"
+                    class="${preselectedRole === 'Customer' ? 'tab-active' : 'tab-inactive'}" aria-selected="${preselectedRole === 'Customer'}">
+                <i class="fa-solid fa-user" aria-hidden="true"></i> راكب
             </button>
-            <button type="button" id="tab-btn-driver" onclick="switchRole('Driver'); return false;"
-                    class="py-4 px-4 sm:px-6 rounded-2xl text-xs sm:text-base font-black flex items-center justify-center gap-2.5 transition border cursor-pointer ${preselectedRole === 'Driver' ? 'tab-btn-active-driver glow-amber' : 'tab-btn-inactive'}">
-                <i class="fa-solid fa-taxi text-base sm:text-lg"></i>
-                <span>تسجيل الدخول للكباتن</span>
+            <button id="tab-btn-driver" type="button" onclick="switchRole('Driver')"
+                    style="padding:13px;border-radius:12px;font-family:'Cairo',sans-serif;font-size:14px;font-weight:900;cursor:pointer;border:2px solid;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px"
+                    class="${preselectedRole === 'Driver' ? 'tab-active' : 'tab-inactive'}" aria-selected="${preselectedRole === 'Driver'}">
+                <i class="fa-solid fa-taxi" aria-hidden="true"></i> سائق
             </button>
         </div>
 
-        <!-- ================================================================= -->
-        <!-- TAB 1: PASSENGER (CUSTOMER) - WEB APP REGISTRATION & LOGIN        -->
-        <!-- ================================================================= -->
-        <div id="customer-section" style="display: ${preselectedRole === 'Driver' ? 'none' : 'block'};" class="space-y-6">
-            
-            <div class="glass-card rounded-3xl p-5 sm:p-8 border border-blue-500/30 shadow-2xl space-y-6 glow-blue">
-                
-                <!-- Passenger Sub-mode switchers -->
-                <div class="flex items-center justify-between bg-slate-900/90 p-2 rounded-2xl border border-slate-800">
-                    <button type="button" id="sub-btn-cust-reg" onclick="switchPassengerMode('register')"
-                            class="px-4 py-2 rounded-xl text-xs font-black bg-blue-600 text-white transition shadow-md">
-                        استمارة تسجيل راكب جديد 📝
-                    </button>
-                    <button type="button" id="sub-btn-cust-login" onclick="switchPassengerMode('login')"
-                            class="px-4 py-2 rounded-xl text-xs font-black text-slate-400 hover:text-white transition">
-                        لديك حساب بالفعل؟ تسجيل الدخول 🔑
-                    </button>
+        <!-- Logged-in card -->
+        <div id="user-logged-in-box" class="card" style="display:none;padding:20px;margin-bottom:16px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                <div style="display:flex;align-items:center;gap:10px">
+                    <div id="logged-user-avatar" style="width:44px;height:44px;border-radius:12px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:22px">🚕</div>
+                    <div>
+                        <div id="logged-user-name" style="font-size:15px;font-weight:900;color:#111"></div>
+                        <div id="logged-user-role" style="font-size:12px;color:#6b7280;font-weight:700"></div>
+                    </div>
                 </div>
-
-                <!-- Registration Form for Passengers (5 Fields) -->
-                <form id="cust-register-form" onsubmit="handleCustomerRegister(event)" class="space-y-4">
-                    <div class="text-right border-b border-slate-800 pb-3">
-                        <h3 class="text-base font-black text-white flex items-center gap-2">
-                            <span>👤</span>
-                            <span>استمارة تسجيل الراكب الجديد</span>
-                        </h3>
-                        <p class="text-xs text-slate-400 mt-1">أدخل بياناتك وسيتم توجيهك فوراً لدخول التطبيق:</p>
-                    </div>
-
-                    <div id="cust-reg-alert" style="display: none;" class="p-3 bg-rose-500/20 border border-rose-500/50 rounded-xl text-xs font-bold text-rose-300 text-right"></div>
-
-                    <!-- 1. Full Name -->
-                    <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">الاسم الكامل <span class="text-rose-400">*</span></label>
-                        <div class="relative">
-                            <i class="fa-solid fa-user absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                            <input type="text" id="cust-reg-name" required placeholder="مثال: حيدر علي الحسني"
-                                   class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500 text-right">
-                        </div>
-                    </div>
-
-                    <!-- 2. Iraqi Phone -->
-                    <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">رقم الهاتف العراقي <span class="text-rose-400">*</span></label>
-                        <div class="relative">
-                            <i class="fa-solid fa-phone absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                            <input type="tel" id="cust-reg-phone" required placeholder="07701234567" dir="ltr"
-                                   class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500 font-mono text-left">
-                        </div>
-                    </div>
-
-                    <!-- 3. Route -->
-                    <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">المسار (خط السير المطلوب) <span class="text-rose-400">*</span></label>
-                        <div class="relative">
-                            <i class="fa-solid fa-route absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                            <input type="text" id="cust-reg-route" required placeholder="مثال: من حي الجامعة إلى جامعة الكوفة"
-                                   class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500 text-right">
-                        </div>
-                    </div>
-
-                    <!-- 4. Address -->
-                    <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">العنوان بالتفصيل <span class="text-rose-400">*</span></label>
-                        <div class="relative">
-                            <i class="fa-solid fa-location-dot absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                            <input type="text" id="cust-reg-address" required placeholder="مثال: النجف - حي الجامعة - قرب المسجد"
-                                   class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white placeholder-slate-500 text-right">
-                        </div>
-                    </div>
-
-                    <!-- 5. Password -->
-                    <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">كلمة المرور (الباسوورد للحساب) <span class="text-rose-400">*</span></label>
-                        <div class="relative">
-                            <i class="fa-solid fa-lock absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                            <input type="password" id="cust-reg-password" required minlength="4" placeholder="••••••••"
-                                   class="w-full pr-10 pl-11 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white font-mono">
-                            <button type="button" onclick="togglePasswordVisibility('cust-reg-password', 'eye-cust-reg-pwd')" class="absolute left-3 top-3 text-slate-400 hover:text-white p-1">
-                                <i id="eye-cust-reg-pwd" class="fa-solid fa-eye"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <button type="submit" id="btn-cust-reg-submit"
-                            class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl text-base transition flex items-center justify-center gap-2 shadow-xl shadow-blue-600/30 cursor-pointer">
-                        <i class="fa-solid fa-user-plus"></i>
-                        <span>إكمال تسجيل حساب الراكب والمتابعة 🚀</span>
-                    </button>
-                </form>
-
-                <!-- Direct Login Form for Existing Passengers -->
-                <form id="cust-login-form" onsubmit="handleCustomerLogin(event)" class="space-y-4" style="display: none;">
-                    <div class="text-right border-b border-slate-800 pb-3">
-                        <h3 class="text-base font-black text-white flex items-center gap-2">
-                            <span>🔑</span>
-                            <span>تسجيل دخول الراكب ببياناته المسجلة</span>
-                        </h3>
-                        <p class="text-xs text-slate-400 mt-1">أدخل رقم الهاتف وكلمة المرور المسجلة سابقاً للدخول:</p>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">رقم الهاتف <span class="text-rose-400">*</span></label>
-                        <div class="relative">
-                            <i class="fa-solid fa-phone absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                            <input type="text" id="cust-login-identifier" required placeholder="07701234567" dir="ltr"
-                                   class="w-full pr-10 pl-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white font-mono text-left">
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5 text-right">كلمة المرور (الباسوورد) <span class="text-rose-400">*</span></label>
-                        <div class="relative">
-                            <i class="fa-solid fa-lock absolute right-3.5 top-3.5 text-slate-400 text-sm pointer-events-none"></i>
-                            <input type="password" id="cust-login-password" required placeholder="••••••••"
-                                   class="w-full pr-10 pl-11 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-white font-mono">
-                            <button type="button" onclick="togglePasswordVisibility('cust-login-password', 'eye-cust-log-pwd')" class="absolute left-3 top-3 text-slate-400 hover:text-white p-1">
-                                <i id="eye-cust-log-pwd" class="fa-solid fa-eye"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="flex items-center justify-between text-xs">
-                        <a href="https://wa.me/9647706204066?text=%D9%86%D8%B3%D9%8A%D8%AA%20%D9%83%D9%84%D9%85%D8%A9%20%D8%A7%D9%84%D9%85%D8%B1%D9%88%D8%B1%20%D9%84%D8%AD%D8%B3%D8%A7%D8%A8%20%D8%A7%D9%84%D8%B1%D8%A7%D9%83%D8%A8" target="_blank" class="text-blue-400 hover:text-blue-300 font-bold">
-                            نسيت كلمة المرور؟ (تواصل واتساب)
-                        </a>
-                    </div>
-
-                    <button type="submit" id="btn-cust-login-submit"
-                            class="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl text-base transition flex items-center justify-center gap-2 shadow-xl shadow-blue-600/30 cursor-pointer">
-                        <i class="fa-solid fa-right-to-bracket"></i>
-                        <span>تسجيل الدخول للراكب 🚀</span>
-                    </button>
-                </form>
-
-                <!-- Interactive Najaf Map Explorer -->
-                <div class="space-y-2 pt-2 border-t border-slate-800/80">
-                    <label class="block text-xs text-slate-300 font-bold text-right">خريطة خطوط النجف والبحث السريع (اختياري)</label>
-                    <div class="relative">
-                        <input type="text" id="cust-map-search" placeholder="ابحث عن شارع، حي، مجمع، أو جامعة..."
-                               class="w-full px-4 py-2.5 bg-slate-800/90 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 text-right">
-                        <div id="cust-search-results" class="hidden absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl z-50 max-h-48 overflow-y-auto"></div>
-                    </div>
-                    <div id="passenger-map" style="height: 200px; width: 100%; border-radius: 1rem;" class="border border-slate-700 shadow-inner"></div>
-                </div>
-
+                <button type="button" onclick="handleLogout()" style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;font-family:'Cairo',sans-serif;cursor:pointer" aria-label="تسجيل الخروج">
+                    خروج <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+                <span style="font-size:12px;font-weight:700;color:#6b7280">الحالة:</span>
+                <span style="font-size:12px;font-weight:900;color:#15803d">✅ نشط ومعتمد</span>
+            </div>
+            <button type="button" onclick="openUserAppNow()" class="btn-primary" style="margin-top:12px;padding:11px 14px;font-size:13px">
+                <i class="fa-solid fa-play" aria-hidden="true"></i> متابعة وفتح تطبيق الرحلات
+            </button>
+            <div id="driver-route-btn-wrap" style="display:none;margin-top:8px">
+                <button type="button" onclick="showDriverSetRouteFromBox()" class="btn-primary" style="padding:10px 14px;font-size:12px;background:#3b82f6">
+                    🛣️ تثبيت مسارك وإدارة طلبات الانضمام
+                </button>
             </div>
         </div>
 
-        <!-- ================================================================= -->
-        <!-- TAB 2: CAPTAIN (DRIVER) - DIRECT LOGIN & DASHBOARD VERIFICATION   -->
-        <!-- (EXACT CARD IN SCREENSHOT media_1790236839641.png)                -->
-        <!-- ================================================================= -->
-        <div id="driver-section" style="display: ${preselectedRole === 'Driver' ? 'block' : 'none'};">
-            
-            <div class="glass-card rounded-3xl p-6 sm:p-8 border border-amber-500/30 shadow-2xl space-y-5 glow-amber text-center">
-                
-                <!-- Circular Icon Badge -->
-                <div class="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-3xl flex items-center justify-center text-3xl mx-auto shadow-inner border border-amber-500/30">
-                    🚕
+        <!-- ===== PASSENGER SECTION ===== -->
+        <section id="customer-section" style="display:${preselectedRole === 'Driver' ? 'none' : 'block'}">
+            <div class="card" style="padding:20px">
+
+                <!-- Sub-mode toggle -->
+                <div class="sub-toggle">
+                    <button id="sub-btn-cust-reg" type="button" class="sub-btn on" onclick="switchPassengerMode('register')">تسجيل جديد</button>
+                    <button id="sub-btn-cust-login" type="button" class="sub-btn off" onclick="switchPassengerMode('login')">لديك حساب؟ دخول</button>
                 </div>
 
-                <div>
-                    <h3 class="text-xl sm:text-2xl font-black text-white">تسجيل الدخول للكباتن</h3>
-                    <p class="text-xs sm:text-sm text-slate-400 mt-1">أدخل رقم الهاتف وكلمة المرور المعتمدة من لوحة التحكم (الداشبورد):</p>
-                </div>
+                <!-- Alert -->
+                <div id="cust-reg-alert" class="alert-error" role="alert"></div>
 
-                <form onsubmit="handleCaptainLogin(event)" class="space-y-4 text-right">
-                    <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5">
-                            رقم الهاتف (اسم المستخدم) <span class="text-rose-400">*</span>
-                        </label>
-                        <div class="relative">
-                            <input type="text" id="login-driver-identifier" required placeholder="07801234567 أو 07706204066" dir="rtl"
-                                   class="w-full px-4 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white placeholder-slate-400 font-mono text-right">
+                <!-- REGISTER FORM -->
+                <form id="cust-register-form" onsubmit="handleCustomerRegister(event)">
+
+                    <!-- Step 1: Phone + OTP -->
+                    <div style="border:1.5px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
+                        <div style="font-size:12px;font-weight:700;color:#111;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+                            <span style="background:#111;color:#fff;border-radius:999px;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">1</span>
+                            تأكيد رقم الهاتف عبر واتساب
+                        </div>
+                        <div style="display:flex;gap:8px;margin-bottom:10px">
+                            <div style="background:#f3f4f6;border:1.5px solid #e5e7eb;border-radius:10px;padding:13px 12px;font-size:13px;font-weight:900;color:#374151;white-space:nowrap">🇮🇶 +964</div>
+                            <div style="position:relative;flex:1">
+                                <i class="fa-brands fa-whatsapp" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#16a34a;font-size:16px" aria-hidden="true"></i>
+                                <input type="tel" id="cust-reg-phone" class="inp" style="padding-right:38px" placeholder="07706204066" dir="ltr" aria-label="رقم الهاتف" oninput="this.value=normalizeArabicDigits(this.value)">
+                            </div>
+                        </div>
+                        <div id="cust-send-otp-wrap">
+                            <button type="button" id="btn-send-whatsapp-otp" onclick="handleSendWhatsappOtp(false)" class="btn-primary" aria-label="إرسال رمز واتساب">
+                                <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> إرسال رمز التحقق عبر واتساب
+                            </button>
+                        </div>
+                        <div id="cust-otp-box" style="display:none;margin-top:12px;border-top:1px solid #e5e7eb;padding-top:12px">
+                            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700;color:#15803d;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+                                <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> تحقق من واتساب للرمز
+                            </div>
+                            <input type="text" id="cust-reg-otp" class="inp" maxlength="6" placeholder="- - - - - -" dir="ltr" style="text-align:center;letter-spacing:8px;font-size:20px;font-weight:900" oninput="this.value=normalizeArabicDigits(this.value)" aria-label="رمز التحقق">
+                            <div style="display:flex;gap:8px;margin-top:10px">
+                                <button type="button" id="btn-verify-whatsapp-otp" onclick="handleVerifyWhatsappOtp()" class="btn-primary" style="flex:1" aria-label="تأكيد الرمز">تأكيد الرمز ✅</button>
+                                <button type="button" id="btn-resend-whatsapp-otp" onclick="handleSendWhatsappOtp(true)" class="btn-small" aria-label="إعادة إرسال">إعادة إرسال</button>
+                            </div>
+                        </div>
+                        <div id="cust-verified-badge" class="badge-green" style="margin-top:10px;justify-content:space-between">
+                            <span><i class="fa-solid fa-circle-check" aria-hidden="true"></i> تم تأكيد رقم الهاتف ✅</span>
+                            <button type="button" onclick="resetPhoneVerification()" style="background:none;border:none;font-size:12px;color:#6b7280;cursor:pointer;font-family:'Cairo',sans-serif" aria-label="تغيير الرقم">تغيير</button>
                         </div>
                     </div>
 
-                    <div>
-                        <label class="block text-xs text-slate-300 font-bold mb-1.5">
-                            كلمة المرور (الباسوورد) <span class="text-rose-400">*</span>
-                        </label>
-                        <div class="relative">
-                            <input type="password" id="login-driver-password" required placeholder="••••••••"
-                                   class="w-full pr-4 pl-11 py-3 bg-slate-800/90 border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white font-mono text-right">
-                            <button type="button" onclick="togglePasswordVisibility('login-driver-password', 'eye-login-drv-pwd')" class="absolute left-3 top-3 text-slate-400 hover:text-white p-1">
-                                <i id="eye-login-drv-pwd" class="fa-solid fa-eye"></i>
+                    <!-- Step 2: Personal Info (unlocked after OTP) -->
+                    <div id="cust-details-section" style="display:none">
+                        <div style="font-size:12px;font-weight:700;color:#111;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+                            <span style="background:#111;color:#fff;border-radius:999px;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">2</span>
+                            بيانات الحساب
+                        </div>
+
+                        <!-- First & Last Name -->
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+                            <div>
+                                <label for="cust-reg-firstname" class="label">الاسم <span style="color:#dc2626">*</span></label>
+                                <input type="text" id="cust-reg-firstname" class="inp" placeholder="مثال: حيدر" aria-label="الاسم الأول">
+                            </div>
+                            <div>
+                                <label for="cust-reg-lastname" class="label">اللقب <span style="color:#dc2626">*</span></label>
+                                <input type="text" id="cust-reg-lastname" class="inp" placeholder="مثال: العلي" aria-label="اللقب">
+                            </div>
+                        </div>
+
+                        <!-- Route selection (short trip vs daily) -->
+                        <div style="margin-bottom:12px">
+                            <label class="label" style="margin-bottom:10px">نوع الخدمة المطلوبة <span style="color:#dc2626">*</span></label>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                                <div class="trip-card" id="reg-trip-short" onclick="selectRegTripType('short')">
+                                    <div style="font-size:22px;margin-bottom:6px">⚡</div>
+                                    <div style="font-size:13px;font-weight:900">مشوار قصير</div>
+                                    <div style="font-size:11px;color:#6b7280;margin-top:2px">رحلة فورية</div>
+                                </div>
+                                <div class="trip-card" id="reg-trip-daily" onclick="selectRegTripType('daily')">
+                                    <div style="font-size:22px;margin-bottom:6px">🔄</div>
+                                    <div style="font-size:13px;font-weight:900">خط دائمي</div>
+                                    <div style="font-size:11px;color:#6b7280;margin-top:2px">اشتراك يومي</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Hidden coords (empty until selected by user on map) -->
+                        <input type="hidden" id="cust-pickup-lat" value="">
+                        <input type="hidden" id="cust-pickup-lon" value="">
+                        <input type="hidden" id="cust-dropoff-lat" value="">
+                        <input type="hidden" id="cust-dropoff-lon" value="">
+
+                        <!-- Route / Address (auto-filled from map or typed by user) -->
+                        <div style="margin-bottom:12px">
+                            <label for="cust-reg-address" class="label">عنوان الانطلاق بالتفصيل <span style="color:#dc2626">*</span></label>
+                            <input type="text" id="cust-reg-address" class="inp" placeholder="حدد الانطلاق من الخريطة أو اكتبه هنا" aria-label="عنوان الانطلاق">
+                        </div>
+                        <div style="margin-bottom:12px">
+                            <label for="cust-reg-route" class="label">عنوان الوصول بالتفصيل <span style="color:#dc2626">*</span></label>
+                            <input type="text" id="cust-reg-route" class="inp" placeholder="حدد الوصول من الخريطة أو اكتبه هنا" aria-label="عنوان الوصول">
+                        </div>
+
+                        <!-- Password -->
+                        <div style="margin-bottom:16px">
+                            <label for="cust-reg-password" class="label">كلمة المرور <span style="color:#dc2626">*</span></label>
+                            <div style="position:relative">
+                                <input type="password" id="cust-reg-password" class="inp" style="padding-left:44px" minlength="4" placeholder="••••••••" aria-label="كلمة المرور">
+                                <button type="button" onclick="togglePasswordVisibility('cust-reg-password','eye-cust-reg-pwd')" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af" aria-label="إظهار/إخفاء">
+                                    <i id="eye-cust-reg-pwd" class="fa-solid fa-eye" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button type="submit" id="btn-cust-reg-submit" class="btn-primary" aria-label="إكمال التسجيل">
+                            <i class="fa-solid fa-user-plus" aria-hidden="true"></i> إكمال تسجيل الحساب
+                        </button>
+                    </div>
+                </form>
+
+                <!-- LOGIN FORM -->
+                <form id="cust-login-form" onsubmit="handleCustomerLogin(event)" style="display:none">
+                    <div style="margin-bottom:14px">
+                        <label for="cust-login-identifier" class="label">رقم الهاتف <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="cust-login-identifier" class="inp" placeholder="07701234567" dir="ltr" aria-label="رقم الهاتف" oninput="this.value=normalizeArabicDigits(this.value)">
+                    </div>
+                    <div style="margin-bottom:16px">
+                        <label for="cust-login-password" class="label">كلمة المرور <span style="color:#dc2626">*</span></label>
+                        <div style="position:relative">
+                            <input type="password" id="cust-login-password" class="inp" style="padding-left:44px" placeholder="••••••••" aria-label="كلمة المرور">
+                            <button type="button" onclick="togglePasswordVisibility('cust-login-password','eye-cust-log-pwd')" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af" aria-label="إظهار/إخفاء">
+                                <i id="eye-cust-log-pwd" class="fa-solid fa-eye" aria-hidden="true"></i>
                             </button>
                         </div>
                     </div>
-
-                    <button type="submit" id="btn-login-driver-submit" 
-                            class="w-full py-4 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-2xl text-base transition flex items-center justify-center gap-2 shadow-xl shadow-amber-500/25 cursor-pointer">
-                        <i class="fa-solid fa-right-to-bracket text-lg"></i>
-                        <span>تسجيل الدخول للكابتن 🚀</span>
+                    <button type="submit" id="btn-cust-login-submit" class="btn-primary" aria-label="تسجيل الدخول">
+                        <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> دخول
                     </button>
+                    <div style="text-align:center;margin-top:12px">
+                        <a href="https://wa.me/9647706204066" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#6b7280;font-weight:700">نسيت كلمة المرور؟ (واتساب)</a>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- ===== DRIVER SECTION ===== -->
+        <section id="driver-section" style="display:${preselectedRole === 'Driver' ? 'block' : 'none'}">
+            <div class="card" style="padding:20px">
+
+                <!-- Sub-mode toggle -->
+                <div class="sub-toggle">
+                    <button id="sub-btn-driver-reg" type="button" class="sub-btn on" onclick="switchDriverMode('register')">تسجيل سائق جديد</button>
+                    <button id="sub-btn-driver-login" type="button" class="sub-btn off" onclick="switchDriverMode('login')">لديك حساب؟ دخول</button>
+                </div>
+
+                <div id="driver-reg-alert" class="alert-error" role="alert"></div>
+
+                <!-- DRIVER REGISTER FORM -->
+                <form id="driver-register-form" onsubmit="handleDriverRegister(event)">
+                    <!-- Step 1: OTP -->
+                    <div style="border:1.5px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
+                        <div style="font-size:12px;font-weight:700;color:#111;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+                            <span style="background:#111;color:#fff;border-radius:999px;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">1</span>
+                            تأكيد رقم الهاتف عبر واتساب
+                        </div>
+                        <div style="display:flex;gap:8px;margin-bottom:10px">
+                            <div style="background:#f3f4f6;border:1.5px solid #e5e7eb;border-radius:10px;padding:13px 12px;font-size:13px;font-weight:900;color:#374151;white-space:nowrap">🇮🇶 +964</div>
+                            <div style="position:relative;flex:1">
+                                <i class="fa-brands fa-whatsapp" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#16a34a;font-size:16px" aria-hidden="true"></i>
+                                <input type="tel" id="driver-reg-phone" class="inp" style="padding-right:38px" placeholder="07706204066" dir="ltr" aria-label="رقم الهاتف" oninput="this.value=normalizeArabicDigits(this.value)">
+                            </div>
+                        </div>
+                        <div id="driver-send-otp-wrap">
+                            <button type="button" id="btn-send-driver-otp" onclick="handleSendDriverWhatsappOtp(false)" class="btn-primary" aria-label="إرسال رمز واتساب">
+                                <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> إرسال رمز التحقق
+                            </button>
+                        </div>
+                        <div id="driver-otp-box" style="display:none;margin-top:12px;border-top:1px solid #e5e7eb;padding-top:12px">
+                            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700;color:#15803d;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+                                <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> تحقق من واتساب للرمز
+                            </div>
+                            <input type="text" id="driver-reg-otp" class="inp" maxlength="6" placeholder="- - - - - -" dir="ltr" style="text-align:center;letter-spacing:8px;font-size:20px;font-weight:900" oninput="this.value=normalizeArabicDigits(this.value)" aria-label="رمز التحقق">
+                            <div style="display:flex;gap:8px;margin-top:10px">
+                                <button type="button" id="btn-verify-driver-otp" onclick="handleVerifyDriverWhatsappOtp()" class="btn-primary" style="flex:1" aria-label="تأكيد الرمز">تأكيد الرمز ✅</button>
+                                <button type="button" id="btn-resend-driver-otp" onclick="handleSendDriverWhatsappOtp(true)" class="btn-small" aria-label="إعادة إرسال">إعادة إرسال</button>
+                            </div>
+                        </div>
+                        <div id="driver-verified-badge" class="badge-green" style="margin-top:10px;justify-content:space-between">
+                            <span><i class="fa-solid fa-circle-check" aria-hidden="true"></i> تم تأكيد رقم الهاتف ✅</span>
+                            <button type="button" onclick="resetDriverPhoneVerification()" style="background:none;border:none;font-size:12px;color:#6b7280;cursor:pointer;font-family:'Cairo',sans-serif" aria-label="تغيير الرقم">تغيير</button>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Driver details (unlocked after OTP) -->
+                    <div id="driver-details-section" style="display:none">
+                        <div style="font-size:12px;font-weight:700;color:#111;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+                            <span style="background:#111;color:#fff;border-radius:999px;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">2</span>
+                            بيانات الكابتن
+                        </div>
+                        <div style="margin-bottom:12px">
+                            <label for="driver-reg-name" class="label">الاسم الكامل <span style="color:#dc2626">*</span></label>
+                            <input type="text" id="driver-reg-name" required class="inp" placeholder="مثال: علي محمد حسن" aria-label="الاسم الكامل للسائق">
+                        </div>
+                        <div style="margin-bottom:12px">
+                            <label for="driver-reg-license" class="label">رقم إجازة السوق <span style="color:#dc2626">*</span></label>
+                            <input type="text" id="driver-reg-license" required class="inp" placeholder="مثال: IQ-NJF-4819" aria-label="رقم إجازة السوق">
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+                            <div>
+                                <label for="driver-reg-vehicle" class="label">نوع المركبة</label>
+                                <input type="text" id="driver-reg-vehicle" class="inp" placeholder="تويوتا كورولا" aria-label="نوع المركبة">
+                            </div>
+                            <div>
+                                <label for="driver-reg-plate" class="label">رقم اللوحة</label>
+                                <input type="text" id="driver-reg-plate" class="inp" placeholder="النجف 12345 أ" aria-label="رقم اللوحة">
+                            </div>
+                        </div>
+                        <div style="margin-bottom:16px">
+                            <label for="driver-reg-password" class="label">كلمة المرور <span style="color:#dc2626">*</span></label>
+                            <div style="position:relative">
+                                <input type="password" id="driver-reg-password" required class="inp" style="padding-left:44px" minlength="4" placeholder="••••••••" aria-label="كلمة المرور">
+                                <button type="button" onclick="togglePasswordVisibility('driver-reg-password','eye-drv-reg-pwd')" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af" aria-label="إظهار/إخفاء">
+                                    <i id="eye-drv-reg-pwd" class="fa-solid fa-eye" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <!-- Driver Route (من/إلى) -->
+                        <div style="border:1.5px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:16px">
+                            <div style="font-size:12px;font-weight:700;color:#111;margin-bottom:8px">🛣️ مسارك الفعلي (إلزامي) <span style="color:#dc2626">*</span></div>
+                            <div style="position:relative;margin-bottom:8px">
+                                <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block"></span>
+                                <input type="text" id="driver-reg-from" required class="inp" style="padding-right:26px;font-size:12px" placeholder="نقطة انطلاقك الفعلية (حي/شارع)" aria-label="نقطة انطلاق السائق">
+                            </div>
+                            <div style="position:relative">
+                                <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block"></span>
+                                <input type="text" id="driver-reg-to" required class="inp" style="padding-right:26px;font-size:12px" placeholder="نقطة وصولك الفعلية (حي/شارع)" aria-label="نقطة وصول السائق">
+                            </div>
+                        </div>
+                        <button type="submit" id="btn-driver-reg-submit" class="btn-primary" aria-label="إكمال تسجيل السائق">
+                            <i class="fa-solid fa-taxi" aria-hidden="true"></i> إكمال تسجيل حساب السائق
+                        </button>
+                    </div>
                 </form>
 
-                <!-- Official Notice Box -->
-                <div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-200/90 leading-relaxed text-right flex items-start gap-2">
-                    <span class="text-amber-400 text-sm">⚠️</span>
-                    <div>
-                        <strong>تنويه للكباتن:</strong> يتم تسجيل واعتماد حسابات الكباتن والسائقين الجدد حصراً من خلال إدارة المنصة ومكتب التوثيق. إذا كنت ترغب بالانضمام ككابتن جديد، يرجى التواصل المباشر مع إدارة المنصة للاعتماد وتفعيل الحساب.
+                <!-- DRIVER LOGIN FORM -->
+                <form id="driver-login-form" onsubmit="handleCaptainLogin(event)" style="display:none">
+                    <div style="margin-bottom:14px">
+                        <label for="login-driver-identifier" class="label">رقم الهاتف <span style="color:#dc2626">*</span></label>
+                        <input type="text" id="login-driver-identifier" required class="inp" placeholder="07706204066" dir="ltr" aria-label="رقم الهاتف" oninput="this.value=normalizeArabicDigits(this.value)">
                     </div>
-                </div>
-
-                <!-- Two Contact Buttons -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <a href="https://wa.me/9647706204066?text=%D8%A7%D9%84%D8%B3%D9%84%D8%A7%D9%85%20%D8%B9%D9%84%D9%8A%D9%83%D9%85%D8%8C%20%D8%A3%D8%B1%D8%BA%D8%A8%20%D8%A8%D8%A7%D9%84%D8%AA%D8%B3%D8%AC%D9%8A%D9%84%20%D9%83%D9%83%D8%A7%D8%A8%D8%AA%D9%86%20%D8%AC%D8%AF%D9%8A%D8%AF%20%D9%81%D9%8A%20%D9%85%D9%86%D8%B5%D8%A9%20%D8%AA%D9%88%D8%B5%D9%8A%D9%84%D8%A9" target="_blank" rel="noopener noreferrer"
-                       class="py-3 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 cursor-pointer text-center">
-                        <i class="fa-brands fa-whatsapp text-lg"></i>
-                        <span>تواصل عبر واتساب (07706204066)</span>
-                    </a>
-                    <a href="tel:07706204066"
-                       class="py-3 px-3 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/40 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-md cursor-pointer text-center">
-                        <i class="fa-solid fa-phone text-sm"></i>
-                        <span>اتصال هاتفي مباشر (07706204066)</span>
-                    </a>
-                </div>
-
+                    <div style="margin-bottom:16px">
+                        <label for="login-driver-password" class="label">كلمة المرور <span style="color:#dc2626">*</span></label>
+                        <div style="position:relative">
+                            <input type="password" id="login-driver-password" required class="inp" style="padding-left:44px" placeholder="••••••••" aria-label="كلمة المرور">
+                            <button type="button" onclick="togglePasswordVisibility('login-driver-password','eye-login-drv-pwd')" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af" aria-label="إظهار/إخفاء">
+                                <i id="eye-login-drv-pwd" class="fa-solid fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit" id="btn-login-driver-submit" class="btn-primary" aria-label="دخول السائق">
+                        <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> دخول
+                    </button>
+                </form>
             </div>
+        </section>
 
+        <!-- Loading -->
+        <div id="loading" style="display:none;text-align:center;padding:20px" role="status" aria-live="polite">
+            <div style="width:32px;height:32px;border:3px solid #e5e7eb;border-top-color:#111;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 8px"></div>
+            <p id="loading-text" style="font-size:13px;color:#6b7280;font-weight:700">جاري المعالجة...</p>
         </div>
 
-        <!-- Loading Overlay -->
-        <div id="loading" style="display: none;" class="text-center py-4 bg-slate-900/90 rounded-2xl border border-slate-800">
-            <div class="inline-block w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
-            <p class="text-xs text-slate-300 mt-2 font-bold" id="loading-text">جاري معالجة طلبك والاتصال بالخادم...</p>
-        </div>
-
-        <!-- Footer -->
-        <footer class="text-center text-xs text-slate-500 py-2">
-            <p>© 2026 توصيله (Tawseela IQ) - جميع الحقوق محفوظة لخدمات النقل الذكي بالنجف الأشرف</p>
+        <footer id="app-main-footer" style="text-align:center;margin-top:28px;font-size:12px;color:#9ca3af">
+            © 2026 توصيله (Tawseela IQ) · النجف الأشرف
         </footer>
+        <div id="custom-buttons-container" style="margin-top:16px"></div>
+        <div id="ads-container" style="margin-top:12px"></div>
+    </main>
 
-    </div>
+    <style>
+        @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+    </style>
 
-    <!-- Client-side Logic -->
     <script>
+        // ===== Mapbox Lazy Loader =====
+        window.loadMapboxDynamically = function() {
+            return new Promise(function(resolve) {
+                if (window.mapboxgl) return resolve();
+                var css = document.createElement('link');
+                css.rel = 'stylesheet';
+                css.href = 'https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css';
+                document.head.appendChild(css);
+                var s = document.createElement('script');
+                s.src = 'https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js';
+                s.onload = function() {
+                    var r = document.createElement('script');
+                    r.src = 'https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js';
+                    r.onload = r.onerror = function(){ resolve(); };
+                    document.head.appendChild(r);
+                };
+                s.onerror = function(){ resolve(); };
+                document.head.appendChild(s);
+            });
+        };
+
         function persistSession(data) {
             try {
                 localStorage.setItem('auth_token', data.token);
@@ -661,7 +721,6 @@ class AuthController {
                 localStorage.setItem('user_role', data.role);
                 localStorage.setItem('user_fullname', data.fullName || 'مستخدم توصيله');
                 localStorage.setItem('driver_status', (data.user && data.user.status) || data.status || 'Active');
-
                 localStorage.setItem('flutter.auth_token', JSON.stringify(data.token));
                 localStorage.setItem('flutter.user_id', JSON.stringify(data.userId));
                 localStorage.setItem('flutter.user_role', JSON.stringify(data.role));
@@ -670,210 +729,1326 @@ class AuthController {
             } catch (_) {}
         }
 
-        // 1. CAPTAIN LOGIN
+        // ===== Role tabs =====
+        window.currentRole = '${preselectedRole}';
+        window.switchRole = function(role) {
+            window.currentRole = role;
+            var btnDrv = document.getElementById('tab-btn-driver');
+            var btnCust = document.getElementById('tab-btn-customer');
+            var boxDrv = document.getElementById('driver-section');
+            var boxCust = document.getElementById('customer-section');
+            if (!btnDrv || !btnCust) return;
+            if (role === 'Driver') {
+                btnDrv.className = 'tab-active';
+                btnCust.className = 'tab-inactive';
+                btnDrv.setAttribute('aria-selected','true');
+                btnCust.setAttribute('aria-selected','false');
+                if(boxDrv) boxDrv.style.display='block';
+                if(boxCust) boxCust.style.display='none';
+            } else {
+                btnCust.className = 'tab-active';
+                btnDrv.className = 'tab-inactive';
+                btnCust.setAttribute('aria-selected','true');
+                btnDrv.setAttribute('aria-selected','false');
+                if(boxCust) boxCust.style.display='block';
+                if(boxDrv) boxDrv.style.display='none';
+                initPassengerMapbox();
+            }
+        };
+
+        // ===== Passenger sub-mode =====
+        function switchPassengerMode(mode) {
+            var regForm = document.getElementById('cust-register-form');
+            var loginForm = document.getElementById('cust-login-form');
+            var btnReg = document.getElementById('sub-btn-cust-reg');
+            var btnLogin = document.getElementById('sub-btn-cust-login');
+            if (mode === 'register') {
+                if(regForm) regForm.style.display = '';
+                if(loginForm) loginForm.style.display = 'none';
+                if(btnReg) {btnReg.className='sub-btn on';}
+                if(btnLogin) {btnLogin.className='sub-btn off';}
+            } else {
+                if(regForm) regForm.style.display = 'none';
+                if(loginForm) loginForm.style.display = '';
+                if(btnReg) {btnReg.className='sub-btn off';}
+                if(btnLogin) {btnLogin.className='sub-btn on';}
+            }
+        }
+
+        // ===== Driver sub-mode =====
+        function switchDriverMode(mode) {
+            var regForm = document.getElementById('driver-register-form');
+            var loginForm = document.getElementById('driver-login-form');
+            var btnReg = document.getElementById('sub-btn-driver-reg');
+            var btnLogin = document.getElementById('sub-btn-driver-login');
+            if (mode === 'register') {
+                if(regForm) regForm.style.display = '';
+                if(loginForm) loginForm.style.display = 'none';
+                if(btnReg) {btnReg.className='sub-btn on';}
+                if(btnLogin) {btnLogin.className='sub-btn off';}
+            } else {
+                if(regForm) regForm.style.display = 'none';
+                if(loginForm) loginForm.style.display = '';
+                if(btnReg) {btnReg.className='sub-btn off';}
+                if(btnLogin) {btnLogin.className='sub-btn on';}
+            }
+        }
+
+        // ===== Trip type selection (registration form) =====
+        var selectedRegTripType = null;
+        function selectRegTripType(type) {
+            selectedRegTripType = type;
+            var cardShort = document.getElementById('reg-trip-short');
+            var cardDaily = document.getElementById('reg-trip-daily');
+            if (!cardShort || !cardDaily) return;
+            if (type === 'short') {
+                cardShort.className = 'trip-card selected';
+                cardDaily.className = 'trip-card';
+            } else {
+                cardDaily.className = 'trip-card selected';
+                cardShort.className = 'trip-card';
+            }
+        }
+
+        // ===== Trip type modal (after login) =====
+        var _pendingAppParams = null;
+        var selectedTripType = null;
+        function selectTripType(type) {
+            selectedTripType = type;
+            document.getElementById('trip-short').className = type === 'short' ? 'trip-card selected' : 'trip-card';
+            document.getElementById('trip-daily').className = type === 'daily' ? 'trip-card selected' : 'trip-card';
+            var btn = document.getElementById('btn-open-app');
+            if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+        }
+        function confirmTripTypeAndOpen() {
+            if (!_pendingAppParams) return;
+            var modal = document.getElementById('trip-type-modal');
+            if (modal) modal.style.display = 'none';
+            var p = _pendingAppParams;
+            // Store trip type in localStorage for flutter app
+            try {
+                localStorage.setItem('selected_trip_type', selectedTripType || 'short');
+                localStorage.setItem('flutter.selected_trip_type', JSON.stringify(selectedTripType || 'short'));
+            } catch(_) {}
+            openAppView(p.token, p.userId, p.role, p.fullName);
+        }
+
+        function showTripTypeModal(token, userId, role, fullName) {
+            _pendingAppParams = { token, userId, role, fullName };
+            selectedTripType = null;
+            document.getElementById('trip-short').className = 'trip-card';
+            document.getElementById('trip-daily').className = 'trip-card';
+            var btn = document.getElementById('btn-open-app');
+            if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+            var modal = document.getElementById('trip-type-modal');
+            if (modal) { modal.style.display = 'flex'; }
+        }
+
+        window.closeTripTypeModal = function() {
+            var modal = document.getElementById('trip-type-modal');
+            if (modal) modal.style.display = 'none';
+        };
+
+        window.openUserAppNow = function() {
+            var token = localStorage.getItem('auth_token');
+            var userId = localStorage.getItem('user_id') || 'usr-current';
+            var role = localStorage.getItem('user_role') || 'Customer';
+            var fullName = localStorage.getItem('user_fullname') || (role === 'Driver' ? 'كابتن توصيله' : 'راكب توصيله');
+            var status = localStorage.getItem('driver_status') || '';
+            if (role === 'Driver' && (status === 'Pending' || status === 'Rejected')) {
+                alert('⚠️ حسابك معلّق بانتظار التوثيق من قبل إدارة المنصة.\\nيرجى إرسال المستمسكات عبر الواتساب أو التيليجرام للاعتماد.');
+                return;
+            }
+            if (token) {
+                showTripTypeModal(token, userId, role, fullName);
+            }
+        };
+
+        // ===== Captain Login =====
         async function handleCaptainLogin(event) {
             event.preventDefault();
-            const identifier = document.getElementById('login-driver-identifier').value.trim();
-            const password = document.getElementById('login-driver-password').value;
-            const submitBtn = document.getElementById('btn-login-driver-submit');
-
-            if (!identifier || !password) {
-                alert('يرجى إدخال رقم الهاتف وكلمة المرور المحددة لك في الداشبورد');
-                return;
-            }
-
+            var identifier = document.getElementById('login-driver-identifier').value.trim();
+            var password = document.getElementById('login-driver-password').value;
+            var submitBtn = document.getElementById('btn-login-driver-submit');
+            if (!identifier || !password) { alert('يرجى إدخال رقم الهاتف وكلمة المرور'); return; }
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i><span>جاري التحقق من بيانات الكابتن...</span>';
-
+            submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التحقق...';
             try {
-                const res = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ identifier, password, role: 'Driver' })
-                });
-
-                const data = await res.json();
+                var res = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({identifier,password,role:'Driver'}) });
+                var data = await res.json();
                 if (res.ok && data.success) {
+                    if (data.status === 'Pending' || data.isVerified === false) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> دخول';
+                        alert('⚠️ حسابك معلّق بانتظار التوثيق من قبل إدارة المنصة.\\nيرجى إرسال المستمسكات عبر الواتساب أو التيليجرام للاعتماد.');
+                        return;
+                    }
                     persistSession(data);
-                    submitBtn.innerHTML = '<i class="fa-solid fa-check"></i><span>تم الدخول بنجاح! جاري تحويلك للوحة الكابتن...</span>';
-                    const targetUrl = '/app/#/driver?login_token=' + encodeURIComponent(data.token) +
-                                      '&userId=' + encodeURIComponent(data.userId) +
-                                      '&role=Driver' +
-                                      '&fullName=' + encodeURIComponent(data.fullName || 'كابتن توصيله');
-                    setTimeout(function() { window.location.replace(targetUrl); }, 200);
+                    submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> تم الدخول!';
+                    setTimeout(function(){ showTripTypeModal(data.token, data.userId, data.role||'Driver', data.fullName||'كابتن توصيله'); }, 200);
                 } else {
                     submitBtn.disabled = false;
-                    submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i><span>تسجيل الدخول للكابتن 🚀</span>';
-                    alert(data.error || 'عذراً، فشل تسجيل الدخول. يرجى التأكد من رقم الهاتف وكلمة المرور المعتمدة من الداشبورد.');
+                    submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> دخول';
+                    alert(data.error || 'فشل تسجيل الدخول. تحقق من رقم الهاتف وكلمة المرور.');
                 }
-            } catch (err) {
+            } catch(err) {
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i><span>تسجيل الدخول للكابتن 🚀</span>';
-                alert('حدث خطأ في الاتصال بالخادم. يرجى المحاولة مرة أخرى.');
+                submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> دخول';
+                alert('خطأ في الاتصال بالخادم.');
             }
         }
 
-        // 2. PASSENGER REGISTRATION
+        // ===== Passenger OTP =====
+        window.__isPhoneVerified = false;
+        window.__verifiedOtpCode = '';
+
+        async function handleSendWhatsappOtp(isResend) {
+            var phoneInput = document.getElementById('cust-reg-phone');
+            var phone = (phoneInput.value || '').trim();
+            var sendBtn = document.getElementById(isResend ? 'btn-resend-whatsapp-otp' : 'btn-send-whatsapp-otp');
+            var alertBox = document.getElementById('cust-reg-alert');
+            var otpBox = document.getElementById('cust-otp-box');
+            if (alertBox) alertBox.style.display = 'none';
+            var normalized = normalizeArabicDigits(phone);
+            var digits = normalized.replace(/[^0-9]/g,'');
+            if (!digits || digits.length < 9) { alert('أدخل رقم هاتف عراقي صالح (مثال: 07801234567)'); phoneInput.focus(); return; }
+            var orig = sendBtn.innerHTML;
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري الإرسال...';
+            try {
+                var res = await fetch('/api/auth/send-whatsapp-otp', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phoneNumber:normalized}) });
+                var data = await res.json();
+                if (res.ok && data.success) {
+                    otpBox.style.display = 'block';
+                    phoneInput.readOnly = true;
+                    var otpInput = document.getElementById('cust-reg-otp');
+                    if (otpInput) { otpInput.value=''; otpInput.focus(); }
+                    if (isResend) alert('تمت إعادة الإرسال إلى ' + phone);
+                } else {
+                    if (alertBox) { alertBox.textContent = data.error||'تعذر إرسال الرمز'; alertBox.style.display='block'; }
+                    alert(data.error || 'تعذر إرسال الرمز');
+                }
+            } catch(err) { alert('خطأ في الاتصال.'); }
+            finally { sendBtn.disabled=false; sendBtn.innerHTML=orig; }
+        }
+
+        async function handleVerifyWhatsappOtp() {
+            var phone = normalizeArabicDigits((document.getElementById('cust-reg-phone').value||'').trim());
+            var otpInput = document.getElementById('cust-reg-otp');
+            var code = normalizeArabicDigits((otpInput.value||'').trim());
+            var verifyBtn = document.getElementById('btn-verify-whatsapp-otp');
+            var alertBox = document.getElementById('cust-reg-alert');
+            if (alertBox) alertBox.style.display = 'none';
+            if (!code || code.length < 4) { alert('أدخل رمز التحقق المكون من 6 أرقام'); otpInput.focus(); return; }
+            var orig = verifyBtn.innerHTML;
+            verifyBtn.disabled = true;
+            verifyBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التحقق...';
+            try {
+                var res = await fetch('/api/auth/verify-whatsapp-otp', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({phoneNumber:phone,code:code}) });
+                var data = await res.json();
+                if (res.ok && data.success) {
+                    window.__isPhoneVerified = true;
+                    window.__verifiedOtpCode = code;
+                    document.getElementById('cust-otp-box').style.display = 'none';
+                    document.getElementById('cust-send-otp-wrap').style.display = 'none';
+                    var badge = document.getElementById('cust-verified-badge');
+                    if (badge) badge.style.display = 'flex';
+                    var details = document.getElementById('cust-details-section');
+                    if (details) { details.style.display = 'block'; initPassengerMapbox(); }
+                    var fnInp = document.getElementById('cust-reg-firstname');
+                    if (fnInp) fnInp.focus();
+                } else {
+                    if (alertBox) { alertBox.textContent = data.error||'رمز التحقق غير صحيح'; alertBox.style.display='block'; }
+                    alert(data.error||'رمز التحقق غير صحيح');
+                }
+            } catch(err) { alert('خطأ في الاتصال.'); }
+            finally { verifyBtn.disabled=false; verifyBtn.innerHTML=orig; }
+        }
+
+        function resetPhoneVerification() {
+            window.__isPhoneVerified = false;
+            window.__verifiedOtpCode = '';
+            var phoneInput = document.getElementById('cust-reg-phone');
+            if (phoneInput) { phoneInput.readOnly=false; phoneInput.focus(); }
+            var otpBox = document.getElementById('cust-otp-box');
+            var sendWrap = document.getElementById('cust-send-otp-wrap');
+            var badge = document.getElementById('cust-verified-badge');
+            var details = document.getElementById('cust-details-section');
+            if (otpBox) otpBox.style.display='none';
+            if (sendWrap) sendWrap.style.display='block';
+            if (badge) badge.style.display='none';
+            if (details) details.style.display='none';
+        }
+
         async function handleCustomerRegister(event) {
             event.preventDefault();
-            const name = document.getElementById('cust-reg-name').value.trim();
-            const phone = document.getElementById('cust-reg-phone').value.trim();
-            const route = document.getElementById('cust-reg-route').value.trim();
-            const address = document.getElementById('cust-reg-address').value.trim();
-            const password = document.getElementById('cust-reg-password').value;
-            const submitBtn = document.getElementById('btn-cust-reg-submit');
-            const alertBox = document.getElementById('cust-reg-alert');
+            var alertBox = document.getElementById('cust-reg-alert');
+            if (alertBox) alertBox.style.display = 'none';
+            if (!window.__isPhoneVerified) { alert('يرجى التحقق من رقم الهاتف أولاً'); return; }
+            var fname = (document.getElementById('cust-reg-firstname').value||'').trim();
+            var lname = (document.getElementById('cust-reg-lastname').value||'').trim();
+            var fullName = (fname + ' ' + lname).trim();
+            var phone = normalizeArabicDigits(document.getElementById('cust-reg-phone').value.trim());
+            var route = (document.getElementById('cust-reg-route').value||'').trim() || 'النجف الأشرف';
+            var address = (document.getElementById('cust-reg-address').value||'').trim() || 'النجف الأشرف';
+            var password = document.getElementById('cust-reg-password').value;
+            var submitBtn = document.getElementById('btn-cust-reg-submit');
+            if (!fname || !lname) { alert('يرجى إدخال الاسم واللقب'); return; }
+            if (!password) { alert('يرجى إدخال كلمة المرور'); return; }
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التسجيل...';
+            var pickupText = (document.getElementById('cust-pickup-text')?.value||'').trim();
+            var dropoffText = (document.getElementById('cust-dropoff-text')?.value||'').trim();
+            var address = (document.getElementById('cust-reg-address').value||'').trim() || pickupText;
+            var route = (document.getElementById('cust-reg-route').value||'').trim() || dropoffText;
+            var pickupLat = document.getElementById('cust-pickup-lat')?.value;
+            var pickupLon = document.getElementById('cust-pickup-lon')?.value;
+            var dropoffLat = document.getElementById('cust-dropoff-lat')?.value;
+            var dropoffLon = document.getElementById('cust-dropoff-lon')?.value;
 
-            alertBox.style.display = 'none';
-
-            if (!name || !phone || !route || !address || !password) {
-                alert('يرجى ملء جميع الحقول المطلوبة');
+            if (!pickupLat || !pickupLon || !dropoffLat || !dropoffLon || !address || !route) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> إكمال تسجيل الحساب';
+                alert('⚠️ يجب تحديد مسارك الفعلي (نقطة الانطلاق ونقطة الوصول) على الخريطة أولاً لإكمال التسجيل');
                 return;
             }
 
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i><span>جاري إكمال التسجيل...</span>';
-
             try {
-                const res = await fetch('/api/auth/complete-passenger-registration', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        fullName: name,
-                        phoneNumber: phone,
-                        route: route,
-                        address: address,
-                        password: password
-                    })
+                var res = await fetch('/api/auth/complete-passenger-registration', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({fullName,phoneNumber:phone,route,address,password,otpCode:window.__verifiedOtpCode||'',pickupLat:parseFloat(pickupLat),pickupLon:parseFloat(pickupLon),dropoffLat:parseFloat(dropoffLat),dropoffLon:parseFloat(dropoffLon),tripType:selectedRegTripType||'short'})
                 });
-
-                const data = await res.json();
+                var data = await res.json();
                 if (res.ok && data.success) {
                     persistSession(data);
-                    submitBtn.innerHTML = '<i class="fa-solid fa-check"></i><span>تم التسجيل بنجاح! جاري تحويلك...</span>';
-                    const targetUrl = '/app/#/customer?login_token=' + encodeURIComponent(data.token) +
-                                      '&userId=' + encodeURIComponent(data.userId) +
-                                      '&role=Customer' +
-                                      '&fullName=' + encodeURIComponent(data.fullName || 'راكب توصيله');
-                    setTimeout(function() { window.location.replace(targetUrl); }, 200);
+                    submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> تم التسجيل!';
+                    setTimeout(function(){ showTripTypeModal(data.token, data.userId, 'Customer', data.fullName||'راكب توصيله'); }, 200);
                 } else {
                     submitBtn.disabled = false;
-                    submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i><span>إكمال تسجيل حساب الراكب والمتابعة 🚀</span>';
-                    alertBox.innerText = data.error || 'عذراً، فشل تسجيل الحساب.';
-                    alertBox.style.display = 'block';
-                    alert(data.error || 'عذراً، فشل تسجيل الحساب.');
+                    submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> إكمال تسجيل الحساب';
+                    if (alertBox) { alertBox.textContent = data.error||'فشل التسجيل'; alertBox.style.display='block'; }
+                    alert(data.error||'فشل التسجيل');
                 }
-            } catch (err) {
+            } catch(err) {
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i><span>إكمال تسجيل حساب الراكب والمتابعة 🚀</span>';
-                alert('حدث خطأ في الاتصال بالخادم. يرجى التأكد من اتصال الإنترنت.');
+                submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> إكمال تسجيل الحساب';
+                alert('خطأ في الاتصال بالخادم.');
             }
         }
 
-        // 3. PASSENGER LOGIN
+        // ===== Driver OTP =====
+        window.__isDriverPhoneVerified = false;
+        window.__verifiedDriverOtpCode = '';
+
+        async function handleSendDriverWhatsappOtp(isResend) {
+            var phoneInput = document.getElementById('driver-reg-phone');
+            var phone = (phoneInput.value||'').trim();
+            var sendBtn = document.getElementById(isResend?'btn-resend-driver-otp':'btn-send-driver-otp');
+            var alertBox = document.getElementById('driver-reg-alert');
+            var otpBox = document.getElementById('driver-otp-box');
+            if (alertBox) alertBox.style.display='none';
+            var normalized = normalizeArabicDigits(phone);
+            var digits = normalized.replace(/[^0-9]/g,'');
+            if (!digits||digits.length<9) { alert('أدخل رقم هاتف عراقي صالح'); phoneInput.focus(); return; }
+            var orig = sendBtn.innerHTML;
+            sendBtn.disabled=true;
+            sendBtn.innerHTML='<i class="fa-solid fa-circle-notch fa-spin"></i> جاري الإرسال...';
+            try {
+                var res = await fetch('/api/auth/send-whatsapp-otp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneNumber:normalized})});
+                var data = await res.json();
+                if (res.ok && data.success) {
+                    otpBox.style.display='block';
+                    phoneInput.readOnly=true;
+                    var oi = document.getElementById('driver-reg-otp');
+                    if(oi){oi.value='';oi.focus();}
+                    if(isResend) alert('تمت إعادة الإرسال إلى '+phone);
+                } else {
+                    if(alertBox){alertBox.textContent=data.error||'تعذر الإرسال';alertBox.style.display='block';}
+                    alert(data.error||'تعذر الإرسال');
+                }
+            } catch(err){alert('خطأ في الاتصال.');}
+            finally{sendBtn.disabled=false;sendBtn.innerHTML=orig;}
+        }
+
+        async function handleVerifyDriverWhatsappOtp() {
+            var phone = normalizeArabicDigits((document.getElementById('driver-reg-phone').value||'').trim());
+            var otpInput = document.getElementById('driver-reg-otp');
+            var code = normalizeArabicDigits((otpInput.value||'').trim());
+            var verifyBtn = document.getElementById('btn-verify-driver-otp');
+            var alertBox = document.getElementById('driver-reg-alert');
+            if(alertBox) alertBox.style.display='none';
+            if(!code||code.length<4){alert('أدخل رمز التحقق');otpInput.focus();return;}
+            var orig = verifyBtn.innerHTML;
+            verifyBtn.disabled=true;
+            verifyBtn.innerHTML='<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التحقق...';
+            try {
+                var res = await fetch('/api/auth/verify-whatsapp-otp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneNumber:phone,code:code})});
+                var data = await res.json();
+                if(res.ok&&data.success){
+                    window.__isDriverPhoneVerified=true;
+                    window.__verifiedDriverOtpCode=code;
+                    document.getElementById('driver-otp-box').style.display='none';
+                    document.getElementById('driver-send-otp-wrap').style.display='none';
+                    var badge=document.getElementById('driver-verified-badge');
+                    if(badge) badge.style.display='flex';
+                    var details=document.getElementById('driver-details-section');
+                    if(details) details.style.display='block';
+                    var ni=document.getElementById('driver-reg-name');
+                    if(ni) ni.focus();
+                } else {
+                    if(alertBox){alertBox.textContent=data.error||'رمز غير صحيح';alertBox.style.display='block';}
+                    alert(data.error||'رمز غير صحيح');
+                }
+            } catch(err){alert('خطأ في الاتصال.');}
+            finally{verifyBtn.disabled=false;verifyBtn.innerHTML=orig;}
+        }
+
+        function resetDriverPhoneVerification() {
+            window.__isDriverPhoneVerified=false;
+            window.__verifiedDriverOtpCode='';
+            var pi=document.getElementById('driver-reg-phone');
+            if(pi){pi.readOnly=false;pi.focus();}
+            ['driver-otp-box','driver-reg-alert'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});
+            var sw=document.getElementById('driver-send-otp-wrap');if(sw)sw.style.display='block';
+            var badge=document.getElementById('driver-verified-badge');if(badge)badge.style.display='none';
+            var det=document.getElementById('driver-details-section');if(det)det.style.display='none';
+        }
+
+        async function handleDriverRegister(event) {
+            event.preventDefault();
+            var alertBox=document.getElementById('driver-reg-alert');
+            if(alertBox) alertBox.style.display='none';
+            if(!window.__isDriverPhoneVerified){alert('يرجى التحقق من رقم الهاتف أولاً');return;}
+            var name=(document.getElementById('driver-reg-name').value||'').trim();
+            var phone=normalizeArabicDigits(document.getElementById('driver-reg-phone').value.trim());
+            var license=(document.getElementById('driver-reg-license').value||'').trim();
+            var vehicle=(document.getElementById('driver-reg-vehicle')?.value||'').trim();
+            var plate=(document.getElementById('driver-reg-plate')?.value||'').trim();
+            var password=document.getElementById('driver-reg-password').value;
+            var fromRoute=(document.getElementById('driver-reg-from')?.value||'').trim();
+            var toRoute=(document.getElementById('driver-reg-to')?.value||'').trim();
+            var submitBtn=document.getElementById('btn-driver-reg-submit');
+            if(!name||!phone||!password){alert('يرجى ملء جميع الحقول المطلوبة');return;}
+            if(!fromRoute||!toRoute){alert('⚠️ يجب تحديد مسارك الفعلي (نقطة الانطلاق ونقطة الوصول) لإكمال التسجيل');return;}
+            submitBtn.disabled=true;
+            submitBtn.innerHTML='<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التسجيل...';
+            try {
+                var res = await fetch('/api/auth/complete-driver-registration',{
+                    method:'POST',headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({fullName:name,phoneNumber:phone,licenseNumber:license,vehicleMake:vehicle,vehiclePlate:plate,password,fromRoute,toRoute,route:(fromRoute+' ➔ '+toRoute),otpCode:window.__verifiedDriverOtpCode||''})
+                });
+                var data = await res.json();
+                if (res.ok && data.success) {
+                    submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> تم استلام الطلب!';
+                    var formBox = document.getElementById('driver-register-form');
+                    var tgLink = window.__telegramAdminLink || 'https://t.me/tawseela_iq_bot';
+                    var waLink = window.__whatsappAdminLink || 'https://wa.me/9647706204066';
+                    if (formBox) {
+                        formBox.innerHTML = '<div style="background:#fffbeb;border:2px solid #fde68a;border-radius:14px;padding:22px 18px;text-align:center">' +
+                            '<div style="font-size:38px;margin-bottom:10px">⏳</div>' +
+                            '<h3 style="font-size:16px;font-weight:900;color:#92400e;margin:0 0 8px">تم تسجيل طلبك بنجاح - الحساب معلّق</h3>' +
+                            '<p style="font-size:13px;color:#78350f;margin:0 0 16px;line-height:1.6">حسابك الآن بانتظار توثيق الإدارة. لن تتمكن من الدخول أو استقبال الطلبات حتى إرسال مستمسكاتك واعتماد الحساب من لوحة التحكم.</p>' +
+                            '<div style="background:#ffffff;border:1.5px solid #fcd34d;border-radius:12px;padding:14px;text-align:right;margin-bottom:16px">' +
+                                '<div style="font-weight:900;font-size:13px;color:#92400e;margin-bottom:10px">📋 يرجى إرسال المستمسكات (البطاقة، إجازة السوق، السنوية) عبر:</div>' +
+                                '<div style="display:flex;flex-direction:column;gap:8px">' +
+                                    '<a href="' + waLink + '" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#25d366;color:#fff;padding:11px;border-radius:10px;font-weight:900;font-size:13px;text-decoration:none">📱 إرسال عبر واتساب الإدارة</a>' +
+                                    '<a href="' + tgLink + '" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#0088cc;color:#fff;padding:11px;border-radius:10px;font-weight:900;font-size:13px;text-decoration:none">💬 إرسال عبر تيليجرام الإدارة</a>' +
+                                '</div>' +
+                            '</div>' +
+                            '<p style="font-size:12px;color:#a16207;font-weight:700;margin:0">سيتم تفعيل حسابك من قبل الإدارة بعد مراجعة المستمسكات.</p>' +
+                        '</div>';
+                    }
+                } else {
+                    submitBtn.disabled=false;
+                    submitBtn.innerHTML='<i class="fa-solid fa-taxi"></i> إكمال تسجيل حساب السائق';
+                    if(alertBox){alertBox.textContent=data.error||'فشل التسجيل';alertBox.style.display='block';}
+                    alert(data.error||'فشل التسجيل');
+                }
+            } catch(err){
+                submitBtn.disabled=false;
+                submitBtn.innerHTML='<i class="fa-solid fa-taxi"></i> إكمال تسجيل حساب السائق';
+                alert('خطأ في الاتصال.');
+            }
+        }
+
+        // ===== Passenger Login =====
         async function handleCustomerLogin(event) {
             event.preventDefault();
-            const identifier = document.getElementById('cust-login-identifier').value.trim();
-            const password = document.getElementById('cust-login-password').value;
-            const submitBtn = document.getElementById('btn-cust-login-submit');
+            var identifier=document.getElementById('cust-login-identifier').value.trim();
+            var password=document.getElementById('cust-login-password').value;
+            var submitBtn=document.getElementById('btn-cust-login-submit');
+            if(!identifier||!password){alert('يرجى إدخال رقم الهاتف وكلمة المرور');return;}
+            submitBtn.disabled=true;
+            submitBtn.innerHTML='<i class="fa-solid fa-circle-notch fa-spin"></i> جاري الدخول...';
+            try {
+                var res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier,password,role:'Customer'})});
+                var data=await res.json();
+                if(res.ok&&data.success){
+                    persistSession(data);
+                    submitBtn.innerHTML='<i class="fa-solid fa-check"></i> تم!';
+                    setTimeout(function(){showTripTypeModal(data.token,data.userId,'Customer',data.fullName||'راكب توصيله');},200);
+                } else {
+                    submitBtn.disabled=false;
+                    submitBtn.innerHTML='<i class="fa-solid fa-right-to-bracket"></i> دخول';
+                    alert(data.error||'فشل تسجيل الدخول. تحقق من البيانات.');
+                }
+            } catch(err){
+                submitBtn.disabled=false;
+                submitBtn.innerHTML='<i class="fa-solid fa-right-to-bracket"></i> دخول';
+                alert('خطأ في الاتصال.');
+            }
+        }
 
-            if (!identifier || !password) {
-                alert('يرجى إدخال رقم الهاتف وكلمة المرور');
+        // ===== Mapbox map =====
+        var passengerMap=null, pickupMarker=null, dropoffMarker=null, currentPinMode='pickup';
+
+        function setMapPinMode(mode) {
+            currentPinMode=mode;
+            var bp=document.getElementById('btn-mode-pickup');
+            var bd=document.getElementById('btn-mode-dropoff');
+            if(!bp||!bd) return;
+            if(mode==='pickup'){
+                bp.className='map-mode-btn active-pickup';
+                bd.className='map-mode-btn';
+            } else {
+                bp.className='map-mode-btn';
+                bd.className='map-mode-btn active-dropoff';
+            }
+        }
+
+        async function reverseGeocodeLocation(lng,lat,target) {
+            try {
+                var token=('pk.'+'eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9'+'._J6DYjYBDhsdcidErQrblA');
+                var res=await fetch('https://api.mapbox.com/geocoding/v5/mapbox.places/'+lng+','+lat+'.json?country=iq&language=ar&access_token='+token);
+                var data=await res.json();
+                var pName=(data.features&&data.features.length>0)?(data.features[0].place_name_ar||data.features[0].place_name):'';
+                if(!pName){
+                    var osm=await fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat='+lat+'&lon='+lng);
+                    var od=await osm.json();
+                    if(od&&od.display_name) pName=od.display_name;
+                }
+                if(pName){
+                    if(target==='pickup'){
+                        var ai=document.getElementById('cust-reg-address');if(ai)ai.value=pName;
+                        var pd=document.getElementById('pickup-addr-display');if(pd)pd.textContent=pName;
+                    } else {
+                        var ri=document.getElementById('cust-reg-route');if(ri)ri.value=pName;
+                        var dd=document.getElementById('dropoff-addr-display');if(dd)dd.textContent=pName;
+                    }
+                }
+            } catch(_) {}
+        }
+
+        function updatePickupPoint(lng,lat,doReverse) {
+            document.getElementById('cust-pickup-lat').value=Number(lat).toFixed(6);
+            document.getElementById('cust-pickup-lon').value=Number(lng).toFixed(6);
+            if(!pickupMarker&&passengerMap){
+                pickupMarker=new mapboxgl.Marker({color:'#16a34a',draggable:true}).setLngLat([lng,lat]).addTo(passengerMap);
+                pickupMarker.on('dragend',function(){var p=pickupMarker.getLngLat();updatePickupPoint(p.lng,p.lat,true);});
+            } else if(pickupMarker) pickupMarker.setLngLat([lng,lat]);
+            if(doReverse) reverseGeocodeLocation(lng,lat,'pickup');
+            drawRouteLine();
+            showNearestDriver();
+        }
+
+        function updateDropoffPoint(lng,lat,doReverse) {
+            document.getElementById('cust-dropoff-lat').value=Number(lat).toFixed(6);
+            document.getElementById('cust-dropoff-lon').value=Number(lng).toFixed(6);
+            if(!dropoffMarker&&passengerMap){
+                dropoffMarker=new mapboxgl.Marker({color:'#dc2626',draggable:true}).setLngLat([lng,lat]).addTo(passengerMap);
+                dropoffMarker.on('dragend',function(){var p=dropoffMarker.getLngLat();updateDropoffPoint(p.lng,p.lat,true);});
+            } else if(dropoffMarker) dropoffMarker.setLngLat([lng,lat]);
+            if(doReverse) reverseGeocodeLocation(lng,lat,'dropoff');
+            drawRouteLine();
+        }
+
+        function getCurrentGpsLocation() {
+            var btn=document.getElementById('btn-cust-gps');
+            if(!navigator.geolocation){alert('GPS غير مدعوم في متصفحك.');return;}
+            var orig=btn?btn.innerHTML:'';
+            if(btn) btn.innerHTML='<i class="fa-solid fa-circle-notch fa-spin"></i>';
+            navigator.geolocation.getCurrentPosition(function(pos){
+                if(btn) btn.innerHTML=orig;
+                var lat=pos.coords.latitude, lng=pos.coords.longitude;
+                if(passengerMap) passengerMap.flyTo({center:[lng,lat],zoom:15});
+                if(currentPinMode==='pickup') updatePickupPoint(lng,lat,true);
+                else updateDropoffPoint(lng,lat,true);
+            },function(){
+                if(btn) btn.innerHTML=orig;
+                alert('تعذر الوصول إلى موقعك. فعّل إذن الموقع.');
+            },{enableHighAccuracy:true,timeout:10000});
+        }
+
+        async function initPassengerMapbox() {
+            if(passengerMap||!document.getElementById('passenger-map')) return;
+            try {
+                if(!window.mapboxgl) await window.loadMapboxDynamically();
+                if(!window.mapboxgl) return;
+                mapboxgl.accessToken=('pk.'+'eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9'+'._J6DYjYBDhsdcidErQrblA');
+                passengerMap=new mapboxgl.Map({container:'passenger-map',style:'mapbox://styles/mapbox/streets-v12',center:[44.32,32.02],zoom:13,maxBounds:[[44.05,31.75],[44.65,32.35]]});
+                if(typeof mapboxgl.getRTLTextPluginStatus==='function'&&mapboxgl.getRTLTextPluginStatus()==='unavailable'){
+                    mapboxgl.setRTLTextPlugin('https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js',null,true);
+                }
+                passengerMap.addControl(new mapboxgl.NavigationControl({showCompass:true}),'top-left');
+                passengerMap.on('load',function(){
+                    // Map loads clean without static default route
+                });
+                passengerMap.on('click',function(e){
+                    if(currentPinMode==='pickup') updatePickupPoint(e.lngLat.lng,e.lngLat.lat,true);
+                    else updateDropoffPoint(e.lngLat.lng,e.lngLat.lat,true);
+                });
+            } catch(e){console.error('Mapbox error:',e);}
+        }
+
+        // Draw route between pickup and dropoff
+        async function drawRouteLine() {
+            if (!passengerMap || !window.mapboxgl) return;
+            try {
+                var pLat = document.getElementById('cust-pickup-lat').value;
+                var pLon = document.getElementById('cust-pickup-lon').value;
+                var dLat = document.getElementById('cust-dropoff-lat').value;
+                var dLon = document.getElementById('cust-dropoff-lon').value;
+                if (!pLat || !dLat) return;
+                var token = mapboxgl.accessToken;
+                var url = 'https://api.mapbox.com/directions/v5/mapbox/driving/' + pLon+','+pLat+';'+dLon+','+dLat+'?geometries=geojson&overview=full&access_token='+token;
+                var res = await fetch(url);
+                var data = await res.json();
+                if (!data.routes || !data.routes[0]) return;
+                var route = data.routes[0].geometry;
+                if (passengerMap.getSource('route-line')) {
+                    passengerMap.getSource('route-line').setData({ type:'Feature', geometry: route });
+                } else {
+                    passengerMap.addSource('route-line', { type:'geojson', data:{ type:'Feature', geometry: route } });
+                    passengerMap.addLayer({ id:'route-line-layer', type:'line', source:'route-line', paint:{ 'line-color':'#111111', 'line-width':4, 'line-opacity':0.85 }, layout:{ 'line-cap':'round', 'line-join':'round' } });
+                }
+                // Show distance and time
+                var dist = (data.routes[0].distance/1000).toFixed(1);
+                var mins = Math.round(data.routes[0].duration/60);
+                var info = document.getElementById('route-info-display');
+                if (info) info.innerHTML = '📏 '+dist+' كم · ⏱️ '+mins+' دقيقة';
+            } catch(e) { console.error('Route error:', e); }
+        }
+
+        // Show nearest driver on map
+        var nearestDriverMarker = null;
+        async function showNearestDriver() {
+            if (!passengerMap) return;
+            try {
+                var pLat = parseFloat(document.getElementById('cust-pickup-lat').value) || 32.02;
+                var pLon = parseFloat(document.getElementById('cust-pickup-lon').value) || 44.32;
+                var res = await fetch('/api/fleet/active-drivers');
+                var data = await res.json();
+                var drivers = (data.drivers || data || []).filter(function(d) { return d.lat && d.lon; });
+                if (drivers.length === 0) return;
+                var closest = null, minDist = Infinity;
+                drivers.forEach(function(d) {
+                    var dx = d.lat - pLat, dy = d.lon - pLon;
+                    var dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < minDist) { minDist = dist; closest = d; }
+                });
+                if (!closest) return;
+                if (nearestDriverMarker) nearestDriverMarker.remove();
+                var el = document.createElement('div');
+                el.style.cssText = 'width:32px;height:32px;background:#111;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3)';
+                el.textContent = '🚕';
+                nearestDriverMarker = new mapboxgl.Marker({ element: el }).setLngLat([closest.lon, closest.lat]).addTo(passengerMap);
+                var ndi = document.getElementById('nearest-driver-info');
+                if (ndi) ndi.innerHTML = '🚕 أقرب سائق: ' + (closest.name||'متاح') + ' (' + (minDist*111).toFixed(1) + ' كم)';
+            } catch(e) {}
+        }
+
+        // ===== Geocode text input for passenger (Feature 4) =====
+        var geocodeTimers = {};
+        window.geocodePassengerInput = function(q, target) {
+            clearTimeout(geocodeTimers[target]);
+            var resultsEl = document.getElementById('cust-'+target+'-results');
+            if (!resultsEl) return;
+            if (!q || q.length < 1) { resultsEl.style.display = 'none'; return; }
+            geocodeTimers[target] = setTimeout(async function() {
+                try {
+                    var token = ('pk.'+'eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9'+'._J6DYjYBDhsdcidErQrblA');
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'+encodeURIComponent(q)+'.json?proximity=44.32,32.02&bbox=44.05,31.75,44.65,32.35&country=iq&language=ar&types=poi,address,neighborhood,place,locality&limit=5&access_token='+token;
+                    var res = await fetch(url);
+                    var data = await res.json();
+                    var feats = (data && data.features) ? data.features : [];
+                    if (feats.length === 0) {
+                        try {
+                            var or = await fetch('https://nominatim.openstreetmap.org/search?format=json&countrycodes=iq&q='+encodeURIComponent(q+' النجف'));
+                            var od = await or.json();
+                            if (od && od.length > 0) feats = od.map(function(o){ return { place_name_ar: o.display_name, center: [parseFloat(o.lon), parseFloat(o.lat)] }; });
+                        } catch(_) {}
+                    }
+                    resultsEl.innerHTML = '';
+                    if (feats.length > 0) {
+                        resultsEl.style.display = 'block';
+                        feats.slice(0, 5).forEach(function(feat) {
+                            var d = document.createElement('div');
+                            d.className = 'search-result-item';
+                            var pName = feat.place_name_ar || feat.place_name || '';
+                            d.innerHTML = '<span>📍</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+pName+'</span>';
+                            d.onclick = function() {
+                                var inp = document.getElementById('cust-'+target+'-text');
+                                if (inp) inp.value = pName;
+                                resultsEl.style.display = 'none';
+                                if (target === 'pickup') {
+                                    updatePickupPoint(feat.center[0], feat.center[1], false);
+                                    var ai = document.getElementById('cust-reg-address'); if(ai) ai.value = pName;
+                                } else {
+                                    updateDropoffPoint(feat.center[0], feat.center[1], false);
+                                    var ri = document.getElementById('cust-reg-route'); if(ri) ri.value = pName;
+                                }
+                                if (passengerMap) passengerMap.flyTo({ center: feat.center, zoom: 15 });
+                                if (!window.mapboxgl) return;
+                                loadMapboxDynamically().then(function() { initPassengerMapbox(); });
+                            };
+                            resultsEl.appendChild(d);
+                        });
+                    } else resultsEl.style.display = 'none';
+                } catch(_) { resultsEl.style.display = 'none'; }
+            }, 250);
+        };
+
+        // Close dropdowns on outside click
+        document.addEventListener('click', function(e) {
+            ['cust-pickup-results','cust-dropoff-results'].forEach(function(id) {
+                var el = document.getElementById(id);
+                if (el && !el.contains(e.target)) el.style.display = 'none';
+            });
+        });
+
+        // ===== Fix passenger route + show nearby drivers (Feature 4) =====
+        window.fixPassengerRoute = async function() {
+            var pLatVal = (document.getElementById('cust-pickup-lat') || {}).value;
+            var pLonVal = (document.getElementById('cust-pickup-lon') || {}).value;
+            var dLatVal = (document.getElementById('cust-dropoff-lat') || {}).value;
+            var dLonVal = (document.getElementById('cust-dropoff-lon') || {}).value;
+            var pickupText = ((document.getElementById('cust-pickup-text') || {}).value || '').trim();
+            var dropoffText = ((document.getElementById('cust-dropoff-text') || {}).value || '').trim();
+            if (!pLatVal || !pLonVal || !dLatVal || !dLonVal || !pickupText || !dropoffText) {
+                alert('⚠️ يرجى تحديد نقطة الانطلاق ونقطة الوصول الفعلية على الخريطة لتثبيت المسار');
                 return;
             }
-
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i><span>جاري تسجيل الدخول...</span>';
-
+            await initPassengerMapbox();
+            drawRouteLine();
+            showNearestDriver();
+            var pLat = parseFloat(pLatVal);
+            var pLon = parseFloat(pLonVal);
+            var dLat = parseFloat(dLatVal);
+            var dLon = parseFloat(dLonVal);
+            var container = document.getElementById('nearby-driver-routes');
+            if (!container) return;
+            container.style.display = 'block';
+            container.innerHTML = '<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">🚕 السائقون المتاحون قريباً من مسارك:</div><div id="driver-routes-list" style="font-size:12px;color:#6b7280">جاري البحث...</div>';
             try {
-                const res = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ identifier, password, role: 'Customer' })
+                var res = await fetch('/api/driver/active-routes');
+                var data = await res.json();
+                var routes = (data.routes || []);
+                var list = document.getElementById('driver-routes-list');
+                if (!list) return;
+                if (routes.length === 0) { list.innerHTML = '<div style="color:#6b7280;text-align:center;padding:10px">لا يوجد سائقون نشطون حالياً على مسارك</div>'; return; }
+                list.innerHTML = '';
+                routes.slice(0, 6).forEach(function(dr) {
+                    var d = document.createElement('div');
+                    d.style.cssText = 'background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;padding:10px;margin-bottom:8px';
+                    var waNum = (dr.driverPhone || '').replace(/[^0-9]/g,'');
+                    if (waNum.startsWith('07')) waNum = '964' + waNum.substring(1);
+                    var waLink = 'https://wa.me/'+waNum+'?text='+encodeURIComponent('مرحباً، أريد الانضمام لمسارك من '+pickupText+' إلى '+dropoffText);
+                    var tgLink = 'https://t.me/+'+waNum;
+                    var passId = localStorage.getItem('user_id') || '';
+                    // Header info
+                    var header = document.createElement('div');
+                    header.style.cssText = 'font-weight:900;font-size:13px;color:#111;margin-bottom:4px';
+                    header.textContent = '🚕 ' + (dr.driverName || '');
+                    d.appendChild(header);
+                    var sub = document.createElement('div');
+                    sub.style.cssText = 'font-size:11px;color:#6b7280;margin-bottom:6px';
+                    sub.textContent = (dr.vehicle||'') + ' · ' + (dr.route.fromText||'--') + ' ← → ' + (dr.route.toText||'--');
+                    d.appendChild(sub);
+                    var btnRow = document.createElement('div');
+                    btnRow.style.cssText = 'display:flex;gap:6px';
+                    // Join button (only for logged-in passengers)
+                    if (passId) {
+                        var joinBtn = document.createElement('button');
+                        joinBtn.style.cssText = 'flex:1;background:#111;color:#fff;border:none;border-radius:8px;padding:7px 6px;font-size:11px;font-weight:900;font-family:inherit;cursor:pointer';
+                        joinBtn.textContent = '🙋 انضمام';
+                        (function(did, pt, dt, plat, plon, dlat, dlon) {
+                            joinBtn.onclick = function() { joinDriverRoute(did, encodeURIComponent(pt), encodeURIComponent(dt), plat, plon, dlat, dlon); };
+                        })(dr.driverId, pickupText, dropoffText, pLat, pLon, dLat, dLon);
+                        btnRow.appendChild(joinBtn);
+                    }
+                    // WhatsApp contact
+                    var waBtn = document.createElement('a');
+                    waBtn.href = waLink; waBtn.target = '_blank';
+                    waBtn.style.cssText = 'flex:1;background:#25d366;color:#fff;border-radius:8px;padding:7px 6px;font-size:11px;font-weight:900;text-decoration:none;text-align:center';
+                    waBtn.textContent = '📱 واتساب';
+                    (function(did){ waBtn.onclick = function() { logExternalContact(did, 'whatsapp'); }; })(dr.driverId);
+                    btnRow.appendChild(waBtn);
+                    // Telegram contact
+                    var tgBtn = document.createElement('a');
+                    tgBtn.href = tgLink; tgBtn.target = '_blank';
+                    tgBtn.style.cssText = 'flex:1;background:#0088cc;color:#fff;border-radius:8px;padding:7px 6px;font-size:11px;font-weight:900;text-decoration:none;text-align:center';
+                    tgBtn.textContent = '💬 تيليجرام';
+                    (function(did){ tgBtn.onclick = function() { logExternalContact(did, 'telegram'); }; })(dr.driverId);
+                    btnRow.appendChild(tgBtn);
+                    d.appendChild(btnRow);
+                    list.appendChild(d);
                 });
-
-                const data = await res.json();
-                if (res.ok && data.success) {
-                    persistSession(data);
-                    submitBtn.innerHTML = '<i class="fa-solid fa-check"></i><span>تم الدخول بنجاح! جاري تحويلك...</span>';
-                    const targetUrl = '/app/#/customer?login_token=' + encodeURIComponent(data.token) +
-                                      '&userId=' + encodeURIComponent(data.userId) +
-                                      '&role=Customer' +
-                                      '&fullName=' + encodeURIComponent(data.fullName || 'راكب توصيله');
-                    setTimeout(function() { window.location.replace(targetUrl); }, 200);
-                } else {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i><span>تسجيل الدخول للراكب 🚀</span>';
-                    alert(data.error || 'فشل تسجيل الدخول. يرجى التأكد من صحة رقم الهاتف وكلمة المرور.');
-                }
-            } catch (err) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i><span>تسجيل الدخول للراكب 🚀</span>';
-                alert('حدث خطأ في الاتصال بالخادم.');
+            } catch(e) {
+                var list2 = document.getElementById('driver-routes-list');
+                if (list2) list2.innerHTML = '<div style="color:#dc2626">تعذر تحميل السائقين</div>';
             }
-        }
+        };
 
-        // 4. MAPBOX INIT FOR PASSENGER
-        var passengerMap = null;
-        var mapboxPublicToken = ['pk.eyJ1IjoibXVzdGFmYS1hbGphYmFyaSIsImEiOi', 'JjbTdtbTNzZnEwMjR3MmpweWtkNXU1ZXFmIn0', '.c94M2151ZpYh_L2DfvQJmA'].join('');
-        function initPassengerMapbox() {
-            if (passengerMap || !document.getElementById('passenger-map')) return;
-            try {
-                mapboxgl.accessToken = mapboxPublicToken;
-                passengerMap = new mapboxgl.Map({
-                    container: 'passenger-map',
-                    style: 'mapbox://styles/mapbox/streets-v12',
-                    center: [44.3238, 32.0004],
-                    zoom: 12
-                });
-                if (mapboxgl.getRTLTextPluginStatus() === 'unavailable') {
-                    mapboxgl.setRTLTextPlugin('https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js', null, true);
+        // ===== Feature 9: Secure Telegram links (force external browser) =====
+        function openTelegramSafe(url) {
+            // Returns URL with tg_open=1 marker; handled at click to force window.open
+            return url;
+        }
+        document.addEventListener('click', function(e) {
+            var a = e.target.closest('a[href*="t.me"]');
+            if (!a) return;
+            var href = a.getAttribute('href');
+            if (!href) return;
+            e.preventDefault();
+            try { window.open(href, '_system'); } catch(_) { window.open(href, '_blank', 'noopener,noreferrer'); }
+        });
+
+
+        // ===== Feature: Permanent Location =====
+        window.fixPermanentLocation = async function() {
+            var pLat = (document.getElementById('cust-pickup-lat') || {}).value;
+            var pLon = (document.getElementById('cust-pickup-lon') || {}).value;
+            var dLat = (document.getElementById('cust-dropoff-lat') || {}).value;
+            var dLon = (document.getElementById('cust-dropoff-lon') || {}).value;
+            var pickupText = ((document.getElementById('cust-pickup-text') || {}).value || '').trim();
+            var dropoffText = ((document.getElementById('cust-dropoff-text') || {}).value || '').trim();
+            if (!pLat || !pLon || !pickupText) {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(function(pos) {
+                        document.getElementById('cust-pickup-lat').value = pos.coords.latitude.toFixed(6);
+                        document.getElementById('cust-pickup-lon').value = pos.coords.longitude.toFixed(6);
+                        fixPermanentLocation();
+                    }, function() {
+                        alert('⚠️ يرجى تحديد نقطة الانطلاق على الخريطة أولاً أو تفعيل GPS');
+                    });
+                    return;
                 }
-            } catch (e) { console.error('Mapbox error:', e); }
-        }
+                alert('⚠️ يرجى تحديد نقطة الانطلاق على الخريطة أولاً');
+                return;
+            }
+            var passId = localStorage.getItem('user_id') || '';
+            if (!passId) { alert('يرجى تسجيل الدخول أولاً'); return; }
+            try {
+                var res = await fetch('/api/passenger/set-permanent-location', {
+                    method:'POST', headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({
+                        passengerId: passId,
+                        lat: parseFloat(pLat), lon: parseFloat(pLon), locationName: pickupText,
+                        dropoffLat: dLat ? parseFloat(dLat) : null, dropoffLon: dLon ? parseFloat(dLon) : null, dropoffName: dropoffText
+                    })
+                });
+                var data = await res.json();
+                if (data.success) {
+                    var st = document.getElementById('perm-loc-status');
+                    if (st) {
+                        st.style.display = 'block';
+                        st.style.background = '#f0fdf4';
+                        st.style.padding = '12px';
+                        st.style.borderRadius = '12px';
+                        st.style.fontSize = '14px';
+                        st.innerHTML = '✅ <b>تم تثبيت مسارك الدائمي بنجاح!</b><br>📍 من: ' + pickupText + (dropoffText ? '<br>📍 إلى: ' + dropoffText : '') + '<br><span style="font-size:11px;color:#6b7280">سيظهر موقعك للسائقين القريبين في التطبيق وتليجرام</span>';
+                    }
+                    localStorage.setItem('perm_lat', pLat);
+                    localStorage.setItem('perm_lon', pLon);
+                    localStorage.setItem('perm_name', pickupText);
+                } else alert(data.error || 'خطأ في حفظ الموقع');
+            } catch(e) { alert('خطأ في الاتصال'); }
+        };
 
-        // Live Geocoding Search
-        var searchInput = document.getElementById('cust-map-search');
-        var resultsBox = document.getElementById('cust-search-results');
-        var searchTimeout = null;
-        if (searchInput && resultsBox) {
-            searchInput.addEventListener('input', function() {
-                var query = searchInput.value.trim();
-                clearTimeout(searchTimeout);
-                if (query.length < 2) { resultsBox.classList.add('hidden'); return; }
-                searchTimeout = setTimeout(async function() {
-                    try {
-                        var res = await fetch('https://api.mapbox.com/geocoding/v5/mapbox.places/' + encodeURIComponent(query) + '.json?proximity=44.3238,32.0004&country=iq&language=ar&access_token=' + mapboxPublicToken);
-                        var data = await res.json();
-                        resultsBox.innerHTML = '';
-                        if (data.features && data.features.length > 0) {
-                            resultsBox.classList.remove('hidden');
-                            data.features.forEach(function(feat) {
-                                var div = document.createElement('div');
-                                div.className = 'px-3 py-2 hover:bg-slate-800 cursor-pointer text-xs border-b border-slate-800/50 flex items-center gap-2';
-                                div.innerHTML = '<span class="text-amber-400">📍</span> <span>' + (feat.place_name_ar || feat.place_name) + '</span>';
-                                div.onclick = function() {
-                                    if (passengerMap) passengerMap.flyTo({ center: feat.center, zoom: 15 });
-                                    searchInput.value = feat.text_ar || feat.text;
-                                    resultsBox.classList.add('hidden');
-                                };
-                                resultsBox.appendChild(div);
-                            });
-                        } else { resultsBox.classList.add('hidden'); }
-                    } catch (_) {}
-                }, 300);
-            });
-        }
-
-        // Auto Select Tab on Load from URL (Defaults to Captain/Driver)
+        
+        // Auto-show Flutter app if redirected from Telegram or with showMap=1
         (function() {
+            var params = new URLSearchParams(window.location.search);
+            if (params.get('showMap') === '1' || params.get('openMap') === '1') {
+                var token = params.get('login_token') || localStorage.getItem('auth_token') || '';
+                var userId = params.get('userId') || localStorage.getItem('user_id') || '';
+                var role = params.get('role') || localStorage.getItem('user_role') || 'Customer';
+                var fullName = params.get('fullName') || localStorage.getItem('user_fullname') || '';
+                
+                if (token) {
+                    // Save to local storage in case we need it
+                    localStorage.setItem('auth_token', token);
+                    localStorage.setItem('user_id', userId);
+                    localStorage.setItem('user_role', role);
+                    if (fullName) localStorage.setItem('user_fullname', fullName);
+                    
+                    setTimeout(function() {
+                        window.openAppView(token, userId, role, fullName, true);
+                    }, 100);
+                } else {
+                    setTimeout(function() {
+                        alert('يرجى تسجيل الدخول أولاً لتثبيت المسار الدائمي.');
+                    }, 500);
+                }
+            }
+        })();
+
+        // Load saved permanent location on page load
+        (function() {
+            var savedLat = localStorage.getItem('perm_lat');
+            var savedLon = localStorage.getItem('perm_lon');
+            var savedName = localStorage.getItem('perm_name');
+            if (savedLat && savedLon) {
+                var st = document.getElementById('perm-loc-status');
+                if (st) { st.style.display = 'block'; st.textContent = '📍 موقعك الدائمي المثبت: ' + (savedName || savedLat + ',' + savedLon); }
+            }
+        })();
+
+        // ===== Feature 1: Log external contact =====
+        window.logExternalContact = function(driverId, channel) {
+            var passId = localStorage.getItem('user_id') || '';
+            var passPhone = '';
+            try { passPhone = localStorage.getItem('user_phone') || ''; } catch(_) {}
+            var pickup = (document.getElementById('cust-pickup-text') || {}).value || '';
+            var dropoff = (document.getElementById('cust-dropoff-text') || {}).value || '';
+            fetch('/api/bookings/external', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ passengerId: passId, driverId: driverId, channel: channel, passengerPhone: passPhone, pickup: pickup, dropoff: dropoff }) }).catch(function(){});
+        };
+
+        // ===== Feature 4: Join driver route =====
+        window.joinDriverRoute = async function(driverId, pickupTextEnc, dropoffTextEnc, pLat, pLon, dLat, dLon) {
+            var passId = localStorage.getItem('user_id') || '';
+            if (!passId) { alert('يرجى تسجيل الدخول أولاً'); return; }
+            try {
+                var res = await fetch('/api/passenger/join-request', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ passengerId: passId, driverId: driverId, pickupLat: pLat, pickupLon: pLon, dropoffLat: dLat, dropoffLon: dLon, pickupText: decodeURIComponent(pickupTextEnc), dropoffText: decodeURIComponent(dropoffTextEnc) }) });
+                var data = await res.json();
+                if (data.success) {
+                    alert('✅ تم إرسال طلب الانضمام للسائق. سيتم إعلامك عند الموافقة.');
+                    // Poll for approval
+                    pollJoinStatus(passId);
+                } else alert(data.error || 'تعذر إرسال الطلب');
+            } catch(e) { alert('خطأ في الاتصال'); }
+        };
+
+        // Poll join status every 10 seconds (Feature 6: Waze on approval)
+        var joinPollInterval = null;
+        function pollJoinStatus(passId) {
+            if (joinPollInterval) clearInterval(joinPollInterval);
+            joinPollInterval = setInterval(async function() {
+                try {
+                    var res = await fetch('/api/passenger/join-status/'+passId);
+                    var data = await res.json();
+                    if (data.request && data.request.status === 'Approved') {
+                        clearInterval(joinPollInterval);
+                        var dr = data.request;
+                        alert('🎉 وافق السائق '+(dr.driverName||'')+'\\nسيتواصل معك قريباً.');
+                    }
+                } catch(_) {}
+            }, 10000);
+        }
+
+        // ===== App view =====
+        window.openAppView = function(token,userId,role,fullName, forceMap) {
+            var container=document.getElementById('app-view-container');
+            var frame=document.getElementById('app-frame');
+            if(!container||!frame) return;
+            var targetHash=(role==='Driver'||role==='driver') && !forceMap ?'/driver':'/customer';
+            var targetUrl='/app-view/#'+targetHash+'?login_token='+encodeURIComponent(token)+'&userId='+encodeURIComponent(userId)+'&role='+encodeURIComponent(role)+'&fullName='+encodeURIComponent(fullName);
+            frame.src=targetUrl;
+            container.style.display='block';
+            document.body.style.overflow='hidden';
+        };
+
+        function togglePasswordVisibility(inputId,iconId) {
+            var inp=document.getElementById(inputId);
+            var ico=document.getElementById(iconId);
+            if(!inp) return;
+            if(inp.type==='password'){inp.type='text';if(ico){ico.className='fa-solid fa-eye-slash';}}
+            else{inp.type='password';if(ico){ico.className='fa-solid fa-eye';}}
+        }
+
+        function checkUserSession() {
+            try {
+                var token = localStorage.getItem('auth_token');
+                var userId = localStorage.getItem('user_id') || 'usr-current';
+                var role = localStorage.getItem('user_role') || 'Customer';
+                var fullName = localStorage.getItem('user_fullname') || (role === 'Driver' ? 'كابتن توصيله' : 'راكب توصيله');
+                var status = localStorage.getItem('driver_status') || '';
+
+                if (token && token.length > 5) {
+                    if (role === 'Driver' && (status === 'Pending' || status === 'Rejected')) {
+                        return;
+                    }
+                    var box = document.getElementById('user-logged-in-box');
+                    if (box) {
+                        box.style.display = 'block';
+                        var nameEl = document.getElementById('logged-user-name');
+                        var roleEl = document.getElementById('logged-user-role');
+                        if (nameEl) nameEl.textContent = fullName;
+                        if (roleEl) roleEl.textContent = role === 'Driver' ? 'كابتن معتمد' : 'راكب';
+                        // Feature 5: Show driver route button
+                        if (role === 'Driver') {
+                            var drBtnWrap = document.getElementById('driver-route-btn-wrap');
+                            if (drBtnWrap) drBtnWrap.style.display = 'block';
+                        }
+                    }
+                }
+            } catch (_) {}
+        }
+
+        window.showDriverSetRouteFromBox = function() {
+            var driverId = localStorage.getItem('user_id') || '';
+            showDriverSetRoute(driverId);
+        };
+
+        window.handleLogout = function() {
+            try {
+                ['auth_token','user_id','user_role','user_fullname','driver_status',
+                 'flutter.auth_token','flutter.user_id','flutter.user_role','flutter.user_fullname','flutter.driver_status'
+                ].forEach(function(k){localStorage.removeItem(k);});
+                sessionStorage.clear();
+            } catch(_) {}
+            window.location.replace('/');
+        };
+
+        // Dynamic Config from Dashboard
+        window.__telegramAdminLink = 'https://t.me/tawseela_iq_bot';
+        window.__whatsappAdminLink = 'https://wa.me/9647706204066';
+
+        function applyDynamicTheme(th) {
+            if (!th) return;
+            var fontColor = th.fontColor || th.textColor;
+            var primaryColor = th.primaryColor || '#111111';
+            var buttonColor = th.buttonColor || primaryColor;
+            var buttonHoverColor = th.buttonHoverColor || '#374151';
+            var activeTabColor = th.activeTabColor || th.activeColor || '#f59e0b';
+            var bgColor = th.bgColor;
+            var searchInputColor = th.searchInputColor;
+            var searchInputBg = th.searchInputBg;
+
+            if (th.appName) {
+                var titleEl = document.getElementById('app-main-title');
+                if (titleEl) titleEl.textContent = th.appName;
+                document.title = th.appName + ' | التسجيل والدخول';
+            }
+            if (th.logoEmoji) {
+                var logoEl = document.getElementById('app-main-logo');
+                if (logoEl) logoEl.textContent = th.logoEmoji;
+            }
+            if (th.footerText) {
+                var footEl = document.getElementById('app-main-footer');
+                if (footEl) footEl.textContent = th.footerText;
+            }
+            if (th.fontFamily) {
+                document.body.style.fontFamily = '"' + th.fontFamily + '", sans-serif';
+            }
+
+            // 1. Font color
+            if (fontColor) {
+                var fStyle = document.getElementById('dynamic-theme-font-style');
+                if (!fStyle) {
+                    fStyle = document.createElement('style');
+                    fStyle.id = 'dynamic-theme-font-style';
+                    document.head.appendChild(fStyle);
+                }
+                fStyle.textContent = 'body, label, .label, input, select, textarea, p, h1, h2, h3, h4, div:not(.trip-card):not(.badge-green):not(.tab-active):not(.btn-primary) { color: ' + fontColor + ' !important; } ::placeholder { color: ' + fontColor + ' !important; opacity: 0.65; }';
+            }
+
+            // 2. Background color
+            if (bgColor) {
+                document.body.style.backgroundColor = bgColor;
+                var bStyle = document.getElementById('dynamic-theme-bg-style');
+                if (!bStyle) {
+                    bStyle = document.createElement('style');
+                    bStyle.id = 'dynamic-theme-bg-style';
+                    document.head.appendChild(bStyle);
+                }
+                bStyle.textContent = 'body { background-color: ' + bgColor + ' !important; }';
+            }
+
+            // 3. Search & Text inputs
+            if (searchInputColor || searchInputBg) {
+                var sis = document.getElementById('dynamic-theme-search-input-style');
+                if (!sis) { sis = document.createElement('style'); sis.id = 'dynamic-theme-search-input-style'; document.head.appendChild(sis); }
+                var rules = '';
+                if (searchInputColor) rules += 'color: ' + searchInputColor + ' !important; ';
+                if (searchInputBg) rules += 'background-color: ' + searchInputBg + ' !important; ';
+                sis.textContent = '.search-input, .inp, #cust-pickup-text, #cust-dropoff-text, #cust-phone-input, #driver-phone-input, #cust-fullname-input, #driver-fullname-input { ' + rules + '}';
+            }
+
+            // 4. Buttons, Tab Active/Inactive, Trip Cards, and Sub-buttons
+            var btnStyle = document.getElementById('dynamic-theme-button-style');
+            if (!btnStyle) {
+                btnStyle = document.createElement('style');
+                btnStyle.id = 'dynamic-theme-button-style';
+                document.head.appendChild(btnStyle);
+            }
+            btnStyle.textContent = 
+                '.btn-primary, button.btn-primary, [type="submit"], #cust-submit-btn, #driver-submit-btn, #btn-open-app { background-color: ' + buttonColor + ' !important; color: #ffffff !important; border: none !important; } ' +
+                '.btn-primary:hover, button.btn-primary:hover, [type="submit"]:hover, #cust-submit-btn:hover, #driver-submit-btn:hover, #btn-open-app:hover { background-color: ' + buttonHoverColor + ' !important; color: #ffffff !important; } ' +
+                '.btn-primary:active, button.btn-primary:active, [type="submit"]:active, #cust-submit-btn:active, #driver-submit-btn:active { transform: scale(0.98); } ' +
+                '.tab-active, button.tab-active, #tab-btn-customer.tab-active, #tab-btn-driver.tab-active { background-color: ' + activeTabColor + ' !important; border-color: ' + activeTabColor + ' !important; color: #ffffff !important; } ' +
+                '.tab-active *, button.tab-active *, #tab-btn-customer.tab-active *, #tab-btn-driver.tab-active * { color: #ffffff !important; } ' +
+                '.tab-inactive, button.tab-inactive, #tab-btn-customer.tab-inactive, #tab-btn-driver.tab-inactive { background-color: #f3f4f6 !important; border-color: #e5e7eb !important; color: #6b7280 !important; } ' +
+                '.tab-inactive *, button.tab-inactive *, #tab-btn-customer.tab-inactive *, #tab-btn-driver.tab-inactive * { color: #6b7280 !important; } ' +
+                '.tab-inactive:hover, #tab-btn-customer.tab-inactive:hover, #tab-btn-driver.tab-inactive:hover { background-color: #e5e7eb !important; color: #111111 !important; } ' +
+                '.tab-inactive:hover *, #tab-btn-customer.tab-inactive:hover *, #tab-btn-driver.tab-inactive:hover * { color: #111111 !important; } ' +
+                '.sub-btn.on { background-color: ' + activeTabColor + ' !important; color: #ffffff !important; } ' +
+                '.sub-btn.on * { color: #ffffff !important; } ' +
+                '.sub-btn.off { background-color: transparent !important; color: #6b7280 !important; } ' +
+                '.sub-btn.off:hover { color: #111111 !important; } ' +
+                '.trip-card.selected { background-color: ' + activeTabColor + ' !important; border-color: ' + activeTabColor + ' !important; color: #ffffff !important; } ' +
+                '.trip-card.selected * { color: #ffffff !important; } ' +
+                '.trip-card:not(.selected) { background-color: #fafafa !important; border-color: #e5e7eb !important; } ' +
+                '.trip-card:not(.selected):hover { border-color: #9ca3af !important; background-color: #f3f4f6 !important; } ' +
+                '.btn-secondary { background-color: #f3f4f6 !important; color: #111111 !important; border-color: #e5e7eb !important; } ' +
+                '.btn-secondary:hover { background-color: #e5e7eb !important; } ' +
+                '.btn-small { background-color: #f3f4f6 !important; color: #374151 !important; border-color: #d1d5db !important; } ' +
+                '.btn-small:hover { background-color: #e5e7eb !important; }';
+        }
+
+        async function applyDynamicAppConfig() {
+            try {
+                var res = await fetch('/api/admin/app-config?t=' + Date.now());
+                var cfg = await res.json();
+                if (!cfg) return;
+
+                if (cfg.telegramAdminLink) window.__telegramAdminLink = cfg.telegramAdminLink;
+                if (cfg.whatsappAdminLink) window.__whatsappAdminLink = cfg.whatsappAdminLink;
+
+                if (cfg.theme) {
+                    applyDynamicTheme(cfg.theme);
+                }
+
+                if (cfg.staticTexts) {
+                    if (cfg.staticTexts.welcomeTitle) {
+                        var wt = document.getElementById('app-main-title');
+                        if (wt) wt.textContent = cfg.staticTexts.welcomeTitle;
+                    }
+                    if (cfg.staticTexts.welcomeSubtitle) {
+                        var ws = document.getElementById('app-main-subtitle');
+                        if (ws) ws.textContent = cfg.staticTexts.welcomeSubtitle;
+                    }
+                }
+            } catch(e) {}
+        }
+
+        // Real-time config sync via BroadcastChannel (instant reflection on font & color changes)
+        try {
+            var configSyncChannel = new BroadcastChannel('tawseela_config_sync');
+            configSyncChannel.onmessage = function(evt) {
+                if (evt.data && evt.data.type === 'config_updated') {
+                    if (evt.data.config && evt.data.config.theme) {
+                        applyDynamicTheme(evt.data.config.theme);
+                    }
+                    applyDynamicAppConfig();
+                }
+            };
+        } catch(_) {}
+
+        // Also poll config every 60s (Feature 7 fallback)
+        setInterval(applyDynamicAppConfig, 60000);
+
+        // Feature 5: Driver set-route after login
+        window.showDriverSetRoute = function(driverId) {
+            var existing = document.getElementById('driver-set-route-panel');
+            if (existing) { existing.style.display = existing.style.display === 'none' ? 'block' : 'none'; return; }
+            var panel = document.createElement('div');
+            panel.id = 'driver-set-route-panel';
+            panel.style.cssText = 'position:fixed;bottom:80px;left:0;right:0;background:#fff;border-top:2px solid #e5e7eb;padding:16px;z-index:1000;box-shadow:0 -4px 20px rgba(0,0,0,0.1)';
+            var inner = document.createElement('div');
+            inner.style.cssText = 'max-width:420px;margin:0 auto';
+            var title = document.createElement('div');
+            title.style.cssText = 'font-size:14px;font-weight:900;color:#111;margin-bottom:12px';
+            title.textContent = '🛣️ تثبيت مسارك';
+            inner.appendChild(title);
+            // From input
+            var fromWrap = document.createElement('div');
+            fromWrap.style.cssText = 'position:relative;margin-bottom:8px';
+            fromWrap.innerHTML = '<span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block"></span><input type="text" id="drv-from-input" class="inp" style="padding-right:26px" placeholder="نقطة الانطلاق">';
+            inner.appendChild(fromWrap);
+            // To input
+            var toWrap = document.createElement('div');
+            toWrap.style.cssText = 'position:relative;margin-bottom:12px';
+            toWrap.innerHTML = '<span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block"></span><input type="text" id="drv-to-input" class="inp" style="padding-right:26px" placeholder="نقطة الوصول">';
+            inner.appendChild(toWrap);
+            // Buttons row
+            var btnRow = document.createElement('div');
+            btnRow.style.cssText = 'display:flex;gap:8px';
+            var setBtn = document.createElement('button');
+            setBtn.style.cssText = 'flex:1;background:#111;color:#fff;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:900;font-family:inherit;cursor:pointer';
+            setBtn.textContent = '📌 تثبيت المسار';
+            setBtn.onclick = function() { submitDriverRoute(driverId); };
+            var reqBtn = document.createElement('button');
+            reqBtn.style.cssText = 'flex:1;background:#3b82f6;color:#fff;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:900;font-family:inherit;cursor:pointer';
+            reqBtn.textContent = '🙋 طلبات الانضمام';
+            reqBtn.onclick = function() { checkDriverJoinRequests(driverId); };
+            btnRow.appendChild(setBtn);
+            btnRow.appendChild(reqBtn);
+            inner.appendChild(btnRow);
+            var joinList = document.createElement('div');
+            joinList.id = 'driver-join-list';
+            joinList.style.marginTop = '10px';
+            inner.appendChild(joinList);
+            panel.appendChild(inner);
+            document.body.appendChild(panel);
+        };
+
+        window.submitDriverRoute = async function(driverId) {
+            var from = (document.getElementById('drv-from-input') || {}).value || '';
+            var to = (document.getElementById('drv-to-input') || {}).value || '';
+            if (!from || !to) { alert('أدخل نقطة الانطلاق والوصول'); return; }
+            try {
+                var res = await fetch('/api/driver/set-route', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ driverId: driverId, fromText: from, toText: to }) });
+                var data = await res.json();
+                if (data.success) { alert('✅ تم تثبيت مسارك. سيظهر للركاب الآن.'); }
+                else alert(data.error || 'خطأ في حفظ المسار');
+            } catch(e) { alert('خطأ في الاتصال'); }
+        };
+
+        window.checkDriverJoinRequests = async function(driverId) {
+            var list = document.getElementById('driver-join-list');
+            if (!list) return;
+            list.innerHTML = '<div style="font-size:12px;color:#6b7280;text-align:center">جاري التحميل...</div>';
+            try {
+                var res = await fetch('/api/driver/join-requests/' + driverId);
+                var data = await res.json();
+                var requests = data.requests || [];
+                if (requests.length === 0) { list.innerHTML = '<div style="font-size:12px;color:#6b7280;text-align:center;padding:8px">لا توجد طلبات انضمام</div>'; return; }
+                list.innerHTML = '';
+                requests.forEach(function(jr) {
+                    var d = document.createElement('div');
+                    d.style.cssText = 'background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;padding:10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px';
+                    var info = document.createElement('div');
+                    var nameDiv = document.createElement('div');
+                    nameDiv.style.cssText = 'font-size:12px;font-weight:700;color:#111';
+                    nameDiv.textContent = '🙋 ' + (jr.passengerName || 'راكب');
+                    var destDiv = document.createElement('div');
+                    destDiv.style.cssText = 'font-size:11px;color:#6b7280';
+                    destDiv.textContent = 'إلى: ' + (jr.dropoffText || '--');
+                    info.appendChild(nameDiv); info.appendChild(destDiv);
+                    d.appendChild(info);
+                    var btns = document.createElement('div');
+                    btns.style.cssText = 'display:flex;gap:6px';
+                    var apprBtn = document.createElement('button');
+                    apprBtn.style.cssText = 'background:#16a34a;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:900;font-family:inherit;cursor:pointer';
+                    apprBtn.textContent = '✅ قبول';
+                    (function(rid, did) { apprBtn.onclick = function() { driverApproveJoin(rid, did); }; })(jr.requestId, driverId);
+                    var rejBtn = document.createElement('button');
+                    rejBtn.style.cssText = 'background:#dc2626;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:900;font-family:inherit;cursor:pointer';
+                    rejBtn.textContent = '❌ رفض';
+                    (function(rid) { rejBtn.onclick = function() { driverRejectJoin(rid); }; })(jr.requestId);
+                    btns.appendChild(apprBtn); btns.appendChild(rejBtn);
+                    d.appendChild(btns);
+                    list.appendChild(d);
+                });
+            } catch(e) { list.innerHTML = '<div style="font-size:12px;color:#dc2626;text-align:center">خطأ في التحميل</div>'; }
+        };
+
+        // Feature 6: Driver approve join → open Waze
+        window.driverApproveJoin = async function(requestId, driverId) {
+            try {
+                var res = await fetch('/api/driver/approve-join', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ requestId: requestId, driverId: driverId }) });
+                var data = await res.json();
+                if (data.success) {
+                    alert('✅ تم قبول الراكب!');
+                    // Feature 6: Open Waze
+                    if (data.wazeUrl) {
+                        try { window.open(data.wazeUrl, '_system'); } catch(_) {
+                            window.location.href = data.wazeUrl;
+                        }
+                    }
+                    checkDriverJoinRequests(driverId);
+                }
+            } catch(e) { alert('خطأ في الاتصال'); }
+        };
+
+        window.driverRejectJoin = async function(requestId) {
+            try {
+                await fetch('/api/driver/reject-join', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ requestId: requestId }) });
+                alert('تم رفض الطلب.');
+            } catch(e) {}
+        };
+
+        // Onboarding
+        var onbScreens = [], onbIndex = 0;
+        async function initOnboarding() {
+            try {
+                var res = await fetch('/api/admin/onboarding?t=' + Date.now());
+                var data = await res.json();
+                if (!data.enabled || !data.screens || data.screens.length === 0) return;
+                if (localStorage.getItem('onboarding_done')) return;
+                onbScreens = data.screens;
+                onbIndex = 0;
+                showOnboardingScreen();
+            } catch(e) {}
+        }
+        function showOnboardingScreen() {
+            if (onbIndex >= onbScreens.length) { finishOnboarding(); return; }
+            var s = onbScreens[onbIndex];
+            var overlay = document.getElementById('onboarding-overlay');
+            if (!overlay) return;
+            overlay.style.display = 'flex';
+            document.getElementById('onb-icon').textContent = s.icon || '📱';
+            document.getElementById('onb-title').textContent = s.title || '';
+            document.getElementById('onb-desc').textContent = s.description || '';
+            var dots = document.getElementById('onb-dots');
+            dots.innerHTML = onbScreens.map(function(_,i) { return '<span style="width:8px;height:8px;border-radius:50%;background:'+(i===onbIndex?'#111':'#d1d5db')+'"></span>'; }).join('');
+            document.getElementById('onb-next-btn').textContent = onbIndex === onbScreens.length-1 ? 'ابدأ الآن' : 'التالي';
+        }
+        function nextOnboardingScreen() { onbIndex++; showOnboardingScreen(); }
+        function finishOnboarding() {
+            localStorage.setItem('onboarding_done', '1');
+            var o = document.getElementById('onboarding-overlay'); if(o) o.style.display='none';
+        }
+
+        // Load custom buttons
+        async function loadAppCustomButtons() {
+            try {
+                var res = await fetch('/api/admin/custom-buttons?t=' + Date.now());
+                var buttons = await res.json();
+                var container = document.getElementById('custom-buttons-container');
+                if (!container || !buttons || !Array.isArray(buttons) || buttons.length === 0) return;
+                container.innerHTML = '';
+                buttons.filter(function(b){ return b.visible !== false; }).forEach(function(b) {
+                    var a = document.createElement('a');
+                    a.href = b.url || '#';
+                    a.target = b.target || '_blank';
+                    a.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:12px;background:' + (b.color || '#111') + ';color:#fff;font-weight:900;font-size:14px;text-decoration:none;margin-bottom:8px;font-family:Cairo,sans-serif';
+                    a.textContent = (b.icon || '🔗') + ' ' + (b.label || '');
+                    container.appendChild(a);
+                });
+            } catch(e) {}
+        }
+
+        async function loadAppAds() {
+            try {
+                var res = await fetch('/api/admin/advertisements?t=' + Date.now());
+                var ads = await res.json();
+                var container = document.getElementById('ads-container');
+                if (!container || !ads || !Array.isArray(ads) || ads.length === 0) return;
+                container.innerHTML = '';
+                ads.filter(function(a){ return a.active !== false; }).forEach(function(a) {
+                    var d = document.createElement('div');
+                    d.style.cssText = 'background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:12px;padding:14px;margin-bottom:8px' + (a.linkUrl ? ';cursor:pointer' : '');
+                    d.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px">' + (a.title || '') + '</div><div style="font-size:12px;color:#6b7280">' + (a.content || '') + '</div>';
+                    if (a.linkUrl) {
+                        d.onclick = function() { window.open(a.linkUrl, '_blank'); };
+                    }
+                    container.appendChild(d);
+                });
+            } catch(e) {}
+        }
+
+        (function() {
+            applyDynamicAppConfig();
+            initOnboarding();
+            loadAppCustomButtons();
+            loadAppAds();
+            checkUserSession();
             var urlParams = new URLSearchParams(window.location.search);
             var role = urlParams.get('role');
-            if (role === 'Customer' || role === 'customer') {
-                window.switchRole('Customer');
-            } else {
-                window.switchRole('Driver');
-            }
+            if (role === 'Customer' || role === 'customer') window.switchRole('Customer');
+            else window.switchRole('Driver');
         })();
     </script>
 </body>
@@ -899,7 +2074,7 @@ class AuthController {
      * Completes Passenger (Customer) Registration with Duplicate Prevention and Password Hashing
      */
     async handleCompletePassengerRegistration(req, res, body) {
-        const { fullName, email, password, googleId, phoneNumber, route, address, area, paymentMethod } = body;
+        const { fullName, email, password, googleId, phoneNumber, route, address, area, paymentMethod, pickupLat, pickupLon, dropoffLat, dropoffLon } = body;
         if (!fullName || !phoneNumber || !password) {
             res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
             return res.end(JSON.stringify({ success: false, error: 'الاسم الكامل، رقم الهاتف، وكلمة المرور مطلوبة.' }));
@@ -920,6 +2095,16 @@ class AuthController {
 
         const cleanPhone = normDigits.startsWith('0') ? normDigits : ('0' + normDigits);
         const emailLower = email ? email.trim().toLowerCase() : `${cleanPhone}@tawseelaiq.app`;
+
+        // Optional WhatsApp OTP verification if provided
+        if (body.otpCode) {
+            const whatsappService = require('../whatsapp/whatsappService');
+            const otpCheck = whatsappService.verifyOtp(phoneNumber, body.otpCode);
+            if (!otpCheck.valid) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                return res.end(JSON.stringify({ success: false, error: otpCheck.error }));
+            }
+        }
 
         // 1. DUPLICATE CHECK (In Memory)
         const normalizeCheck = (p) => {
@@ -962,7 +2147,7 @@ class AuthController {
             return res.end(JSON.stringify({
                 success: false,
                 duplicate: true,
-                error: 'هذا الرقم مسجل بالفعل'
+                error: 'الرقم مسجل بالفعل، يرجى إدخال رقم هاتف آخر.'
             }));
         }
 
@@ -973,7 +2158,11 @@ class AuthController {
         const customerId = 'usr-c-' + Math.random().toString(36).substr(2, 9);
         const now = new Date().toISOString();
         const userRoute = (route || area || 'النجف الأشرف').trim();
-        const userAddress = (address || area || 'النجف الأشرف').trim();
+        const userAddress = (address || area || '').trim();
+        if (!pickupLat || !dropoffLat || !userAddress || !userRoute) {
+            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(JSON.stringify({ success: false, error: 'يجب تحديد نقطة الانطلاق ونقطة الوصول الفعلية على الخريطة' }));
+        }
 
         const newCustomer = {
             customerId,
@@ -987,6 +2176,10 @@ class AuthController {
             googleId: googleId || null,
             preferredPaymentMethod: paymentMethod || 'Cash',
             area: userAddress,
+            pickupLat: parseFloat(pickupLat),
+            pickupLon: parseFloat(pickupLon),
+            dropoffLat: parseFloat(dropoffLat),
+            dropoffLon: parseFloat(dropoffLon),
             ratingAverage: 5.0,
             totalBookings: 0,
             isActive: true,
@@ -999,16 +2192,16 @@ class AuthController {
         if (db.isPostgresConnected && db.pool) {
             try {
                 await db.pool.query(`
-                    INSERT INTO users (id, phone_number, email, full_name, role, google_id, is_active, is_blocked, created_at)
-                    VALUES ($1, $2, $3, $4, 'Customer', $5, true, false, $6)
-                    ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number
-                `, [customerId, cleanPhone, emailLower, fullName.trim(), googleId, now]);
+                    INSERT INTO users (id, phone_number, email, full_name, role, password_hash, plain_password, google_id, is_active, is_blocked, created_at)
+                    VALUES ($1, $2, $3, $4, 'Customer', $5, $6, $7, true, false, $8)
+                    ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number, password_hash = EXCLUDED.password_hash, plain_password = EXCLUDED.plain_password
+                `, [customerId, cleanPhone, emailLower, fullName.trim(), passwordHash, cleanPassword, googleId || null, now]);
 
                 await db.pool.query(`
-                    INSERT INTO customers (customer_id, full_name, phone_number, email, google_id, preferred_payment_method, rating_average, total_bookings, is_active, is_blocked, created_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, 5.0, 0, true, false, $7)
-                    ON CONFLICT (customer_id) DO NOTHING
-                `, [customerId, fullName.trim(), cleanPhone, emailLower, googleId, newCustomer.preferredPaymentMethod, now]);
+                    INSERT INTO customers (customer_id, full_name, phone_number, email, route, address, plain_password, password_hash, google_id, preferred_payment_method, rating_average, total_bookings, is_active, is_blocked, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 5.0, 0, true, false, $11)
+                    ON CONFLICT (customer_id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number, route = EXCLUDED.route, address = EXCLUDED.address, plain_password = EXCLUDED.plain_password, password_hash = EXCLUDED.password_hash
+                `, [customerId, fullName.trim(), cleanPhone, emailLower, userRoute, userAddress, cleanPassword, passwordHash, googleId || null, newCustomer.preferredPaymentMethod, now]);
             } catch (e) {
                 console.error('[AuthController] PG Customer insert error:', e);
             }
@@ -1023,6 +2216,12 @@ class AuthController {
         });
 
         db.saveStateSnapshot();
+
+        try {
+            const whatsappService = require('../whatsapp/whatsappService');
+            whatsappService.consumeVerification(cleanPhone);
+            whatsappService.sendTextMessage(cleanPhone, `مرحباً ${fullName.trim()} في تطبيق توصيلة (Tawsela) 🚖\nتم تسجيل حسابك كراكب بنجاح. نتمنى لك رحلات آمنة ومريحة!`).catch(() => {});
+        } catch (_) {}
 
         const token = 'jwt_customer_' + customerId;
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -1045,14 +2244,37 @@ class AuthController {
      * Completes Driver Registration with Duplicate Prevention, Password Hashing, documents & route
      */
     async handleCompleteDriverRegistration(req, res, body) {
-        const { fullName, email, password, googleId, phoneNumber, vehicleMake, vehiclePlate, vehicleYear, documents, route } = body;
-        if (!fullName || !email) {
+        const { fullName, email, password, googleId, phoneNumber, vehicleMake, vehiclePlate, vehicleYear, licenseNumber, documents, route } = body;
+        if (!fullName || !phoneNumber || !password) {
             res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-            return res.end(JSON.stringify({ success: false, error: 'الاسم والبريد الإلكتروني مطلوبان.' }));
+            return res.end(JSON.stringify({ success: false, error: 'الاسم الكامل، رقم الهاتف، وكلمة المرور مطلوبة.' }));
         }
 
-        const emailLower = email.trim().toLowerCase();
-        const cleanPhone = (phoneNumber || '').trim().replace(/[\s\-]/g, '');
+        // Iraqi Phone Normalization
+        const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+        let strPhone = String(phoneNumber).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d));
+        let normDigits = strPhone.replace(/[^0-9]/g, '');
+        if (normDigits.startsWith('00964')) normDigits = normDigits.substring(5);
+        else if (normDigits.startsWith('964')) normDigits = normDigits.substring(3);
+        if (normDigits.length === 10 && normDigits.startsWith('7')) normDigits = '0' + normDigits;
+
+        if (!normDigits || normDigits.length < 10) {
+            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(JSON.stringify({ success: false, error: 'يرجى إدخال رقم هاتف عراقي صالح (مثال: 07701234567).' }));
+        }
+
+        const cleanPhone = normDigits.startsWith('0') ? normDigits : ('0' + normDigits);
+        const emailLower = email ? email.trim().toLowerCase() : `${cleanPhone}@tawseelaiq.app`;
+
+        // Optional WhatsApp OTP verification if provided
+        if (body.otpCode) {
+            const whatsappService = require('../whatsapp/whatsappService');
+            const otpCheck = whatsappService.verifyOtp(phoneNumber, body.otpCode);
+            if (!otpCheck.valid) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                return res.end(JSON.stringify({ success: false, error: otpCheck.error }));
+            }
+        }
 
         // 1. DUPLICATE CHECK
         const existingCustomer = db.memoryState.customers.find(c =>
@@ -1069,7 +2291,7 @@ class AuthController {
             return res.end(JSON.stringify({
                 success: false,
                 duplicate: true,
-                error: 'عذراً، هذا البريد الإلكتروني أو رقم الهاتف مسجل مسبقاً في المنصة! يرجى تسجيل الدخول بدلاً من ذلك.'
+                error: 'الرقم مسجل بالفعل، يرجى إدخال رقم هاتف آخر.'
             }));
         }
 
@@ -1078,7 +2300,7 @@ class AuthController {
 
         const driverId = 'drv-g-' + Math.random().toString(36).substr(2, 9);
         const now = new Date().toISOString();
-        const licenseNumber = 'IRQ-NJF-' + Math.floor(1000 + Math.random() * 9000);
+        const finalLicenseNumber = licenseNumber || ('IRQ-NJF-' + Math.floor(1000 + Math.random() * 9000));
 
         // Process Documents
         const docUrls = {};
@@ -1099,7 +2321,7 @@ class AuthController {
             phoneNumber: cleanPhone,
             passwordHash,
             googleId: googleId || null,
-            licenseNumber,
+            licenseNumber: finalLicenseNumber,
             vehicle: {
                 make: vehicleMake || 'تويوتا',
                 model: vehicleMake || 'كورولا',
@@ -1107,6 +2329,7 @@ class AuthController {
                 year: parseInt(vehicleYear, 10) || 2023
             },
             route: route || null,
+            activeRoute: (body.fromRoute && body.toRoute) ? { fromText: body.fromRoute.trim(), toText: body.toRoute.trim(), setAt: now } : null,
             documents: docUrls,
             status: 'Pending',
             isVerified: false,
@@ -1124,7 +2347,7 @@ class AuthController {
             driverId,
             driverName: fullName,
             phoneNumber: cleanPhone,
-            licenseNumber,
+            licenseNumber: finalLicenseNumber,
             documents: docUrls,
             vehicle: newDriver.vehicle,
             status: 'Pending',
@@ -1191,16 +2414,14 @@ class AuthController {
 
         db.saveStateSnapshot();
 
-        const token = 'jwt_driver_' + driverId;
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         return res.end(JSON.stringify({
             success: true,
-            token,
             userId: driverId,
             role: 'Driver',
             fullName,
             status: 'Pending',
-            redirectUrl: `/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driverId)}&role=Driver&fullName=${encodeURIComponent(fullName)}`
+            message: 'تم استلام طلب التسجيل بنجاح. حسابك معلّق بانتظار التوثيق من قبل إدارة المنصة.'
         }));
     }
 
@@ -1212,8 +2433,7 @@ class AuthController {
         const safeRole = JSON.stringify(role);
         const safeFullName = JSON.stringify(fullName);
         const safeStatus = JSON.stringify(status || 'Active');
-        const isTawseela = reqHost && reqHost.includes('tawseelaiq.app');
-        const basePath = isTawseela ? '/' : '/app/';
+        const basePath = '/';
         const target = `${basePath}?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(userId)}&role=${encodeURIComponent(role)}&fullName=${encodeURIComponent(fullName)}&status=${encodeURIComponent(status || 'Active')}`;
 
         const html = `<!DOCTYPE html>
