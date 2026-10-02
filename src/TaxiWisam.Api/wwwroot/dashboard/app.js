@@ -3644,7 +3644,9 @@ var DASHBOARD_PRESETS = {
         dashPrimaryColor: '#f59e0b',
         dashActiveColor: '#f59e0b',
         dashBorderColor: '#e2e8f0',
-        dashFontFamily: 'Cairo'
+        dashFontFamily: 'Cairo',
+        dashFontStrokeColor: '#000000',
+        dashFontStrokeWidth: '0px'
     },
     dark: {
         dashBgColor: '#0b1120',
@@ -3656,7 +3658,9 @@ var DASHBOARD_PRESETS = {
         dashPrimaryColor: '#f59e0b',
         dashActiveColor: '#f59e0b',
         dashBorderColor: '#334155',
-        dashFontFamily: 'Cairo'
+        dashFontFamily: 'Cairo',
+        dashFontStrokeColor: '#000000',
+        dashFontStrokeWidth: '0px'
     },
     light: {
         dashBgColor: '#f8fafc',
@@ -3665,10 +3669,12 @@ var DASHBOARD_PRESETS = {
         dashHeaderBg: '#ffffff',
         dashTextColor: '#334155',
         dashHeadingColor: '#0f172a',
-        dashPrimaryColor: '#f59e0b',
-        dashActiveColor: '#f59e0b',
+        dashPrimaryColor: '#2563eb',
+        dashActiveColor: '#2563eb',
         dashBorderColor: '#e2e8f0',
-        dashFontFamily: 'Cairo'
+        dashFontFamily: 'Cairo',
+        dashFontStrokeColor: '#000000',
+        dashFontStrokeWidth: '0px'
     },
     amber: {
         dashBgColor: '#121214',
@@ -3680,7 +3686,9 @@ var DASHBOARD_PRESETS = {
         dashPrimaryColor: '#f59e0b',
         dashActiveColor: '#fbbf24',
         dashBorderColor: '#3f3f46',
-        dashFontFamily: 'Cairo'
+        dashFontFamily: 'Cairo',
+        dashFontStrokeColor: '#000000',
+        dashFontStrokeWidth: '0px'
     },
     emerald: {
         dashBgColor: '#022c22',
@@ -3692,7 +3700,9 @@ var DASHBOARD_PRESETS = {
         dashPrimaryColor: '#10b981',
         dashActiveColor: '#34d399',
         dashBorderColor: '#047857',
-        dashFontFamily: 'Tajawal'
+        dashFontFamily: 'Tajawal',
+        dashFontStrokeColor: '#000000',
+        dashFontStrokeWidth: '0px'
     },
     navy: {
         dashBgColor: '#07101f',
@@ -3704,7 +3714,9 @@ var DASHBOARD_PRESETS = {
         dashPrimaryColor: '#3b82f6',
         dashActiveColor: '#60a5fa',
         dashBorderColor: '#1e3a5f',
-        dashFontFamily: 'Almarai'
+        dashFontFamily: 'Almarai',
+        dashFontStrokeColor: '#000000',
+        dashFontStrokeWidth: '0px'
     },
     violet: {
         dashBgColor: '#110924',
@@ -3716,7 +3728,9 @@ var DASHBOARD_PRESETS = {
         dashPrimaryColor: '#a855f7',
         dashActiveColor: '#c084fc',
         dashBorderColor: '#3b2368',
-        dashFontFamily: 'Alexandria'
+        dashFontFamily: 'Alexandria',
+        dashFontStrokeColor: '#000000',
+        dashFontStrokeWidth: '0px'
     }
 };
 
@@ -3732,9 +3746,14 @@ function applyDashboardPreset(presetKey) {
     setColorPair('dash-primary-color', 'dash-primary-color-hex', p.dashPrimaryColor);
     setColorPair('dash-active-color', 'dash-active-color-hex', p.dashActiveColor);
     setColorPair('dash-border-color', 'dash-border-color-hex', p.dashBorderColor);
-    var ffEl = document.getElementById('dash-font-family');
-    if (ffEl) ffEl.value = p.dashFontFamily;
+    setColorPair('dash-font-stroke-color', 'dash-font-stroke-color-hex', p.dashFontStrokeColor || '#000000');
     
+    var ffEl = document.getElementById('dash-font-family');
+    if (ffEl) ffEl.value = p.dashFontFamily || 'Cairo';
+    
+    var swEl = document.getElementById('dash-font-stroke-width');
+    if (swEl) swEl.value = p.dashFontStrokeWidth || '0px';
+
     if (presetKey === 'default') {
         var styleEl = document.getElementById('dynamic-dashboard-theme-style');
         if (styleEl) styleEl.remove();
@@ -3743,7 +3762,10 @@ function applyDashboardPreset(presetKey) {
         applyDashboardTheme(p);
         localStorage.setItem('tawseela_dashboard_theme', JSON.stringify(p));
     }
-    showToast('تم تفعيل النمط بنجاح ✨');
+    
+    if (typeof showToast === 'function') {
+        showToast('تم تطبيق نمط (' + (presetKey === 'default' ? 'الافتراضي الأصلي' : presetKey) + ') بنجاح ✨');
+    }
 }
 window.applyDashboardPreset = applyDashboardPreset;
 
@@ -3764,6 +3786,8 @@ function syncLiveDashboardTheme() {
         dashPrimaryColor: getColorPairVal('dash-primary-color', 'dash-primary-color-hex', '#f59e0b'),
         dashActiveColor: getColorPairVal('dash-active-color', 'dash-active-color-hex', '#f59e0b'),
         dashBorderColor: getColorPairVal('dash-border-color', 'dash-border-color-hex', '#e2e8f0'),
+        dashFontStrokeColor: getColorPairVal('dash-font-stroke-color', 'dash-font-stroke-color-hex', '#000000'),
+        dashFontStrokeWidth: document.getElementById('dash-font-stroke-width') ? document.getElementById('dash-font-stroke-width').value : '0px',
         dashFontFamily: document.getElementById('dash-font-family') ? document.getElementById('dash-font-family').value : 'Cairo'
     };
     applyDashboardTheme(dt);
@@ -3782,6 +3806,8 @@ function applyDashboardTheme(th) {
     var activeColor = th.dashActiveColor || '#f59e0b';
     var borderColor = th.dashBorderColor || '#e2e8f0';
     var fontFamily = th.dashFontFamily || 'Cairo';
+    var strokeColor = th.dashFontStrokeColor || '#000000';
+    var strokeWidth = th.dashFontStrokeWidth || '0px';
 
     var styleEl = document.getElementById('dynamic-dashboard-theme-style');
     if (!styleEl) {
@@ -3789,9 +3815,15 @@ function applyDashboardTheme(th) {
         styleEl.id = 'dynamic-dashboard-theme-style';
         document.head.appendChild(styleEl);
     }
+
+    var strokeCss = (strokeWidth && strokeWidth !== '0px' && strokeWidth !== '0')
+        ? `-webkit-text-stroke: ${strokeWidth} ${strokeColor} !important; text-stroke: ${strokeWidth} ${strokeColor} !important;`
+        : `-webkit-text-stroke: 0 !important; text-stroke: 0 !important;`;
+
     styleEl.textContent = `
-        body, html, input, button, select, textarea, p, h1, h2, h3, h4, h5, h6, table, th, td, label {
+        body, html, input, button, select, textarea, p, h1, h2, h3, h4, h5, h6, table, th, td, label, div, span:not([class*="fa"]):not([class*="badge"]) {
             font-family: '${fontFamily}', 'Cairo', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+            ${strokeCss}
         }
         i, i[class*="fa"], i[class*="fa-"], .fa, .fas, .far, .fab, .fa-solid, .fa-regular, .fa-brands, [class^="fa-"], [class*=" fa-"] {
             font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands", "FontAwesome" !important;
@@ -3799,15 +3831,17 @@ function applyDashboardTheme(th) {
             font-variant: normal !important;
             text-rendering: auto !important;
             -webkit-font-smoothing: antialiased !important;
+            -webkit-text-stroke: 0 !important;
         }
         body {
             background-color: ${bg} !important;
+            color: ${textColor} !important;
         }
         main {
             background-color: ${bg} !important;
             color: ${textColor} !important;
         }
-        #sidebar-drawer {
+        #sidebar-drawer, aside {
             background-color: ${sidebarBg} !important;
             border-color: ${borderColor} !important;
         }
@@ -3815,29 +3849,31 @@ function applyDashboardTheme(th) {
             background-color: ${headerBg} !important;
             border-color: ${borderColor} !important;
         }
-        .bg-white, .bg-slate-50, .bg-slate-800\\/60, .bg-slate-900\\/80 {
+        .bg-white, .bg-slate-50, .bg-slate-100, .bg-slate-800, .bg-slate-850, .bg-slate-800\\/60, .bg-slate-900, .bg-slate-900\\/80, .bg-slate-950 {
             background-color: ${cardBg} !important;
             border-color: ${borderColor} !important;
         }
-        .text-slate-900, .text-slate-800, h1, h2, h3, .font-black {
+        .text-slate-900, .text-slate-800, .text-white, h1, h2, h3, h4, h5, h6, .font-black {
             color: ${headingColor} !important;
         }
-        .text-slate-500, .text-slate-600, .text-slate-700, .text-slate-400, p {
+        .text-slate-700, .text-slate-600, .text-slate-500, .text-slate-400, .text-slate-300, p, label {
             color: ${textColor} !important;
         }
-        .border-slate-200, .border-slate-300, .border-slate-700, .border-slate-800 {
+        .border-slate-100, .border-slate-200, .border-slate-300, .border-slate-600, .border-slate-700, .border-slate-800, .border-slate-900 {
             border-color: ${borderColor} !important;
         }
         .tab-btn.active {
-            color: ${activeColor} !important;
+            background-color: ${activeColor} !important;
+            color: #ffffff !important;
             border-color: ${activeColor} !important;
-            box-shadow: 0 4px 14px -2px ${activeColor}50 !important;
+            box-shadow: 0 4px 14px -2px ${activeColor}80 !important;
         }
         .tab-btn.active i, .tab-btn.active span {
-            color: ${activeColor} !important;
+            color: #ffffff !important;
         }
         .btn-theme-primary {
             background-color: ${primaryColor} !important;
+            border-color: ${primaryColor} !important;
             color: #ffffff !important;
         }
     `;
@@ -3855,6 +3891,8 @@ async function saveDashboardTheme() {
         dashPrimaryColor: getColorPairVal('dash-primary-color', 'dash-primary-color-hex', '#f59e0b'),
         dashActiveColor: getColorPairVal('dash-active-color', 'dash-active-color-hex', '#f59e0b'),
         dashBorderColor: getColorPairVal('dash-border-color', 'dash-border-color-hex', '#e2e8f0'),
+        dashFontStrokeColor: getColorPairVal('dash-font-stroke-color', 'dash-font-stroke-color-hex', '#000000'),
+        dashFontStrokeWidth: document.getElementById('dash-font-stroke-width') ? document.getElementById('dash-font-stroke-width').value : '0px',
         dashFontFamily: document.getElementById('dash-font-family') ? document.getElementById('dash-font-family').value : 'Cairo'
     };
     try {
@@ -3891,8 +3929,13 @@ function resetDashboardTheme() {
         setColorPair('dash-primary-color', 'dash-primary-color-hex', p.dashPrimaryColor);
         setColorPair('dash-active-color', 'dash-active-color-hex', p.dashActiveColor);
         setColorPair('dash-border-color', 'dash-border-color-hex', p.dashBorderColor);
+        setColorPair('dash-font-stroke-color', 'dash-font-stroke-color-hex', p.dashFontStrokeColor || '#000000');
+        
         var ffEl = document.getElementById('dash-font-family');
-        if (ffEl) ffEl.value = p.dashFontFamily;
+        if (ffEl) ffEl.value = p.dashFontFamily || 'Cairo';
+        
+        var swEl = document.getElementById('dash-font-stroke-width');
+        if (swEl) swEl.value = p.dashFontStrokeWidth || '0px';
 
         fetch('/api/admin/theme', {
             method: 'POST',
@@ -3972,22 +4015,39 @@ async function loadCustomizationSettings() {
             // Load Dashboard Theme if present
             if (cfg.theme.dashboardTheme) {
                 var dt = cfg.theme.dashboardTheme;
-                setColorPair('dash-bg-color', 'dash-bg-color-hex', dt.dashBgColor || '#0f172a');
+                setColorPair('dash-bg-color', 'dash-bg-color-hex', dt.dashBgColor || '#f8fafc');
                 setColorPair('dash-sidebar-bg', 'dash-sidebar-bg-hex', dt.dashSidebarBg || '#0f172a');
-                setColorPair('dash-card-bg', 'dash-card-bg-hex', dt.dashCardBg || '#1e293b');
+                setColorPair('dash-card-bg', 'dash-card-bg-hex', dt.dashCardBg || '#ffffff');
                 setColorPair('dash-header-bg', 'dash-header-bg-hex', dt.dashHeaderBg || '#0f172a');
-                setColorPair('dash-text-color', 'dash-text-color-hex', dt.dashTextColor || '#94a3b8');
-                setColorPair('dash-heading-color', 'dash-heading-color-hex', dt.dashHeadingColor || '#f8fafc');
+                setColorPair('dash-text-color', 'dash-text-color-hex', dt.dashTextColor || '#475569');
+                setColorPair('dash-heading-color', 'dash-heading-color-hex', dt.dashHeadingColor || '#0f172a');
                 setColorPair('dash-primary-color', 'dash-primary-color-hex', dt.dashPrimaryColor || '#f59e0b');
                 setColorPair('dash-active-color', 'dash-active-color-hex', dt.dashActiveColor || '#f59e0b');
-                setColorPair('dash-border-color', 'dash-border-color-hex', dt.dashBorderColor || '#334155');
+                setColorPair('dash-border-color', 'dash-border-color-hex', dt.dashBorderColor || '#e2e8f0');
+                setColorPair('dash-font-stroke-color', 'dash-font-stroke-color-hex', dt.dashFontStrokeColor || '#000000');
+                if (document.getElementById('dash-font-stroke-width')) document.getElementById('dash-font-stroke-width').value = dt.dashFontStrokeWidth || '0px';
                 if (document.getElementById('dash-font-family')) document.getElementById('dash-font-family').value = dt.dashFontFamily || 'Cairo';
                 applyDashboardTheme(dt);
                 localStorage.setItem('tawseela_dashboard_theme', JSON.stringify(dt));
             } else {
                 var cached = localStorage.getItem('tawseela_dashboard_theme');
                 if (cached) {
-                    try { applyDashboardTheme(JSON.parse(cached)); } catch(_) {}
+                    try {
+                        var dt = JSON.parse(cached);
+                        setColorPair('dash-bg-color', 'dash-bg-color-hex', dt.dashBgColor || '#f8fafc');
+                        setColorPair('dash-sidebar-bg', 'dash-sidebar-bg-hex', dt.dashSidebarBg || '#0f172a');
+                        setColorPair('dash-card-bg', 'dash-card-bg-hex', dt.dashCardBg || '#ffffff');
+                        setColorPair('dash-header-bg', 'dash-header-bg-hex', dt.dashHeaderBg || '#0f172a');
+                        setColorPair('dash-text-color', 'dash-text-color-hex', dt.dashTextColor || '#475569');
+                        setColorPair('dash-heading-color', 'dash-heading-color-hex', dt.dashHeadingColor || '#0f172a');
+                        setColorPair('dash-primary-color', 'dash-primary-color-hex', dt.dashPrimaryColor || '#f59e0b');
+                        setColorPair('dash-active-color', 'dash-active-color-hex', dt.dashActiveColor || '#f59e0b');
+                        setColorPair('dash-border-color', 'dash-border-color-hex', dt.dashBorderColor || '#e2e8f0');
+                        setColorPair('dash-font-stroke-color', 'dash-font-stroke-color-hex', dt.dashFontStrokeColor || '#000000');
+                        if (document.getElementById('dash-font-stroke-width')) document.getElementById('dash-font-stroke-width').value = dt.dashFontStrokeWidth || '0px';
+                        if (document.getElementById('dash-font-family')) document.getElementById('dash-font-family').value = dt.dashFontFamily || 'Cairo';
+                        applyDashboardTheme(dt);
+                    } catch(_) {}
                 }
             }
         }

@@ -33,7 +33,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;600;700;900&family=Almarai:wght@400;700;800&family=Cairo:wght@400;600;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Readex+Pro:wght@400;600;700&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/dashboard/style.css?v=20260924_rel120">
+    <link rel="stylesheet" href="/dashboard/style.css?v=20261003_v3">
     <script>
         try {
             var cachedDashTheme = localStorage.getItem('tawseela_dashboard_theme');
@@ -50,9 +50,15 @@
                     var activeColor = th.dashActiveColor || '#f59e0b';
                     var borderColor = th.dashBorderColor || '#e2e8f0';
                     var fontFamily = th.dashFontFamily || 'Cairo';
+                    var strokeColor = th.dashFontStrokeColor || '#000000';
+                    var strokeWidth = th.dashFontStrokeWidth || '0px';
+                    var strokeCss = (strokeWidth && strokeWidth !== '0px' && strokeWidth !== '0')
+                        ? '-webkit-text-stroke: ' + strokeWidth + ' ' + strokeColor + ' !important; text-stroke: ' + strokeWidth + ' ' + strokeColor + ' !important;'
+                        : '-webkit-text-stroke: 0 !important; text-stroke: 0 !important;';
+
                     var s = document.createElement('style');
                     s.id = 'dynamic-dashboard-theme-style';
-                    s.textContent = 'body, html, input, button, select, textarea, p, h1, h2, h3, h4, h5, h6, table, th, td, label { font-family: "' + fontFamily + '", "Cairo", sans-serif !important; } i, i[class*="fa"], .fa, .fas, .far, .fab, .fa-solid, .fa-regular, .fa-brands, [class^="fa-"], [class*=" fa-"] { font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands", "FontAwesome" !important; font-style: normal !important; } body { background-color: ' + bg + ' !important; } main { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } #sidebar-drawer { background-color: ' + sidebarBg + ' !important; border-color: ' + borderColor + ' !important; } header, header.bg-slate-900 { background-color: ' + headerBg + ' !important; border-color: ' + borderColor + ' !important; } .bg-white, .bg-slate-50, .bg-slate-800\\/60, .bg-slate-900\\/80 { background-color: ' + cardBg + ' !important; border-color: ' + borderColor + ' !important; } .text-slate-900, .text-slate-800, h1, h2, h3, .font-black { color: ' + headingColor + ' !important; } .text-slate-500, .text-slate-600, .text-slate-700, .text-slate-400, p { color: ' + textColor + ' !important; } .border-slate-200, .border-slate-300, .border-slate-700, .border-slate-800 { border-color: ' + borderColor + ' !important; } .tab-btn.active { color: ' + activeColor + ' !important; border-color: ' + activeColor + ' !important; box-shadow: 0 4px 14px -2px ' + activeColor + '50 !important; } .tab-btn.active i, .tab-btn.active span { color: ' + activeColor + ' !important; } .btn-theme-primary { background-color: ' + primaryColor + ' !important; color: #ffffff !important; }';
+                    s.textContent = 'body, html, input, button, select, textarea, p, h1, h2, h3, h4, h5, h6, table, th, td, label, div, span:not([class*="fa"]):not([class*="badge"]) { font-family: "' + fontFamily + '", "Cairo", sans-serif !important; ' + strokeCss + ' } i, i[class*="fa"], .fa, .fas, .far, .fab, .fa-solid, .fa-regular, .fa-brands, [class^="fa-"], [class*=" fa-"] { font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands", "FontAwesome" !important; font-style: normal !important; -webkit-text-stroke: 0 !important; } body { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } main { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } #sidebar-drawer, aside { background-color: ' + sidebarBg + ' !important; border-color: ' + borderColor + ' !important; } header, header.bg-slate-900 { background-color: ' + headerBg + ' !important; border-color: ' + borderColor + ' !important; } .bg-white, .bg-slate-50, .bg-slate-100, .bg-slate-800, .bg-slate-850, .bg-slate-800\\/60, .bg-slate-900, .bg-slate-900\\/80, .bg-slate-950 { background-color: ' + cardBg + ' !important; border-color: ' + borderColor + ' !important; } .text-slate-900, .text-slate-800, .text-white, h1, h2, h3, h4, h5, h6, .font-black { color: ' + headingColor + ' !important; } .text-slate-700, .text-slate-600, .text-slate-500, .text-slate-400, .text-slate-300, p, label { color: ' + textColor + ' !important; } .border-slate-100, .border-slate-200, .border-slate-300, .border-slate-600, .border-slate-700, .border-slate-800, .border-slate-900 { border-color: ' + borderColor + ' !important; } .tab-btn.active { background-color: ' + activeColor + ' !important; color: #ffffff !important; border-color: ' + activeColor + ' !important; box-shadow: 0 4px 14px -2px ' + activeColor + '80 !important; } .tab-btn.active i, .tab-btn.active span { color: #ffffff !important; } .btn-theme-primary { background-color: ' + primaryColor + ' !important; border-color: ' + primaryColor + ' !important; color: #ffffff !important; }';
                     document.head.appendChild(s);
                 }
             }
@@ -1332,6 +1338,26 @@
                                 <input type="text" id="dash-border-color-hex" value="#334155" placeholder="#334155" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveDashboardColor('dash-border-color','dash-border-color-hex',this.value)">
                             </div>
                         </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون حدود الخط (Font Outline / Border Color)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="dash-font-stroke-color" value="#000000" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveDashboardColor('dash-font-stroke-color','dash-font-stroke-color-hex',this.value)">
+                                <input type="text" id="dash-font-stroke-color-hex" value="#000000" placeholder="#000000" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveDashboardColor('dash-font-stroke-color','dash-font-stroke-color-hex',this.value)">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">سُمك حدود الخط (Font Border Width)</label>
+                            <select id="dash-font-stroke-width" onchange="syncLiveDashboardTheme()" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs">
+                                <option value="0px">بدون حدود (0px) - الافتراضي</option>
+                                <option value="0.5px">0.5px - حدود خفيفة ناعمة</option>
+                                <option value="1px">1px - حدود رفيعة واضحة</option>
+                                <option value="1.5px">1.5px - حدود متوسطة</option>
+                                <option value="2px">2px - حدود عريضة مميزة</option>
+                                <option value="3px">3px - حدود قوية جداً</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div class="pt-4 flex flex-col sm:flex-row items-center gap-3">
@@ -2402,6 +2428,6 @@
         });
     </script>
 
-    <script src="/dashboard/app.js?v=20260924_rel120"></script>
+    <script src="/dashboard/app.js?v=20261003_v3"></script>
 </body>
 </html>
