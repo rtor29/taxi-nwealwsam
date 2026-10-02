@@ -1,12 +1,11 @@
 import 'dart:convert';
-import 'dart:html' as html;
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/ads/screens/vacancy_ads_screen.dart';
+import '../../features/auth/screens/login_screen.dart';
 import '../../features/driver/screens/document_upload_screen.dart';
 import '../../features/driver/screens/driver_requests_screen.dart';
 import '../../features/support/screens/contact_support_screen.dart';
@@ -401,18 +400,16 @@ class _CustomSideDrawerState extends State<CustomSideDrawer> {
                     color: Colors.redAccent,
                     onTap: () async {
                       await widget.storageService.clearSession();
-                      final prefs = await SharedPreferences.getInstance();
-                      await prefs.clear();
-                      if (kIsWeb) {
-                        try {
-                          html.window.localStorage.clear();
-                          html.window.sessionStorage.clear();
-                          html.window.location.replace('/');
-                        } catch (_) {}
-                        return;
-                      }
                       if (!context.mounted) return;
-                      Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil('/', (route) => false);
+                      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+                        MaterialPageRoute(
+                          builder: (_) => LoginScreen(
+                            apiClient: widget.apiClient,
+                            storageService: widget.storageService,
+                          ),
+                        ),
+                        (route) => false,
+                      );
                     },
                   ),
                 ],

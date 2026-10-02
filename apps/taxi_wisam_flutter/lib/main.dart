@@ -1,4 +1,3 @@
-import 'dart:html' as html;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -6,7 +5,7 @@ import 'core/network/api_client.dart';
 import 'core/services/storage_service.dart';
 import 'core/theme/app_theme.dart';
 import 'features/auth/screens/login_screen.dart';
-import 'features/customer/screens/route_search_screen.dart';
+import 'features/customer/screens/customer_home_screen.dart';
 import 'features/driver/screens/driver_home_screen.dart';
 
 void main() async {
@@ -17,7 +16,6 @@ void main() async {
 
   String? token;
   String? role;
-  String? userId;
 
   // 1. On Web, check if Google OAuth redirect provided a login token in query parameters or fragment
   if (kIsWeb) {
@@ -33,7 +31,7 @@ void main() async {
 
       if (queryParams.containsKey('login_token') && queryParams['login_token']!.isNotEmpty) {
         token = queryParams['login_token'];
-        userId = queryParams['userId'] ?? 'usr-google';
+        final userId = queryParams['userId'] ?? 'usr-google';
         role = queryParams['role'] ?? 'Customer';
         final fullName = (queryParams['fullName'] != null && queryParams['fullName']!.isNotEmpty)
             ? queryParams['fullName']!
@@ -53,7 +51,6 @@ void main() async {
   if (token == null || token.isEmpty) {
     token = await storageService.getToken();
     role = await storageService.getUserRole();
-    userId = await storageService.getUserId();
   }
 
   runApp(TaxiWisamApp(
@@ -61,7 +58,6 @@ void main() async {
     apiClient: apiClient,
     initialToken: token,
     initialRole: role,
-    initialUserId: userId,
   ));
 }
 
@@ -70,7 +66,6 @@ class TaxiWisamApp extends StatelessWidget {
   final ApiClient apiClient;
   final String? initialToken;
   final String? initialRole;
-  final String? initialUserId;
 
   const TaxiWisamApp({
     super.key,
@@ -78,19 +73,20 @@ class TaxiWisamApp extends StatelessWidget {
     required this.apiClient,
     this.initialToken,
     this.initialRole,
-    this.initialUserId,
   });
 
   @override
   Widget build(BuildContext context) {
-    final bool isDriver = initialRole == 'Driver' || (kIsWeb && Uri.base.fragment.contains('driver'));
-    final Widget home = isDriver
-        ? DriverHome(apiClient: apiClient, storageService: storageService)
-        : RouteSearchScreen(
-            apiClient: apiClient,
-            customerId: initialUserId ?? '',
-            storageService: storageService,
-          );
+    Widget home;
+    if (initialToken != null && initialToken!.isNotEmpty) {
+      if (initialRole == 'Driver') {
+        home = DriverHome(apiClient: apiClient, storageService: storageService);
+      } else {
+        home = CustomerHome(apiClient: apiClient, storageService: storageService);
+      }
+    } else {
+      home = LoginScreen(apiClient: apiClient, storageService: storageService);
+    }
 
     return MaterialApp(
       title: 'توصيله',
@@ -107,30 +103,11 @@ class TaxiWisamApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
       home: home,
-      onGenerateRoute: (settings) {
-        final rawName = settings.name ?? '/';
-        final uri = Uri.parse(rawName);
-        final path = uri.path;
-
-        if (path.startsWith('/driver') || (initialRole == 'Driver' && (path == '/' || path.isEmpty))) {
-          return MaterialPageRoute(
-            builder: (_) => DriverHome(
-              apiClient: apiClient,
-              storageService: storageService,
-            ),
-            settings: settings,
-          );
-        }
-
-        final customerId = uri.queryParameters['userId'] ?? initialUserId ?? '';
-        return MaterialPageRoute(
-          builder: (_) => RouteSearchScreen(
-            apiClient: apiClient,
-            customerId: customerId,
-            storageService: storageService,
-          ),
-          settings: settings,
-        );
+      routes: {
+        '/': (context) => LoginScreen(apiClient: apiClient, storageService: storageService),
+        '/login': (context) => LoginScreen(apiClient: apiClient, storageService: storageService),
+        '/customer': (context) => CustomerHome(apiClient: apiClient, storageService: storageService),
+        '/driver': (context) => DriverHome(apiClient: apiClient, storageService: storageService),
       },
     );
   }

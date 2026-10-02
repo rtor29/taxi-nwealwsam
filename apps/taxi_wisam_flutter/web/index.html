@@ -2,26 +2,14 @@
 <html dir="rtl" lang="ar">
 <head>
   <base href="$FLUTTER_BASE_HREF">
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(regs) {
-        for (var i = 0; i < regs.length; i++) { regs[i].unregister(); }
-      });
-    }
-    if ('caches' in window) {
-      caches.keys().then(function(keys) {
-        for (var j = 0; j < keys.length; j++) { caches.delete(keys[j]); }
-      });
-    }
-  </script>
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="منصة توصيلة - خدمة حجز وتنظيم رحلات التوصيل اليومية والسائقين في النجف الأشرف بسهولة وأمان.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="توصيله - منصة حجز وتتبع الرحلات والخطوط اليومية في محافظة النجف الأشرف">
   <meta name="theme-color" content="#0F172A">
 
   <!-- iOS meta tags & icons -->
@@ -108,6 +96,31 @@
   </style>
 </head>
 <body>
+  <!-- Floating Captain Login Button -->
+  <div id="tawseela-captain-login-badge" style="position:fixed; top:16px; left:16px; z-index:9999999; direction:rtl; font-family:'Cairo', -apple-system, sans-serif;">
+    <a href="/captain-login" 
+       id="btn-goto-captain-login"
+       title="تسجيل الدخول للكباتن"
+       style="background:rgba(15,23,42,0.92); border:1.5px solid #f59e0b; color:#f59e0b; font-size:12px; font-weight:800; padding:8px 16px; border-radius:9999px; text-decoration:none; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,0.6); display:flex; align-items:center; gap:8px; transition:all 0.2s;"
+       onmouseover="this.style.background='#f59e0b'; this.style.color='#0f172a';"
+       onmouseout="this.style.background='rgba(15,23,42,0.92)'; this.style.color='#f59e0b';">
+      <span style="font-size:14px;">🚖</span>
+      <span>دخول الكباتن</span>
+    </a>
+  </div>
+  <!-- Floating Quick Cache Purge Button -->
+  <div id="tawseela-cache-buster" style="position:fixed; bottom:16px; left:16px; z-index:9999999; direction:rtl; font-family:'Cairo', -apple-system, sans-serif;">
+    <button onclick="forcePurgeAndReload()" 
+            id="btn-purge-cache"
+            title="تحديث التطبيق ومسح الذاكرة المؤقتة لآخر إصدار"
+            style="background:#0f172a; border:1.5px solid #f59e0b; color:#f59e0b; font-size:12px; font-weight:800; padding:8px 16px; border-radius:9999px; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,0.6); display:flex; align-items:center; gap:8px; transition:all 0.2s;"
+            onmouseover="this.style.background='#f59e0b'; this.style.color='#0f172a';"
+            onmouseout="this.style.background='#0f172a'; this.style.color='#f59e0b';">
+      <span style="font-size:14px;">🔄</span>
+      <span>تحديث التطبيق</span>
+    </button>
+  </div>
+
   <div id="loading-container">
     <div class="logo-box">
       <span class="logo-text">🚖</span>
@@ -123,7 +136,7 @@
       window.location.hostname = '173.212.206.86.nip.io';
     }
 
-    const APP_BUILD_VERSION = 'tawseela_v20260929_rel2';
+    const APP_BUILD_VERSION = 'tawseela_v20260923_rel5';
 
     window.forcePurgeAndReload = async function() {
       var btn = document.getElementById('btn-purge-cache');
@@ -261,14 +274,8 @@
         localStorage.clear();
         sessionStorage.clear();
         try {
-          if (window.top && window.top !== window) {
-            window.top.location.replace('/');
-          } else {
-            window.location.replace('/');
-          }
-        } catch (_) {
-          window.location.replace('/');
-        }
+          window.history.replaceState(null, 'توصيله', '/');
+        } catch (_) {}
       } catch (e) {
         console.error('Error clearing session:', e);
       }
@@ -289,7 +296,7 @@
     setTimeout(hideLoader, 12000);
 
     // 3. Google OAuth Helper
-    window.googleOAuthClientId = "483987924711-" + "2935qs8ilglnen6jispd1u1t2fd0m2e6." + "apps.googleusercontent.com";
+    window.googleOAuthClientId = "483987924711-2935qs8ilglnen6jispd1u1t2fd0m2e6.apps.googleusercontent.com";
     window.startGoogleLogin = function() {
       var isDomain = window.location.hostname.indexOf('tawseelaiq.app') !== -1;
       var callbackUri = isDomain

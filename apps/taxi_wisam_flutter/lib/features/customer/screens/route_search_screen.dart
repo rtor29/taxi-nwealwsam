@@ -364,6 +364,13 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
       }
 
       if (mounted) {
+        final resData = response.data;
+        List list = [];
+        if (resData is List) {
+          list = resData;
+        } else if (resData is Map && resData['routes'] is List) {
+          list = resData['routes'];
+        }
         setState(() {
           _matches = list;
         });

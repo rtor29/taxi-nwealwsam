@@ -61,9 +61,10 @@ obj/
 **/android/local.properties
 **/android/GeneratedPluginRegistrant.java
 
-# Logs
+# Logs & Data
 *.log
 *.apk
 data/uploads/
 data/backups/
-scratch/
+data/*.sql
+data/state_backup_*.json
