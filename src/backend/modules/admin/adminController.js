@@ -73,6 +73,12 @@ class AdminController {
 
         if (data.fullName !== undefined) driver.fullName = String(data.fullName).trim();
         if (data.phoneNumber !== undefined) driver.phoneNumber = String(data.phoneNumber).trim();
+        if (data.permanentLat !== undefined && data.permanentLat !== null && data.permanentLat !== '') driver.permanentLat = parseFloat(data.permanentLat);
+        if (data.permanentLon !== undefined && data.permanentLon !== null && data.permanentLon !== '') driver.permanentLon = parseFloat(data.permanentLon);
+        if (data.permanentLocationName !== undefined) driver.permanentLocationName = String(data.permanentLocationName).trim();
+        if (data.permanentDropoffLat !== undefined && data.permanentDropoffLat !== null && data.permanentDropoffLat !== '') driver.permanentDropoffLat = parseFloat(data.permanentDropoffLat);
+        if (data.permanentDropoffLon !== undefined && data.permanentDropoffLon !== null && data.permanentDropoffLon !== '') driver.permanentDropoffLon = parseFloat(data.permanentDropoffLon);
+        if (data.permanentDropoffName !== undefined) driver.permanentDropoffName = String(data.permanentDropoffName).trim();
         if (data.route !== undefined) {
             driver.route = String(data.route).trim();
             let r = db.memoryState.routes.find(rt => rt.driverId === driverId);
@@ -126,6 +132,12 @@ class AdminController {
             route: driver.route
         });
         db.saveStateSnapshot();
+        if (driver.permanentLat && driver.permanentLon) {
+            db.persistDriverPermanentLocation(driverId, {
+                lat: driver.permanentLat, lon: driver.permanentLon, locationName: driver.permanentLocationName,
+                dropoffLat: driver.permanentDropoffLat, dropoffLon: driver.permanentDropoffLon, dropoffName: driver.permanentDropoffName
+            }).catch(()=>{});
+        }
 
         return { success: true, driver };
     }
@@ -455,6 +467,12 @@ class AdminController {
 
         if (data.fullName !== undefined) customer.fullName = String(data.fullName).trim();
         if (data.phoneNumber !== undefined) customer.phoneNumber = String(data.phoneNumber).trim();
+        if (data.permanentLat !== undefined && data.permanentLat !== null && data.permanentLat !== '') customer.permanentLat = parseFloat(data.permanentLat);
+        if (data.permanentLon !== undefined && data.permanentLon !== null && data.permanentLon !== '') customer.permanentLon = parseFloat(data.permanentLon);
+        if (data.permanentLocationName !== undefined) customer.permanentLocationName = String(data.permanentLocationName).trim();
+        if (data.permanentDropoffLat !== undefined && data.permanentDropoffLat !== null && data.permanentDropoffLat !== '') customer.permanentDropoffLat = parseFloat(data.permanentDropoffLat);
+        if (data.permanentDropoffLon !== undefined && data.permanentDropoffLon !== null && data.permanentDropoffLon !== '') customer.permanentDropoffLon = parseFloat(data.permanentDropoffLon);
+        if (data.permanentDropoffName !== undefined) customer.permanentDropoffName = String(data.permanentDropoffName).trim();
         if (data.route !== undefined) customer.route = String(data.route).trim();
         if (data.address !== undefined) {
             customer.address = String(data.address).trim();
@@ -492,6 +510,12 @@ class AdminController {
             address: customer.address
         });
         db.saveStateSnapshot();
+        if (customer.permanentLat && customer.permanentLon) {
+            db.persistCustomerPermanentLocation(customerId, {
+                lat: customer.permanentLat, lon: customer.permanentLon, locationName: customer.permanentLocationName,
+                dropoffLat: customer.permanentDropoffLat, dropoffLon: customer.permanentDropoffLon, dropoffName: customer.permanentDropoffName
+            }).catch(()=>{});
+        }
 
         return { success: true, customer };
     }

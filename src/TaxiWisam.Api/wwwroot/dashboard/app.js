@@ -2853,6 +2853,281 @@ async function submitAdminAddCustomer(event) {
     }
 }
 
+// =============================================================================
+// Interactive Maps in Customer & Driver Edit Modals
+// =============================================================================
+let editCustMap = null;
+let editCustPickupMarker = null;
+let editCustDropoffMarker = null;
+let editCustMode = 'pickup';
+
+let editDrvMap = null;
+let editDrvPickupMarker = null;
+let editDrvDropoffMarker = null;
+let editDrvMode = 'pickup';
+
+function setEditMapMode(type, mode) {
+    if (type === 'customer') {
+        editCustMode = mode;
+        const btnPickup = document.getElementById('btn-mode-cust-pickup');
+        const btnDropoff = document.getElementById('btn-mode-cust-dropoff');
+        if (btnPickup && btnDropoff) {
+            if (mode === 'pickup') {
+                btnPickup.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 text-white transition shadow-sm';
+                btnDropoff.className = 'px-2.5 py-1 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 transition';
+            } else {
+                btnPickup.className = 'px-2.5 py-1 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 transition';
+                btnDropoff.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-600 text-white transition shadow-sm';
+            }
+        }
+    } else {
+        editDrvMode = mode;
+        const btnPickup = document.getElementById('btn-mode-drv-pickup');
+        const btnDropoff = document.getElementById('btn-mode-drv-dropoff');
+        if (btnPickup && btnDropoff) {
+            if (mode === 'pickup') {
+                btnPickup.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 text-white transition shadow-sm';
+                btnDropoff.className = 'px-2.5 py-1 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 transition';
+            } else {
+                btnPickup.className = 'px-2.5 py-1 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 transition';
+                btnDropoff.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-600 text-white transition shadow-sm';
+            }
+        }
+    }
+}
+
+function createPinElement(color, label) {
+    const el = document.createElement('div');
+    el.style.cssText = `background:${color};width:24px;height:24px;border-radius:50%;border:2px solid white;box-shadow:0 3px 8px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:bold;cursor:pointer;`;
+    el.innerHTML = label;
+    return el;
+}
+
+function initEditCustomerMap(customer) {
+    const container = document.getElementById('edit-cust-mapbox-container');
+    if (!container || typeof mapboxgl === 'undefined') return;
+
+    ensureMapboxRTL();
+    mapboxgl.accessToken = MAPBOX_PUBLIC_TOKEN;
+
+    const pLat = customer.permanentLat || (customer.routeLat || 31.9961);
+    const pLon = customer.permanentLon || (customer.routeLon || 44.3168);
+
+    document.getElementById('edit-cust-lat').value = customer.permanentLat || '';
+    document.getElementById('edit-cust-lon').value = customer.permanentLon || '';
+    document.getElementById('edit-cust-location-name').value = customer.permanentLocationName || '';
+    document.getElementById('edit-cust-dropoff-lat').value = customer.permanentDropoffLat || '';
+    document.getElementById('edit-cust-dropoff-lon').value = customer.permanentDropoffLon || '';
+    document.getElementById('edit-cust-dropoff-name').value = customer.permanentDropoffName || '';
+
+    document.getElementById('disp-edit-cust-pickup').textContent = customer.permanentLocationName || customer.address || (customer.permanentLat ? `${customer.permanentLat}, ${customer.permanentLon}` : 'لم يحدد');
+    document.getElementById('disp-edit-cust-dropoff').textContent = customer.permanentDropoffName || customer.route || (customer.permanentDropoffLat ? `${customer.permanentDropoffLat}, ${customer.permanentDropoffLon}` : 'لم يحدد');
+
+    if (!editCustMap) {
+        editCustMap = new mapboxgl.Map({
+            container: 'edit-cust-mapbox-container',
+            style: 'mapbox://styles/mapbox/navigation-night-v1',
+            center: [pLon, pLat],
+            zoom: 13,
+            maxBounds: [[44.05, 31.75], [44.65, 32.35]]
+        });
+        editCustMap.addControl(new mapboxgl.NavigationControl(), 'top-left');
+
+        editCustMap.on('click', async (e) => {
+            const { lng, lat } = e.lngLat;
+            await applyEditModalCoordinate('customer', editCustMode, lat, lng);
+        });
+    } else {
+        editCustMap.setCenter([pLon, pLat]);
+        editCustMap.resize();
+    }
+
+    setTimeout(() => {
+        if (editCustMap) editCustMap.resize();
+    }, 200);
+
+    if (editCustPickupMarker) editCustPickupMarker.remove();
+    if (editCustDropoffMarker) editCustDropoffMarker.remove();
+
+    if (customer.permanentLat && customer.permanentLon) {
+        editCustPickupMarker = new mapboxgl.Marker({ element: createPinElement('#10B981', '🟢') })
+            .setLngLat([customer.permanentLon, customer.permanentLat])
+            .addTo(editCustMap);
+    }
+    if (customer.permanentDropoffLat && customer.permanentDropoffLon) {
+        editCustDropoffMarker = new mapboxgl.Marker({ element: createPinElement('#EF4444', '🔴') })
+            .setLngLat([customer.permanentDropoffLon, customer.permanentDropoffLat])
+            .addTo(editCustMap);
+    }
+}
+
+function initEditDriverMap(driver) {
+    const container = document.getElementById('edit-drv-mapbox-container');
+    if (!container || typeof mapboxgl === 'undefined') return;
+
+    ensureMapboxRTL();
+    mapboxgl.accessToken = MAPBOX_PUBLIC_TOKEN;
+
+    const pLat = driver.permanentLat || (driver.latitude || 31.9961);
+    const pLon = driver.permanentLon || (driver.longitude || 44.3168);
+
+    document.getElementById('edit-drv-lat').value = driver.permanentLat || '';
+    document.getElementById('edit-drv-lon').value = driver.permanentLon || '';
+    document.getElementById('edit-drv-location-name').value = driver.permanentLocationName || '';
+    document.getElementById('edit-drv-dropoff-lat').value = driver.permanentDropoffLat || '';
+    document.getElementById('edit-drv-dropoff-lon').value = driver.permanentDropoffLon || '';
+    document.getElementById('edit-drv-dropoff-name').value = driver.permanentDropoffName || '';
+
+    document.getElementById('disp-edit-drv-pickup').textContent = driver.permanentLocationName || driver.route || (driver.permanentLat ? `${driver.permanentLat}, ${driver.permanentLon}` : 'لم يحدد');
+    document.getElementById('disp-edit-drv-dropoff').textContent = driver.permanentDropoffName || (driver.permanentDropoffLat ? `${driver.permanentDropoffLat}, ${driver.permanentDropoffLon}` : 'لم يحدد');
+
+    if (!editDrvMap) {
+        editDrvMap = new mapboxgl.Map({
+            container: 'edit-drv-mapbox-container',
+            style: 'mapbox://styles/mapbox/navigation-night-v1',
+            center: [pLon, pLat],
+            zoom: 13,
+            maxBounds: [[44.05, 31.75], [44.65, 32.35]]
+        });
+        editDrvMap.addControl(new mapboxgl.NavigationControl(), 'top-left');
+
+        editDrvMap.on('click', async (e) => {
+            const { lng, lat } = e.lngLat;
+            await applyEditModalCoordinate('driver', editDrvMode, lat, lng);
+        });
+    } else {
+        editDrvMap.setCenter([pLon, pLat]);
+        editDrvMap.resize();
+    }
+
+    setTimeout(() => {
+        if (editDrvMap) editDrvMap.resize();
+    }, 200);
+
+    if (editDrvPickupMarker) editDrvPickupMarker.remove();
+    if (editDrvDropoffMarker) editDrvDropoffMarker.remove();
+
+    if (driver.permanentLat && driver.permanentLon) {
+        editDrvPickupMarker = new mapboxgl.Marker({ element: createPinElement('#10B981', '🟢') })
+            .setLngLat([driver.permanentLon, driver.permanentLat])
+            .addTo(editDrvMap);
+    }
+    if (driver.permanentDropoffLat && driver.permanentDropoffLon) {
+        editDrvDropoffMarker = new mapboxgl.Marker({ element: createPinElement('#EF4444', '🔴') })
+            .setLngLat([driver.permanentDropoffLon, driver.permanentDropoffLat])
+            .addTo(editDrvMap);
+    }
+}
+
+async function applyEditModalCoordinate(type, mode, lat, lon, customName) {
+    let placeName = customName;
+    if (!placeName) {
+        try {
+            const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lon},${lat}.json?access_token=${MAPBOX_PUBLIC_TOKEN}&language=ar&types=poi,neighborhood,locality,place,address`);
+            const data = await res.json();
+            if (data.features && data.features.length > 0) {
+                placeName = data.features[0].text || data.features[0].place_name;
+            }
+        } catch (_) {}
+    }
+    placeName = placeName || `موقع في النجف (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+
+    if (type === 'customer') {
+        if (mode === 'pickup') {
+            document.getElementById('edit-cust-lat').value = lat;
+            document.getElementById('edit-cust-lon').value = lon;
+            document.getElementById('edit-cust-location-name').value = placeName;
+            document.getElementById('disp-edit-cust-pickup').textContent = placeName;
+            document.getElementById('edit-cust-address').value = placeName;
+            if (editCustPickupMarker) editCustPickupMarker.remove();
+            editCustPickupMarker = new mapboxgl.Marker({ element: createPinElement('#10B981', '🟢') })
+                .setLngLat([lon, lat])
+                .addTo(editCustMap);
+        } else {
+            document.getElementById('edit-cust-dropoff-lat').value = lat;
+            document.getElementById('edit-cust-dropoff-lon').value = lon;
+            document.getElementById('edit-cust-dropoff-name').value = placeName;
+            document.getElementById('disp-edit-cust-dropoff').textContent = placeName;
+            const pName = document.getElementById('edit-cust-location-name').value || 'النجف';
+            document.getElementById('edit-cust-route').value = `${pName} → ${placeName}`;
+            if (editCustDropoffMarker) editCustDropoffMarker.remove();
+            editCustDropoffMarker = new mapboxgl.Marker({ element: createPinElement('#EF4444', '🔴') })
+                .setLngLat([lon, lat])
+                .addTo(editCustMap);
+        }
+    } else {
+        if (mode === 'pickup') {
+            document.getElementById('edit-drv-lat').value = lat;
+            document.getElementById('edit-drv-lon').value = lon;
+            document.getElementById('edit-drv-location-name').value = placeName;
+            document.getElementById('disp-edit-drv-pickup').textContent = placeName;
+            document.getElementById('edit-drv-route').value = placeName;
+            if (editDrvPickupMarker) editDrvPickupMarker.remove();
+            editDrvPickupMarker = new mapboxgl.Marker({ element: createPinElement('#10B981', '🟢') })
+                .setLngLat([lon, lat])
+                .addTo(editDrvMap);
+        } else {
+            document.getElementById('edit-drv-dropoff-lat').value = lat;
+            document.getElementById('edit-drv-dropoff-lon').value = lon;
+            document.getElementById('edit-drv-dropoff-name').value = placeName;
+            document.getElementById('disp-edit-drv-dropoff').textContent = placeName;
+            const pName = document.getElementById('edit-drv-location-name').value || 'النجف';
+            document.getElementById('edit-drv-route').value = `${pName} → ${placeName}`;
+            if (editDrvDropoffMarker) editDrvDropoffMarker.remove();
+            editDrvDropoffMarker = new mapboxgl.Marker({ element: createPinElement('#EF4444', '🔴') })
+                .setLngLat([lon, lat])
+                .addTo(editDrvMap);
+        }
+    }
+}
+
+let editModalSearchDebounce = null;
+async function searchEditModalPlace(query, type) {
+    const resultsContainer = document.getElementById(type === 'customer' ? 'edit-cust-search-results' : 'edit-drv-search-results');
+    if (!resultsContainer) return;
+    if (!query || query.trim().length === 0) {
+        resultsContainer.innerHTML = '';
+        resultsContainer.classList.add('hidden');
+        return;
+    }
+
+    clearTimeout(editModalSearchDebounce);
+    editModalSearchDebounce = setTimeout(async () => {
+        try {
+            const bbox = '44.05,31.75,44.65,32.35';
+            const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query.trim())}.json?access_token=${MAPBOX_PUBLIC_TOKEN}&country=iq&bbox=${bbox}&proximity=44.3168,31.9961&language=ar&limit=5`);
+            const data = await res.json();
+            if (!data.features || data.features.length === 0) {
+                resultsContainer.innerHTML = '<div class="p-2 text-slate-400 text-center">لا توجد نتائج مطابقة في النجف</div>';
+                resultsContainer.classList.remove('hidden');
+                return;
+            }
+
+            resultsContainer.innerHTML = '';
+            data.features.forEach(f => {
+                const item = document.createElement('div');
+                item.className = 'p-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-800 flex items-center justify-between';
+                item.innerHTML = `<span>📍 ${f.place_name}</span>`;
+                item.onclick = async () => {
+                    const [lon, lat] = f.center;
+                    const mode = type === 'customer' ? editCustMode : editDrvMode;
+                    const targetMap = type === 'customer' ? editCustMap : editDrvMap;
+                    await applyEditModalCoordinate(type, mode, lat, lon, f.text || f.place_name);
+                    if (targetMap) {
+                        targetMap.flyTo({ center: [lon, lat], zoom: 14 });
+                    }
+                    resultsContainer.innerHTML = '';
+                    resultsContainer.classList.add('hidden');
+                    const searchInput = document.getElementById(type === 'customer' ? 'edit-cust-map-search' : 'edit-drv-map-search');
+                    if (searchInput) searchInput.value = '';
+                };
+                resultsContainer.appendChild(item);
+            });
+            resultsContainer.classList.remove('hidden');
+        } catch (_) {}
+    }, 250);
+}
+
 // Customer Editing
 function openEditCustomerModal(customerId) {
     const customer = (window.customersMap && window.customersMap[customerId]) || {};
@@ -2862,6 +3137,9 @@ function openEditCustomerModal(customerId) {
     document.getElementById('edit-cust-route').value = customer.route || customer.area || '';
     document.getElementById('edit-cust-address').value = customer.address || customer.area || '';
     document.getElementById('edit-cust-password').value = '';
+
+    setEditMapMode('customer', 'pickup');
+
     const modal = document.getElementById('modal-edit-customer');
     if (modal) {
         modal.classList.add('active');
@@ -2870,6 +3148,10 @@ function openEditCustomerModal(customerId) {
         modal.style.display = 'flex';
         modal.style.pointerEvents = 'auto';
     }
+
+    setTimeout(() => {
+        initEditCustomerMap(customer);
+    }, 100);
 }
 
 function closeEditCustomerModal() {
@@ -2892,8 +3174,23 @@ async function submitEditCustomer(event) {
     const address = document.getElementById('edit-cust-address').value.trim();
     const password = document.getElementById('edit-cust-password').value.trim();
 
+    const permanentLat = document.getElementById('edit-cust-lat').value;
+    const permanentLon = document.getElementById('edit-cust-lon').value;
+    const permanentLocationName = document.getElementById('edit-cust-location-name').value;
+    const permanentDropoffLat = document.getElementById('edit-cust-dropoff-lat').value;
+    const permanentDropoffLon = document.getElementById('edit-cust-dropoff-lon').value;
+    const permanentDropoffName = document.getElementById('edit-cust-dropoff-name').value;
+
     try {
-        const payload = { fullName, phoneNumber, route, address };
+        const payload = {
+            fullName, phoneNumber, route, address,
+            permanentLat: permanentLat || null,
+            permanentLon: permanentLon || null,
+            permanentLocationName: permanentLocationName || address,
+            permanentDropoffLat: permanentDropoffLat || null,
+            permanentDropoffLon: permanentDropoffLon || null,
+            permanentDropoffName: permanentDropoffName || route
+        };
         if (password) payload.password = password;
 
         const res = await fetch(`${API_BASE}/customers/${customerId}/update`, {
@@ -2903,9 +3200,10 @@ async function submitEditCustomer(event) {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-            showToast('تم تحديث بيانات الراكب بنجاح! ✅');
+            showToast('تم تحديث بيانات ومسار الراكب بنجاح! ✅');
             closeEditCustomerModal();
             loadCustomers();
+            if (typeof refreshRoutesAndBookingsOnMap === 'function') refreshRoutesAndBookingsOnMap();
         } else {
             alert(data.error || 'فشل تحديث بيانات الراكب.');
         }
@@ -2922,6 +3220,9 @@ function openEditDriverModal(driverId) {
     document.getElementById('edit-drv-phone').value = driver.phoneNumber || '';
     document.getElementById('edit-drv-route').value = driver.route || '';
     document.getElementById('edit-drv-password').value = '';
+
+    setEditMapMode('driver', 'pickup');
+
     const modal = document.getElementById('modal-edit-driver');
     if (modal) {
         modal.classList.add('active');
@@ -2930,6 +3231,10 @@ function openEditDriverModal(driverId) {
         modal.style.display = 'flex';
         modal.style.pointerEvents = 'auto';
     }
+
+    setTimeout(() => {
+        initEditDriverMap(driver);
+    }, 100);
 }
 
 function closeEditDriverModal() {
@@ -2951,8 +3256,23 @@ async function submitEditDriver(event) {
     const route = document.getElementById('edit-drv-route').value.trim();
     const password = document.getElementById('edit-drv-password').value.trim();
 
+    const permanentLat = document.getElementById('edit-drv-lat').value;
+    const permanentLon = document.getElementById('edit-drv-lon').value;
+    const permanentLocationName = document.getElementById('edit-drv-location-name').value;
+    const permanentDropoffLat = document.getElementById('edit-drv-dropoff-lat').value;
+    const permanentDropoffLon = document.getElementById('edit-drv-dropoff-lon').value;
+    const permanentDropoffName = document.getElementById('edit-drv-dropoff-name').value;
+
     try {
-        const payload = { fullName, phoneNumber, route };
+        const payload = {
+            fullName, phoneNumber, route,
+            permanentLat: permanentLat || null,
+            permanentLon: permanentLon || null,
+            permanentLocationName: permanentLocationName || route,
+            permanentDropoffLat: permanentDropoffLat || null,
+            permanentDropoffLon: permanentDropoffLon || null,
+            permanentDropoffName: permanentDropoffName || ''
+        };
         if (password) payload.password = password;
 
         const res = await fetch(`${API_BASE}/drivers/${driverId}/update`, {
@@ -2962,9 +3282,10 @@ async function submitEditDriver(event) {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-            showToast('تم تحديث بيانات الكابتن بنجاح! ✅');
+            showToast('تم تحديث بيانات ومسار الكابتن بنجاح! ✅');
             closeEditDriverModal();
             loadDrivers();
+            if (typeof refreshFleetLocations === 'function') refreshFleetLocations();
         } else {
             alert(data.error || 'فشل تحديث بيانات الكابتن.');
         }

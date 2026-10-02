@@ -1935,7 +1935,7 @@
 
     <!-- EDIT CUSTOMER MODAL -->
     <div id="modal-edit-customer" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4 pointer-events-none">
-        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+        <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
             <div class="flex items-center justify-between pb-3 border-b border-slate-100">
                 <h3 class="text-lg font-black text-slate-900 flex items-center gap-2">
                     <i class="fa-solid fa-user-pen text-amber-500"></i>
@@ -1961,6 +1961,43 @@
                     <label class="block text-xs font-bold text-slate-700 mb-1">العنوان</label>
                     <input type="text" id="edit-cust-address" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                 </div>
+
+                <!-- Interactive Map for Customer Permanent Route -->
+                <div class="space-y-2 pt-2 border-t border-slate-100">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <span>🗺️ تحديد وتثبيت المسار الدائمي للراكب</span>
+                        </label>
+                        <span class="text-[10px] text-slate-500">انقر على الخريطة أو ابحث</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <div class="relative flex-1">
+                            <input type="text" id="edit-cust-map-search" placeholder="🔍 ابحث عن موقع في النجف..." class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500" oninput="searchEditModalPlace(this.value, 'customer')">
+                            <div id="edit-cust-search-results" class="absolute right-0 left-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-40 overflow-y-auto hidden divide-y divide-slate-100 text-xs"></div>
+                        </div>
+                        <div class="flex bg-slate-100 p-0.5 rounded-xl gap-1">
+                            <button type="button" id="btn-mode-cust-pickup" onclick="setEditMapMode('customer', 'pickup')" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 text-white transition shadow-sm">🟢 انطلاق</button>
+                            <button type="button" id="btn-mode-cust-dropoff" onclick="setEditMapMode('customer', 'dropoff')" class="px-2.5 py-1 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 transition">🔴 وصول</button>
+                        </div>
+                    </div>
+                    <div id="edit-cust-mapbox-container" class="w-full h-44 rounded-2xl overflow-hidden border border-slate-200 relative bg-slate-950"></div>
+                    <div class="grid grid-cols-2 gap-2 text-[11px]">
+                        <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-2 text-emerald-950">
+                            <div class="font-bold">🟢 الانطلاق:</div>
+                            <div id="disp-edit-cust-pickup" class="truncate font-medium text-slate-700">لم يحدد</div>
+                        </div>
+                        <div class="bg-rose-50 border border-rose-200 rounded-xl p-2 text-rose-950">
+                            <div class="font-bold">🔴 الوصول:</div>
+                            <div id="disp-edit-cust-dropoff" class="truncate font-medium text-slate-700">لم يحدد</div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="edit-cust-lat">
+                    <input type="hidden" id="edit-cust-lon">
+                    <input type="hidden" id="edit-cust-location-name">
+                    <input type="hidden" id="edit-cust-dropoff-lat">
+                    <input type="hidden" id="edit-cust-dropoff-lon">
+                    <input type="hidden" id="edit-cust-dropoff-name">
+                </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">كلمة المرور (اتركها فارغة إذا لم ترغب بالتغيير)</label>
                     <div class="flex gap-2">
@@ -1981,7 +2018,7 @@
 
     <!-- EDIT DRIVER MODAL -->
     <div id="modal-edit-driver" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4 pointer-events-none">
-        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+        <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
             <div class="flex items-center justify-between pb-3 border-b border-slate-100">
                 <h3 class="text-lg font-black text-slate-900 flex items-center gap-2">
                     <i class="fa-solid fa-user-gear text-amber-500"></i>
@@ -2002,6 +2039,43 @@
                 <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">المسار (خط السير المعتمد)</label>
                     <input type="text" id="edit-drv-route" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </div>
+
+                <!-- Interactive Map for Driver Permanent Route -->
+                <div class="space-y-2 pt-2 border-t border-slate-100">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                            <span>🗺️ تحديد وتثبيت المسار الدائمي للكابتن</span>
+                        </label>
+                        <span class="text-[10px] text-slate-500">انقر على الخريطة أو ابحث</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <div class="relative flex-1">
+                            <input type="text" id="edit-drv-map-search" placeholder="🔍 ابحث عن موقع في النجف..." class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500" oninput="searchEditModalPlace(this.value, 'driver')">
+                            <div id="edit-drv-search-results" class="absolute right-0 left-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-slate-200 z-50 max-h-40 overflow-y-auto hidden divide-y divide-slate-100 text-xs"></div>
+                        </div>
+                        <div class="flex bg-slate-100 p-0.5 rounded-xl gap-1">
+                            <button type="button" id="btn-mode-drv-pickup" onclick="setEditMapMode('driver', 'pickup')" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 text-white transition shadow-sm">🟢 انطلاق</button>
+                            <button type="button" id="btn-mode-drv-dropoff" onclick="setEditMapMode('driver', 'dropoff')" class="px-2.5 py-1 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 transition">🔴 وصول</button>
+                        </div>
+                    </div>
+                    <div id="edit-drv-mapbox-container" class="w-full h-44 rounded-2xl overflow-hidden border border-slate-200 relative bg-slate-950"></div>
+                    <div class="grid grid-cols-2 gap-2 text-[11px]">
+                        <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-2 text-emerald-950">
+                            <div class="font-bold">🟢 الانطلاق:</div>
+                            <div id="disp-edit-drv-pickup" class="truncate font-medium text-slate-700">لم يحدد</div>
+                        </div>
+                        <div class="bg-rose-50 border border-rose-200 rounded-xl p-2 text-rose-950">
+                            <div class="font-bold">🔴 الوصول:</div>
+                            <div id="disp-edit-drv-dropoff" class="truncate font-medium text-slate-700">لم يحدد</div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="edit-drv-lat">
+                    <input type="hidden" id="edit-drv-lon">
+                    <input type="hidden" id="edit-drv-location-name">
+                    <input type="hidden" id="edit-drv-dropoff-lat">
+                    <input type="hidden" id="edit-drv-dropoff-lon">
+                    <input type="hidden" id="edit-drv-dropoff-name">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">كلمة المرور (اتركها فارغة إذا لم ترغب بالتغيير)</label>
