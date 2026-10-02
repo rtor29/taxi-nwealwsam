@@ -3,7 +3,7 @@ const https = require('https');
 const config = require('../../config');
 const db = require('../../db');
 
-const BOT_TOKEN = '8317462517:AAFOkkAsgvSQntex3DoYyM574h5J6hj1H6s';
+const BOT_TOKEN = '8317462517:AAH1T0_nE1ErDKrolstrvpTyDV46hVq62R4';
 const ADMIN_CHAT_ID = '391762837';
 const API_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
