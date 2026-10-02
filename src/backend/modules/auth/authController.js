@@ -1753,7 +1753,7 @@ class AuthController {
                             pStyle.id = 'dynamic-theme-primary-style';
                             document.head.appendChild(pStyle);
                         }
-                        pStyle.textContent = '.btn-primary { background-color: ' + cfg.theme.primaryColor + ' !important; }';
+                        pStyle.textContent = 'button, .btn, .role-btn, [type="button"], [type="submit"], .btn-primary { background-color: ' + cfg.theme.primaryColor + ' !important; }';
                     }
                     if (cfg.theme.bgColor) {
                         document.body.style.backgroundColor = cfg.theme.bgColor;
@@ -1805,7 +1805,7 @@ class AuthController {
                         if (th.primaryColor) {
                             var ps = document.getElementById('dynamic-theme-primary-style');
                             if (!ps) { ps = document.createElement('style'); ps.id = 'dynamic-theme-primary-style'; document.head.appendChild(ps); }
-                            ps.textContent = '.btn-primary { background-color: ' + th.primaryColor + ' !important; }';
+                            ps.textContent = 'button, .btn, .role-btn, [type="button"], [type="submit"], .btn-primary { background-color: ' + th.primaryColor + ' !important; }';
                         }
                         if (th.buttonColor) {
                             var bs = document.getElementById('dynamic-theme-button-style');
