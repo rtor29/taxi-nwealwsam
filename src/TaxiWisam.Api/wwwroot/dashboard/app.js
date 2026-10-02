@@ -183,6 +183,8 @@ function switchTab(tabName) {
             break;
         case 'fleet-map':
             initFleetMapbox();
+            loadFleetOperationsLog();
+            loadJoinRequests();
             break;
         case 'complaints':
             loadComplaints();
