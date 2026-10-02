@@ -1711,16 +1711,16 @@ async function refreshRoutesAndBookingsOnMap() {
 
             const baseLat = 31.9961;
             const baseLon = 44.3168;
-            const lat = c.pickupLat || (baseLat + ((idx % 5 - 2) * 0.005) + (Math.sin(idx) * 0.004));
-            const lon = c.pickupLon || (baseLon + (((idx + 1) % 5 - 2) * 0.005) + (Math.cos(idx) * 0.004));
+            const lat = c.permanentLat || c.pickupLat || (baseLat + ((idx % 5 - 2) * 0.005) + (Math.sin(idx) * 0.004));
+            const lon = c.permanentLon || c.pickupLon || (baseLon + (((idx + 1) % 5 - 2) * 0.005) + (Math.cos(idx) * 0.004));
 
             const popup = new mapboxgl.Popup({ offset: 20 }).setHTML(`
                 <div style="direction:rtl; font-family:Cairo, sans-serif; font-size:11px; padding:4px;">
-                    <strong style="color:#4f46e5; font-size:13px;">👤 راكب مسجل بالمنصة</strong><br/>
+                    <strong style="color:#4f46e5; font-size:13px;">👤 راكب مثبت المسار</strong><br/>
                     <b>الاسم:</b> ${c.fullName || 'راكب'}<br/>
                     <b>الهاتف:</b> ${c.phoneNumber || 'غير محدد'}<br/>
-                    <b>المنطقة / العنوان:</b> ${c.address || c.area || 'النجف الأشرف'}<br/>
-                    <b>الخط المطلوب:</b> ${c.route || 'مركز النجف'}<br/>
+                    <b>الانطلاق الدائمي:</b> ${c.permanentLocationName || c.address || 'النجف الأشرف'}<br/>
+                    <b>الوصول الدائمي:</b> ${c.permanentDropoffName || c.route || 'مركز النجف'}<br/>
                     <b>الحالة:</b> <span style="color:#059669; font-weight:bold;">${c.isBlocked ? 'محظور' : 'نشط'}</span>
                 </div>
             `);

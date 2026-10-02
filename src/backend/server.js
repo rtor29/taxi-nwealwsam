@@ -726,7 +726,13 @@ async function startServer() {
                     route: user.route || 'النجف الأشرف',
                     address: user.address || user.area || 'النجف الأشرف',
                     status: user.status || 'Active',
-                    isVerified: !!user.isVerified
+                    isVerified: !!user.isVerified,
+                    permanentLat: user.permanentLat || null,
+                    permanentLon: user.permanentLon || null,
+                    permanentLocationName: user.permanentLocationName || '',
+                    permanentDropoffLat: user.permanentDropoffLat || null,
+                    permanentDropoffLon: user.permanentDropoffLon || null,
+                    permanentDropoffName: user.permanentDropoffName || ''
                 }
             });
         }
@@ -1215,8 +1221,8 @@ async function startServer() {
                     vehicleInfo: `${d.vehicleMake || 'تويوتا'} ${d.vehicleModel || 'كورولا'} (${d.vehiclePlate || 'النجف'})`,
                     carModel: d.vehicleMake ? `${d.vehicleMake} ${d.vehicleModel || ''}` : 'تويوتا كورولا',
                     plateNumber: d.vehiclePlate || 'النجف',
-                    latitude: d.currentLat ? parseFloat(d.currentLat) : (lat + (idx % 2 === 0 ? 0.003 * (idx + 1) : -0.003 * (idx + 1))),
-                    longitude: d.currentLon ? parseFloat(d.currentLon) : (lon + (idx % 2 === 0 ? 0.002 * (idx + 1) : -0.002 * (idx + 1))),
+                    latitude: d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : (lat + (idx % 2 === 0 ? 0.003 * (idx + 1) : -0.003 * (idx + 1)))),
+                    longitude: d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : (lon + (idx % 2 === 0 ? 0.002 * (idx + 1) : -0.002 * (idx + 1)))),
                     heading: d.heading || (idx * 45) % 360,
                     status: d.tripStatus || 'Online',
                     speedKmh: d.speedKmh || Math.floor(25 + Math.random() * 30)
@@ -2016,6 +2022,10 @@ async function startServer() {
             if (body.dropoffLon) customer.permanentDropoffLon = parseFloat(body.dropoffLon);
             if (body.dropoffName !== undefined) customer.permanentDropoffName = body.dropoffName || '';
             db.saveStateSnapshot();
+            db.persistCustomerPermanentLocation(passengerId, {
+                lat: customer.permanentLat, lon: customer.permanentLon, locationName: customer.permanentLocationName,
+                dropoffLat: customer.permanentDropoffLat, dropoffLon: customer.permanentDropoffLon, dropoffName: customer.permanentDropoffName
+            }).catch(()=>{});
             return sendJson({ success: true, message: 'تم تثبيت الموقع الدائمي بنجاح' });
         }
 
@@ -2024,7 +2034,31 @@ async function startServer() {
             const passengerId = pathname.split('/').pop();
             const customer = db.memoryState.customers.find(c => c.customerId === passengerId);
             if (!customer) return sendJson({ success: false });
-            return sendJson({ success: true, lat: customer.permanentLat || null, lon: customer.permanentLon || null, locationName: customer.permanentLocationName || '' });
+            return sendJson({
+                success: true,
+                lat: customer.permanentLat || null,
+                lon: customer.permanentLon || null,
+                locationName: customer.permanentLocationName || '',
+                dropoffLat: customer.permanentDropoffLat || null,
+                dropoffLon: customer.permanentDropoffLon || null,
+                dropoffName: customer.permanentDropoffName || ''
+            });
+        }
+
+        // Get driver permanent location
+        if (pathname.startsWith('/api/driver/permanent-location/') && method === 'GET') {
+            const driverId = pathname.split('/').pop();
+            const driver = db.memoryState.drivers.find(d => d.driverId === driverId);
+            if (!driver) return sendJson({ success: false });
+            return sendJson({
+                success: true,
+                lat: driver.permanentLat || null,
+                lon: driver.permanentLon || null,
+                locationName: driver.permanentLocationName || '',
+                dropoffLat: driver.permanentDropoffLat || null,
+                dropoffLon: driver.permanentDropoffLon || null,
+                dropoffName: driver.permanentDropoffName || ''
+            });
         }
 
         // Admin: Set driver permanent location
@@ -2041,6 +2075,10 @@ async function startServer() {
             if (body.dropoffLon) driver.permanentDropoffLon = parseFloat(body.dropoffLon);
             if (body.dropoffName !== undefined) driver.permanentDropoffName = body.dropoffName || '';
             db.saveStateSnapshot();
+            db.persistDriverPermanentLocation(driverId, {
+                lat: driver.permanentLat, lon: driver.permanentLon, locationName: driver.permanentLocationName,
+                dropoffLat: driver.permanentDropoffLat, dropoffLon: driver.permanentDropoffLon, dropoffName: driver.permanentDropoffName
+            }).catch(()=>{});
             return sendJson({ success: true, message: 'تم تثبيت موقع السائق الدائمي' });
         }
 

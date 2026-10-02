@@ -249,6 +249,13 @@ class DatabaseManager {
                 rejectionReason: r.rejection_reason,
                 ratingAverage: parseFloat(r.rating_average || 5.0),
                 totalTrips: r.total_trips || 0,
+                permanentLat: r.permanent_lat ? parseFloat(r.permanent_lat) : null,
+                permanentLon: r.permanent_lon ? parseFloat(r.permanent_lon) : null,
+                permanentLocationName: r.permanent_location_name || '',
+                permanentDropoffLat: r.permanent_dropoff_lat ? parseFloat(r.permanent_dropoff_lat) : null,
+                permanentDropoffLon: r.permanent_dropoff_lon ? parseFloat(r.permanent_dropoff_lon) : null,
+                permanentDropoffName: r.permanent_dropoff_name || '',
+                telegramChatId: r.telegram_chat_id ? String(r.telegram_chat_id) : null,
                 createdAt: r.created_at
             }));
 
@@ -268,6 +275,13 @@ class DatabaseManager {
                 totalBookings: r.total_bookings || 0,
                 isActive: r.is_active,
                 isBlocked: r.is_blocked,
+                permanentLat: r.permanent_lat ? parseFloat(r.permanent_lat) : null,
+                permanentLon: r.permanent_lon ? parseFloat(r.permanent_lon) : null,
+                permanentLocationName: r.permanent_location_name || '',
+                permanentDropoffLat: r.permanent_dropoff_lat ? parseFloat(r.permanent_dropoff_lat) : null,
+                permanentDropoffLon: r.permanent_dropoff_lon ? parseFloat(r.permanent_dropoff_lon) : null,
+                permanentDropoffName: r.permanent_dropoff_name || '',
+                telegramChatId: r.telegram_chat_id ? String(r.telegram_chat_id) : null,
                 registeredAt: r.created_at
             }));
 
@@ -283,6 +297,17 @@ class DatabaseManager {
                             if (!pgCustIds.has(c.customerId)) {
                                 this.memoryState.customers.unshift(c);
                                 this.persistNewCustomer(c).catch(() => {});
+                            } else {
+                                const exist = this.memoryState.customers.find(x => x.customerId === c.customerId);
+                                if (exist) {
+                                    if (!exist.permanentLat && c.permanentLat) exist.permanentLat = c.permanentLat;
+                                    if (!exist.permanentLon && c.permanentLon) exist.permanentLon = c.permanentLon;
+                                    if (!exist.permanentLocationName && c.permanentLocationName) exist.permanentLocationName = c.permanentLocationName;
+                                    if (!exist.permanentDropoffLat && c.permanentDropoffLat) exist.permanentDropoffLat = c.permanentDropoffLat;
+                                    if (!exist.permanentDropoffLon && c.permanentDropoffLon) exist.permanentDropoffLon = c.permanentDropoffLon;
+                                    if (!exist.permanentDropoffName && c.permanentDropoffName) exist.permanentDropoffName = c.permanentDropoffName;
+                                    if (!exist.telegramChatId && c.telegramChatId) exist.telegramChatId = c.telegramChatId;
+                                }
                             }
                         }
                     }
@@ -291,6 +316,17 @@ class DatabaseManager {
                             if (!pgDrvIds.has(d.driverId)) {
                                 this.memoryState.drivers.unshift(d);
                                 this.persistNewDriver(d).catch(() => {});
+                            } else {
+                                const exist = this.memoryState.drivers.find(x => x.driverId === d.driverId);
+                                if (exist) {
+                                    if (!exist.permanentLat && d.permanentLat) exist.permanentLat = d.permanentLat;
+                                    if (!exist.permanentLon && d.permanentLon) exist.permanentLon = d.permanentLon;
+                                    if (!exist.permanentLocationName && d.permanentLocationName) exist.permanentLocationName = d.permanentLocationName;
+                                    if (!exist.permanentDropoffLat && d.permanentDropoffLat) exist.permanentDropoffLat = d.permanentDropoffLat;
+                                    if (!exist.permanentDropoffLon && d.permanentDropoffLon) exist.permanentDropoffLon = d.permanentDropoffLon;
+                                    if (!exist.permanentDropoffName && d.permanentDropoffName) exist.permanentDropoffName = d.permanentDropoffName;
+                                    if (!exist.telegramChatId && d.telegramChatId) exist.telegramChatId = d.telegramChatId;
+                                }
                             }
                         }
                     }
@@ -362,6 +398,47 @@ class DatabaseManager {
                     [d.driverId, d.fullName, d.phoneNumber, d.email||null, d.licenseNumber||'PENDING', d.status||'Pending', !!d.isVerified, !!d.isBlocked, d.ratingAverage||5.0, d.totalTrips||0, d.registeredAt||d.createdAt||new Date().toISOString()]);
             } finally { cl.release(); }
         } catch (e) { console.warn('[Database] persistNewDriver error:', e.message); }
+    }
+
+    
+    // Persist permanent location for passenger
+    async persistCustomerPermanentLocation(customerId, data) {
+        if (!this.pool || !this.isPostgresConnected) return;
+        try {
+            await this.pool.query(
+                `UPDATE customers SET 
+                    permanent_lat = $1, permanent_lon = $2, permanent_location_name = $3,
+                    permanent_dropoff_lat = $4, permanent_dropoff_lon = $5, permanent_dropoff_name = $6,
+                    updated_at = NOW()
+                 WHERE customer_id = $7`,
+                [data.lat, data.lon, data.locationName || '', data.dropoffLat || null, data.dropoffLon || null, data.dropoffName || '', customerId]
+            );
+        } catch (e) { console.warn('[Database] persistCustomerPermanentLocation error:', e.message); }
+    }
+
+    // Persist permanent location for driver
+    async persistDriverPermanentLocation(driverId, data) {
+        if (!this.pool || !this.isPostgresConnected) return;
+        try {
+            await this.pool.query(
+                `UPDATE drivers SET 
+                    permanent_lat = $1, permanent_lon = $2, permanent_location_name = $3,
+                    permanent_dropoff_lat = $4, permanent_dropoff_lon = $5, permanent_dropoff_name = $6,
+                    updated_at = NOW()
+                 WHERE driver_id = $7`,
+                [data.lat, data.lon, data.locationName || '', data.dropoffLat || null, data.dropoffLon || null, data.dropoffName || '', driverId]
+            );
+        } catch (e) { console.warn('[Database] persistDriverPermanentLocation error:', e.message); }
+    }
+
+    // Persist telegramChatId mapping
+    async persistTelegramChatId(role, id, chatId) {
+        if (!this.pool || !this.isPostgresConnected) return;
+        try {
+            const table = role === 'Driver' ? 'drivers' : 'customers';
+            const col = role === 'Driver' ? 'driver_id' : 'customer_id';
+            await this.pool.query(`UPDATE ${table} SET telegram_chat_id = $1 WHERE ${col} = $2`, [String(chatId), id]);
+        } catch (e) { console.warn('[Database] persistTelegramChatId error:', e.message); }
     }
 
     // -------------------------------------------------------------------------

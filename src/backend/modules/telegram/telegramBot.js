@@ -110,7 +110,12 @@ async function handleCallback(chatId, data, user) {
             break;
         case 'nearby_drivers': {
             // التحقق من أن المستخدم راكب مسجل بالفعل
-            const passenger = (db.memoryState.customers || []).find(c => String(c.telegramChatId) === String(chatId));
+            let passenger = (db.memoryState.customers || []).find(c => String(c.telegramChatId) === String(chatId));
+            if (!passenger && state && state.verifiedPhone) {
+                const clean = state.verifiedPhone.replace('+964', '0');
+                passenger = (db.memoryState.customers || []).find(c => c.phoneNumber === clean);
+                if (passenger) { passenger.telegramChatId = String(chatId); db.saveStateSnapshot(); }
+            }
             if (!passenger) {
                 await sendMessage(chatId, '⚠️ <b>عذراً!</b> خيار معرفة السائقين القريبين متاح فقط للركاب بعد إكمال عملية التسجيل بالكامل.\n\nاضغط على <b>تسجيل راكب</b> للتسجيل أولاً.');
                 break;
@@ -138,11 +143,14 @@ async function handleCallback(chatId, data, user) {
                 drivers = allDrivers.map(d => {
                     const dLat = d.permanentLat || (d.activeRoute ? d.activeRoute.fromLat : null);
                     const dLon = d.permanentLon || (d.activeRoute ? d.activeRoute.fromLon : null);
-                    const dist = (dLat && dLon) ? haversine(pLat, pLon, dLat, dLon) : 9999;
+                    const dist = (dLat && dLon) ? haversine(pLat, pLon, dLat, dLon) : null;
                     return { ...d, _dist: dist };
-                }).filter(d => d._dist < 50).sort((a, b) => a._dist - b._dist);
+                }).sort((a, b) => (a._dist ?? 999) - (b._dist ?? 999));
+                if (drivers.filter(d => d._dist !== null && d._dist < 50).length > 0) {
+                    drivers = drivers.filter(d => d._dist !== null && d._dist < 50);
+                }
             } else {
-                drivers = allDrivers.filter(d => d.activeRoute || d.permanentLat);
+                drivers = allDrivers;
             }
 
             if (drivers.length === 0) {
@@ -385,12 +393,16 @@ async function handleMessage(chatId, text, user) {
             if (customer) {
                 customer.telegramChatId = String(chatId);
                 db.saveStateSnapshot();
+                db.persistTelegramChatId('Customer', customer.customerId, chatId).catch(()=>{});
                 const token = 'jwt_customer_' + customer.customerId;
                 await sendKeyboard(chatId, `✅ تم الدخول كراكب!\n👤 ${customer.fullName}\n\nيمكنك الآن استعراض السائقين القريبين:`, [
                     [{ text: '🗺️ السائقون القريبون', callback_data: 'nearby_drivers' }],
                     [{ text: '🚗 افتح التطبيق', url: 'https://tawseelaiq.app/?login_token=' + encodeURIComponent(token) + '&userId=' + encodeURIComponent(customer.customerId) + '&role=Customer&fullName=' + encodeURIComponent(customer.fullName) }]
                 ]);
             } else if (driver) {
+                driver.telegramChatId = String(chatId);
+                db.saveStateSnapshot();
+                db.persistTelegramChatId('Driver', driver.driverId, chatId).catch(()=>{});
                 if (driver.status === 'Pending' || !driver.isVerified) {
                     const cfg = db.memoryState.appConfig || {};
                     const tgAdminLink = cfg.telegramAdminLink || 'https://t.me/tawseela_iq_bot';

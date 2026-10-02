@@ -95,8 +95,11 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
       widget.storageService.getUserId().then((id) {
         if (id != null && mounted) {
           setState(() => _activeCustomerId = id);
+          _loadSavedPermanentRoute(id);
         }
       });
+    } else {
+      _loadSavedPermanentRoute(_activeCustomerId);
     }
     _searchMatchingRoutes();
     _fetchMapboxRoadRoute();
@@ -1316,6 +1319,57 @@ class _RouteSearchScreenState extends State<RouteSearchScreen> {
     );
 
   }
+  
+  // ===== Load Permanent Route from Backend =====
+  Future<void> _loadSavedPermanentRoute(String uid) async {
+    if (uid.isEmpty) return;
+    try {
+      final role = await widget.storageService.getUserRole();
+      final isDriver = role == 'Driver';
+      final endpoint = isDriver
+          ? '/api/driver/permanent-location/$uid'
+          : '/api/passenger/permanent-location/$uid';
+
+      final res = await widget.apiClient.get(endpoint);
+      final data = res.data;
+      if (data != null && data['success'] == true) {
+        final dynamic rawLat = data['lat'];
+        final dynamic rawLon = data['lon'];
+        final double? lat = rawLat != null ? (rawLat as num).toDouble() : null;
+        final double? lon = rawLon != null ? (rawLon as num).toDouble() : null;
+        final String? locName = data['locationName'] as String?;
+        final dynamic rawDLat = data['dropoffLat'];
+        final dynamic rawDLon = data['dropoffLon'];
+        final double? dLat = rawDLat != null ? (rawDLat as num).toDouble() : null;
+        final double? dLon = rawDLon != null ? (rawDLon as num).toDouble() : null;
+        final String? dName = data['dropoffName'] as String?;
+
+        if (mounted && lat != null && lon != null) {
+          setState(() {
+            _pickupPoint = LatLng(lat, lon);
+            if (locName != null && locName.trim().isNotEmpty) {
+              _pickupController.text = locName.trim();
+            }
+            if (dLat != null && dLon != null) {
+              _dropoffPoint = LatLng(dLat, dLon);
+            }
+            if (dName != null && dName.trim().isNotEmpty) {
+              _dropoffController.text = dName.trim();
+            }
+            _permanentSaved = true;
+          });
+          try {
+            _mapController.move(_pickupPoint, 14.0);
+          } catch (_) {}
+          _fetchMapboxRoadRoute();
+          _searchMatchingRoutes();
+        }
+      }
+    } catch (e) {
+      debugPrint('[RouteSearchScreen] Error loading permanent route: $e');
+    }
+  }
+
   // ===== Save Permanent Route to Backend =====
   Future<void> _savePermanentRoute() async {
     if (_pickupController.text.trim().isEmpty) {
