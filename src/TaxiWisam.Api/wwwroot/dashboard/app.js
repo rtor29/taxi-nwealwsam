@@ -3606,7 +3606,254 @@ window.approveCancellationRequest = approveCancellationRequest;
 window.rejectCancellationRequest = rejectCancellationRequest;
 
 
-// ===== Customization Tab =====
+// ===== Customization Tab & Dashboard Theme =====
+function switchCustomSubTab(tabName) {
+    var tabs = ['dash-theme', 'web-theme', 'static-texts', 'driver-location'];
+    tabs.forEach(function(t) {
+        var btn = document.getElementById('custom-subtab-' + t);
+        var view = document.getElementById('custom-view-' + t);
+        if (t === tabName) {
+            if (btn) {
+                btn.className = 'px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-amber-500 text-slate-900 shadow';
+            }
+            if (view) {
+                view.classList.remove('hidden');
+                view.style.display = (t === 'driver-location' ? 'block' : 'grid');
+            }
+        } else {
+            if (btn) {
+                btn.className = 'px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-slate-800 text-slate-300 hover:text-white';
+            }
+            if (view) {
+                view.classList.add('hidden');
+                view.style.display = 'none';
+            }
+        }
+    });
+}
+window.switchCustomSubTab = switchCustomSubTab;
+
+var DASHBOARD_PRESETS = {
+    dark: {
+        dashBgColor: '#0f172a',
+        dashSidebarBg: '#0f172a',
+        dashCardBg: '#1e293b',
+        dashHeaderBg: '#0f172a',
+        dashTextColor: '#94a3b8',
+        dashHeadingColor: '#f8fafc',
+        dashPrimaryColor: '#f59e0b',
+        dashActiveColor: '#f59e0b',
+        dashBorderColor: '#334155',
+        dashFontFamily: 'Cairo'
+    },
+    light: {
+        dashBgColor: '#f8fafc',
+        dashSidebarBg: '#ffffff',
+        dashCardBg: '#ffffff',
+        dashHeaderBg: '#ffffff',
+        dashTextColor: '#475569',
+        dashHeadingColor: '#0f172a',
+        dashPrimaryColor: '#f59e0b',
+        dashActiveColor: '#f59e0b',
+        dashBorderColor: '#e2e8f0',
+        dashFontFamily: 'Cairo'
+    },
+    amber: {
+        dashBgColor: '#111111',
+        dashSidebarBg: '#18181b',
+        dashCardBg: '#27272a',
+        dashHeaderBg: '#111111',
+        dashTextColor: '#e4e4e7',
+        dashHeadingColor: '#fbbf24',
+        dashPrimaryColor: '#f59e0b',
+        dashActiveColor: '#fbbf24',
+        dashBorderColor: '#3f3f46',
+        dashFontFamily: 'Cairo'
+    },
+    emerald: {
+        dashBgColor: '#064e3b',
+        dashSidebarBg: '#022c22',
+        dashCardBg: '#065f46',
+        dashHeaderBg: '#022c22',
+        dashTextColor: '#a7f3d0',
+        dashHeadingColor: '#ecfdf5',
+        dashPrimaryColor: '#10b981',
+        dashActiveColor: '#34d399',
+        dashBorderColor: '#047857',
+        dashFontFamily: 'Tajawal'
+    },
+    navy: {
+        dashBgColor: '#0c1a30',
+        dashSidebarBg: '#07101f',
+        dashCardBg: '#132743',
+        dashHeaderBg: '#07101f',
+        dashTextColor: '#93c5fd',
+        dashHeadingColor: '#eff6ff',
+        dashPrimaryColor: '#3b82f6',
+        dashActiveColor: '#60a5fa',
+        dashBorderColor: '#1e3a5f',
+        dashFontFamily: 'Almarai'
+    },
+    violet: {
+        dashBgColor: '#1a102f',
+        dashSidebarBg: '#110924',
+        dashCardBg: '#271847',
+        dashHeaderBg: '#110924',
+        dashTextColor: '#d8b4fe',
+        dashHeadingColor: '#faf5ff',
+        dashPrimaryColor: '#a855f7',
+        dashActiveColor: '#c084fc',
+        dashBorderColor: '#3b2368',
+        dashFontFamily: 'Alexandria'
+    }
+};
+
+function applyDashboardPreset(presetKey) {
+    var p = DASHBOARD_PRESETS[presetKey];
+    if (!p) return;
+    setColorPair('dash-bg-color', 'dash-bg-color-hex', p.dashBgColor);
+    setColorPair('dash-sidebar-bg', 'dash-sidebar-bg-hex', p.dashSidebarBg);
+    setColorPair('dash-card-bg', 'dash-card-bg-hex', p.dashCardBg);
+    setColorPair('dash-header-bg', 'dash-header-bg-hex', p.dashHeaderBg);
+    setColorPair('dash-text-color', 'dash-text-color-hex', p.dashTextColor);
+    setColorPair('dash-heading-color', 'dash-heading-color-hex', p.dashHeadingColor);
+    setColorPair('dash-primary-color', 'dash-primary-color-hex', p.dashPrimaryColor);
+    setColorPair('dash-active-color', 'dash-active-color-hex', p.dashActiveColor);
+    setColorPair('dash-border-color', 'dash-border-color-hex', p.dashBorderColor);
+    var ffEl = document.getElementById('dash-font-family');
+    if (ffEl) ffEl.value = p.dashFontFamily;
+    applyDashboardTheme(p);
+    showToast('تم تفعيل النمط الجاهز بنجاح ✨');
+}
+window.applyDashboardPreset = applyDashboardPreset;
+
+function syncLiveDashboardColor(pickerId, hexId, val) {
+    syncColorInputPair(pickerId, hexId, val);
+    syncLiveDashboardTheme();
+}
+window.syncLiveDashboardColor = syncLiveDashboardColor;
+
+function syncLiveDashboardTheme() {
+    var dt = {
+        dashBgColor: getColorPairVal('dash-bg-color', 'dash-bg-color-hex', '#0f172a'),
+        dashSidebarBg: getColorPairVal('dash-sidebar-bg', 'dash-sidebar-bg-hex', '#0f172a'),
+        dashCardBg: getColorPairVal('dash-card-bg', 'dash-card-bg-hex', '#1e293b'),
+        dashHeaderBg: getColorPairVal('dash-header-bg', 'dash-header-bg-hex', '#0f172a'),
+        dashTextColor: getColorPairVal('dash-text-color', 'dash-text-color-hex', '#94a3b8'),
+        dashHeadingColor: getColorPairVal('dash-heading-color', 'dash-heading-color-hex', '#f8fafc'),
+        dashPrimaryColor: getColorPairVal('dash-primary-color', 'dash-primary-color-hex', '#f59e0b'),
+        dashActiveColor: getColorPairVal('dash-active-color', 'dash-active-color-hex', '#f59e0b'),
+        dashBorderColor: getColorPairVal('dash-border-color', 'dash-border-color-hex', '#334155'),
+        dashFontFamily: document.getElementById('dash-font-family') ? document.getElementById('dash-font-family').value : 'Cairo'
+    };
+    applyDashboardTheme(dt);
+}
+window.syncLiveDashboardTheme = syncLiveDashboardTheme;
+
+function applyDashboardTheme(th) {
+    if (!th) return;
+    var bg = th.dashBgColor || '#0f172a';
+    var sidebarBg = th.dashSidebarBg || '#0f172a';
+    var cardBg = th.dashCardBg || '#1e293b';
+    var headerBg = th.dashHeaderBg || '#0f172a';
+    var textColor = th.dashTextColor || '#94a3b8';
+    var headingColor = th.dashHeadingColor || '#f8fafc';
+    var primaryColor = th.dashPrimaryColor || '#f59e0b';
+    var activeColor = th.dashActiveColor || '#f59e0b';
+    var borderColor = th.dashBorderColor || '#334155';
+    var fontFamily = th.dashFontFamily || 'Cairo';
+
+    var styleEl = document.getElementById('dynamic-dashboard-theme-style');
+    if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'dynamic-dashboard-theme-style';
+        document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = `
+        body, html, * {
+            font-family: '${fontFamily}', 'Cairo', sans-serif !important;
+        }
+        body {
+            background-color: ${bg} !important;
+        }
+        main {
+            background-color: ${bg} !important;
+            color: ${textColor} !important;
+        }
+        #sidebar-drawer {
+            background-color: ${sidebarBg} !important;
+            border-color: ${borderColor} !important;
+        }
+        header, header.bg-slate-900 {
+            background-color: ${headerBg} !important;
+            border-color: ${borderColor} !important;
+        }
+        .bg-white, .bg-slate-800\\/60, .bg-slate-900\\/80 {
+            background-color: ${cardBg} !important;
+            border-color: ${borderColor} !important;
+        }
+        .text-slate-900, .text-slate-800, h1, h2, h3, .font-black {
+            color: ${headingColor} !important;
+        }
+        .text-slate-500, .text-slate-600, .text-slate-700, .text-slate-400, p, span:not(.badge):not(#cancellations-count-badge):not(.tab-btn *) {
+            color: ${textColor} !important;
+        }
+        .border-slate-200, .border-slate-700, .border-slate-800 {
+            border-color: ${borderColor} !important;
+        }
+        .tab-btn.active {
+            color: ${activeColor} !important;
+            border-color: ${activeColor} !important;
+            box-shadow: 0 4px 14px -2px ${activeColor}50 !important;
+        }
+        .tab-btn.active i, .tab-btn.active span {
+            color: ${activeColor} !important;
+        }
+        .btn-theme-primary {
+            background-color: ${primaryColor} !important;
+            color: #0f172a !important;
+        }
+    `;
+}
+window.applyDashboardTheme = applyDashboardTheme;
+
+async function saveDashboardTheme() {
+    var dt = {
+        dashBgColor: getColorPairVal('dash-bg-color', 'dash-bg-color-hex', '#0f172a'),
+        dashSidebarBg: getColorPairVal('dash-sidebar-bg', 'dash-sidebar-bg-hex', '#0f172a'),
+        dashCardBg: getColorPairVal('dash-card-bg', 'dash-card-bg-hex', '#1e293b'),
+        dashHeaderBg: getColorPairVal('dash-header-bg', 'dash-header-bg-hex', '#0f172a'),
+        dashTextColor: getColorPairVal('dash-text-color', 'dash-text-color-hex', '#94a3b8'),
+        dashHeadingColor: getColorPairVal('dash-heading-color', 'dash-heading-color-hex', '#f8fafc'),
+        dashPrimaryColor: getColorPairVal('dash-primary-color', 'dash-primary-color-hex', '#f59e0b'),
+        dashActiveColor: getColorPairVal('dash-active-color', 'dash-active-color-hex', '#f59e0b'),
+        dashBorderColor: getColorPairVal('dash-border-color', 'dash-border-color-hex', '#334155'),
+        dashFontFamily: document.getElementById('dash-font-family') ? document.getElementById('dash-font-family').value : 'Cairo'
+    };
+    try {
+        localStorage.setItem('tawseela_dashboard_theme', JSON.stringify(dt));
+        await fetch('/api/admin/theme', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + localStorage.getItem('admin_token')
+            },
+            body: JSON.stringify({ dashboardTheme: dt })
+        });
+        applyDashboardTheme(dt);
+        showToast('تم حفظ ثيم ومظهر لوحة التحكم بنجاح ✅');
+    } catch(e) {
+        showToast('خطأ في حفظ ثيم لوحة التحكم', 'error');
+    }
+}
+window.saveDashboardTheme = saveDashboardTheme;
+
+function resetDashboardTheme() {
+    applyDashboardPreset('dark');
+    saveDashboardTheme();
+}
+window.resetDashboardTheme = resetDashboardTheme;
+
 function syncColorInputPair(pickerId, hexId, value) {
     if (!value) return '';
     var picker = document.getElementById(pickerId);
@@ -3660,11 +3907,33 @@ async function loadCustomizationSettings() {
             setColorPair('theme-search-input-color', 'theme-search-input-color-hex', cfg.theme.searchInputColor || '#111111');
             setColorPair('theme-search-input-bg', 'theme-search-input-bg-hex', cfg.theme.searchInputBg || '#fafafa');
 
-            document.getElementById('theme-font').value = cfg.theme.fontFamily || 'Cairo';
-            document.getElementById('theme-app-name').value = cfg.theme.appName || 'توصيله';
-            document.getElementById('theme-logo-emoji').value = cfg.theme.logoEmoji || '🚕';
-            document.getElementById('theme-footer').value = cfg.theme.footerText || '';
+            if (document.getElementById('theme-font')) document.getElementById('theme-font').value = cfg.theme.fontFamily || 'Cairo';
+            if (document.getElementById('theme-app-name')) document.getElementById('theme-app-name').value = cfg.theme.appName || 'توصيله';
+            if (document.getElementById('theme-logo-emoji')) document.getElementById('theme-logo-emoji').value = cfg.theme.logoEmoji || '🚕';
+            if (document.getElementById('theme-footer')) document.getElementById('theme-footer').value = cfg.theme.footerText || '';
             applyActiveTabColorStyle(atc);
+
+            // Load Dashboard Theme if present
+            if (cfg.theme.dashboardTheme) {
+                var dt = cfg.theme.dashboardTheme;
+                setColorPair('dash-bg-color', 'dash-bg-color-hex', dt.dashBgColor || '#0f172a');
+                setColorPair('dash-sidebar-bg', 'dash-sidebar-bg-hex', dt.dashSidebarBg || '#0f172a');
+                setColorPair('dash-card-bg', 'dash-card-bg-hex', dt.dashCardBg || '#1e293b');
+                setColorPair('dash-header-bg', 'dash-header-bg-hex', dt.dashHeaderBg || '#0f172a');
+                setColorPair('dash-text-color', 'dash-text-color-hex', dt.dashTextColor || '#94a3b8');
+                setColorPair('dash-heading-color', 'dash-heading-color-hex', dt.dashHeadingColor || '#f8fafc');
+                setColorPair('dash-primary-color', 'dash-primary-color-hex', dt.dashPrimaryColor || '#f59e0b');
+                setColorPair('dash-active-color', 'dash-active-color-hex', dt.dashActiveColor || '#f59e0b');
+                setColorPair('dash-border-color', 'dash-border-color-hex', dt.dashBorderColor || '#334155');
+                if (document.getElementById('dash-font-family')) document.getElementById('dash-font-family').value = dt.dashFontFamily || 'Cairo';
+                applyDashboardTheme(dt);
+                localStorage.setItem('tawseela_dashboard_theme', JSON.stringify(dt));
+            } else {
+                var cached = localStorage.getItem('tawseela_dashboard_theme');
+                if (cached) {
+                    try { applyDashboardTheme(JSON.parse(cached)); } catch(_) {}
+                }
+            }
         }
         if (cfg.staticTexts) {
             document.getElementById('text-welcome-title').value = cfg.staticTexts.welcomeTitle || '';
@@ -3821,7 +4090,7 @@ async function saveThemeSettings() {
     try {
         await fetch('/api/admin/theme', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify(body) });
         broadcastLiveThemeSync(body);
-        showToast('تم حفظ إعدادات الثيم ومزامنة الألوان فوراً ✅');
+        showToast('تم حفظ إعدادات ثيم تطبيق الويب ومزامنة الألوان فوراً ✅');
     } catch(e) { showToast('خطأ', 'error'); }
 }
 

@@ -29,11 +29,33 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" media="print" onload="this.media='all'">
-    <!-- Google Cairo Font with font-display: swap -->
+    <!-- Google Arabic Fonts with font-display: swap -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;600;700;900&family=Almarai:wght@400;700;800&family=Cairo:wght@400;600;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Readex+Pro:wght@400;600;700&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/dashboard/style.css?v=20260924_rel120">
+    <script>
+        try {
+            var cachedDashTheme = localStorage.getItem('tawseela_dashboard_theme');
+            if (cachedDashTheme) {
+                var th = JSON.parse(cachedDashTheme);
+                var bg = th.dashBgColor || '#0f172a';
+                var sidebarBg = th.dashSidebarBg || '#0f172a';
+                var cardBg = th.dashCardBg || '#1e293b';
+                var headerBg = th.dashHeaderBg || '#0f172a';
+                var textColor = th.dashTextColor || '#94a3b8';
+                var headingColor = th.dashHeadingColor || '#f8fafc';
+                var primaryColor = th.dashPrimaryColor || '#f59e0b';
+                var activeColor = th.dashActiveColor || '#f59e0b';
+                var borderColor = th.dashBorderColor || '#334155';
+                var fontFamily = th.dashFontFamily || 'Cairo';
+                var s = document.createElement('style');
+                s.id = 'dynamic-dashboard-theme-style';
+                s.textContent = 'body, html, * { font-family: "' + fontFamily + '", "Cairo", sans-serif !important; } body { background-color: ' + bg + ' !important; } main { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } #sidebar-drawer { background-color: ' + sidebarBg + ' !important; border-color: ' + borderColor + ' !important; } header, header.bg-slate-900 { background-color: ' + headerBg + ' !important; border-color: ' + borderColor + ' !important; } .bg-white, .bg-slate-800\\/60, .bg-slate-900\\/80 { background-color: ' + cardBg + ' !important; border-color: ' + borderColor + ' !important; } .text-slate-900, .text-slate-800, h1, h2, h3, .font-black { color: ' + headingColor + ' !important; } .text-slate-500, .text-slate-600, .text-slate-700, .text-slate-400, p, span:not(.badge):not(#cancellations-count-badge):not(.tab-btn *) { color: ' + textColor + ' !important; } .border-slate-200, .border-slate-700, .border-slate-800 { border-color: ' + borderColor + ' !important; } .tab-btn.active { color: ' + activeColor + ' !important; border-color: ' + activeColor + ' !important; box-shadow: 0 4px 14px -2px ' + activeColor + '50 !important; } .tab-btn.active i, .tab-btn.active span { color: ' + activeColor + ' !important; } .btn-theme-primary { background-color: ' + primaryColor + ' !important; color: #0f172a !important; }';
+                document.head.appendChild(s);
+            }
+        } catch(_) {}
+    </script>
     <!-- Mapbox GL JS with defer -->
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js" defer></script>
@@ -1144,10 +1166,183 @@
 
         <!-- Customization Tab -->
         <section id="tab-customization" class="tab-content hidden" style="display:none">
-            <div class="flex items-center justify-between mb-6"><h2 class="text-xl font-black text-white">🎨 التخصيص والمظهر</h2></div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+                <div>
+                    <h2 class="text-xl font-black text-white flex items-center gap-2">
+                        <span>🎨 التخصيص والمظهر</span>
+                        <span class="text-xs bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded-full font-bold">التحكم بالمظهر والخطوط</span>
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-1">تخصيص كامل لألوان وخطوط ومظهر لوحة التحكم وتطبيق الويب والنصوص</p>
+                </div>
+            </div>
+
+            <!-- Sub-tabs navigation for customization -->
+            <div class="flex flex-wrap items-center gap-2 mb-6 p-1.5 bg-slate-900/80 rounded-2xl border border-slate-700">
+                <button type="button" onclick="switchCustomSubTab('dash-theme')" id="custom-subtab-dash-theme" class="px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-amber-500 text-slate-900 shadow">
+                    <i class="fa-solid fa-display"></i>
+                    <span>🖥️ ثيم وألوان لوحة التحكم (الداش بورد)</span>
+                </button>
+                <button type="button" onclick="switchCustomSubTab('web-theme')" id="custom-subtab-web-theme" class="px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-slate-800 text-slate-300 hover:text-white">
+                    <i class="fa-solid fa-mobile-screen"></i>
+                    <span>📱 ثيم تطبيق الويب (المستخدمين)</span>
+                </button>
+                <button type="button" onclick="switchCustomSubTab('static-texts')" id="custom-subtab-static-texts" class="px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-slate-800 text-slate-300 hover:text-white">
+                    <i class="fa-solid fa-font"></i>
+                    <span>📝 النصوص والتواصل</span>
+                </button>
+                <button type="button" onclick="switchCustomSubTab('driver-location')" id="custom-subtab-driver-location" class="px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-slate-800 text-slate-300 hover:text-white">
+                    <i class="fa-solid fa-map-pin"></i>
+                    <span>📍 تثبيت موقع السائق</span>
+                </button>
+            </div>
+
+            <!-- 1. NEW SUB-VIEW: DASHBOARD THEME & COLORS -->
+            <div id="custom-view-dash-theme" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Presets Card -->
+                <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700 space-y-4">
+                    <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
+                        <span>الأنماط الجاهزة (Presets)</span>
+                    </h3>
+                    <p class="text-xs text-slate-400">اختر نمطاً جاهزاً لتطبيقه فوراً على لوحة التحكم بالكامل:</p>
+                    
+                    <div class="grid grid-cols-2 gap-2.5 pt-2">
+                        <button type="button" onclick="applyDashboardPreset('dark')" class="p-3 bg-slate-900 hover:bg-slate-950 text-white rounded-xl border border-slate-700 text-xs font-bold flex flex-col items-center gap-1.5 transition">
+                            <span class="text-base">🌙</span>
+                            <span>الوضع الداكن (Dark)</span>
+                        </button>
+                        <button type="button" onclick="applyDashboardPreset('light')" class="p-3 bg-slate-100 hover:bg-white text-slate-900 rounded-xl border border-slate-300 text-xs font-bold flex flex-col items-center gap-1.5 transition">
+                            <span class="text-base">☀️</span>
+                            <span>الوضع الفاتح (Light)</span>
+                        </button>
+                        <button type="button" onclick="applyDashboardPreset('amber')" class="p-3 bg-zinc-900 hover:bg-black text-amber-400 rounded-xl border border-amber-500/50 text-xs font-bold flex flex-col items-center gap-1.5 transition">
+                            <span class="text-base">🚕</span>
+                            <span>توصيلة ذهبي وأسود</span>
+                        </button>
+                        <button type="button" onclick="applyDashboardPreset('emerald')" class="p-3 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 rounded-xl border border-emerald-600 text-xs font-bold flex flex-col items-center gap-1.5 transition">
+                            <span class="text-base">💎</span>
+                            <span>الزمرد الملكي</span>
+                        </button>
+                        <button type="button" onclick="applyDashboardPreset('navy')" class="p-3 bg-blue-950 hover:bg-blue-900 text-blue-300 rounded-xl border border-blue-600 text-xs font-bold flex flex-col items-center gap-1.5 transition">
+                            <span class="text-base">🔷</span>
+                            <span>الأزرق الكحلي</span>
+                        </button>
+                        <button type="button" onclick="applyDashboardPreset('violet')" class="p-3 bg-purple-950 hover:bg-purple-900 text-purple-300 rounded-xl border border-purple-600 text-xs font-bold flex flex-col items-center gap-1.5 transition">
+                            <span class="text-base">🟣</span>
+                            <span>البنفسجي الملكي</span>
+                        </button>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-700">
+                        <label class="block text-xs font-bold text-slate-300 mb-2">نوع الخط في الداش بورد (Dashboard Font Family)</label>
+                        <select id="dash-font-family" onchange="syncLiveDashboardTheme()" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm">
+                            <option value="Cairo">Cairo (الافتراضي - كلاسيكي وأنيق)</option>
+                            <option value="Tajawal">Tajawal (تجوال - عصري ومريح)</option>
+                            <option value="Almarai">Almarai (المراعي - واضح وعريض)</option>
+                            <option value="IBM Plex Sans Arabic">IBM Plex Sans Arabic (تقني ومميز)</option>
+                            <option value="Alexandria">Alexandria (الإسكندرية - حديث وفخم)</option>
+                            <option value="Readex Pro">Readex Pro (ريدكس برو - هندسي ناعم)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Custom Dashboard Color Controls -->
+                <div class="lg:col-span-2 bg-slate-800/60 rounded-2xl p-6 border border-slate-700 space-y-4">
+                    <h3 class="text-lg font-bold text-white mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-palette text-amber-400"></i>
+                        <span>تخصيص ألوان لوحة التحكم بدقة (Hex Code)</span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mb-4">تتغير ألوان لوحة التحكم فورياً ولحظياً بمجرد اختيار اللون أو إدخال كوده:</p>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون خلفية لوحة التحكم (Main Background)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="dash-bg-color" value="#0f172a" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveDashboardColor('dash-bg-color','dash-bg-color-hex',this.value)">
+                                <input type="text" id="dash-bg-color-hex" value="#0f172a" placeholder="#0f172a" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveDashboardColor('dash-bg-color','dash-bg-color-hex',this.value)">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون خلفية الشريط الجانبي (Sidebar Background)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="dash-sidebar-bg" value="#0f172a" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveDashboardColor('dash-sidebar-bg','dash-sidebar-bg-hex',this.value)">
+                                <input type="text" id="dash-sidebar-bg-hex" value="#0f172a" placeholder="#0f172a" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveDashboardColor('dash-sidebar-bg','dash-sidebar-bg-hex',this.value)">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون خلفية البطاقات والجداول (Cards & Tables)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="dash-card-bg" value="#1e293b" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveDashboardColor('dash-card-bg','dash-card-bg-hex',this.value)">
+                                <input type="text" id="dash-card-bg-hex" value="#1e293b" placeholder="#1e293b" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveDashboardColor('dash-card-bg','dash-card-bg-hex',this.value)">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون شريط الهيدر العلوي (Header Background)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="dash-header-bg" value="#0f172a" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveDashboardColor('dash-header-bg','dash-header-bg-hex',this.value)">
+                                <input type="text" id="dash-header-bg-hex" value="#0f172a" placeholder="#0f172a" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveDashboardColor('dash-header-bg','dash-header-bg-hex',this.value)">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون نصوص ومحتوى الداش بورد (Text Color)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="dash-text-color" value="#94a3b8" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveDashboardColor('dash-text-color','dash-text-color-hex',this.value)">
+                                <input type="text" id="dash-text-color-hex" value="#94a3b8" placeholder="#94a3b8" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveDashboardColor('dash-text-color','dash-text-color-hex',this.value)">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون العناوين الرئيسية (Headings Color)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="dash-heading-color" value="#f8fafc" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveDashboardColor('dash-heading-color','dash-heading-color-hex',this.value)">
+                                <input type="text" id="dash-heading-color-hex" value="#f8fafc" placeholder="#f8fafc" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveDashboardColor('dash-heading-color','dash-heading-color-hex',this.value)">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">اللون الأساسي والأزرار (Primary & Accent Color)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="dash-primary-color" value="#f59e0b" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveDashboardColor('dash-primary-color','dash-primary-color-hex',this.value)">
+                                <input type="text" id="dash-primary-color-hex" value="#f59e0b" placeholder="#f59e0b" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveDashboardColor('dash-primary-color','dash-primary-color-hex',this.value)">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون التبويب والزر النشط (Active Tab / Accent)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="dash-active-color" value="#f59e0b" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveDashboardColor('dash-active-color','dash-active-color-hex',this.value)">
+                                <input type="text" id="dash-active-color-hex" value="#f59e0b" placeholder="#f59e0b" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveDashboardColor('dash-active-color','dash-active-color-hex',this.value)">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">لون الحدود والفواصل (Border Color)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="color" id="dash-border-color" value="#334155" class="w-14 h-10 rounded-lg cursor-pointer" oninput="syncLiveDashboardColor('dash-border-color','dash-border-color-hex',this.value)">
+                                <input type="text" id="dash-border-color-hex" value="#334155" placeholder="#334155" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveDashboardColor('dash-border-color','dash-border-color-hex',this.value)">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 flex flex-col sm:flex-row items-center gap-3">
+                        <button type="button" onclick="saveDashboardTheme()" class="flex-1 w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3.5 rounded-xl text-sm transition shadow-lg shadow-amber-500/10">
+                            💾 حفظ وتطبيق ثيم لوحة التحكم
+                        </button>
+                        <button type="button" onclick="resetDashboardTheme()" class="w-full sm:w-auto px-5 py-3.5 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl text-sm transition">
+                            🔄 استعادة الافتراضي
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. SUB-VIEW: WEB APP THEME (الركاب والسائقين) -->
+            <div id="custom-view-web-theme" class="grid grid-cols-1 md:grid-cols-2 gap-6 hidden" style="display:none">
                 <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700">
-                    <h3 class="text-lg font-bold text-white mb-4">🎨 الثيم والألوان</h3>
+                    <h3 class="text-lg font-bold text-white mb-4">🎨 ثيم وألوان تطبيق الويب (المستخدمين)</h3>
                     <div class="space-y-4">
                         <div>
                             <label class="block text-xs font-bold text-slate-400 mb-1">لون الخط والنصوص (Font Color) - مزامنة فورية ⚡</label>
@@ -1207,58 +1402,63 @@
                                 <input type="text" id="theme-bg-color-hex" value="#ffffff" placeholder="#ffffff" class="w-28 bg-slate-900 border border-slate-600 text-white rounded-xl px-3 py-2 text-xs font-mono" oninput="syncLiveBgColor(this.value)">
                             </div>
                         </div>
-                        <div><label class="block text-xs font-bold text-slate-400 mb-1">الخط</label><select id="theme-font" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"><option value="Cairo">Cairo</option><option value="Tajawal">Tajawal</option><option value="Almarai">Almarai</option></select></div>
+                        <div><label class="block text-xs font-bold text-slate-400 mb-1">نوع الخط في تطبيق الويب</label><select id="theme-font" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"><option value="Cairo">Cairo</option><option value="Tajawal">Tajawal</option><option value="Almarai">Almarai</option><option value="IBM Plex Sans Arabic">IBM Plex Sans Arabic</option><option value="Alexandria">Alexandria</option><option value="Readex Pro">Readex Pro</option></select></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">اسم التطبيق</label><input type="text" id="theme-app-name" value="توصيله" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">أيقونة التطبيق (Emoji)</label><input type="text" id="theme-logo-emoji" value="🚕" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm text-center text-2xl"></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">نص الحقوق (Footer)</label><input type="text" id="theme-footer" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
-                        <button onclick="saveThemeSettings()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-xl">💾 حفظ إعدادات الثيم والألوان</button>
+                        <button onclick="saveThemeSettings()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3.5 rounded-xl text-sm transition">💾 حفظ إعدادات ثيم تطبيق الويب</button>
                     </div>
                 </div>
+            </div>
+
+            <!-- 3. SUB-VIEW: STATIC TEXTS & CHANNELS -->
+            <div id="custom-view-static-texts" class="grid grid-cols-1 md:grid-cols-2 gap-6 hidden" style="display:none">
                 <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700">
-                    <h3 class="text-lg font-bold text-white mb-4">📝 النصوص الثابتة</h3>
+                    <h3 class="text-lg font-bold text-white mb-4">📝 النصوص الثابتة وحسابات التواصل</h3>
                     <div class="space-y-4">
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">عنوان الترحيب</label><input type="text" id="text-welcome-title" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">وصف الترحيب</label><input type="text" id="text-welcome-subtitle" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">رسالة السائق المعلق</label><textarea id="text-driver-pending" rows="3" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></textarea></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">💬 رابط / حساب تيليجرام الإدارة للتواصل</label><input type="text" id="theme-telegram-link" placeholder="مثال: https://t.me/admin_tawseela" dir="ltr" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
                         <div><label class="block text-xs font-bold text-slate-400 mb-1">📱 رابط / رقم واتساب الإدارة</label><input type="text" id="theme-whatsapp-link" placeholder="مثال: https://wa.me/9647706204066" dir="ltr" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
-                        <button onclick="saveStaticTexts()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-xl">💾 حفظ النصوص وحسابات التواصل</button>
+                        <button onclick="saveStaticTexts()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3.5 rounded-xl text-sm transition">💾 حفظ النصوص وحسابات التواصل</button>
                     </div>
-                    <h3 class="text-lg font-bold text-white mt-6 mb-4">🎓 شاشات توجيهية (Onboarding)</h3>
+                </div>
+                <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700">
+                    <h3 class="text-lg font-bold text-white mb-4">🎓 شاشات توجيهية (Onboarding)</h3>
                     <div id="onboarding-screens-list" class="space-y-3 mb-4"></div>
                     <button onclick="addOnboardingScreen()" class="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded-xl text-sm">+ إضافة شاشة توجيهية</button>
-                    <button onclick="saveOnboarding()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-xl mt-3">💾 حفظ الشاشات التوجيهية</button>
+                    <button onclick="saveOnboarding()" class="w-full bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3.5 rounded-xl mt-3 text-sm transition">💾 حفظ الشاشات التوجيهية</button>
                 </div>
             </div>
         
-                <!-- Driver Permanent Location Section (inside Customization tab) -->
-                <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700 mt-6">
-                    <h3 class="text-lg font-bold text-white mb-4">📍 تثبيت موقع السائق الدائمي</h3>
-                    <div class="space-y-3">
-                        <div>
-                            <label class="block text-xs font-bold text-slate-400 mb-1">اختر السائق</label>
-                            <select id="driver-perm-select" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm" onchange="loadDriverPermLocation()"></select>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-bold text-slate-400 mb-1">خط العرض (Lat)</label>
-                                <input type="number" step="0.000001" id="driver-perm-lat" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm font-mono" dir="ltr" placeholder="31.9961">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-slate-400 mb-1">خط الطول (Lon)</label>
-                                <input type="number" step="0.000001" id="driver-perm-lon" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm font-mono" dir="ltr" placeholder="44.3168">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-slate-400 mb-1">اسم الموقع (اختياري)</label>
-                            <input type="text" id="driver-perm-name" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm" placeholder="مثال: ساحة الصدرين">
-                        </div>
-                        <button onclick="saveDriverPermanentLocation()" class="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-black py-3 rounded-xl text-sm">📍 تثبيت موقع السائق الدائمي</button>
-                        <div id="driver-perm-status" class="hidden text-center text-emerald-400 text-xs font-bold p-2 bg-emerald-950/50 rounded-xl"></div>
+            <!-- 4. SUB-VIEW: DRIVER PERMANENT LOCATION -->
+            <div id="custom-view-driver-location" class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700 hidden" style="display:none">
+                <h3 class="text-lg font-bold text-white mb-4">📍 تثبيت موقع السائق الدائمي</h3>
+                <div class="space-y-3 max-w-2xl">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 mb-1">اختر السائق</label>
+                        <select id="driver-perm-select" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm" onchange="loadDriverPermLocation()"></select>
                     </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">خط العرض (Lat)</label>
+                            <input type="number" step="0.000001" id="driver-perm-lat" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm font-mono" dir="ltr" placeholder="31.9961">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-400 mb-1">خط الطول (Lon)</label>
+                            <input type="number" step="0.000001" id="driver-perm-lon" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm font-mono" dir="ltr" placeholder="44.3168">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 mb-1">اسم الموقع (اختياري)</label>
+                        <input type="text" id="driver-perm-name" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm" placeholder="مثال: ساحة الصدرين">
+                    </div>
+                    <button onclick="saveDriverPermanentLocation()" class="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-black py-3.5 rounded-xl text-sm transition">📍 تثبيت موقع السائق الدائمي</button>
+                    <div id="driver-perm-status" class="hidden text-center text-emerald-400 text-xs font-bold p-2 bg-emerald-950/50 rounded-xl"></div>
                 </div>
-
-</section>
+            </div>
+        </section>
 
 
                 <!-- Dedicated UI Management Tab (إدارة الواجهة: الأزرار والإعلانات) -->
