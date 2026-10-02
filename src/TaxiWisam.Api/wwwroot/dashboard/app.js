@@ -1054,6 +1054,7 @@ async function loadCustomers(search = '') {
                 <td class="p-4 font-bold text-slate-900 flex items-center gap-1.5">
                     ${escapeHtml(c.fullName)}
                     ${c.isBlocked ? '<span class="px-1.5 py-0.5 text-[10px] bg-rose-600 text-white rounded font-black">محظور</span>' : ''}
+                    ${c.telegramChatId ? '<span title="مسجل عبر تيليجرام" class="px-1.5 py-0.5 text-[10px] bg-blue-500 text-white rounded font-black">📱 تيليجرام</span>' : ''}
                 </td>
                 <td class="p-4 text-slate-600 font-mono text-xs"><a href="tel:${escapeHtml(c.phoneNumber)}" class="hover:text-amber-600 underline">${escapeHtml(c.phoneNumber)}</a></td>
                 <td class="p-4"><span class="px-2.5 py-1 bg-blue-50 text-blue-900 border border-blue-200 rounded-lg text-xs font-bold">${escapeHtml(c.route || c.area || 'غير محدد')}</span></td>

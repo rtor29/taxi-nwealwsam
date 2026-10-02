@@ -255,6 +255,7 @@ async function handleMessage(chatId, text, user) {
             };
             db.memoryState.customers.unshift(newCustomer);
             db.saveStateSnapshot();
+            db.persistNewCustomer(newCustomer).catch(()=>{});
 
             await sendKeyboard(chatId,
                 `🎉 <b>تم تسجيلك كراكب بنجاح!</b>\n\n📱 الهاتف: ${cleanPhone}\n👤 الاسم: ${state.fullName}\n\nيمكنك الآن استعراض السائقين القريبين أو الدخول لتطبيق الويب:`,
@@ -338,6 +339,7 @@ async function handleMessage(chatId, text, user) {
                 telegramChatId: String(chatId)
             };
             db.memoryState.drivers.unshift(newDriver);
+            db.persistNewDriver(newDriver).catch(()=>{});
 
             db.memoryState.verifications.unshift({
                 verificationId: 'ver-' + Math.random().toString(36).substr(2, 9),

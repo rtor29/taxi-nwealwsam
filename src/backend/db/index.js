@@ -271,6 +271,32 @@ class DatabaseManager {
                 registeredAt: r.created_at
             }));
 
+            // Merge JSON snapshot records not yet in PostgreSQL (Telegram-registered users etc.)
+            try {
+                const fs2 = require('fs');
+                if (fs2.existsSync(config.dataFile)) {
+                    const snap = JSON.parse(fs2.readFileSync(config.dataFile, 'utf8'));
+                    const pgCustIds = new Set(this.memoryState.customers.map(c => c.customerId));
+                    const pgDrvIds = new Set(this.memoryState.drivers.map(d => d.driverId));
+                    if (snap.customers) {
+                        for (const c of snap.customers) {
+                            if (!pgCustIds.has(c.customerId)) {
+                                this.memoryState.customers.unshift(c);
+                                this.persistNewCustomer(c).catch(() => {});
+                            }
+                        }
+                    }
+                    if (snap.drivers) {
+                        for (const d of snap.drivers) {
+                            if (!pgDrvIds.has(d.driverId)) {
+                                this.memoryState.drivers.unshift(d);
+                                this.persistNewDriver(d).catch(() => {});
+                            }
+                        }
+                    }
+                }
+            } catch (_) {}
+
             const verifsRes = await client.query('SELECT * FROM driver_documents ORDER BY submitted_at DESC');
             this.memoryState.verifications = verifsRes.rows.map(r => ({
                 documentId: r.document_id,
@@ -308,6 +334,34 @@ class DatabaseManager {
         } catch (e) {
             console.warn('[Database] Sync from PostgreSQL to memory warning:', e.message);
         }
+    }
+
+    // Persist a newly registered customer directly to PostgreSQL (survives restart)
+    async persistNewCustomer(c) {
+        if (!this.pool || !this.isPostgresConnected) return;
+        try {
+            const cl = await this.pool.connect();
+            try {
+                await cl.query(`INSERT INTO users (id, phone_number, email, full_name, role, password_hash, plain_password, google_id, is_active, is_blocked, created_at) VALUES ($1,$2,$3,$4,'Customer',$5,$6,$7,$8,$9,$10) ON CONFLICT (id) DO UPDATE SET full_name=EXCLUDED.full_name, phone_number=EXCLUDED.phone_number, password_hash=COALESCE(EXCLUDED.password_hash,users.password_hash), plain_password=COALESCE(EXCLUDED.plain_password,users.plain_password)`,
+                    [c.customerId, c.phoneNumber, c.email||null, c.fullName, c.passwordHash||null, c.plainPassword||null, c.googleId||null, c.isActive!==false, !!c.isBlocked, c.registeredAt||new Date().toISOString()]);
+                await cl.query(`INSERT INTO customers (customer_id, full_name, phone_number, email, route, address, plain_password, password_hash, google_id, preferred_payment_method, rating_average, total_bookings, is_active, is_blocked, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT (customer_id) DO UPDATE SET full_name=EXCLUDED.full_name, phone_number=EXCLUDED.phone_number, route=COALESCE(EXCLUDED.route,customers.route), address=COALESCE(EXCLUDED.address,customers.address), plain_password=COALESCE(EXCLUDED.plain_password,customers.plain_password), password_hash=COALESCE(EXCLUDED.password_hash,customers.password_hash)`,
+                    [c.customerId, c.fullName, c.phoneNumber, c.email||null, c.route||c.area||'النجف الأشرف', c.address||c.area||'النجف الأشرف', c.plainPassword||null, c.passwordHash||null, c.googleId||null, c.preferredPaymentMethod||'Cash', c.ratingAverage||5.0, c.totalBookings||0, c.isActive!==false, !!c.isBlocked, c.registeredAt||new Date().toISOString()]);
+            } finally { cl.release(); }
+        } catch (e) { console.warn('[Database] persistNewCustomer error:', e.message); }
+    }
+
+    // Persist a newly registered driver directly to PostgreSQL (survives restart)
+    async persistNewDriver(d) {
+        if (!this.pool || !this.isPostgresConnected) return;
+        try {
+            const cl = await this.pool.connect();
+            try {
+                await cl.query(`INSERT INTO users (id, phone_number, email, full_name, role, google_id, is_active, is_blocked, created_at) VALUES ($1,$2,$3,$4,'Driver',$5,$6,$7,$8) ON CONFLICT (id) DO NOTHING`,
+                    [d.driverId, d.phoneNumber, d.email||null, d.fullName, d.googleId||null, !d.isBlocked, !!d.isBlocked, d.registeredAt||d.createdAt||new Date().toISOString()]);
+                await cl.query(`INSERT INTO drivers (driver_id, full_name, phone_number, email, license_number, status, is_verified, is_blocked, rating_average, total_trips, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (driver_id) DO NOTHING`,
+                    [d.driverId, d.fullName, d.phoneNumber, d.email||null, d.licenseNumber||'PENDING', d.status||'Pending', !!d.isVerified, !!d.isBlocked, d.ratingAverage||5.0, d.totalTrips||0, d.registeredAt||d.createdAt||new Date().toISOString()]);
+            } finally { cl.release(); }
+        } catch (e) { console.warn('[Database] persistNewDriver error:', e.message); }
     }
 
     // -------------------------------------------------------------------------
