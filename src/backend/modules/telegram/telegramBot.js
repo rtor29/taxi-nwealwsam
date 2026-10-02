@@ -263,6 +263,119 @@ async function handleMessage(chatId, text, user) {
             break;
         }
 
+        // --- Driver Registration ---
+        case 'driver_phone': {
+            const digits = text.replace(/[^0-9]/g, '');
+            if (digits.length < 10) { await sendMessage(chatId, '❌ رقم غير صالح. أرسل رقم عراقي (مثال: 07701234567):'); return; }
+            state.phone = text.trim();
+            state.step = 'driver_otp_sent';
+            userStates.set(chatId, state);
+            await sendTelegramOtp(state.phone, chatId);
+            break;
+        }
+        case 'driver_otp_sent': {
+            const check = verifyTelegramOtp(chatId, text.trim());
+            if (!check.valid) { await sendMessage(chatId, '❌ ' + check.error); return; }
+            state.verifiedPhone = check.phone;
+            state.step = 'driver_name';
+            userStates.set(chatId, state);
+            await sendMessage(chatId, '✅ تم التحقق!\nأرسل اسمك الكامل (الاسم واللقب):');
+            break;
+        }
+        case 'driver_name': {
+            state.fullName = text.trim();
+            state.step = 'driver_vehicle';
+            userStates.set(chatId, state);
+            await sendMessage(chatId, '🚗 أرسل نوع وموديل المركبة (مثال: تويوتا كورولا 2021):');
+            break;
+        }
+        case 'driver_vehicle': {
+            state.vehicle = text.trim();
+            state.step = 'driver_plate';
+            userStates.set(chatId, state);
+            await sendMessage(chatId, '🔢 أرسل رقم اللوحة:');
+            break;
+        }
+        case 'driver_plate': {
+            state.plate = text.trim();
+            state.step = 'driver_password';
+            userStates.set(chatId, state);
+            await sendMessage(chatId, '🔒 أرسل كلمة المرور (4 أحرف على الأقل):');
+            break;
+        }
+        case 'driver_password': {
+            if (text.trim().length < 4) { await sendMessage(chatId, '❌ كلمة المرور قصيرة. 4 أحرف على الأقل:'); return; }
+            state.password = text.trim();
+            const crypto = require('crypto');
+            const cleanPhone = state.verifiedPhone.replace('+964', '0');
+            const driverId = 'drv-t-' + Math.random().toString(36).substr(2, 9);
+            const now = new Date().toISOString();
+            const passwordHash = crypto.createHash('sha256').update(state.password).digest('hex');
+
+            const exists = db.memoryState.drivers.find(d => d.phoneNumber === cleanPhone) ||
+                           db.memoryState.customers.find(c => c.phoneNumber === cleanPhone);
+            if (exists) {
+                await sendMessage(chatId, '⚠️ هذا الرقم مسجل بالفعل. استخدم تسجيل الدخول.');
+                userStates.delete(chatId);
+                return;
+            }
+
+            const newDriver = {
+                driverId, fullName: state.fullName, phoneNumber: cleanPhone,
+                email: `${cleanPhone}@tawseelaiq.app`, passwordHash, plainPassword: state.password,
+                licenseNumber: 'PENDING', vehicle: { make: state.vehicle, plateNumber: state.plate, year: 2023 },
+                status: 'Pending', isVerified: false, isBlocked: false,
+                ratingAverage: 5.0, totalTrips: 0, registeredAt: now,
+                telegramChatId: String(chatId)
+            };
+            db.memoryState.drivers.unshift(newDriver);
+
+            db.memoryState.verifications.unshift({
+                verificationId: 'ver-' + Math.random().toString(36).substr(2, 9),
+                driverId, driverName: state.fullName, phoneNumber: cleanPhone,
+                status: 'Pending', submittedAt: now
+            });
+
+            db.saveStateSnapshot();
+            db.persistNewDriver(newDriver).catch(()=>{});
+
+            const cfg = db.memoryState.appConfig || {};
+            const waAdminLink = cfg.whatsappAdminLink || 'https://wa.me/9647706204066';
+            const tgAdminLink = cfg.telegramAdminLink || 'https://t.me/tawseela_iq_bot';
+
+            await sendMessage(chatId,
+                `🎉 <b>تم تسجيلك كسائق بنجاح!</b>\n\n` +
+                `⏳ حسابك <b>معلّق</b> بانتظار التوثيق من قبل إدارة المنصة.\n\n` +
+                `📋 <b>الخطوة التالية لتفعيل حسابك:</b>\n` +
+                `أرسل المستمسكات (هوية + إجازة سوق + سنوية المركبة) عبر:\n` +
+                `📱 واتساب: ${waAdminLink}\n` +
+                `💬 تيليجرام: ${tgAdminLink}\n\n` +
+                `سيتم إشعارك هنا فور تفعيل حسابك من قبل الإدارة.`
+            );
+
+            // Notify admin
+            await sendKeyboard(ADMIN_CHAT_ID,
+                `🚕 <b>سائق جديد بانتظار التوثيق:</b>\n👤 ${state.fullName}\n📱 ${cleanPhone}\n🚗 ${state.vehicle} - ${state.plate}`,
+                [[
+                    { text: '✅ قبول', callback_data: `approve_${driverId}` },
+                    { text: '❌ رفض', callback_data: `reject_${driverId}` }
+                ]]
+            );
+            userStates.delete(chatId);
+            break;
+        }
+
+        // --- Login ---
+        case 'login_phone': {
+            const digits = text.replace(/[^0-9]/g, '');
+            if (digits.length < 10) { await sendMessage(chatId, '❌ رقم غير صالح. أرسل رقم عراقي (مثال: 07701234567):'); return; }
+            state.phone = text.trim();
+            state.step = 'login_otp_sent';
+            userStates.set(chatId, state);
+            await sendTelegramOtp(state.phone, chatId);
+            break;
+        }
+
         case 'login_otp_sent': {
             const check = verifyTelegramOtp(chatId, text.trim());
             if (!check.valid) { await sendMessage(chatId, '❌ ' + check.error); return; }
