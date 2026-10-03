@@ -2126,14 +2126,14 @@ async function startServer() {
                     theme: { primaryColor: '#111111', bgColor: '#ffffff', fontFamily: 'Cairo', logoEmoji: '🚕', appName: 'توصيله', footerText: '© 2026 توصيله (Tawseela IQ) · النجف الأشرف' },
                     customButtons: [],
                     ads: [],
-                    telegramAdminLink: 'https://t.me/tawseela_iq_bot',
+                    telegramAdminLink: 'https://t.me/tawseela_najaf_bot',
                     whatsappAdminLink: 'https://wa.me/9647706204066',
                     staticTexts: { welcomeTitle: 'منصة توصيله', welcomeSubtitle: 'النجف الأشرف - سجّل دخولك أو أنشئ حسابك', driverPendingMsg: 'حسابك معلّق بانتظار التوثيق. أرسل مستمسكاتك عبر واتساب أو تيليجرام.' },
                     registrationFields: { passenger: ['phone','firstName','lastName','tripType','map','password'], driver: ['phone','fullName','license','vehicle','plate','password'] },
                     onboarding: { enabled: false, screens: [] }
                 };
             } else {
-                if (!db.memoryState.appConfig.telegramAdminLink) db.memoryState.appConfig.telegramAdminLink = 'https://t.me/tawseela_iq_bot';
+                if (!db.memoryState.appConfig.telegramAdminLink) db.memoryState.appConfig.telegramAdminLink = 'https://t.me/tawseela_najaf_bot';
                 if (!db.memoryState.appConfig.whatsappAdminLink) db.memoryState.appConfig.whatsappAdminLink = 'https://wa.me/9647706204066';
             }
             res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');

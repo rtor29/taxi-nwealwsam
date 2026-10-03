@@ -4303,7 +4303,7 @@ async function loadCustomizationSettings() {
             document.getElementById('text-driver-pending').value = cfg.staticTexts.driverPendingMsg || '';
         }
         if (document.getElementById('theme-telegram-link')) {
-            document.getElementById('theme-telegram-link').value = cfg.telegramAdminLink || 'https://t.me/tawseela_iq_bot';
+            document.getElementById('theme-telegram-link').value = cfg.telegramAdminLink || 'https://t.me/tawseela_najaf_bot';
         }
         if (document.getElementById('theme-whatsapp-link')) {
             document.getElementById('theme-whatsapp-link').value = cfg.whatsappAdminLink || 'https://wa.me/9647706204066';
@@ -4465,7 +4465,7 @@ async function saveStaticTexts() {
             welcomeSubtitle: document.getElementById('text-welcome-subtitle').value,
             driverPendingMsg: document.getElementById('text-driver-pending').value
         },
-        telegramAdminLink: document.getElementById('theme-telegram-link') ? document.getElementById('theme-telegram-link').value.trim() : 'https://t.me/tawseela_iq_bot',
+        telegramAdminLink: document.getElementById('theme-telegram-link') ? document.getElementById('theme-telegram-link').value.trim() : 'https://t.me/tawseela_najaf_bot',
         whatsappAdminLink: document.getElementById('theme-whatsapp-link') ? document.getElementById('theme-whatsapp-link').value.trim() : 'https://wa.me/9647706204066'
     };
     try {

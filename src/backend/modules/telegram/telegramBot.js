@@ -3,7 +3,7 @@ const https = require('https');
 const config = require('../../config');
 const db = require('../../db');
 
-const BOT_TOKEN = '8317462517:AAH1T0_nE1ErDKrolstrvpTyDV46hVq62R4';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8904440367:AAEBLFy5DK-eM_MDqiLwQYgHIi-h-tjvyfU';
 const ADMIN_CHAT_ID = '391762837';
 const API_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
@@ -357,7 +357,7 @@ async function handleCallback(chatId, data, user) {
         }
         case 'contact_admin': {
             const cfg = db.memoryState.appConfig || {};
-            const tgLink = cfg.telegramAdminLink || 'https://t.me/tawseela_iq_bot';
+            const tgLink = cfg.telegramAdminLink || 'https://t.me/tawseela_najaf_bot';
             const waLink = cfg.whatsappAdminLink || 'https://wa.me/9647706204066';
             await sendMessage(chatId, `📞 <b>للتواصل مع إدارة المنصة:</b>\n\n💬 تيليجرام الإدارة: ${tgLink}\n📱 واتساب الإدارة: ${waLink}\n\nأو يمكنك كتابة رسالتك هنا وسنوصلها للإدارة مباشرة.`);
             userStates.set(chatId, { step: 'contact_msg' });
@@ -586,7 +586,7 @@ async function handleMessage(chatId, text, user) {
 
             const cfg = db.memoryState.appConfig || {};
             const waAdminLink = cfg.whatsappAdminLink || 'https://wa.me/9647706204066';
-            const tgAdminLink = cfg.telegramAdminLink || 'https://t.me/tawseela_iq_bot';
+            const tgAdminLink = cfg.telegramAdminLink || 'https://t.me/tawseela_najaf_bot';
 
             await sendMessage(chatId,
                 `🎉 <b>تم تسجيلك كسائق بنجاح!</b>\n\n` +
@@ -661,7 +661,7 @@ async function handleMessage(chatId, text, user) {
                 db.persistTelegramChatId('Driver', driver.driverId, chatId).catch(()=>{});
                 if (driver.status === 'Pending' || !driver.isVerified) {
                     const cfg = db.memoryState.appConfig || {};
-                    const tgAdminLink = cfg.telegramAdminLink || 'https://t.me/tawseela_iq_bot';
+                    const tgAdminLink = cfg.telegramAdminLink || 'https://t.me/tawseela_najaf_bot';
                     const waAdminLink = cfg.whatsappAdminLink || 'https://wa.me/9647706204066';
                     await sendMessage(chatId,
                         `⏳ حسابك كسائق لا يزال <b>معلّقاً</b> بانتظار التوثيق من قبل إدارة المنصة.\n\n` +

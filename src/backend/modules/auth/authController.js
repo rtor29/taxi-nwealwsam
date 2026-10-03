@@ -1462,7 +1462,7 @@ class AuthController {
                 if (res.ok && data.success) {
                     submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> تم استلام الطلب!';
                     var formBox = document.getElementById('driver-register-form');
-                    var tgLink = window.__telegramAdminLink || 'https://t.me/tawseela_iq_bot';
+                    var tgLink = window.__telegramAdminLink || 'https://t.me/tawseela_najaf_bot';
                     var waLink = window.__whatsappAdminLink || 'https://wa.me/9647706204066';
                     if (formBox) {
                         formBox.innerHTML = '<div style="background:#fffbeb;border:2px solid #fde68a;border-radius:14px;padding:22px 18px;text-align:center">' +
@@ -2026,7 +2026,7 @@ class AuthController {
         };
 
         // Dynamic Config from Dashboard
-        window.__telegramAdminLink = 'https://t.me/tawseela_iq_bot';
+        window.__telegramAdminLink = 'https://t.me/tawseela_najaf_bot';
         window.__whatsappAdminLink = 'https://wa.me/9647706204066';
 
         function applyDynamicTheme(th) {
