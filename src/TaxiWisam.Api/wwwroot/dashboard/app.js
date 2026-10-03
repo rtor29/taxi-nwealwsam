@@ -1681,10 +1681,11 @@ async function refreshFleetLocations() {
 async function refreshRoutesAndBookingsOnMap() {
     if (!fleetMap) return;
     try {
-        const [routesRes, bookingsRes, customersRes] = await Promise.all([
+        const [routesRes, bookingsRes, customersRes, permRoutesRes] = await Promise.all([
             fetch('/api/admin/routes').then(r => r.json()).catch(() => []),
             fetch('/api/bookings').then(r => r.json()).catch(() => []),
-            fetch('/api/admin/customers').then(r => r.json()).catch(() => ({ customers: [] }))
+            fetch('/api/admin/customers').then(r => r.json()).catch(() => ({ customers: [] })),
+            fetch('/api/routes/permanent').then(r => r.json()).catch(() => ({ routes: [] }))
         ]);
 
         const routes = Array.isArray(routesRes) ? routesRes : (routesRes.routes || []);
@@ -1770,6 +1771,102 @@ async function refreshRoutesAndBookingsOnMap() {
 
             bookingMarkers.push(marker);
         });
+
+        // 3. Plot Permanent Lines on Mapbox with Status-Based Colors
+        try {
+            const permRoutes = Array.isArray(permRoutesRes) ? permRoutesRes : (permRoutesRes.routes || []);
+            const permFeatures = [];
+
+            permRoutes.forEach(pr => {
+                if (!pr.startLat || !pr.startLon || !pr.endLat || !pr.endLon) return;
+                let coords = [];
+                if (pr.geometry && pr.geometry.coordinates && Array.isArray(pr.geometry.coordinates)) {
+                    coords = pr.geometry.coordinates;
+                } else {
+                    coords = [[pr.startLon, pr.startLat], [pr.endLon, pr.endLat]];
+                }
+
+                permFeatures.push({
+                    type: 'Feature',
+                    properties: {
+                        id: pr.id,
+                        customerName: pr.customerName || 'راكب خط دائم',
+                        startName: pr.startName || 'الانطلاق',
+                        endName: pr.endName || 'الوصول',
+                        status: pr.status || 'Active',
+                        days: Array.isArray(pr.days) ? pr.days.join('، ') : (pr.days || 'يومي'),
+                        departureTime: pr.departureTime || '07:30 ص',
+                        fare: pr.fare || 3000
+                    },
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: coords
+                    }
+                });
+
+                // Pickup Pin
+                const pEl = document.createElement('div');
+                const stColor = pr.status === 'Completed' ? '#3B82F6' : (pr.status === 'Pending' || pr.status === 'Paused' ? '#F59E0B' : '#10B981');
+                pEl.innerHTML = `<div style="background:${stColor};color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);font-size:11px;">🔄</div>`;
+                const pPopup = new mapboxgl.Popup({ offset: 15 }).setHTML(`
+                    <div style="direction:rtl;font-family:Cairo,sans-serif;font-size:11px;padding:4px;">
+                        <b style="color:${stColor}">🔄 خط دائم: ${pr.customerName}</b><br/>
+                        <b>الانطلاق:</b> ${pr.startName}<br/>
+                        <b>الوصول:</b> ${pr.endName}<br/>
+                        <b>الأيام:</b> ${Array.isArray(pr.days) ? pr.days.join('، ') : pr.days}<br/>
+                        <b>الوقت:</b> ${pr.departureTime}<br/>
+                        <b>الحالة:</b> <span style="font-weight:bold;color:${stColor}">${pr.status === 'Active' ? 'نشط' : (pr.status === 'Completed' ? 'مكتمل' : 'معلق')}</span>
+                    </div>
+                `);
+                const pMarker = new mapboxgl.Marker(pEl).setLngLat([pr.startLon, pr.startLat]).setPopup(pPopup).addTo(fleetMap);
+                bookingMarkers.push(pMarker);
+            });
+
+            if (fleetMap.getSource('admin-perm-routes-source')) {
+                fleetMap.getSource('admin-perm-routes-source').setData({
+                    type: 'FeatureCollection',
+                    features: permFeatures
+                });
+            } else {
+                fleetMap.addSource('admin-perm-routes-source', {
+                    type: 'geojson',
+                    data: {
+                        type: 'FeatureCollection',
+                        features: permFeatures
+                    }
+                });
+
+                // Casing
+                fleetMap.addLayer({
+                    id: 'admin-perm-routes-casing',
+                    type: 'line',
+                    source: 'admin-perm-routes-source',
+                    layout: { 'line-join': 'round', 'line-cap': 'round' },
+                    paint: { 'line-color': '#0f172a', 'line-width': 6, 'line-opacity': 0.7 }
+                });
+
+                // Colored line by status: Active = Green (#10B981), Pending/Paused = Amber (#F59E0B), Completed = Blue (#3B82F6)
+                fleetMap.addLayer({
+                    id: 'admin-perm-routes-lines',
+                    type: 'line',
+                    source: 'admin-perm-routes-source',
+                    layout: { 'line-join': 'round', 'line-cap': 'round' },
+                    paint: {
+                        'line-width': 4,
+                        'line-opacity': 0.9,
+                        'line-color': [
+                            'match',
+                            ['get', 'status'],
+                            'Active', '#10B981',
+                            'Pending', '#F59E0B',
+                            'Paused', '#F59E0B',
+                            'Completed', '#3B82F6',
+                            '#10B981'
+                        ]
+                    }
+                });
+            }
+        } catch (_) {}
 
         const onTripEl = document.getElementById('fleet-ontrip-count');
         if (onTripEl) onTripEl.innerText = totalPassengersOnMap;

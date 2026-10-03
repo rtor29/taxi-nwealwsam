@@ -242,6 +242,9 @@ class AuthController {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet" media="print" onload="this.media='all'">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js"></script>
     <script src="https://cdn.tailwindcss.com" defer></script>
     <style>
         *{box-sizing:border-box}
@@ -279,6 +282,18 @@ class AuthController {
         .sub-btn.off{background:transparent;color:#6b7280}
         .sub-btn.off:hover{color:#111111}
         ::placeholder{color:#9ca3af;opacity:1}
+        .range-chip{background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;font-family:'Cairo',sans-serif;cursor:pointer;transition:all .15s}
+        .range-chip.active{background:#111827;color:#fff;border-color:#111827}
+        .day-chip{background:#f3f4f6;color:#4b5563;border:1.5px solid #e5e7eb;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;text-align:center}
+        .day-chip.active{background:#10b981;color:#fff;border-color:#059669}
+        .driver-mini-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;transition:all .2s;cursor:pointer}
+        .driver-mini-card:hover{border-color:#3b82f6;background:#f0f9ff}
+        .match-badge{background:#ecfdf5;color:#059669;border:1px solid #a7f3d0;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:800}
+        @media (max-width: 768px) {
+            #booking-main-body { flex-direction: column !important; }
+            #booking-map-wrapper { height: 42vh !important; }
+            #booking-sidebar { width: 100% !important; flex: 1 !important; }
+        }
     </style>
 
     <script>
@@ -309,6 +324,130 @@ class AuthController {
     <!-- App view iframe (shown after login) -->
     <div id="app-view-container" style="display:none;position:fixed;inset:0;width:100vw;height:100vh;z-index:999999;background:#1a1a2e">
         <iframe id="app-frame" style="width:100%;height:100%;border:none" allow="geolocation *; microphone *; camera *" title="تطبيق توصيلة"></iframe>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- INTERACTIVE MAPBOX BOOKING & DISPATCH APP (STAGES 1, 2, 3, 4) -->
+    <!-- ========================================================================= -->
+    <div id="booking-modal-view" style="display:none;position:fixed;inset:0;width:100vw;height:100vh;z-index:999999;background:#f8fafc;flex-direction:column;font-family:'Cairo',sans-serif;" dir="rtl">
+        <!-- Top App Bar -->
+        <header style="background:#111827;color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 10px rgba(0,0,0,0.25);flex-shrink:0;z-index:20;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <span style="font-size:26px;">🚕</span>
+                <div>
+                    <div style="font-size:15px;font-weight:900;line-height:1.2;">توصيلة النجف</div>
+                    <div style="font-size:11px;color:#9ca3af;">مشاوير قصيرة وخطوط دائمة</div>
+                </div>
+            </div>
+
+            <!-- Tabs: Short Trip / Permanent Line / Driver Console -->
+            <div style="display:flex;background:#1f2937;padding:3px;border-radius:10px;gap:4px;">
+                <button id="book-tab-short" type="button" onclick="switchBookingTab('short')" style="background:#f59e0b;color:#111;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;">
+                    ⚡ مشوار قصير
+                </button>
+                <button id="book-tab-daily" type="button" onclick="switchBookingTab('daily')" style="background:transparent;color:#d1d5db;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
+                    🔄 خط دائمي
+                </button>
+                <button id="book-tab-driver" type="button" onclick="switchBookingTab('driver')" style="background:transparent;color:#d1d5db;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
+                    🚖 واجهة الكابتن
+                </button>
+            </div>
+
+            <button type="button" onclick="closeBookingApp()" style="background:#374151;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
+                ✕ إغلاق
+            </button>
+        </header>
+
+        <!-- Main Body -->
+        <div id="booking-main-body" style="display:flex;flex:1;overflow:hidden;position:relative;">
+            <!-- MAP VIEWPORT -->
+            <div id="booking-map-wrapper" style="flex:1;height:100%;position:relative;">
+                <div id="booking-mapbox-map" style="width:100%;height:100%;"></div>
+
+                <!-- Floating Range Selector (Stage 1) -->
+                <div style="position:absolute;top:12px;right:12px;z-index:10;display:flex;gap:6px;background:rgba(255,255,255,0.92);backdrop-filter:blur(6px);padding:6px 10px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.12);align-items:center;">
+                    <span style="font-size:11px;font-weight:800;color:#374151;">النطاق:</span>
+                    <button type="button" class="range-chip" onclick="setBookingSearchRange(3)" id="rng-chip-3">3 كم</button>
+                    <button type="button" class="range-chip active" onclick="setBookingSearchRange(5)" id="rng-chip-5">5 كم</button>
+                    <button type="button" class="range-chip" onclick="setBookingSearchRange(10)" id="rng-chip-10">10 كم</button>
+                    <button type="button" class="range-chip" onclick="setBookingSearchRange(15)" id="rng-chip-15">15 كم</button>
+                </div>
+
+                <!-- Floating GPS Button -->
+                <button type="button" onclick="centerOnUserGps()" style="position:absolute;bottom:24px;left:16px;z-index:10;background:#fff;border:1.5px solid #d1d5db;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(0,0,0,0.15);cursor:pointer;font-size:18px;color:#1d4ed8;" title="تحديد موقعي">
+                    <i class="fa-solid fa-crosshairs"></i>
+                </button>
+
+                <!-- Floating Route Summary Pill (Stage 2) -->
+                <div id="booking-route-pill" style="display:none;position:absolute;bottom:16px;right:16px;left:70px;max-width:380px;z-index:10;margin:0 auto;background:#111827;color:#fff;padding:10px 14px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,0.25);font-size:12px;font-weight:800;align-items:center;justify-content:space-between;">
+                    <span id="route-pill-dist">📏 -- كم</span>
+                    <span id="route-pill-dur">⏱️ -- دقيقة</span>
+                    <span id="route-pill-fare" style="color:#f59e0b;">💰 -- د.ع</span>
+                </div>
+            </div>
+
+            <!-- SIDEBAR PANEL -->
+            <div id="booking-sidebar" style="width:390px;max-width:100%;background:#ffffff;border-right:1px solid #e2e8f0;overflow-y:auto;display:flex;flex-direction:column;padding:16px;gap:14px;box-shadow:-2px 0 10px rgba(0,0,0,0.05);flex-shrink:0;">
+                <!-- Panel content will be dynamically rendered or toggled -->
+                <div id="sidebar-panel-short" style="display:flex;flex-direction:column;gap:12px;"></div>
+                <div id="sidebar-panel-daily" style="display:none;flex-direction:column;gap:12px;"></div>
+                <div id="sidebar-panel-driver" style="display:none;flex-direction:column;gap:12px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 30-Second Auto-Escalation Dispatch Modal (Stage 1) -->
+    <div id="ride-dispatch-modal" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
+        <div class="card" style="max-width:400px;width:100%;padding:24px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.3);">
+            <div style="font-size:36px;margin-bottom:8px;" id="dispatch-modal-icon">⏳</div>
+            <h3 id="dispatch-modal-title" style="font-size:17px;font-weight:900;margin:0 0 6px;color:#111;">جاري انتظار رد الكابتن...</h3>
+            <p id="dispatch-modal-subtitle" style="font-size:12px;color:#6b7280;margin:0 0 16px;">إذا لم يرد السائق خلال 30 ثانية سيتم تحويل الطلب تلقائياً للأقرب التالي</p>
+
+            <!-- Circular timer -->
+            <div style="display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:50%;border:4px solid #f59e0b;margin-bottom:14px;">
+                <span id="dispatch-timer-seconds" style="font-size:24px;font-weight:900;color:#d97706;">30</span>
+            </div>
+
+            <!-- Assigned Driver Info Box -->
+            <div id="dispatch-driver-info-box" style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:16px;text-align:right;">
+                <div style="font-size:13px;font-weight:900;color:#111;" id="dispatch-drv-name">كابتن: --</div>
+                <div style="font-size:11px;color:#64748b;margin-top:2px;" id="dispatch-drv-car">المركبة: --</div>
+                <div style="font-size:11px;color:#059669;font-weight:700;margin-top:2px;" id="dispatch-drv-status">الحالة: يتم الإشعار الآن</div>
+            </div>
+
+            <!-- Action buttons -->
+            <div id="dispatch-actions-wrap" style="display:flex;gap:8px;">
+                <button type="button" onclick="cancelRideRequest()" class="btn-secondary" style="color:#dc2626;border-color:#fecaca;background:#fef2f2;">إلغاء الطلب</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Driver Incoming Ride Alert Modal (Stage 4) -->
+    <div id="driver-incoming-modal" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
+        <div class="card" style="max-width:400px;width:100%;padding:22px 18px;text-align:center;border:2px solid #f59e0b;">
+            <div style="font-size:36px;margin-bottom:6px;">🚖</div>
+            <h3 style="font-size:17px;font-weight:900;margin:0 0 4px;color:#111;">طلب مشوار قصير جديد!</h3>
+            <p style="font-size:12px;color:#6b7280;margin:0 0 12px;">لديك 30 ثانية للموافقة قبل انتقال الطلب لسائق آخر</p>
+
+            <!-- 30s countdown for driver -->
+            <div style="font-size:22px;font-weight:900;color:#d97706;margin-bottom:12px;" id="driver-incoming-timer">⏳ 30 ثانية</div>
+
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:16px;text-align:right;font-size:12px;">
+                <div style="font-weight:900;margin-bottom:4px;" id="incoming-passenger-name">👤 الراكب: --</div>
+                <div style="color:#16a34a;margin-bottom:3px;" id="incoming-pickup-addr">🟢 الانطلاق: --</div>
+                <div style="color:#dc2626;margin-bottom:3px;" id="incoming-dropoff-addr">🔴 الوصول: --</div>
+                <div style="font-weight:900;color:#111;margin-top:6px;" id="incoming-fare-info">💰 الأجرة المقدرة: -- د.ع (المسافة: -- كم)</div>
+            </div>
+
+            <div style="display:flex;gap:8px;">
+                <button type="button" onclick="respondToIncomingRide('accept')" class="btn-primary" style="background:#16a34a;flex:1;">
+                    ✅ قبول المشوار
+                </button>
+                <button type="button" onclick="respondToIncomingRide('reject')" class="btn-secondary" style="color:#dc2626;flex:1;">
+                    ❌ رفض
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Trip type selection (shown after login, before opening app) -->
@@ -402,6 +541,11 @@ class AuthController {
             <div id="app-main-logo" style="font-size:40px;margin-bottom:10px">🚕</div>
             <h1 id="app-main-title" style="font-size:22px;font-weight:900;margin:0 0 6px;color:#111">منصة توصيله</h1>
             <p id="app-main-subtitle" style="font-size:13px;color:#6b7280;margin:0">النجف الأشرف - سجّل دخولك أو أنشئ حسابك</p>
+            <div style="margin-top:14px;">
+                <button type="button" onclick="openBookingApp('short')" style="background:linear-gradient(135deg,#111827,#1f2937);color:#fff;border:none;border-radius:12px;padding:12px 20px;font-size:13px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 4px 15px rgba(0,0,0,0.18);">
+                    <span>🗺️</span> <span>خريطة حجز التكسي والخطوط المباشرة (Mapbox)</span>
+                </button>
+            </div>
         </header>
 
         <!-- Role Tabs -->
@@ -963,7 +1107,11 @@ class AuthController {
                 } catch(_) {}
             }
             if (modal) modal.style.display = 'none';
-            openAppView(p.token, p.userId, p.role, p.fullName);
+            if (isDriver) {
+                window.openBookingApp('driver');
+            } else {
+                window.openBookingApp(selectedTripType || 'short');
+            }
         }
 
         function showTripTypeModal(token, userId, role, fullName) {
@@ -1824,16 +1972,8 @@ class AuthController {
 
         // ===== App view =====
         window.openAppView = function(token,userId,role,fullName, forceMap) {
-            var container=document.getElementById('app-view-container');
-            var frame=document.getElementById('app-frame');
-            if(!container||!frame) return;
-            var targetHash=(role==='Driver'||role==='driver') && !forceMap ?'/driver':'/customer';
-            var tripTypeParam = selectedTripType ? '&tripType=' + encodeURIComponent(selectedTripType) : '';
-            var serviceTypeParam = selectedDriverServiceType ? '&serviceType=' + encodeURIComponent(selectedDriverServiceType) : '';
-            var targetUrl='/app-view/#'+targetHash+'?login_token='+encodeURIComponent(token)+'&userId='+encodeURIComponent(userId)+'&role='+encodeURIComponent(role)+'&fullName='+encodeURIComponent(fullName)+tripTypeParam+serviceTypeParam;
-            frame.src=targetUrl;
-            container.style.display='block';
-            document.body.style.overflow='hidden';
+            var mode = (role === 'Driver' || role === 'driver') ? 'driver' : (selectedTripType || 'short');
+            window.openBookingApp(mode);
         };
 
         function togglePasswordVisibility(inputId,iconId) {
@@ -2226,6 +2366,918 @@ class AuthController {
             } catch(e) {}
         }
 
+        // =============================================================================
+        // INTERACTIVE MAPBOX BOOKING & DISPATCH ENGINE (STAGES 1, 2, 3, 4)
+        // =============================================================================
+        var BOOKING_MAPBOX_TOKEN = 'pk.eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9._J6DYjYBDhsdcidErQrblA';
+        var bMap = null, bGeolocate = null;
+        var bUserLat = 31.9961, bUserLon = 44.3168, bHasUserGps = false;
+        var bActiveTab = 'short';
+        var bRangeKm = 5;
+        var bPickupMarker = null, bDropoffMarker = null;
+        var bPickupCoords = null, bDropoffCoords = null;
+        var bPickupName = '', bDropoffName = '';
+        var bRouteDist = 0, bRouteDur = 0, bRouteFare = 0, bRouteGeom = null;
+        var bNearbyDrivers = [];
+        var bDriversPollTimer = null;
+        var bActiveRideId = null, bRidePollTimer = null, bDispatchSeconds = 30, bDispatchTimer = null;
+        var bPermDays = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء'];
+        var bDriverOnline = false, bDriverWatchId = null, bDriverIncomingTimer = null, bDriverReqTimer = null;
+
+        window.openBookingApp = function(tab) {
+            var modal = document.getElementById('booking-modal-view');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+            if (tab) bActiveTab = tab;
+            window.switchBookingTab(bActiveTab);
+            if (!bMap) {
+                initBookingMapbox();
+            } else {
+                setTimeout(function() { bMap.resize(); }, 150);
+                fetchNearbyDriversForMap();
+            }
+        };
+
+        window.closeBookingApp = function() {
+            var modal = document.getElementById('booking-modal-view');
+            if (modal) modal.style.display = 'none';
+            document.body.style.overflow = '';
+            if (bDriversPollTimer) clearInterval(bDriversPollTimer);
+        };
+
+        window.switchBookingTab = function(tab) {
+            bActiveTab = tab;
+            var tShort = document.getElementById('book-tab-short');
+            var tDaily = document.getElementById('book-tab-daily');
+            var tDriver = document.getElementById('book-tab-driver');
+            var pShort = document.getElementById('sidebar-panel-short');
+            var pDaily = document.getElementById('sidebar-panel-daily');
+            var pDriver = document.getElementById('sidebar-panel-driver');
+
+            [tShort, tDaily, tDriver].forEach(function(b) {
+                if (b) { b.style.background = 'transparent'; b.style.color = '#d1d5db'; b.style.fontWeight = '700'; }
+            });
+            [pShort, pDaily, pDriver].forEach(function(p) { if (p) p.style.display = 'none'; });
+
+            if (tab === 'short') {
+                if (tShort) { tShort.style.background = '#f59e0b'; tShort.style.color = '#111'; tShort.style.fontWeight = '900'; }
+                if (pShort) pShort.style.display = 'flex';
+                renderShortTripSidebar();
+            } else if (tab === 'daily') {
+                if (tDaily) { tDaily.style.background = '#f59e0b'; tDaily.style.color = '#111'; tDaily.style.fontWeight = '900'; }
+                if (pDaily) pDaily.style.display = 'flex';
+                renderDailyTripSidebar();
+                loadPassengerPermanentRoutes();
+            } else if (tab === 'driver') {
+                if (tDriver) { tDriver.style.background = '#f59e0b'; tDriver.style.color = '#111'; tDriver.style.fontWeight = '900'; }
+                if (pDriver) pDriver.style.display = 'flex';
+                renderDriverSidebar();
+            }
+            if (bMap) setTimeout(function() { bMap.resize(); }, 100);
+        };
+
+        window.setBookingSearchRange = function(km) {
+            bRangeKm = km;
+            [3, 5, 10, 15].forEach(function(k) {
+                var el = document.getElementById('rng-chip-' + k);
+                if (el) el.className = (k === km ? 'range-chip active' : 'range-chip');
+            });
+            fetchNearbyDriversForMap();
+        };
+
+        window.centerOnUserGps = function() {
+            if (bGeolocate) {
+                bGeolocate.trigger();
+            } else if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(pos) {
+                    bUserLat = pos.coords.latitude;
+                    bUserLon = pos.coords.longitude;
+                    bHasUserGps = true;
+                    if (bMap) bMap.flyTo({ center: [bUserLon, bUserLat], zoom: 15 });
+                    setBookingPickup(bUserLon, bUserLat, 'موقعي الحالي');
+                    fetchNearbyDriversForMap();
+                });
+            }
+        };
+
+        function initBookingMapbox() {
+            if (typeof mapboxgl === 'undefined') return;
+            mapboxgl.accessToken = BOOKING_MAPBOX_TOKEN;
+            bMap = new mapboxgl.Map({
+                container: 'booking-mapbox-map',
+                style: 'mapbox://styles/mapbox/streets-v12',
+                center: [bUserLon, bUserLat],
+                zoom: 13
+            });
+
+            bMap.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'top-left');
+
+            bGeolocate = new mapboxgl.GeolocateControl({
+                positionOptions: { enableHighAccuracy: true },
+                trackUserLocation: true,
+                showUserHeading: true
+            });
+            bMap.addControl(bGeolocate, 'top-left');
+
+            bGeolocate.on('geolocate', function(e) {
+                bUserLat = e.coords.latitude;
+                bUserLon = e.coords.longitude;
+                bHasUserGps = true;
+                if (!bPickupCoords) {
+                    setBookingPickup(bUserLon, bUserLat, 'موقعي الحالي');
+                }
+                fetchNearbyDriversForMap();
+            });
+
+            bMap.on('load', function() {
+                // Auto request geolocation on open (Stage 1)
+                try { bGeolocate.trigger(); } catch(_) {}
+
+                // Drivers GeoJSON source & layers (Stage 1)
+                bMap.addSource('booking-drivers-source', {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
+                });
+                bMap.addLayer({
+                    id: 'booking-drivers-circle',
+                    type: 'circle',
+                    source: 'booking-drivers-source',
+                    paint: {
+                        'circle-radius': 14,
+                        'circle-color': '#f59e0b',
+                        'circle-stroke-width': 2.5,
+                        'circle-stroke-color': '#ffffff'
+                    }
+                });
+                bMap.addLayer({
+                    id: 'booking-drivers-symbol',
+                    type: 'symbol',
+                    source: 'booking-drivers-source',
+                    layout: {
+                        'text-field': '🚕',
+                        'text-size': 18,
+                        'text-allow-overlap': true,
+                        'text-ignore-placement': true
+                    }
+                });
+
+                // Directions route line source & layers (Stage 2)
+                bMap.addSource('booking-route-source', {
+                    type: 'geojson',
+                    data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
+                });
+                bMap.addLayer({
+                    id: 'booking-route-casing',
+                    type: 'line',
+                    source: 'booking-route-source',
+                    layout: { 'line-join': 'round', 'line-cap': 'round' },
+                    paint: { 'line-color': '#0f172a', 'line-width': 7, 'line-opacity': 0.75 }
+                });
+                bMap.addLayer({
+                    id: 'booking-route-line',
+                    type: 'line',
+                    source: 'booking-route-source',
+                    layout: { 'line-join': 'round', 'line-cap': 'round' },
+                    paint: { 'line-color': '#2563eb', 'line-width': 4.5, 'line-opacity': 0.95 }
+                });
+
+                // Map Click handler to set pins
+                bMap.on('click', function(e) {
+                    var lng = e.lngLat.lng, lat = e.lngLat.lat;
+                    if (!bPickupCoords) setBookingPickup(lng, lat, '');
+                    else setBookingDropoff(lng, lat, '');
+                });
+
+                fetchNearbyDriversForMap();
+                if (bDriversPollTimer) clearInterval(bDriversPollTimer);
+                bDriversPollTimer = setInterval(fetchNearbyDriversForMap, 5000);
+            });
+        }
+
+        async function bReverseGeocode(lng, lat) {
+            try {
+                var res = await fetch('https://api.mapbox.com/geocoding/v5/mapbox.places/' + lng + ',' + lat + '.json?country=iq&language=ar&access_token=' + BOOKING_MAPBOX_TOKEN);
+                var data = await res.json();
+                if (data && data.features && data.features.length > 0) {
+                    return data.features[0].place_name_ar || data.features[0].place_name || '';
+                }
+            } catch(_) {}
+            return lat.toFixed(4) + ', ' + lng.toFixed(4);
+        }
+
+        function setBookingPickup(lng, lat, name) {
+            bPickupCoords = [lng, lat];
+            if (!bPickupMarker && bMap) {
+                var el = document.createElement('div');
+                el.innerHTML = '<div style="background:#16a34a;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,0.3);font-size:14px;cursor:grab;">🟢</div>';
+                bPickupMarker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat([lng, lat]).addTo(bMap);
+                bPickupMarker.on('dragend', async function() {
+                    var p = bPickupMarker.getLngLat();
+                    bPickupCoords = [p.lng, p.lat];
+                    var addr = await bReverseGeocode(p.lng, p.lat);
+                    bPickupName = addr;
+                    var inp = document.getElementById('book-pickup-input');
+                    if (inp) inp.value = addr;
+                    calculateBookingRoute();
+                });
+            } else if (bPickupMarker) {
+                bPickupMarker.setLngLat([lng, lat]);
+            }
+
+            if (name) {
+                bPickupName = name;
+                var inp = document.getElementById('book-pickup-input');
+                if (inp) inp.value = name;
+            } else {
+                bReverseGeocode(lng, lat).then(function(addr) {
+                    bPickupName = addr;
+                    var inp = document.getElementById('book-pickup-input');
+                    if (inp) inp.value = addr;
+                });
+            }
+            calculateBookingRoute();
+        }
+
+        function setBookingDropoff(lng, lat, name) {
+            bDropoffCoords = [lng, lat];
+            if (!bDropoffMarker && bMap) {
+                var el = document.createElement('div');
+                el.innerHTML = '<div style="background:#dc2626;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,0.3);font-size:14px;cursor:grab;">🔴</div>';
+                bDropoffMarker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat([lng, lat]).addTo(bMap);
+                bDropoffMarker.on('dragend', async function() {
+                    var p = bDropoffMarker.getLngLat();
+                    bDropoffCoords = [p.lng, p.lat];
+                    var addr = await bReverseGeocode(p.lng, p.lat);
+                    bDropoffName = addr;
+                    var inp = document.getElementById('book-dropoff-input');
+                    if (inp) inp.value = addr;
+                    calculateBookingRoute();
+                });
+            } else if (bDropoffMarker) {
+                bDropoffMarker.setLngLat([lng, lat]);
+            }
+
+            if (name) {
+                bDropoffName = name;
+                var inp = document.getElementById('book-dropoff-input');
+                if (inp) inp.value = name;
+            } else {
+                bReverseGeocode(lng, lat).then(function(addr) {
+                    bDropoffName = addr;
+                    var inp = document.getElementById('book-dropoff-input');
+                    if (inp) inp.value = addr;
+                });
+            }
+            calculateBookingRoute();
+        }
+
+        async function calculateBookingRoute() {
+            if (!bPickupCoords || !bDropoffCoords || !bMap) return;
+            try {
+                var url = 'https://api.mapbox.com/directions/v5/mapbox/driving/' + bPickupCoords[0] + ',' + bPickupCoords[1] + ';' + bDropoffCoords[0] + ',' + bDropoffCoords[1] + '?geometries=geojson&overview=full&access_token=' + BOOKING_MAPBOX_TOKEN;
+                var res = await fetch(url);
+                var data = await res.json();
+                if (!data.routes || !data.routes[0]) return;
+                var r = data.routes[0];
+                bRouteGeom = r.geometry;
+                bRouteDist = Math.round((r.distance / 1000) * 10) / 10;
+                bRouteDur = Math.max(1, Math.round(r.duration / 60));
+                bRouteFare = Math.max(2000, Math.round(2000 + (bRouteDist * 500) / 250) * 250);
+
+                if (bMap.getSource('booking-route-source')) {
+                    bMap.getSource('booking-route-source').setData({ type: 'Feature', geometry: bRouteGeom });
+                }
+
+                var bounds = new mapboxgl.LngLatBounds();
+                bounds.extend(bPickupCoords);
+                bounds.extend(bDropoffCoords);
+                bMap.fitBounds(bounds, { padding: 60, maxZoom: 15 });
+
+                var pill = document.getElementById('booking-route-pill');
+                if (pill) {
+                    pill.style.display = 'flex';
+                    var dEl = document.getElementById('route-pill-dist');
+                    var duEl = document.getElementById('route-pill-dur');
+                    var fEl = document.getElementById('route-pill-fare');
+                    if (dEl) dEl.textContent = '📏 ' + bRouteDist + ' كم';
+                    if (duEl) duEl.textContent = '⏱️ ' + bRouteDur + ' دقيقة';
+                    if (fEl) fEl.textContent = '💰 ' + bRouteFare.toLocaleString() + ' د.ع';
+                }
+
+                var sideInfo = document.getElementById('side-route-summary');
+                if (sideInfo) {
+                    sideInfo.style.display = 'block';
+                    sideInfo.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-weight:900;color:#111">المسار المقدر:</span><span style="font-weight:900;color:#059669;font-size:14px">' + bRouteFare.toLocaleString() + ' د.ع</span></div><div style="font-size:11px;color:#64748b;display:flex;gap:12px"><span>📏 ' + bRouteDist + ' كم</span><span>⏱️ ' + bRouteDur + ' دقيقة</span></div>';
+                }
+            } catch(e) {}
+        }
+
+        async function fetchNearbyDriversForMap() {
+            try {
+                var lat = bPickupCoords ? bPickupCoords[1] : bUserLat;
+                var lon = bPickupCoords ? bPickupCoords[0] : bUserLon;
+                var res = await fetch('/api/drivers/nearby?tripType=short&lat=' + lat + '&lon=' + lon + '&rangeKm=' + bRangeKm);
+                var drivers = await res.json();
+                bNearbyDrivers = Array.isArray(drivers) ? drivers : [];
+
+                if (bMap && bMap.getSource('booking-drivers-source')) {
+                    var features = bNearbyDrivers.map(function(d) {
+                        return {
+                            type: 'Feature',
+                            properties: { id: d.driverId, name: d.driverName, car: d.carModel, distance: d.distanceKm },
+                            geometry: { type: 'Point', coordinates: [d.longitude, d.latitude] }
+                        };
+                    });
+                    bMap.getSource('booking-drivers-source').setData({ type: 'FeatureCollection', features: features });
+                }
+
+                if (bActiveTab === 'short') {
+                    renderNearbyDriversList();
+                }
+            } catch(_) {}
+        }
+
+        // Search Autocomplete for Dropoff
+        var bDropoffTimer = null;
+        window.onBookingDropoffSearch = function(query) {
+            clearTimeout(bDropoffTimer);
+            var resultsEl = document.getElementById('book-dropoff-results');
+            if (!resultsEl) return;
+            if (!query || query.trim().length < 2) {
+                resultsEl.style.display = 'none';
+                return;
+            }
+            bDropoffTimer = setTimeout(async function() {
+                try {
+                    var q = encodeURIComponent(query.trim());
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + bUserLon + ',' + bUserLat + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=6&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    var res = await fetch(url);
+                    var data = await res.json();
+                    var feats = (data && data.features) ? data.features : [];
+                    if (feats.length === 0) { resultsEl.style.display = 'none'; return; }
+                    resultsEl.innerHTML = '';
+                    resultsEl.style.display = 'block';
+                    feats.forEach(function(f) {
+                        var item = document.createElement('div');
+                        item.className = 'search-result-item';
+                        var name = f.place_name_ar || f.place_name || '';
+                        item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + name + '</span>';
+                        item.onclick = function() {
+                            resultsEl.style.display = 'none';
+                            setBookingDropoff(f.center[0], f.center[1], name);
+                        };
+                        resultsEl.appendChild(item);
+                    });
+                } catch(_) { resultsEl.style.display = 'none'; }
+            }, 300);
+        };
+
+        // Render Short Trip Sidebar (Stage 1 & 2)
+        function renderShortTripSidebar() {
+            var panel = document.getElementById('sidebar-panel-short');
+            if (!panel) return;
+            panel.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px;">⚡ حجز مشوار قصير فوري</div>' +
+                '<div style="position:relative;">' +
+                    '<label class="label" style="font-size:11px;">🟢 نقطة الانطلاق</label>' +
+                    '<div style="display:flex;gap:6px;">' +
+                        '<input type="text" id="book-pickup-input" class="inp" placeholder="حدد على الخريطة أو موقعي الحالي" value="' + (bPickupName||'') + '" style="font-size:12px;padding:9px 12px;">' +
+                        '<button type="button" onclick="centerOnUserGps()" class="btn-small" style="padding:8px 10px;" title="موقعي الحالي">📍</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div style="position:relative;">' +
+                    '<label class="label" style="font-size:11px;">🔴 نقطة الوصول (ابحث عن جامعة/حي/معلم)</label>' +
+                    '<input type="text" id="book-dropoff-input" class="inp" placeholder="ابحث: جامعة الكوفة، شارع الروان..." value="' + (bDropoffName||'') + '" oninput="onBookingDropoffSearch(this.value)" style="font-size:12px;padding:9px 12px;">' +
+                    '<div id="book-dropoff-results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;"></div>' +
+                '</div>' +
+                '<div id="side-route-summary" style="display:' + (bRouteDist > 0 ? 'block' : 'none') + ';background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px;">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+                        '<span style="font-weight:900;color:#111;">المسار المقدر:</span>' +
+                        '<span style="font-weight:900;color:#059669;font-size:14px;">' + (bRouteFare||0).toLocaleString() + ' د.ع</span>' +
+                    '</div>' +
+                    '<div style="font-size:11px;color:#64748b;display:flex;gap:12px;">' +
+                        '<span>📏 ' + bRouteDist + ' كم</span>' +
+                        '<span>⏱️ ' + bRouteDur + ' دقيقة</span>' +
+                    '</div>' +
+                '</div>' +
+                '<button type="button" onclick="requestNearestDriver()" class="btn-primary" style="background:#111827;font-size:13px;padding:12px;display:flex;align-items:center;justify-content:center;gap:8px;">' +
+                    '<span>🚕</span> <span>اطلب أقرب سائق متاح</span>' +
+                '</button>' +
+                '<div style="margin-top:6px;">' +
+                    '<div style="font-size:12px;font-weight:800;color:#374151;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">' +
+                        '<span>السائقون القريبون (' + bNearbyDrivers.length + '):</span>' +
+                        '<span style="font-size:10px;color:#6b7280;">تحديث كل 5 ثوانٍ 🔄</span>' +
+                    '</div>' +
+                    '<div id="side-drivers-list" style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;"></div>' +
+                '</div>';
+            renderNearbyDriversList();
+        }
+
+        function renderNearbyDriversList() {
+            var list = document.getElementById('side-drivers-list');
+            if (!list) return;
+            if (bNearbyDrivers.length === 0) {
+                list.innerHTML = '<div style="font-size:12px;color:#94a3b8;text-align:center;padding:12px;background:#f8fafc;border-radius:10px;">لا يوجد سائقون متاحون ضمن النطاق المحدد</div>';
+                return;
+            }
+            list.innerHTML = '';
+            bNearbyDrivers.slice(0, 10).forEach(function(d) {
+                var card = document.createElement('div');
+                card.className = 'driver-mini-card';
+                var eta = Math.max(2, Math.round(d.distanceKm / 0.5));
+                card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">' +
+                        '<span style="font-weight:900;font-size:12px;color:#111;">🚕 ' + d.driverName + '</span>' +
+                        '<span style="font-size:11px;font-weight:800;color:#059669;">⏱️ ' + eta + ' دقيقة</span>' +
+                    '</div>' +
+                    '<div style="font-size:11px;color:#64748b;display:flex;justify-content:space-between;align-items:center;">' +
+                        '<span>🚗 ' + (d.carModel || 'تويوتا') + '</span>' +
+                        '<span>📏 يبعد ' + d.distanceKm + ' كم</span>' +
+                    '</div>';
+                card.onclick = function() {
+                    if (bMap) bMap.flyTo({ center: [d.longitude, d.latitude], zoom: 15 });
+                };
+                list.appendChild(card);
+            });
+        }
+
+        // Request Nearest Driver & 30-Second Escalation (Stage 1)
+        window.requestNearestDriver = async function() {
+            if (!bPickupCoords) {
+                alert('يرجى تحديد نقطة الانطلاق أولاً أو الضغط على زر موقعي');
+                return;
+            }
+            if (!bDropoffCoords) {
+                alert('يرجى كتابة أو تحديد نقطة الوصول على الخريطة');
+                return;
+            }
+            var uid = localStorage.getItem('user_id') || 'cust-user';
+            var uName = localStorage.getItem('user_fullname') || 'راكب توصيله';
+            var uPhone = localStorage.getItem('user_phone') || '';
+
+            try {
+                var res = await fetch('/api/ride/request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customerId: uid,
+                        customerName: uName,
+                        customerPhone: uPhone,
+                        pickupName: bPickupName || 'موقع الركوب',
+                        pickupLat: bPickupCoords[1],
+                        pickupLon: bPickupCoords[0],
+                        dropoffName: bDropoffName || 'وجهة الوصول',
+                        dropoffLat: bDropoffCoords[1],
+                        dropoffLon: bDropoffCoords[0],
+                        fare: bRouteFare || 3000,
+                        distanceKm: bRouteDist || 3.5,
+                        durationMins: bRouteDur || 8,
+                        rangeKm: bRangeKm
+                    })
+                });
+                var data = await res.json();
+                if (data.success && data.request) {
+                    bActiveRideId = data.request.id;
+                    showDispatchModal(data.request);
+                } else {
+                    alert(data.error || 'تعذر إرسال طلب المشوار');
+                }
+            } catch(e) {
+                alert('خطأ في الاتصال بالخادم');
+            }
+        };
+
+        function showDispatchModal(req) {
+            var modal = document.getElementById('ride-dispatch-modal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            bDispatchSeconds = 30;
+            updateDispatchUi(req);
+
+            if (bDispatchTimer) clearInterval(bDispatchTimer);
+            bDispatchTimer = setInterval(function() {
+                bDispatchSeconds--;
+                var tEl = document.getElementById('dispatch-timer-seconds');
+                if (tEl) tEl.textContent = Math.max(0, bDispatchSeconds);
+                if (bDispatchSeconds <= 0) {
+                    bDispatchSeconds = 30;
+                }
+            }, 1000);
+
+            if (bRidePollTimer) clearInterval(bRidePollTimer);
+            bRidePollTimer = setInterval(async function() {
+                if (!bActiveRideId) return;
+                try {
+                    var res = await fetch('/api/ride/status/' + bActiveRideId);
+                    var data = await res.json();
+                    if (data.success && data.request) {
+                        updateDispatchUi(data.request);
+                        if (data.request.status === 'Accepted') {
+                            clearInterval(bRidePollTimer);
+                            clearInterval(bDispatchTimer);
+                            onRideAccepted(data.request);
+                        }
+                    }
+                } catch(_) {}
+            }, 1500);
+        }
+
+        function updateDispatchUi(req) {
+            var nameEl = document.getElementById('dispatch-drv-name');
+            var carEl = document.getElementById('dispatch-drv-car');
+            var stEl = document.getElementById('dispatch-drv-status');
+            if (nameEl) nameEl.textContent = '🚕 الكابتن: ' + (req.assignedDriverName || 'أقرب سائق متاح');
+            if (carEl) carEl.textContent = '🚗 المركبة: ' + (req.assignedDriverVehicle || 'تويوتا');
+            if (stEl) {
+                stEl.textContent = '⏳ جاري انتظار القبول (السائق #' + ((req.currentDriverIndex || 0) + 1) + ')';
+                stEl.style.color = '#d97706';
+            }
+        }
+
+        function onRideAccepted(req) {
+            document.getElementById('dispatch-modal-icon').textContent = '🎉';
+            document.getElementById('dispatch-modal-title').textContent = 'تم قبول رحلتك بنجاح!';
+            document.getElementById('dispatch-modal-subtitle').textContent = 'الكابتن ' + req.assignedDriverName + ' في طريقه إليك!';
+            document.getElementById('dispatch-timer-seconds').textContent = '✅';
+            var waNum = (req.assignedDriverPhone || '').replace(/[^0-9]/g, '').replace(/^07/, '9647');
+            var act = document.getElementById('dispatch-actions-wrap');
+            if (act) {
+                act.innerHTML = '<a href="https://wa.me/' + waNum + '" target="_blank" class="btn-primary" style="background:#25d366;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;flex:1;">💬 واتساب</a><a href="tel:' + req.assignedDriverPhone + '" class="btn-primary" style="background:#10b981;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;flex:1;">📞 اتصال</a><button type="button" onclick="cancelRideRequest()" class="btn-secondary" style="flex:1;">إغلاق</button>';
+            }
+        }
+
+        window.cancelRideRequest = function() {
+            if (bRidePollTimer) clearInterval(bRidePollTimer);
+            if (bDispatchTimer) clearInterval(bDispatchTimer);
+            bActiveRideId = null;
+            var modal = document.getElementById('ride-dispatch-modal');
+            if (modal) modal.style.display = 'none';
+        };
+
+        // Render Permanent Line Sidebar (Stage 3)
+        function renderDailyTripSidebar() {
+            var panel = document.getElementById('sidebar-panel-daily');
+            if (!panel) return;
+            var days = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+            var chipsHtml = days.map(function(d) {
+                var act = bPermDays.includes(d) ? 'day-chip active' : 'day-chip';
+                return '<div class="' + act + '" onclick="togglePermDay(\'' + d + '\')">' + d + '</div>';
+            }).join('');
+
+            panel.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px;">🔄 تثبيت خط دائمي (اشتراك يومي)</div>' +
+                '<div style="position:relative;">' +
+                    '<label class="label" style="font-size:11px;">🟢 نقطة الانطلاق الدائمية</label>' +
+                    '<input type="text" id="book-pickup-input" class="inp" placeholder="حدد الانطلاق على الخريطة" value="' + (bPickupName || '') + '" style="font-size:12px;padding:9px 12px;">' +
+                '</div>' +
+                '<div style="position:relative;">' +
+                    '<label class="label" style="font-size:11px;">🔴 نقطة الوصول الدائمية (الدوام / الجامعة)</label>' +
+                    '<input type="text" id="book-dropoff-input" class="inp" placeholder="حدد الوصول على الخريطة" value="' + (bDropoffName || '') + '" oninput="onBookingDropoffSearch(this.value)" style="font-size:12px;padding:9px 12px;">' +
+                    '<div id="book-dropoff-results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;"></div>' +
+                '</div>' +
+                '<div>' +
+                    '<label class="label" style="font-size:11px;">📅 أيام الأسبوع المطلوبة</label>' +
+                    '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;" id="perm-days-container">' + chipsHtml + '</div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
+                    '<div>' +
+                        '<label class="label" style="font-size:11px;">⏰ وقت الانطلاق</label>' +
+                        '<input type="text" id="perm-dep-time" class="inp" value="07:30 ص" style="font-size:12px;padding:8px 10px;">' +
+                    '</div>' +
+                    '<div>' +
+                        '<label class="label" style="font-size:11px;">🔄 التكرار</label>' +
+                        '<select id="perm-frequency" class="inp" style="font-size:12px;padding:8px 10px;">' +
+                            '<option value="يومي">يومي (الدوام)</option>' +
+                            '<option value="أسبوعي">أسبوعي</option>' +
+                        '</select>' +
+                    '</div>' +
+                '</div>' +
+                '<button type="button" onclick="savePermanentRoute()" class="btn-primary" style="background:#059669;font-size:13px;padding:12px;display:flex;align-items:center;justify-content:center;gap:8px;">' +
+                    '<span>📌</span> <span>تثبيت المسار وحفظ الخط</span>' +
+                '</button>' +
+                '<div style="margin-top:6px;">' +
+                    '<div style="font-size:12px;font-weight:800;color:#374151;margin-bottom:6px;">خطوطي الدائمة المثبتة:</div>' +
+                    '<div id="side-perm-routes-list" style="display:flex;flex-direction:column;gap:8px;max-height:200px;overflow-y:auto;"></div>' +
+                '</div>';
+        }
+
+        window.togglePermDay = function(day) {
+            if (bPermDays.includes(day)) {
+                bPermDays = bPermDays.filter(function(d){ return d !== day; });
+            } else {
+                bPermDays.push(day);
+            }
+            renderDailyTripSidebar();
+        };
+
+        window.savePermanentRoute = async function() {
+            if (!bPickupCoords || !bDropoffCoords) {
+                alert('يرجى تحديد نقطة الانطلاق ونقطة الوصول على الخريطة أولاً');
+                return;
+            }
+            var uid = localStorage.getItem('user_id') || 'cust-user';
+            var uName = localStorage.getItem('user_fullname') || 'راكب توصيله';
+            var uPhone = localStorage.getItem('user_phone') || '';
+            var depTime = (document.getElementById('perm-dep-time') || {}).value || '07:30 ص';
+            var freq = (document.getElementById('perm-frequency') || {}).value || 'يومي';
+
+            try {
+                var res = await fetch('/api/routes/permanent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customerId: uid,
+                        customerName: uName,
+                        customerPhone: uPhone,
+                        startName: bPickupName || 'الانطلاق',
+                        endName: bDropoffName || 'الوصول',
+                        startLat: bPickupCoords[1],
+                        startLon: bPickupCoords[0],
+                        endLat: bDropoffCoords[1],
+                        endLon: bDropoffCoords[0],
+                        geometry: bRouteGeom,
+                        days: bPermDays,
+                        departureTime: depTime,
+                        frequency: freq,
+                        fare: bRouteFare || 3000
+                    })
+                });
+                var data = await res.json();
+                if (data.success) {
+                    alert('🎉 تم تثبيت مسار الخط الدائم بنجاح!\nسيظهر في لوحة تحكمك وعند الكباتن القريبين من مسارك.');
+                    loadPassengerPermanentRoutes();
+                } else {
+                    alert(data.error || 'تعذر حفظ المسار');
+                }
+            } catch(e) { alert('خطأ في الاتصال بالخادم'); }
+        };
+
+        async function loadPassengerPermanentRoutes() {
+            var uid = localStorage.getItem('user_id') || '';
+            try {
+                var res = await fetch('/api/routes/permanent' + (uid ? '?customerId=' + uid : ''));
+                var data = await res.json();
+                var routes = data.routes || [];
+                var list = document.getElementById('side-perm-routes-list');
+                if (!list) return;
+                if (routes.length === 0) {
+                    list.innerHTML = '<div style="font-size:11px;color:#94a3b8;text-align:center;padding:10px;background:#f8fafc;border-radius:10px;">لا توجد خطوط دائمة مثبتة حالياً</div>';
+                    return;
+                }
+                list.innerHTML = '';
+                routes.forEach(function(r) {
+                    var card = document.createElement('div');
+                    card.style.cssText = 'background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:10px;font-size:11px;';
+                    var statusBadge = r.status === 'Active' ? '<span style="background:#ecfdf5;color:#059669;padding:2px 6px;border-radius:10px;font-weight:800;font-size:10px;">نشط 🟢</span>' : '<span style="background:#fef3c7;color:#d97706;padding:2px 6px;border-radius:10px;font-weight:800;font-size:10px;">معلق 🟡</span>';
+                    var daysList = (r.days || []).join('، ');
+                    var toggleLabel = r.status === 'Active' ? 'إيقاف مؤقت' : 'تفعيل';
+                    card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+                            '<span style="font-weight:900;color:#111;">' + (r.startName || '') + ' ➔ ' + (r.endName || '') + '</span>' +
+                            statusBadge +
+                        '</div>' +
+                        '<div style="color:#64748b;margin-bottom:6px;">⏰ ' + (r.departureTime || '') + ' · 📅 ' + daysList + '</div>' +
+                        '<div style="display:flex;gap:6px;">' +
+                            '<button type="button" onclick="previewPermOnMap(\'' + r.id + '\')" class="btn-small" style="padding:4px 8px;font-size:10px;flex:1;">معاينة 🗺️</button>' +
+                            '<button type="button" onclick="togglePermStatus(\'' + r.id + '\',\'' + r.status + '\')" class="btn-small" style="padding:4px 8px;font-size:10px;flex:1;">' + toggleLabel + '</button>' +
+                            '<button type="button" onclick="deletePermRoute(\'' + r.id + '\')" class="btn-small" style="padding:4px 8px;font-size:10px;color:#dc2626;">حذف 🗑️</button>' +
+                        '</div>';
+                    list.appendChild(card);
+                });
+            } catch(_) {}
+        }
+
+        window.previewPermOnMap = function(routeId) {
+            fetch('/api/routes/permanent').then(r => r.json()).then(data => {
+                var r = (data.routes || []).find(x => x.id === routeId);
+                if (!r || !bMap) return;
+                setBookingPickup(r.startLon, r.startLat, r.startName);
+                setBookingDropoff(r.endLon, r.endLat, r.endName);
+            });
+        };
+
+        window.togglePermStatus = async function(id, cur) {
+            var next = cur === 'Active' ? 'Paused' : 'Active';
+            await fetch('/api/routes/permanent/' + id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ status: next }) });
+            loadPassengerPermanentRoutes();
+        };
+
+        window.deletePermRoute = async function(id) {
+            if (!confirm('هل أنت متأكد من حذف هذا الخط؟')) return;
+            await fetch('/api/routes/permanent/' + id, { method:'DELETE' });
+            loadPassengerPermanentRoutes();
+        };
+
+        // Render Driver Sidebar (Stage 4)
+        function renderDriverSidebar() {
+            var panel = document.getElementById('sidebar-panel-driver');
+            if (!panel) return;
+            var did = localStorage.getItem('user_id') || 'drv-test';
+            var statusColor = bDriverOnline ? '#16a34a' : '#dc2626';
+            var statusText = bDriverOnline ? 'متصل ومتاح للطلبات 🟢' : 'غير متصل (مغلق) 🔴';
+            var btnBg = bDriverOnline ? '#dc2626' : '#16a34a';
+            var btnText = bDriverOnline ? 'قطع الاتصال' : 'اتصال الآن';
+
+            panel.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px;">🚖 لوحة الكابتن والطلبات الحية</div>' +
+                '<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px;display:flex;align-items:center;justify-content:space-between;">' +
+                    '<div>' +
+                        '<div style="font-weight:900;font-size:13px;color:#111;">حالة الاتصال والخدمة</div>' +
+                        '<div id="driver-status-text" style="font-size:11px;color:' + statusColor + ';font-weight:700;">' + statusText + '</div>' +
+                    '</div>' +
+                    '<button type="button" onclick="toggleDriverOnlineState()" id="btn-driver-toggle" class="btn-primary" style="width:auto;padding:8px 14px;font-size:12px;background:' + btnBg + ';">' + btnText + '</button>' +
+                '</div>' +
+                '<div>' +
+                    '<label class="label" style="font-size:11px;">🛣️ مسار عملك المعتاد (الانطلاق والوصول)</label>' +
+                    '<div style="display:flex;flex-direction:column;gap:6px;">' +
+                        '<input type="text" id="drv-route-from" class="inp" placeholder="الانطلاق: حي الأمير، الكوفة..." style="font-size:12px;padding:8px 10px;">' +
+                        '<input type="text" id="drv-route-to" class="inp" placeholder="الوصول: جامعة الكوفة، مركز النجف..." style="font-size:12px;padding:8px 10px;">' +
+                        '<button type="button" onclick="saveDriverActiveRoute()" class="btn-secondary" style="font-size:11px;padding:8px;">حفظ مساري المعتاد 💾</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div style="margin-top:6px;">' +
+                    '<div style="font-size:12px;font-weight:800;color:#374151;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">' +
+                        '<span>الخطوط الدائمة المتقاطعة مع مسارك:</span>' +
+                        '<button type="button" onclick="loadDriverMatchingRoutes()" style="background:none;border:none;font-size:11px;color:#2563eb;cursor:pointer;">تحديث 🔄</button>' +
+                    '</div>' +
+                    '<div id="driver-matching-routes-list" style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;"></div>' +
+                '</div>';
+            loadDriverMatchingRoutes();
+        }
+
+        window.toggleDriverOnlineState = async function() {
+            var did = localStorage.getItem('user_id') || 'drv-test';
+            bDriverOnline = !bDriverOnline;
+            try {
+                await fetch('/api/driver/toggle-online', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ driverId: did, isOnline: bDriverOnline })
+                });
+            } catch(_) {}
+
+            renderDriverSidebar();
+
+            if (bDriverOnline) {
+                // Live location stream
+                if (navigator.geolocation) {
+                    bDriverWatchId = navigator.geolocation.watchPosition(function(pos) {
+                        fetch('/api/driver/location', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                driverId: did,
+                                latitude: pos.coords.latitude,
+                                longitude: pos.coords.longitude,
+                                heading: pos.coords.heading || 0,
+                                speedKmh: Math.round((pos.coords.speed || 0) * 3.6)
+                            })
+                        }).catch(function(){});
+                    }, function(){}, { enableHighAccuracy: true });
+                }
+                // Poll for incoming ride requests every 3s (Stage 4)
+                if (bDriverIncomingTimer) clearInterval(bDriverIncomingTimer);
+                bDriverIncomingTimer = setInterval(checkDriverIncomingPendingRequests, 3000);
+            } else {
+                if (bDriverWatchId && navigator.geolocation) {
+                    navigator.geolocation.clearWatch(bDriverWatchId);
+                }
+                if (bDriverIncomingTimer) clearInterval(bDriverIncomingTimer);
+            }
+        };
+
+        window.saveDriverActiveRoute = async function() {
+            var did = localStorage.getItem('user_id') || 'drv-test';
+            var from = (document.getElementById('drv-route-from') || {}).value;
+            var to = (document.getElementById('drv-route-to') || {}).value;
+            if (!from || !to) { alert('أدخل نقطة الانطلاق والوصول'); return; }
+            try {
+                var res = await fetch('/api/driver/set-route', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        driverId: did,
+                        fromText: from,
+                        toText: to,
+                        fromLat: bPickupCoords ? bPickupCoords[1] : 31.9961,
+                        fromLon: bPickupCoords ? bPickupCoords[0] : 44.3168,
+                        toLat: bDropoffCoords ? bDropoffCoords[1] : 32.0321,
+                        toLon: bDropoffCoords ? bDropoffCoords[0] : 44.3725
+                    })
+                });
+                var data = await res.json();
+                if (data.success) {
+                    alert('✅ تم حفظ مسارك المعتاد بنجاح!');
+                    loadDriverMatchingRoutes();
+                } else alert(data.error || 'خطأ في الحفظ');
+            } catch(e) { alert('خطأ في الاتصال'); }
+        };
+
+        async function loadDriverMatchingRoutes() {
+            var did = localStorage.getItem('user_id') || 'drv-test';
+            var list = document.getElementById('driver-matching-routes-list');
+            if (!list) return;
+            list.innerHTML = '<div style="font-size:11px;color:#94a3b8;text-align:center;padding:8px;">جاري حساب المطابقة الجغرافية...</div>';
+            try {
+                var res = await fetch('/api/driver/' + did + '/matching-permanent');
+                var data = await res.json();
+                var matches = data.matches || [];
+                if (matches.length === 0) {
+                    list.innerHTML = '<div style="font-size:11px;color:#94a3b8;text-align:center;padding:10px;background:#f8fafc;border-radius:10px;">لا توجد خطوط دائمة حالياً للمطابقة</div>';
+                    return;
+                }
+                list.innerHTML = '';
+                matches.slice(0, 10).forEach(function(m) {
+                    var card = document.createElement('div');
+                    card.style.cssText = 'background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:10px;font-size:11px;';
+                    var waNum = (m.customerPhone || '').replace(/[^0-9]/g, '').replace(/^07/, '9647');
+                    var daysList = (m.days || []).join('، ');
+                    var waBtn = waNum ? '<a href="https://wa.me/' + waNum + '" target="_blank" class="btn-small" style="background:#25d366;color:#fff;text-decoration:none;text-align:center;padding:4px 8px;font-size:10px;flex:1;">واتساب 💬</a>' : '';
+                    var telBtn = m.customerPhone ? '<a href="tel:' + m.customerPhone + '" class="btn-small" style="background:#10b981;color:#fff;text-decoration:none;text-align:center;padding:4px 8px;font-size:10px;flex:1;">اتصال 📞</a>' : '';
+                    card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+                            '<span style="font-weight:900;color:#111;">👤 ' + (m.customerName || '') + '</span>' +
+                            '<span class="match-badge">🔥 تطابق ' + (m.matchPercentage || 0) + '%</span>' +
+                        '</div>' +
+                        '<div style="font-size:11px;color:#475569;margin-bottom:3px;">' + (m.startName || '') + ' ➔ ' + (m.endName || '') + '</div>' +
+                        '<div style="font-size:10px;color:#94a3b8;margin-bottom:6px;">⏰ ' + (m.departureTime || '') + ' · 📅 ' + daysList + '</div>' +
+                        '<div style="display:flex;gap:6px;">' +
+                            waBtn +
+                            telBtn +
+                        '</div>';
+                    list.appendChild(card);
+                });
+            } catch(_) {
+                list.innerHTML = '<div style="font-size:11px;color:#ef4444;text-align:center;">تعذر تحميل المطابقات</div>';
+            }
+        }
+
+        // Driver Incoming Ride Alerts (Stage 4)
+        var bCurrentIncomingReq = null;
+        async function checkDriverIncomingPendingRequests() {
+            var did = localStorage.getItem('user_id') || 'drv-test';
+            try {
+                var res = await fetch('/api/driver/' + did + '/pending-requests');
+                var data = await res.json();
+                if (data.success && data.requests && data.requests.length > 0) {
+                    var req = data.requests[0];
+                    if (!bCurrentIncomingReq || bCurrentIncomingReq.id !== req.id) {
+                        bCurrentIncomingReq = req;
+                        showIncomingDriverModal(req);
+                    }
+                }
+            } catch(_) {}
+        }
+
+        function showIncomingDriverModal(req) {
+            var modal = document.getElementById('driver-incoming-modal');
+            if (!modal) return;
+            modal.style.display = 'flex';
+            var pName = document.getElementById('incoming-passenger-name');
+            var pPick = document.getElementById('incoming-pickup-addr');
+            var pDrop = document.getElementById('incoming-dropoff-addr');
+            var pFare = document.getElementById('incoming-fare-info');
+
+            if (pName) pName.textContent = '👤 الراكب: ' + req.customerName;
+            if (pPick) pPick.textContent = '🟢 الانطلاق: ' + req.pickupName;
+            if (pDrop) pDrop.textContent = '🔴 الوصول: ' + req.dropoffName;
+            if (pFare) pFare.textContent = '💰 الأجرة: ' + (req.fare || 3000).toLocaleString() + ' د.ع (' + (req.distanceKm || 3) + ' كم)';
+
+            var sec = 30;
+            var timerEl = document.getElementById('driver-incoming-timer');
+            if (bDriverReqTimer) clearInterval(bDriverReqTimer);
+            bDriverReqTimer = setInterval(function() {
+                sec--;
+                if (timerEl) timerEl.textContent = '⏳ ' + Math.max(0, sec) + ' ثانية';
+                if (sec <= 0) {
+                    clearInterval(bDriverReqTimer);
+                    modal.style.display = 'none';
+                    bCurrentIncomingReq = null;
+                }
+            }, 1000);
+        }
+
+        window.respondToIncomingRide = async function(action) {
+            if (!bCurrentIncomingReq) return;
+            var did = localStorage.getItem('user_id') || 'drv-test';
+            var modal = document.getElementById('driver-incoming-modal');
+            if (modal) modal.style.display = 'none';
+            if (bDriverReqTimer) clearInterval(bDriverReqTimer);
+
+            try {
+                await fetch('/api/ride/respond', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        requestId: bCurrentIncomingReq.id,
+                        driverId: did,
+                        action: action
+                    })
+                });
+                if (action === 'accept') {
+                    alert('🎉 قبلت المشوار بنجاح! سيتم توجيه الراكب للتواصل معك.');
+                }
+            } catch(_) {}
+            bCurrentIncomingReq = null;
+        };
+
+    })();
+
         (function() {
             applyDynamicAppConfig();
             initOnboarding();
@@ -2236,6 +3288,9 @@ class AuthController {
             var role = urlParams.get('role');
             if (role === 'Customer' || role === 'customer') window.switchRole('Customer');
             else window.switchRole('Driver');
+            if (urlParams.get('openMap') === '1' || urlParams.get('showMap') === '1') {
+                window.openBookingApp(urlParams.get('tripType') || 'short');
+            }
         })();
     </script>
 </body>

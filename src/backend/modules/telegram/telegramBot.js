@@ -230,7 +230,8 @@ async function handleCallback(chatId, data, user) {
                 const dLat = d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : (pLat + (idx % 2 === 0 ? 0.003 * (idx + 1) : -0.003 * (idx + 1))));
                 const dLon = d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : (pLon + (idx % 2 === 0 ? 0.002 * (idx + 1) : -0.002 * (idx + 1))));
                 const dist = haversine(pLat, pLon, dLat, dLon);
-                return { ...d, _dist: dist };
+                const routeInfo = d.permanentLocationName || (d.activeRoute ? `${d.activeRoute.fromText} ➔ ${d.activeRoute.toText}` : (d.route || 'مركز النجف الأشرف'));
+                return { ...d, _dist: dist, routeInfo };
             }).sort((a, b) => a._dist - b._dist);
 
             const token = 'jwt_customer_' + passenger.customerId;
@@ -245,14 +246,15 @@ async function handleCallback(chatId, data, user) {
                     ]
                 );
             } else {
-                let msg = `⚡ <b>تم اختيار: مشوار قصير</b>\n📍 <b>السائقون المسجلون كمشوار قصير والقريبون منك:</b>\n\n`;
+                let msg = `⚡ <b>تم اختيار: مشوار قصير</b>\n📍 <b>السائقون المسجلون وقريبون من مسارك في النجف:</b>\n\n`;
                 driversWithDist.slice(0, 8).forEach((d, i) => {
                     const waNum = (d.phoneNumber || '').replace(/[^0-9]/g, '').replace(/^07/, '9647');
-                    const distText = d._dist ? ` (${d._dist.toFixed(1)} كم)` : '';
+                    const distText = d._dist ? ` (${d._dist.toFixed(1)} كم عنك)` : '';
                     const vMake = d.vehicleMake || (d.vehicle ? d.vehicle.make : 'تويوتا');
                     const vModel = d.vehicleModel || (d.vehicle ? (d.vehicle.model || '') : 'كورولا');
                     const carInfo = `${vMake} ${vModel}`.trim();
                     msg += `${i+1}. 🚕 <b>${d.fullName}</b>${distText}\n`;
+                    msg += `   🛣️ المسار: <i>${d.routeInfo}</i>\n`;
                     msg += `   🚗 المركبة: ${carInfo}\n`;
                     msg += `   📞 الهاتف: <code>${d.phoneNumber || '07800000000'}</code>\n`;
                     msg += `   💬 <a href="https://wa.me/${waNum}">مراسلة واتساب مباشرة</a>\n\n`;

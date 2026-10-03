@@ -1258,7 +1258,9 @@ async function startServer() {
                 })
                 .sort((a, b) => a.distanceKm - b.distanceKm);
 
-            return sendJson(activeDrivers);
+            const maxRange = parseFloat(parsedUrl.searchParams.get('rangeKm') || parsedUrl.searchParams.get('radius') || '15');
+            const inRange = activeDrivers.filter(d => d.distanceKm <= maxRange);
+            return sendJson(inRange.length > 0 ? inRange : activeDrivers.slice(0, 5));
         }
 
         if (pathname === '/api/fleet/active-drivers') {
@@ -1279,10 +1281,328 @@ async function startServer() {
                     name: d.fullName,
                     phone: d.phoneNumber,
                     serviceType: d.serviceType || 'Both',
-                    lat: d.currentLat ? parseFloat(d.currentLat) : 32.025,
-                    lon: d.currentLon ? parseFloat(d.currentLon) : 44.33
+                    lat: d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : 32.016),
+                    lon: d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : 44.339)
                 }));
             return sendJson({ success: true, drivers: activeDrivers });
+        }
+
+        // ---------------------------------------------------------------------
+        // REAL-TIME RIDE DISPATCH & 30-SECOND AUTO-ESCALATION (Stage 1 & 4)
+        // ---------------------------------------------------------------------
+        if (pathname === '/api/ride/request' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const {
+                    customerId, customerName, customerPhone,
+                    pickupName, pickupLat, pickupLon,
+                    dropoffName, dropoffLat, dropoffLon,
+                    fare, distanceKm, durationMins, rangeKm = 5
+                } = body;
+
+                const pLat = parseFloat(pickupLat) || 31.9961;
+                const pLon = parseFloat(pickupLon) || 44.3168;
+
+                const toRad = (deg) => deg * Math.PI / 180;
+                const haversine = (lat1, lon1, lat2, lon2) => {
+                    const R = 6371;
+                    const dLat = toRad(lat2 - lat1);
+                    const dLon = toRad(lon2 - lon1);
+                    const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
+                    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                };
+
+                const maxDist = parseFloat(rangeKm) || 5;
+                const candidates = (db.memoryState.drivers || [])
+                    .filter(d => !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' && (d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType))
+                    .map(d => {
+                        const dLat = d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : pLat);
+                        const dLon = d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : pLon);
+                        const dist = haversine(pLat, pLon, dLat, dLon);
+                        return { ...d, dist };
+                    })
+                    .filter(d => d.dist <= maxDist || maxDist >= 15)
+                    .sort((a, b) => a.dist - b.dist);
+
+                const candidateDriverIds = candidates.map(c => c.driverId);
+                const assignedDriver = candidates[0] || (db.memoryState.drivers || [])[0] || null;
+
+                const newRequest = {
+                    id: 'ride-' + Math.random().toString(36).substr(2, 9),
+                    customerId: customerId || 'cust-user',
+                    customerName: customerName || 'راكب توصيله',
+                    customerPhone: customerPhone || '',
+                    pickupName: pickupName || 'موقع الركوب',
+                    pickupLat: pLat,
+                    pickupLon: pLon,
+                    dropoffName: dropoffName || 'وجهة الوصول',
+                    dropoffLat: parseFloat(dropoffLat) || 32.0321,
+                    dropoffLon: parseFloat(dropoffLon) || 44.3725,
+                    fare: fare || 3000,
+                    distanceKm: distanceKm || 3.5,
+                    durationMins: durationMins || 8,
+                    status: 'Pending',
+                    candidateDriverIds: candidateDriverIds.length > 0 ? candidateDriverIds : (assignedDriver ? [assignedDriver.driverId] : []),
+                    currentDriverIndex: 0,
+                    assignedDriverId: assignedDriver ? assignedDriver.driverId : null,
+                    assignedDriverName: assignedDriver ? assignedDriver.fullName : null,
+                    assignedDriverPhone: assignedDriver ? assignedDriver.phoneNumber : null,
+                    assignedDriverVehicle: assignedDriver ? `${assignedDriver.vehicleMake||'تويوتا'} ${assignedDriver.vehicleModel||'كورولا'}` : 'تويوتا كورولا',
+                    requestedAt: Date.now(),
+                    stepTimeoutAt: Date.now() + 30000,
+                    history: []
+                };
+
+                db.memoryState.rideRequests = db.memoryState.rideRequests || [];
+                db.memoryState.rideRequests.unshift(newRequest);
+                db.saveStateSnapshot();
+
+                return sendJson({
+                    success: true,
+                    request: newRequest,
+                    candidateCount: newRequest.candidateDriverIds.length,
+                    assignedDriver
+                });
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        // Check Ride Status & Auto-Escalate if 30s elapsed
+        if (pathname.startsWith('/api/ride/status/') && method === 'GET') {
+            const reqId = pathname.replace('/api/ride/status/', '').trim();
+            const requests = db.memoryState.rideRequests || [];
+            const r = requests.find(item => item.id === reqId);
+
+            if (!r) {
+                return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
+            }
+
+            // 30s Countdown and Auto-escalation check
+            if (r.status === 'Pending' && r.candidateDriverIds && r.candidateDriverIds.length > 0) {
+                const now = Date.now();
+                if (now > r.stepTimeoutAt) {
+                    r.currentDriverIndex += 1;
+                    if (r.currentDriverIndex < r.candidateDriverIds.length) {
+                        const nextDriverId = r.candidateDriverIds[r.currentDriverIndex];
+                        const nextDriver = (db.memoryState.drivers || []).find(d => d.driverId === nextDriverId);
+                        r.history.push({
+                            driverId: r.assignedDriverId,
+                            reason: 'Timeout30s',
+                            at: new Date().toISOString()
+                        });
+                        r.assignedDriverId = nextDriverId;
+                        r.assignedDriverName = nextDriver ? nextDriver.fullName : 'كابتن توصيله';
+                        r.assignedDriverPhone = nextDriver ? nextDriver.phoneNumber : '';
+                        r.assignedDriverVehicle = nextDriver ? `${nextDriver.vehicleMake||'تويوتا'} ${nextDriver.vehicleModel||'كورولا'}` : 'تويوتا';
+                        r.stepTimeoutAt = now + 30000;
+                        db.saveStateSnapshot();
+                    } else {
+                        r.status = 'NoDriversAvailable';
+                        r.assignedDriverId = null;
+                        db.saveStateSnapshot();
+                    }
+                }
+            }
+
+            const secondsRemaining = Math.max(0, Math.round((r.stepTimeoutAt - Date.now()) / 1000));
+            return sendJson({
+                success: true,
+                request: r,
+                secondsRemaining,
+                currentDriverIndex: r.currentDriverIndex,
+                totalCandidates: (r.candidateDriverIds || []).length
+            });
+        }
+
+        // Driver Respond to Request (Accept / Reject)
+        if (pathname === '/api/ride/respond' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const { requestId, driverId, action } = body;
+                const requests = db.memoryState.rideRequests || [];
+                const r = requests.find(item => item.id === requestId);
+
+                if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
+
+                if (action === 'accept') {
+                    r.status = 'Accepted';
+                    r.acceptedDriverId = driverId;
+                    r.acceptedAt = new Date().toISOString();
+                    db.saveStateSnapshot();
+                    return sendJson({ success: true, message: 'تم قبول المشوار بنجاح!', request: r });
+                } else {
+                    r.currentDriverIndex += 1;
+                    if (r.currentDriverIndex < r.candidateDriverIds.length) {
+                        const nextDriverId = r.candidateDriverIds[r.currentDriverIndex];
+                        const nextDriver = (db.memoryState.drivers || []).find(d => d.driverId === nextDriverId);
+                        r.assignedDriverId = nextDriverId;
+                        r.assignedDriverName = nextDriver ? nextDriver.fullName : 'كابتن توصيله';
+                        r.assignedDriverPhone = nextDriver ? nextDriver.phoneNumber : '';
+                        r.assignedDriverVehicle = nextDriver ? `${nextDriver.vehicleMake||'تويوتا'} ${nextDriver.vehicleModel||'كورولا'}` : 'تويوتا';
+                        r.stepTimeoutAt = Date.now() + 30000;
+                    } else {
+                        r.status = 'NoDriversAvailable';
+                    }
+                    db.saveStateSnapshot();
+                    return sendJson({ success: true, message: 'تم التمرير للسائق التالي', request: r });
+                }
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        // Driver Pending Requests List
+        if (pathname.startsWith('/api/driver/') && pathname.endsWith('/pending-requests') && method === 'GET') {
+            const parts = pathname.split('/');
+            const driverId = parts[parts.length - 2];
+            const now = Date.now();
+            const list = (db.memoryState.rideRequests || []).filter(r => 
+                r.status === 'Pending' && r.assignedDriverId === driverId && now < r.stepTimeoutAt
+            );
+            return sendJson({ success: true, requests: list });
+        }
+
+        // Driver Toggle Online/Offline
+        if (pathname === '/api/driver/toggle-online' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const { driverId, isOnline } = body;
+                const driver = (db.memoryState.drivers || []).find(d => d.driverId === driverId);
+                if (driver) {
+                    driver.status = isOnline ? 'Online' : 'Offline';
+                    driver.isOnline = !!isOnline;
+                    db.saveStateSnapshot();
+                    return sendJson({ success: true, driverId, status: driver.status, isOnline: driver.isOnline });
+                }
+                return sendJson({ success: false, error: 'Driver not found' }, 404);
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // PERMANENT ROUTES CRUD (Stage 3 & 4)
+        // ---------------------------------------------------------------------
+        if (pathname === '/api/routes/permanent' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const {
+                    customerId, customerName, customerPhone,
+                    startName, endName, startLat, startLon, endLat, endLon,
+                    geometry, days, departureTime, frequency, fare
+                } = body;
+
+                const newRoute = {
+                    id: 'perm-' + Math.random().toString(36).substr(2, 9),
+                    customerId: customerId || 'cust-user',
+                    customerName: customerName || 'راكب توصيله',
+                    customerPhone: customerPhone || '',
+                    startName: startName || 'نقطة الانطلاق',
+                    endName: endName || 'نقطة الوصول',
+                    startLat: parseFloat(startLat) || 31.9961,
+                    startLon: parseFloat(startLon) || 44.3168,
+                    endLat: parseFloat(endLat) || 32.0321,
+                    endLon: parseFloat(endLon) || 44.3725,
+                    geometry: geometry || null,
+                    days: days || ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء'],
+                    departureTime: departureTime || '07:30 ص',
+                    frequency: frequency || 'يومي',
+                    fare: fare || 3000,
+                    status: 'Active',
+                    acceptedDriverId: null,
+                    createdAt: new Date().toISOString()
+                };
+
+                db.memoryState.permanentRoutes = db.memoryState.permanentRoutes || [];
+                db.memoryState.permanentRoutes.unshift(newRoute);
+                db.saveStateSnapshot();
+
+                if (db.isPostgresConnected && db.pool) {
+                    try {
+                        await db.pool.query(`
+                            INSERT INTO routes (id, driver_id, driver_name, driver_phone, start_name, end_name, start_lat, start_lon, end_lat, end_lon, fare, available_seats, total_seats, departure_time, status, created_at)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 4, 4, $12, $13, NOW())
+                            ON CONFLICT (id) DO NOTHING
+                        `, [newRoute.id, newRoute.customerId, newRoute.customerName, newRoute.customerPhone, newRoute.startName, newRoute.endName, newRoute.startLat, newRoute.startLon, newRoute.endLat, newRoute.endLon, newRoute.fare, newRoute.departureTime, newRoute.status]);
+                    } catch (_) {}
+                }
+
+                return sendJson({ success: true, route: newRoute, message: 'تم تثبيت المسار بنجاح!' });
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        if (pathname === '/api/routes/permanent' && method === 'GET') {
+            const customerId = parsedUrl.searchParams.get('customerId');
+            let routes = db.memoryState.permanentRoutes || [];
+            if (customerId) {
+                routes = routes.filter(r => r.customerId === customerId);
+            }
+            return sendJson({ success: true, routes });
+        }
+
+        if (pathname.startsWith('/api/routes/permanent/') && method === 'DELETE') {
+            const routeId = pathname.replace('/api/routes/permanent/', '').trim();
+            db.memoryState.permanentRoutes = (db.memoryState.permanentRoutes || []).filter(r => r.id !== routeId);
+            db.saveStateSnapshot();
+            return sendJson({ success: true, message: 'تم حذف المسار' });
+        }
+
+        if (pathname.startsWith('/api/routes/permanent/') && (method === 'PATCH' || method === 'PUT')) {
+            const routeId = pathname.replace('/api/routes/permanent/', '').trim();
+            const body = await parseJsonBody(req);
+            const r = (db.memoryState.permanentRoutes || []).find(item => item.id === routeId);
+            if (r) {
+                if (body.status) r.status = body.status;
+                if (body.days) r.days = body.days;
+                if (body.departureTime) r.departureTime = body.departureTime;
+                db.saveStateSnapshot();
+                return sendJson({ success: true, route: r });
+            }
+            return sendJson({ success: false, error: 'Route not found' }, 404);
+        }
+
+        // Driver Matching Permanent Lines (Spatial intersection calculation)
+        if (pathname.startsWith('/api/driver/') && pathname.endsWith('/matching-permanent') && method === 'GET') {
+            const parts = pathname.split('/');
+            const driverId = parts[parts.length - 2];
+            const driver = (db.memoryState.drivers || []).find(d => d.driverId === driverId);
+
+            const toRad = (deg) => deg * Math.PI / 180;
+            const haversine = (lat1, lon1, lat2, lon2) => {
+                const R = 6371;
+                const dLat = toRad(lat2 - lat1);
+                const dLon = toRad(lon2 - lon1);
+                const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
+                return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            };
+
+            const dStartLat = (driver && driver.permanentLat) ? parseFloat(driver.permanentLat) : 31.9961;
+            const dStartLon = (driver && driver.permanentLon) ? parseFloat(driver.permanentLon) : 44.3168;
+            const dEndLat = (driver && driver.permanentDropoffLat) ? parseFloat(driver.permanentDropoffLat) : 32.0321;
+            const dEndLon = (driver && driver.permanentDropoffLon) ? parseFloat(driver.permanentDropoffLon) : 44.3725;
+
+            const allPermRoutes = db.memoryState.permanentRoutes || [];
+            const matches = allPermRoutes.map(pr => {
+                const startDist = haversine(dStartLat, dStartLon, pr.startLat, pr.startLon);
+                const endDist = haversine(dEndLat, dEndLon, pr.endLat, pr.endLon);
+                const avgDist = (startDist + endDist) / 2;
+                
+                const matchPct = Math.max(30, Math.min(99, Math.round(100 - (avgDist * 15))));
+                const isClose = startDist <= 2.5 && endDist <= 2.5;
+
+                return {
+                    ...pr,
+                    pickupDistanceKm: Math.round(startDist * 10) / 10,
+                    dropoffDistanceKm: Math.round(endDist * 10) / 10,
+                    matchPercentage: matchPct,
+                    isIntersecting: isClose
+                };
+            }).sort((a, b) => b.matchPercentage - a.matchPercentage);
+
+            return sendJson({ success: true, driverId, matches });
         }
 
         // Driver Service Type Selection (ShortTrip / PermanentLine / Both)
@@ -1312,17 +1632,18 @@ async function startServer() {
         }
 
         // Driver Live Location Update Broadcast
-        if (pathname === '/api/driver/location' && method === 'POST') {
+        if ((pathname === '/api/driver/location' || pathname === '/api/driver/update-location') && method === 'POST') {
             const body = await parseJsonBody(req);
-            const { driverId, latitude, longitude, heading, speedKmh, tripStatus } = body;
+            const { driverId, latitude, longitude, lat, lon, heading, speedKmh, tripStatus } = body;
             const driver = db.memoryState.drivers.find(d => d.driverId === driverId);
             if (driver) {
-                driver.currentLat = latitude;
-                driver.currentLon = longitude;
+                driver.currentLat = latitude !== undefined ? latitude : (lat !== undefined ? lat : driver.currentLat);
+                driver.currentLon = longitude !== undefined ? longitude : (lon !== undefined ? lon : driver.currentLon);
                 if (heading !== undefined) driver.heading = heading;
                 if (speedKmh !== undefined) driver.speedKmh = speedKmh;
                 if (tripStatus !== undefined) driver.tripStatus = tripStatus;
                 driver.lastLocationUpdate = new Date().toISOString();
+                db.saveStateSnapshot();
             }
             return sendJson({ success: true, updated: !!driver });
         }
@@ -2020,7 +2341,15 @@ async function startServer() {
             if (fromLat && fromLon) {
                 driver.currentLat = parseFloat(fromLat);
                 driver.currentLon = parseFloat(fromLon);
+                driver.permanentLat = parseFloat(fromLat);
+                driver.permanentLon = parseFloat(fromLon);
             }
+            if (toLat && toLon) {
+                driver.permanentDropoffLat = parseFloat(toLat);
+                driver.permanentDropoffLon = parseFloat(toLon);
+            }
+            driver.permanentLocationName = fromText.trim();
+            driver.permanentDropoffName = toText.trim();
             db.saveStateSnapshot();
             return sendJson({ success: true, route: driver.activeRoute });
         }
