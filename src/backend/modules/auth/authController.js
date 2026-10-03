@@ -241,7 +241,9 @@ class AuthController {
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet" media="print" onload="this.media='all'">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js" defer></script>
     <script src="https://cdn.tailwindcss.com" defer></script>
     <style>
         *{box-sizing:border-box}
@@ -538,11 +540,6 @@ class AuthController {
             <div id="app-main-logo" style="font-size:40px;margin-bottom:10px">🚕</div>
             <h1 id="app-main-title" style="font-size:22px;font-weight:900;margin:0 0 6px;color:#111">منصة توصيله</h1>
             <p id="app-main-subtitle" style="font-size:13px;color:#6b7280;margin:0">النجف الأشرف - سجّل دخولك أو أنشئ حسابك</p>
-            <div style="margin-top:14px;">
-                <button type="button" onclick="openBookingApp('short')" style="background:linear-gradient(135deg,#111827,#1f2937);color:#fff;border:none;border-radius:12px;padding:12px 20px;font-size:13px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer;display:inline-flex;align-items:center;gap:8px;box-shadow:0 4px 15px rgba(0,0,0,0.18);">
-                    <span>🗺️</span> <span>خريطة حجز التكسي والخطوط المباشرة (Mapbox)</span>
-                </button>
-            </div>
         </header>
 
         <!-- Role Tabs -->
@@ -581,6 +578,9 @@ class AuthController {
                 <i class="fa-solid fa-play" aria-hidden="true"></i> متابعة وفتح تطبيق الرحلات
             </button>
             <div id="driver-route-btn-wrap" style="display:none;margin-top:8px">
+                <button type="button" onclick="openBookingApp('driver')" class="btn-primary" style="margin-bottom:8px;padding:12px 14px;font-size:13px;background:linear-gradient(135deg,#111827,#1f2937);display:flex;align-items:center;justify-content:center;gap:8px">
+                    <span>🗺️</span> <span>خريطة حجز التكسي والخطوط المباشرة (Mapbox)</span>
+                </button>
                 <button type="button" onclick="showDriverSetRouteFromBox()" class="btn-primary" style="padding:10px 14px;font-size:12px;background:#3b82f6">
                     🛣️ تثبيت مسارك وإدارة طلبات الانضمام
                 </button>
@@ -2381,17 +2381,23 @@ class AuthController {
         var bPermDays = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء'];
         var bDriverOnline = false, bDriverWatchId = null, bDriverIncomingTimer = null, bDriverReqTimer = null;
 
-        window.openBookingApp = function(tab) {
+        window.openBookingApp = async function(tab) {
             var modal = document.getElementById('booking-modal-view');
             if (!modal) return;
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
             if (tab) bActiveTab = tab;
             window.switchBookingTab(bActiveTab);
+
+            if (typeof mapboxgl === 'undefined' && window.loadMapboxDynamically) {
+                await window.loadMapboxDynamically();
+            }
+
             if (!bMap) {
-                initBookingMapbox();
+                await initBookingMapbox();
             } else {
-                setTimeout(function() { bMap.resize(); }, 150);
+                setTimeout(function() { if (bMap) bMap.resize(); }, 100);
+                setTimeout(function() { if (bMap) bMap.resize(); }, 350);
                 fetchNearbyDriversForMap();
             }
         };
@@ -2458,15 +2464,25 @@ class AuthController {
             }
         };
 
-        function initBookingMapbox() {
+        async function initBookingMapbox() {
+            if (typeof mapboxgl === 'undefined' && window.loadMapboxDynamically) {
+                await window.loadMapboxDynamically();
+            }
             if (typeof mapboxgl === 'undefined') return;
             mapboxgl.accessToken = BOOKING_MAPBOX_TOKEN;
+            if (typeof mapboxgl.getRTLTextPluginStatus === 'function' && mapboxgl.getRTLTextPluginStatus() === 'unavailable') {
+                try {
+                    mapboxgl.setRTLTextPlugin('https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js', null, true);
+                } catch(_) {}
+            }
             bMap = new mapboxgl.Map({
                 container: 'booking-mapbox-map',
                 style: 'mapbox://styles/mapbox/streets-v12',
                 center: [bUserLon, bUserLat],
                 zoom: 13
             });
+            setTimeout(function() { if (bMap) bMap.resize(); }, 150);
+            setTimeout(function() { if (bMap) bMap.resize(); }, 500);
 
             bMap.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'top-left');
 
