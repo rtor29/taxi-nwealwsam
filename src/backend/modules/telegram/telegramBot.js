@@ -63,6 +63,59 @@ function verifyTelegramOtp(chatId, code) {
     return { valid: true, phone: entry.phone };
 }
 
+// --- Phone Normalization & Registration Check ---
+function normalizePhoneNumber(input) {
+    if (!input) return '';
+    let s = String(input).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+    s = s.replace(/[^0-9]/g, '');
+    if (s.startsWith('00964')) s = s.substring(5);
+    else if (s.startsWith('964')) s = s.substring(3);
+    if (s.length === 10 && s.startsWith('7')) s = '0' + s;
+    return s;
+}
+
+async function checkPhoneRegistration(phone) {
+    const norm = normalizePhoneNumber(phone);
+    if (!norm || norm.length < 8) return null;
+
+    const matchPhone = (stored) => {
+        if (!stored) return false;
+        const s = normalizePhoneNumber(stored);
+        return s === norm || (norm.length >= 7 && s.endsWith(norm.substring(norm.length - 7)));
+    };
+
+    const customer = (db.memoryState.customers || []).find(c => matchPhone(c.phoneNumber));
+    if (customer) {
+        return { isRegistered: true, role: 'Customer', roleAr: 'كراكب', user: customer };
+    }
+
+    const driver = (db.memoryState.drivers || []).find(d => matchPhone(d.phoneNumber));
+    if (driver) {
+        return { isRegistered: true, role: 'Driver', roleAr: 'كسائق', user: driver };
+    }
+
+    if (db.isPostgresConnected && db.pool) {
+        try {
+            const res = await db.pool.query(
+                `SELECT role, full_name, phone_number FROM users WHERE phone_number LIKE $1 OR phone_number = $2 LIMIT 1`,
+                [`%${norm.substring(norm.length - 7)}`, norm]
+            );
+            if (res.rows && res.rows.length > 0) {
+                const row = res.rows[0];
+                const isDriver = (row.role || '').toLowerCase() === 'driver';
+                return {
+                    isRegistered: true,
+                    role: isDriver ? 'Driver' : 'Customer',
+                    roleAr: isDriver ? 'كسائق' : 'كراكب',
+                    user: row
+                };
+            }
+        } catch (_) {}
+    }
+
+    return null;
+}
+
 // --- Bot Command Handlers ---
 async function handleStart(chatId, user) {
     if (!db.memoryState.botSubscribers) db.memoryState.botSubscribers = [];
@@ -201,13 +254,44 @@ async function handleMessage(chatId, text, user) {
     if (!db.memoryState.botSubscribers.includes(String(chatId))) { db.memoryState.botSubscribers.push(String(chatId)); db.saveStateSnapshot(); }
 
     const state = userStates.get(chatId);
-    if (!state) { await handleStart(chatId, user); return; }
+    if (!state) {
+        const digits = text.replace(/[^0-9]/g, '');
+        if (digits.length >= 10) {
+            const existing = await checkPhoneRegistration(text);
+            if (existing) {
+                await sendKeyboard(chatId,
+                    `⚠️ <b>الرقم مسجل ${existing.roleAr}. استخدم تسجيل الدخول.</b>`,
+                    [[{ text: '🔑 تسجيل دخول', callback_data: 'login' }], [{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]]
+                );
+                return;
+            } else {
+                await sendKeyboard(chatId,
+                    `ℹ️ الرقم (${text.trim()}) غير مسجل في النظام. اختر نوع الحساب للتسجيل:`,
+                    [
+                        [{ text: '🚶 تسجيل راكب', callback_data: 'reg_passenger' }, { text: '🚕 تسجيل سائق', callback_data: 'reg_driver' }]
+                    ]
+                );
+                return;
+            }
+        }
+        await handleStart(chatId, user);
+        return;
+    }
 
     switch (state.step) {
         // --- Passenger Registration ---
         case 'passenger_phone': {
             const digits = text.replace(/[^0-9]/g, '');
             if (digits.length < 10) { await sendMessage(chatId, '❌ رقم غير صالح. أرسل رقم عراقي (مثال: 07701234567):'); return; }
+            const existing = await checkPhoneRegistration(text);
+            if (existing) {
+                userStates.delete(chatId);
+                await sendKeyboard(chatId,
+                    `⚠️ <b>الرقم مسجل ${existing.roleAr}. استخدم تسجيل الدخول.</b>`,
+                    [[{ text: '🔑 تسجيل دخول', callback_data: 'login' }], [{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]]
+                );
+                return;
+            }
             state.phone = text.trim();
             state.step = 'passenger_otp_sent';
             userStates.set(chatId, state);
@@ -241,10 +325,14 @@ async function handleMessage(chatId, text, user) {
             const passwordHash = crypto.createHash('sha256').update(state.password).digest('hex');
 
             // Check duplicate
-            const exists = db.memoryState.customers.find(c => c.phoneNumber === cleanPhone) ||
-                           db.memoryState.drivers.find(d => d.phoneNumber === cleanPhone);
-            if (exists) {
-                await sendMessage(chatId, '⚠️ هذا الرقم مسجل بالفعل. استخدم تسجيل الدخول.');
+            const existsCust = db.memoryState.customers.find(c => c.phoneNumber === cleanPhone);
+            const existsDrv = db.memoryState.drivers.find(d => d.phoneNumber === cleanPhone);
+            if (existsCust || existsDrv) {
+                const roleAr = existsCust ? 'كراكب' : 'كسائق';
+                await sendKeyboard(chatId,
+                    `⚠️ <b>الرقم مسجل ${roleAr}. استخدم تسجيل الدخول.</b>`,
+                    [[{ text: '🔑 تسجيل دخول', callback_data: 'login' }]]
+                );
                 userStates.delete(chatId);
                 return;
             }
@@ -275,6 +363,15 @@ async function handleMessage(chatId, text, user) {
         case 'driver_phone': {
             const digits = text.replace(/[^0-9]/g, '');
             if (digits.length < 10) { await sendMessage(chatId, '❌ رقم غير صالح. أرسل رقم عراقي (مثال: 07701234567):'); return; }
+            const existing = await checkPhoneRegistration(text);
+            if (existing) {
+                userStates.delete(chatId);
+                await sendKeyboard(chatId,
+                    `⚠️ <b>الرقم مسجل ${existing.roleAr}. استخدم تسجيل الدخول.</b>`,
+                    [[{ text: '🔑 تسجيل دخول', callback_data: 'login' }], [{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]]
+                );
+                return;
+            }
             state.phone = text.trim();
             state.step = 'driver_otp_sent';
             userStates.set(chatId, state);
@@ -320,10 +417,14 @@ async function handleMessage(chatId, text, user) {
             const now = new Date().toISOString();
             const passwordHash = crypto.createHash('sha256').update(state.password).digest('hex');
 
-            const exists = db.memoryState.drivers.find(d => d.phoneNumber === cleanPhone) ||
-                           db.memoryState.customers.find(c => c.phoneNumber === cleanPhone);
-            if (exists) {
-                await sendMessage(chatId, '⚠️ هذا الرقم مسجل بالفعل. استخدم تسجيل الدخول.');
+            const existsCust = db.memoryState.customers.find(c => c.phoneNumber === cleanPhone);
+            const existsDrv = db.memoryState.drivers.find(d => d.phoneNumber === cleanPhone);
+            if (existsCust || existsDrv) {
+                const roleAr = existsDrv ? 'كسائق' : 'كراكب';
+                await sendKeyboard(chatId,
+                    `⚠️ <b>الرقم مسجل ${roleAr}. استخدم تسجيل الدخول.</b>`,
+                    [[{ text: '🔑 تسجيل دخول', callback_data: 'login' }]]
+                );
                 userStates.delete(chatId);
                 return;
             }
@@ -377,9 +478,21 @@ async function handleMessage(chatId, text, user) {
         case 'login_phone': {
             const digits = text.replace(/[^0-9]/g, '');
             if (digits.length < 10) { await sendMessage(chatId, '❌ رقم غير صالح. أرسل رقم عراقي (مثال: 07701234567):'); return; }
+            const existing = await checkPhoneRegistration(text);
+            if (!existing) {
+                userStates.delete(chatId);
+                await sendKeyboard(chatId,
+                    `❌ <b>هذا الرقم (${text.trim()}) غير مسجل في النظام.</b>\n\nيرجى إنشاء حساب أولاً:`,
+                    [
+                        [{ text: '🚶 تسجيل راكب', callback_data: 'reg_passenger' }, { text: '🚕 تسجيل سائق', callback_data: 'reg_driver' }]
+                    ]
+                );
+                return;
+            }
             state.phone = text.trim();
             state.step = 'login_otp_sent';
             userStates.set(chatId, state);
+            await sendMessage(chatId, `ℹ️ تم العثور على الحساب (${existing.roleAr}). جاري إرسال رمز التحقق...`);
             await sendTelegramOtp(state.phone, chatId);
             break;
         }
