@@ -235,7 +235,11 @@ class AuthController {
 <html dir="rtl" lang="ar">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#ffffff">
     <meta name="description" content="منصة توصيلة - خدمة حجز وتنظيم رحلات التوصيل اليومية والسائقين في النجف الأشرف.">
     <title>توصيله | التسجيل والدخول</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -288,10 +292,62 @@ class AuthController {
         .driver-mini-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px;transition:all .2s;cursor:pointer}
         .driver-mini-card:hover{border-color:#3b82f6;background:#f0f9ff}
         .match-badge{background:#ecfdf5;color:#059669;border:1px solid #a7f3d0;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:800}
-        @media (max-width: 768px) {
+        html, body {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-text-size-adjust: 100%;
+            overscroll-behavior-y: none;
+        }
+        button, input, select, textarea {
+            touch-action: manipulation;
+            font-family: inherit;
+        }
+        /* Mobile Phones (< 768px): Drawer on Top, Map below */
+        @media (max-width: 767px) {
             #booking-main-body { flex-direction: column !important; }
-            #booking-map-wrapper { height: 42vh !important; }
-            #booking-sidebar { width: 100% !important; flex: 1 !important; }
+            #booking-sidebar {
+                width: 100% !important;
+                max-height: 48vh !important;
+                border-left: none !important;
+                border-bottom: 2px solid #e2e8f0 !important;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.08) !important;
+                flex-shrink: 0 !important;
+                padding: 12px 14px !important;
+                overflow-y: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
+            #booking-map-wrapper {
+                width: 100% !important;
+                flex: 1 !important;
+                min-height: 240px !important;
+                height: 52vh !important;
+            }
+        }
+        /* iPads & Tablets (768px to 1024px): Drawer on Right, Map next to it */
+        @media (min-width: 768px) and (max-width: 1024px) {
+            #booking-main-body { flex-direction: row !important; }
+            #booking-sidebar {
+                width: 360px !important;
+                max-width: 42% !important;
+                height: 100% !important;
+                border-left: 1.5px solid #e2e8f0 !important;
+                box-shadow: -4px 0 15px rgba(0,0,0,0.06) !important;
+                overflow-y: auto !important;
+                -webkit-overflow-scrolling: touch !important;
+            }
+            #booking-map-wrapper { flex: 1 !important; height: 100% !important; }
+        }
+        /* Desktops (> 1024px): Drawer on Right, Map on Left */
+        @media (min-width: 1025px) {
+            #booking-main-body { flex-direction: row !important; }
+            #booking-sidebar {
+                width: 400px !important;
+                height: 100% !important;
+                border-left: 1.5px solid #e2e8f0 !important;
+                box-shadow: -4px 0 15px rgba(0,0,0,0.06) !important;
+                overflow-y: auto !important;
+            }
+            #booking-map-wrapper { flex: 1 !important; height: 100% !important; }
         }
     </style>
 
@@ -359,9 +415,17 @@ class AuthController {
 
         <!-- Main Body -->
         <div id="booking-main-body" style="display:flex;flex:1;overflow:hidden;position:relative;">
+            <!-- SIDEBAR PANEL (DRAWER: ON RIGHT IN RTL, ON TOP IN PHONES/COLUMN) -->
+            <div id="booking-sidebar" style="width:390px;max-width:100%;background:#ffffff;border-left:1.5px solid #e2e8f0;overflow-y:auto;display:flex;flex-direction:column;padding:16px;gap:14px;box-shadow:-2px 0 10px rgba(0,0,0,0.05);flex-shrink:0;z-index:15;">
+                <!-- Panel content will be dynamically rendered or toggled -->
+                <div id="sidebar-panel-short" style="display:flex;flex-direction:column;gap:12px;"></div>
+                <div id="sidebar-panel-daily" style="display:none;flex-direction:column;gap:12px;"></div>
+                <div id="sidebar-panel-driver" style="display:none;flex-direction:column;gap:12px;"></div>
+            </div>
+
             <!-- MAP VIEWPORT -->
-            <div id="booking-map-wrapper" style="flex:1;height:100%;position:relative;">
-                <div id="booking-mapbox-map" style="width:100%;height:100%;"></div>
+            <div id="booking-map-wrapper" style="flex:1;height:100%;min-height:260px;position:relative;">
+                <div id="booking-mapbox-map" style="width:100%;height:100%;min-height:260px;background:#e2e8f0;"></div>
 
                 <!-- Floating Range Selector (Stage 1) -->
                 <div style="position:absolute;top:12px;right:12px;z-index:10;display:flex;gap:6px;background:rgba(255,255,255,0.92);backdrop-filter:blur(6px);padding:6px 10px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.12);align-items:center;">
@@ -383,14 +447,6 @@ class AuthController {
                     <span id="route-pill-dur">⏱️ -- دقيقة</span>
                     <span id="route-pill-fare" style="color:#f59e0b;">💰 -- د.ع</span>
                 </div>
-            </div>
-
-            <!-- SIDEBAR PANEL -->
-            <div id="booking-sidebar" style="width:390px;max-width:100%;background:#ffffff;border-right:1px solid #e2e8f0;overflow-y:auto;display:flex;flex-direction:column;padding:16px;gap:14px;box-shadow:-2px 0 10px rgba(0,0,0,0.05);flex-shrink:0;">
-                <!-- Panel content will be dynamically rendered or toggled -->
-                <div id="sidebar-panel-short" style="display:flex;flex-direction:column;gap:12px;"></div>
-                <div id="sidebar-panel-daily" style="display:none;flex-direction:column;gap:12px;"></div>
-                <div id="sidebar-panel-driver" style="display:none;flex-direction:column;gap:12px;"></div>
             </div>
         </div>
     </div>
