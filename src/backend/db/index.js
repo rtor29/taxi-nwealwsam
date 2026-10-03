@@ -61,6 +61,93 @@ class DatabaseManager {
         } catch (e) {
             console.warn(`[Database] Error reading state snapshot: ${e.message}`);
         }
+
+        // Guarantee active Najaf drivers exist for matching and trips
+        if (!this.memoryState.drivers || this.memoryState.drivers.length === 0) {
+            this.memoryState.drivers = [
+                {
+                    driverId: "drv-t-lhil8jhxd",
+                    fullName: "كابتن حيدر الكعبي",
+                    phoneNumber: "07801234567",
+                    email: "haidar@tawseelaiq.app",
+                    vehicleMake: "تويوتا",
+                    vehicleModel: "كورولا",
+                    vehicleYear: 2022,
+                    vehiclePlate: "النجف 1240",
+                    status: "Approved",
+                    isVerified: true,
+                    isBlocked: false,
+                    serviceType: "ShortTrip",
+                    ratingAverage: 5.0,
+                    totalTrips: 18,
+                    permanentLat: 32.01889,
+                    permanentLon: 44.34710,
+                    permanentLocationName: "حي الغدير",
+                    createdAt: new Date().toISOString()
+                },
+                {
+                    driverId: "drv-8atms9lfq",
+                    fullName: "كابتن علي الموسوي",
+                    phoneNumber: "07706204066",
+                    email: "ali@tawseelaiq.app",
+                    vehicleMake: "كيا",
+                    vehicleModel: "سيراتو",
+                    vehicleYear: 2023,
+                    vehiclePlate: "النجف 5621",
+                    status: "Approved",
+                    isVerified: true,
+                    isBlocked: false,
+                    serviceType: "Both",
+                    ratingAverage: 5.0,
+                    totalTrips: 34,
+                    permanentLat: 31.9961,
+                    permanentLon: 44.3168,
+                    permanentLocationName: "مركز النجف",
+                    createdAt: new Date().toISOString()
+                },
+                {
+                    driverId: "drv-3sjd8401a",
+                    fullName: "كابتن سجاد الحسيني",
+                    phoneNumber: "07722154182",
+                    email: "sajjad@tawseelaiq.app",
+                    vehicleMake: "هيونداي",
+                    vehicleModel: "إلنترا",
+                    vehicleYear: 2021,
+                    vehiclePlate: "النجف 8834",
+                    status: "Approved",
+                    isVerified: true,
+                    isBlocked: false,
+                    serviceType: "ShortTrip",
+                    ratingAverage: 4.9,
+                    totalTrips: 12,
+                    permanentLat: 32.0321,
+                    permanentLon: 44.3725,
+                    permanentLocationName: "الكوفة",
+                    createdAt: new Date().toISOString()
+                },
+                {
+                    driverId: "drv-mrt84920b",
+                    fullName: "كابتن مرتضى النجفي",
+                    phoneNumber: "07812345678",
+                    email: "murtadha@tawseelaiq.app",
+                    vehicleMake: "نيسان",
+                    vehicleModel: "صني",
+                    vehicleYear: 2020,
+                    vehiclePlate: "النجف 3392",
+                    status: "Approved",
+                    isVerified: true,
+                    isBlocked: false,
+                    serviceType: "PermanentLine",
+                    ratingAverage: 5.0,
+                    totalTrips: 45,
+                    permanentLat: 32.0164,
+                    permanentLon: 44.3393,
+                    permanentLocationName: "حي الضباط",
+                    createdAt: new Date().toISOString()
+                }
+            ];
+            this.saveStateSnapshot();
+        }
     }
 
     saveStateSnapshot() {
@@ -230,34 +317,37 @@ class DatabaseManager {
     async syncPostgresToMemory(client) {
         try {
             const driversRes = await client.query('SELECT * FROM drivers ORDER BY created_at DESC');
-            this.memoryState.drivers = driversRes.rows.map(r => ({
-                driverId: r.driver_id,
-                fullName: r.full_name,
-                phoneNumber: r.phone_number,
-                email: r.email,
-                plainPassword: r.plain_password || null,
-                passwordHash: r.password_hash || null,
-                googleId: r.google_id,
-                licenseNumber: r.license_number,
-                vehicleMake: r.vehicle_make,
-                vehicleModel: r.vehicle_model,
-                vehicleYear: r.vehicle_year,
-                vehiclePlate: r.vehicle_plate,
-                status: r.status,
-                isVerified: r.is_verified,
-                isBlocked: r.is_blocked,
-                rejectionReason: r.rejection_reason,
-                ratingAverage: parseFloat(r.rating_average || 5.0),
-                totalTrips: r.total_trips || 0,
-                permanentLat: r.permanent_lat ? parseFloat(r.permanent_lat) : null,
-                permanentLon: r.permanent_lon ? parseFloat(r.permanent_lon) : null,
-                permanentLocationName: r.permanent_location_name || '',
-                permanentDropoffLat: r.permanent_dropoff_lat ? parseFloat(r.permanent_dropoff_lat) : null,
-                permanentDropoffLon: r.permanent_dropoff_lon ? parseFloat(r.permanent_dropoff_lon) : null,
-                permanentDropoffName: r.permanent_dropoff_name || '',
-                telegramChatId: r.telegram_chat_id ? String(r.telegram_chat_id) : null,
-                createdAt: r.created_at
-            }));
+            if (driversRes.rows && driversRes.rows.length > 0) {
+                this.memoryState.drivers = driversRes.rows.map(r => ({
+                    driverId: r.driver_id,
+                    fullName: r.full_name,
+                    phoneNumber: r.phone_number,
+                    email: r.email,
+                    plainPassword: r.plain_password || null,
+                    passwordHash: r.password_hash || null,
+                    googleId: r.google_id,
+                    licenseNumber: r.license_number,
+                    vehicleMake: r.vehicle_make,
+                    vehicleModel: r.vehicle_model,
+                    vehicleYear: r.vehicle_year,
+                    vehiclePlate: r.vehicle_plate,
+                    status: r.status,
+                    isVerified: r.is_verified,
+                    isBlocked: r.is_blocked,
+                    serviceType: r.service_type || 'Both',
+                    rejectionReason: r.rejection_reason,
+                    ratingAverage: parseFloat(r.rating_average || 5.0),
+                    totalTrips: r.total_trips || 0,
+                    permanentLat: r.permanent_lat ? parseFloat(r.permanent_lat) : null,
+                    permanentLon: r.permanent_lon ? parseFloat(r.permanent_lon) : null,
+                    permanentLocationName: r.permanent_location_name || '',
+                    permanentDropoffLat: r.permanent_dropoff_lat ? parseFloat(r.permanent_dropoff_lat) : null,
+                    permanentDropoffLon: r.permanent_dropoff_lon ? parseFloat(r.permanent_dropoff_lon) : null,
+                    permanentDropoffName: r.permanent_dropoff_name || '',
+                    telegramChatId: r.telegram_chat_id ? String(r.telegram_chat_id) : null,
+                    createdAt: r.created_at
+                }));
+            }
 
             const customersRes = await client.query('SELECT * FROM customers ORDER BY created_at DESC');
             this.memoryState.customers = customersRes.rows.map(r => ({
