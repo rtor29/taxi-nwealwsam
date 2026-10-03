@@ -2917,7 +2917,7 @@ class AuthController {
             var days = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
             var chipsHtml = days.map(function(d) {
                 var act = bPermDays.includes(d) ? 'day-chip active' : 'day-chip';
-                return '<div class="' + act + '" onclick="togglePermDay(\'' + d + '\')">' + d + '</div>';
+                return '<div class="' + act + '" onclick="togglePermDay(&quot;' + d + '&quot;)">' + d + '</div>';
             }).join('');
 
             panel.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px;">🔄 تثبيت خط دائمي (اشتراك يومي)</div>' +
@@ -2999,7 +2999,7 @@ class AuthController {
                 });
                 var data = await res.json();
                 if (data.success) {
-                    alert('🎉 تم تثبيت مسار الخط الدائم بنجاح!\nسيظهر في لوحة تحكمك وعند الكباتن القريبين من مسارك.');
+                    alert('🎉 تم تثبيت مسار الخط الدائم بنجاح!\\nسيظهر في لوحة تحكمك وعند الكباتن القريبين من مسارك.');
                     loadPassengerPermanentRoutes();
                 } else {
                     alert(data.error || 'تعذر حفظ المسار');
@@ -3032,9 +3032,9 @@ class AuthController {
                         '</div>' +
                         '<div style="color:#64748b;margin-bottom:6px;">⏰ ' + (r.departureTime || '') + ' · 📅 ' + daysList + '</div>' +
                         '<div style="display:flex;gap:6px;">' +
-                            '<button type="button" onclick="previewPermOnMap(\'' + r.id + '\')" class="btn-small" style="padding:4px 8px;font-size:10px;flex:1;">معاينة 🗺️</button>' +
-                            '<button type="button" onclick="togglePermStatus(\'' + r.id + '\',\'' + r.status + '\')" class="btn-small" style="padding:4px 8px;font-size:10px;flex:1;">' + toggleLabel + '</button>' +
-                            '<button type="button" onclick="deletePermRoute(\'' + r.id + '\')" class="btn-small" style="padding:4px 8px;font-size:10px;color:#dc2626;">حذف 🗑️</button>' +
+                            '<button type="button" onclick="previewPermOnMap(&quot;' + r.id + '&quot;)" class="btn-small" style="padding:4px 8px;font-size:10px;flex:1;">معاينة 🗺️</button>' +
+                            '<button type="button" onclick="togglePermStatus(&quot;' + r.id + '&quot;,&quot;' + r.status + '&quot;)" class="btn-small" style="padding:4px 8px;font-size:10px;flex:1;">' + toggleLabel + '</button>' +
+                            '<button type="button" onclick="deletePermRoute(&quot;' + r.id + '&quot;)" class="btn-small" style="padding:4px 8px;font-size:10px;color:#dc2626;">حذف 🗑️</button>' +
                         '</div>';
                     list.appendChild(card);
                 });
@@ -3272,8 +3272,6 @@ class AuthController {
             } catch(_) {}
             bCurrentIncomingReq = null;
         };
-
-    })();
 
         (function() {
             applyDynamicAppConfig();
