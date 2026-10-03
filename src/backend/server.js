@@ -1300,6 +1300,21 @@ async function startServer() {
                     fare, distanceKm, durationMins, rangeKm = 5
                 } = body;
 
+                // Check if passenger already has an active accepted/arrived ride
+                const activeExisting = (db.memoryState.rideRequests || []).find(r =>
+                    (r.customerId === customerId || (customerPhone && r.customerPhone === customerPhone)) &&
+                    (r.status === 'Accepted' || r.status === 'Arrived' || r.status === 'InProgress')
+                );
+                if (activeExisting) {
+                    return sendJson({
+                        success: false,
+                        activeRideExists: true,
+                        activeRequestId: activeExisting.id,
+                        activeRequest: activeExisting,
+                        error: '⚠️ لديك رحلة جارية بالفعل مقبولة من الكابتن (' + (activeExisting.assignedDriverName || 'الكابتن') + '). لا يمكنك طلب مشوار جديد حتى يتم إكمال الرحلة أو إلغاؤها أولاً.'
+                    }, 400);
+                }
+
                 const pLat = parseFloat(pickupLat) || 31.9961;
                 const pLon = parseFloat(pickupLon) || 44.3168;
 
@@ -1450,6 +1465,69 @@ async function startServer() {
             } catch (err) {
                 return sendJson({ success: false, error: err.message }, 500);
             }
+        }
+
+        // Driver Arrived at Passenger Pickup
+        if (pathname === '/api/ride/arrived' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const { requestId, driverId } = body;
+                const requests = db.memoryState.rideRequests || [];
+                const r = requests.find(item => item.id === requestId);
+                if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
+                r.status = 'Arrived';
+                r.arrivedAt = new Date().toISOString();
+                db.saveStateSnapshot();
+                return sendJson({ success: true, message: 'تم إشعار الراكب بوصولك إلى الموقع 📍', request: r });
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        // Passenger or Driver Cancel Ride
+        if (pathname === '/api/ride/cancel' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const { requestId, reason } = body;
+                const requests = db.memoryState.rideRequests || [];
+                const r = requests.find(item => item.id === requestId);
+                if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
+                r.status = 'Cancelled';
+                r.cancelReason = reason || 'إلغاء من قبل المستخدم';
+                r.cancelledAt = new Date().toISOString();
+                db.saveStateSnapshot();
+                return sendJson({ success: true, message: 'تم إلغاء الرحلة بنجاح', request: r });
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        // Driver Complete Ride
+        if (pathname === '/api/ride/complete' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const { requestId, driverId } = body;
+                const requests = db.memoryState.rideRequests || [];
+                const r = requests.find(item => item.id === requestId);
+                if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
+                r.status = 'Completed';
+                r.completedAt = new Date().toISOString();
+                db.saveStateSnapshot();
+                return sendJson({ success: true, message: 'تم إكمال الرحلة بنجاح 🏁', request: r });
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        // Driver Current Active Accepted Ride
+        if (pathname.startsWith('/api/driver/') && pathname.endsWith('/active-ride') && method === 'GET') {
+            const parts = pathname.split('/');
+            const driverId = parts[parts.length - 2];
+            const active = (db.memoryState.rideRequests || []).find(r => 
+                (r.acceptedDriverId === driverId || r.assignedDriverId === driverId) &&
+                (r.status === 'Accepted' || r.status === 'Arrived' || r.status === 'InProgress')
+            );
+            return sendJson({ success: true, activeRide: active || null });
         }
 
         // Driver Pending Requests List

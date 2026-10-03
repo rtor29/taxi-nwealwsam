@@ -505,6 +505,90 @@ class AuthController {
         </div>
     </div>
 
+    <!-- Driver Active Ride Modal (Waze Navigation & Arrival Status) -->
+    <div id="driver-active-ride-modal" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
+        <div class="card" style="max-width:420px;width:100%;padding:22px 18px;text-align:center;border:2px solid #10b981;">
+            <div style="font-size:36px;margin-bottom:6px;">🚗</div>
+            <h3 style="font-size:17px;font-weight:900;margin:0 0 4px;color:#111;">الرحلة الجارية الحالية</h3>
+            <p style="font-size:12px;color:#6b7280;margin:0 0 12px;" id="driver-active-ride-status">أنت الآن في طريقك إلى موقع الراكب</p>
+
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:14px;text-align:right;font-size:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span style="font-weight:900;font-size:13px;" id="driver-active-passenger-name">👤 الراكب: --</span>
+                    <span style="font-weight:900;color:#059669;" id="driver-active-fare">💰 -- د.ع</span>
+                </div>
+                <div style="color:#16a34a;margin-bottom:4px;" id="driver-active-pickup">🟢 الانطلاق: --</div>
+                <div style="color:#dc2626;margin-bottom:8px;" id="driver-active-dropoff">🔴 الوجهة: --</div>
+                <div style="display:flex;gap:6px;" id="driver-active-contact-wrap">
+                    <a id="driver-active-wa-link" href="#" target="_blank" class="btn-small" style="background:#25d366;color:#fff;text-decoration:none;flex:1;text-align:center;padding:8px;">💬 واتساب الراكب</a>
+                    <a id="driver-active-tel-link" href="#" class="btn-small" style="background:#10b981;color:#fff;text-decoration:none;flex:1;text-align:center;padding:8px;">📞 اتصال بالراكب</a>
+                </div>
+            </div>
+
+            <!-- Waze Navigation Buttons -->
+            <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+                <button type="button" onclick="openDriverWaze('dropoff')" class="btn-primary" style="background:#00d8cc;color:#0f172a;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:900;padding:12px;">
+                    <span>🧭</span> <span>التنقل إلى الوجهة عبر Waze 🚗</span>
+                </button>
+                <button type="button" onclick="openDriverWaze('pickup')" class="btn-secondary" style="display:flex;align-items:center;justify-content:center;gap:8px;font-weight:700;padding:10px;">
+                    <span>📍</span> <span>التنقل إلى موقع الراكب عبر Waze</span>
+                </button>
+            </div>
+
+            <!-- Arrival and Completion Actions -->
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <button type="button" id="btn-driver-arrived" onclick="driverMarkArrived()" class="btn-primary" style="background:#f59e0b;padding:12px;">
+                    📍 أنا وصلت عند موقع الراكب
+                </button>
+                <button type="button" onclick="driverCompleteRide()" class="btn-primary" style="background:#16a34a;padding:12px;">
+                    🏁 إنهاء وإكمال المشوار بنجاح
+                </button>
+                <button type="button" onclick="closeDriverActiveRideModal()" class="btn-small" style="color:#6b7280;background:transparent;border:none;margin-top:4px;">
+                    تصغير النافذة
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Passenger Driver Arrived Notification Modal -->
+    <div id="passenger-arrived-modal" style="display:none;position:fixed;inset:0;z-index:1000001;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
+        <div class="card" style="max-width:380px;width:100%;padding:26px 20px;text-align:center;border:2.5px solid #16a34a;box-shadow:0 12px 35px rgba(0,0,0,0.35);animation:pulseGreen 2s infinite;">
+            <div style="font-size:48px;margin-bottom:10px;">🚖</div>
+            <h3 style="font-size:19px;font-weight:900;margin:0 0 6px;color:#15803d;">وصل الكابتن إلى موقعك!</h3>
+            <p style="font-size:13px;color:#374151;margin:0 0 14px;line-height:1.5;" id="passenger-arrived-msg">الكابتن في انتظارك الآن عند نقطة الانطلاق.</p>
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:10px;margin-bottom:16px;font-size:12px;color:#166534;" id="passenger-arrived-driver-box">
+                <span id="arrived-drv-name-text">🚕 الكابتن بانتظارك</span>
+            </div>
+            <button type="button" onclick="dismissPassengerArrivedModal()" class="btn-primary" style="background:#16a34a;padding:12px;font-size:14px;">
+                🏃‍♂️ حسناً، أنا قادم الآن
+            </button>
+        </div>
+    </div>
+
+    <!-- Passenger Active Ride Exists Alert Modal -->
+    <div id="passenger-active-blocked-modal" style="display:none;position:fixed;inset:0;z-index:1000001;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
+        <div class="card" style="max-width:390px;width:100%;padding:22px 18px;text-align:center;border:2px solid #f59e0b;">
+            <div style="font-size:40px;margin-bottom:8px;">⚠️</div>
+            <h3 style="font-size:17px;font-weight:900;margin:0 0 6px;color:#92400e;">لديك مشوار جاري ومقبول بالفعل!</h3>
+            <p style="font-size:12px;color:#6b7280;margin:0 0 14px;line-height:1.5;" id="active-blocked-msg">
+                تم قبول طلبك السابق من قبل الكابتن. لا يمكنك طلب مشوار جديد حتى يتم إلغاء الرحلة الحالية أو إكمالها.
+            </p>
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px;margin-bottom:16px;text-align:right;font-size:12px;" id="active-blocked-info">
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button type="button" onclick="cancelExistingAcceptedRide()" class="btn-secondary" style="color:#dc2626;border-color:#fecaca;background:#fef2f2;flex:1;padding:10px;font-weight:900;">
+                    ❌ إلغاء الرحلة المقبولة
+                </button>
+                <button type="button" onclick="viewExistingAcceptedRide()" class="btn-primary" style="background:#111827;flex:1;padding:10px;">
+                    👁️ عرض الرحلة
+                </button>
+            </div>
+            <button type="button" onclick="document.getElementById('passenger-active-blocked-modal').style.display='none'" class="btn-small" style="margin-top:10px;background:transparent;border:none;color:#6b7280;">
+                إغلاق
+            </button>
+        </div>
+    </div>
+
     <!-- Trip type selection (shown after login, before opening app) -->
     <div id="trip-type-modal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;padding:16px">
         <div class="card" style="max-width:420px;width:100%;margin:0 auto;padding:24px 20px;max-height:90vh;overflow-y:auto;box-sizing:border-box">
@@ -2434,6 +2518,7 @@ class AuthController {
         var bNearbyDrivers = [];
         var bDriversPollTimer = null;
         var bActiveRideId = null, bRidePollTimer = null, bDispatchSeconds = 30, bDispatchTimer = null;
+        var bPassengerMonitorTimer = null, bDriverActiveRide = null;
         var bPermDays = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء'];
         var bDriverOnline = false, bDriverWatchId = null, bDriverIncomingTimer = null, bDriverReqTimer = null;
 
@@ -2871,6 +2956,15 @@ class AuthController {
 
         // Request Nearest Driver & 30-Second Escalation (Stage 1)
         window.requestNearestDriver = async function() {
+            var existingAccepted = null;
+            try {
+                existingAccepted = JSON.parse(localStorage.getItem('active_accepted_ride') || 'null');
+            } catch(_) {}
+            if (existingAccepted && (existingAccepted.status === 'Accepted' || existingAccepted.status === 'Arrived' || existingAccepted.status === 'InProgress')) {
+                showPassengerActiveBlockedModal(existingAccepted);
+                return;
+            }
+
             if (!bPickupCoords) {
                 alert('يرجى تحديد نقطة الانطلاق أولاً أو الضغط على زر موقعي');
                 return;
@@ -2904,6 +2998,12 @@ class AuthController {
                     })
                 });
                 var data = await res.json();
+                if (data.activeRideExists) {
+                    var actReq = data.activeRequest || { id: data.activeRequestId };
+                    localStorage.setItem('active_accepted_ride', JSON.stringify(actReq));
+                    showPassengerActiveBlockedModal(actReq);
+                    return;
+                }
                 if (data.success && data.request) {
                     bActiveRideId = data.request.id;
                     showDispatchModal(data.request);
@@ -2963,18 +3063,169 @@ class AuthController {
         }
 
         function onRideAccepted(req) {
+            bActiveRideId = req.id;
+            localStorage.setItem('active_accepted_ride', JSON.stringify(req));
             document.getElementById('dispatch-modal-icon').textContent = '🎉';
             document.getElementById('dispatch-modal-title').textContent = 'تم قبول رحلتك بنجاح!';
-            document.getElementById('dispatch-modal-subtitle').textContent = 'الكابتن ' + req.assignedDriverName + ' في طريقه إليك!';
+            document.getElementById('dispatch-modal-subtitle').textContent = 'الكابتن ' + (req.assignedDriverName || 'المعين') + ' في طريقه إليك!';
             document.getElementById('dispatch-timer-seconds').textContent = '✅';
             var waNum = (req.assignedDriverPhone || '').replace(/[^0-9]/g, '').replace(/^07/, '9647');
             var act = document.getElementById('dispatch-actions-wrap');
             if (act) {
                 act.innerHTML = '<a href="https://wa.me/' + waNum + '" target="_blank" class="btn-primary" style="background:#25d366;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;flex:1;">💬 واتساب</a><a href="tel:' + req.assignedDriverPhone + '" class="btn-primary" style="background:#10b981;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;flex:1;">📞 اتصال</a><button type="button" onclick="cancelRideRequest()" class="btn-secondary" style="flex:1;">إغلاق</button>';
             }
+            startPassengerRideMonitor(req.id);
         }
 
+        function startPassengerRideMonitor(rideId) {
+            if (!rideId) return;
+            if (bPassengerMonitorTimer) clearInterval(bPassengerMonitorTimer);
+            bPassengerMonitorTimer = setInterval(async function() {
+                try {
+                    var res = await fetch('/api/ride/status/' + rideId);
+                    var data = await res.json();
+                    if (!data.success || !data.request) return;
+                    var r = data.request;
+                    if (r.status === 'Arrived') {
+                        showPassengerArrivedModal(r);
+                    } else if (r.status === 'Completed') {
+                        clearInterval(bPassengerMonitorTimer);
+                        localStorage.removeItem('active_accepted_ride');
+                        var arrModal = document.getElementById('passenger-arrived-modal');
+                        if (arrModal) arrModal.style.display = 'none';
+                        var dispModal = document.getElementById('ride-dispatch-modal');
+                        if (dispModal) dispModal.style.display = 'none';
+                        alert('🏁 تم إكمال المشوار بنجاح! نتمنى لك يوماً سعيداً.');
+                    } else if (r.status === 'Cancelled') {
+                        clearInterval(bPassengerMonitorTimer);
+                        localStorage.removeItem('active_accepted_ride');
+                        var arrModal = document.getElementById('passenger-arrived-modal');
+                        if (arrModal) arrModal.style.display = 'none';
+                        var dispModal = document.getElementById('ride-dispatch-modal');
+                        if (dispModal) dispModal.style.display = 'none';
+                        alert('⚠️ تم إلغاء المشوار: ' + (r.cancelReason || ''));
+                    }
+                } catch(_) {}
+            }, 2500);
+        }
+
+        function playArrivalNotificationSound() {
+            try {
+                var AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+                var ctx = new AudioCtx();
+                var now = ctx.currentTime;
+                var notes = [659.25, 830.61, 987.77];
+                notes.forEach(function(freq, idx) {
+                    var osc = ctx.createOscillator();
+                    var gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.18);
+                    gain.gain.setValueAtTime(0.35, now + idx * 0.18);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.18 + 0.35);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now + idx * 0.18);
+                    osc.stop(now + idx * 0.18 + 0.36);
+                });
+            } catch(_) {}
+        }
+
+        window.showPassengerArrivedModal = function(req) {
+            var modal = document.getElementById('passenger-arrived-modal');
+            if (!modal) return;
+            if (modal.style.display === 'flex') return;
+            var msg = document.getElementById('passenger-arrived-msg');
+            var drvBox = document.getElementById('arrived-drv-name-text');
+            if (msg) msg.textContent = 'الكابتن ' + (req.assignedDriverName || 'المعين') + ' وصل الآن إلى نقطة انطلاقك وهو بانتظارك!';
+            if (drvBox) drvBox.textContent = '🚕 ' + (req.assignedDriverName || 'الكابتن') + ' (' + (req.assignedDriverVehicle || 'مركبة') + ') بانتظارك';
+            modal.style.display = 'flex';
+            playArrivalNotificationSound();
+            if (navigator.vibrate) {
+                try { navigator.vibrate([250, 120, 250, 120, 400]); } catch(_) {}
+            }
+            if ('Notification' in window && Notification.permission === 'granted') {
+                try {
+                    new Notification('🚖 وصل الكابتن!', { body: 'الكابتن وصل إلى موقعك وهو بانتظارك الآن' });
+                } catch(_) {}
+            }
+        };
+
+        window.dismissPassengerArrivedModal = function() {
+            var modal = document.getElementById('passenger-arrived-modal');
+            if (modal) modal.style.display = 'none';
+        };
+
+        window.showPassengerActiveBlockedModal = function(req) {
+            var modal = document.getElementById('passenger-active-blocked-modal');
+            if (!modal) return;
+            var infoBox = document.getElementById('active-blocked-info');
+            if (infoBox) {
+                var drv = req.assignedDriverName || req.driverName || 'الكابتن';
+                var pick = req.pickupName || 'موقع الركوب';
+                var drop = req.dropoffName || 'الوجهة';
+                var fareStr = req.fare ? (req.fare).toLocaleString() + ' د.ع' : '3,000 د.ع';
+                infoBox.innerHTML =
+                    '<div style="font-weight:900;color:#111;margin-bottom:4px;">🚕 الكابتن: ' + drv + '</div>' +
+                    '<div style="color:#16a34a;margin-bottom:2px;">🟢 الانطلاق: ' + pick + '</div>' +
+                    '<div style="color:#dc2626;margin-bottom:4px;">🔴 الوجهة: ' + drop + '</div>' +
+                    '<div style="font-weight:700;color:#059669;">💰 الأجرة: ' + fareStr + '</div>';
+            }
+            modal.style.display = 'flex';
+        };
+
+        window.cancelExistingAcceptedRide = async function() {
+            var existing = null;
+            try { existing = JSON.parse(localStorage.getItem('active_accepted_ride') || 'null'); } catch(_) {}
+            var rideId = (existing && existing.id) || bActiveRideId;
+            if (!rideId) {
+                localStorage.removeItem('active_accepted_ride');
+                var m = document.getElementById('passenger-active-blocked-modal');
+                if (m) m.style.display = 'none';
+                return;
+            }
+            if (!confirm('هل أنت متأكد من إلغاء الرحلة الحالية المقبولة لتتمكن من طلب مشوار جديد؟')) return;
+            try {
+                var res = await fetch('/api/ride/cancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId: rideId, reason: 'إلغاء من قبل الراكب لطلب مشوار آخر' })
+                });
+                var data = await res.json();
+                localStorage.removeItem('active_accepted_ride');
+                if (bRidePollTimer) clearInterval(bRidePollTimer);
+                if (bDispatchTimer) clearInterval(bDispatchTimer);
+                if (bPassengerMonitorTimer) clearInterval(bPassengerMonitorTimer);
+                bActiveRideId = null;
+                var m = document.getElementById('passenger-active-blocked-modal');
+                if (m) m.style.display = 'none';
+                var dispModal = document.getElementById('ride-dispatch-modal');
+                if (dispModal) dispModal.style.display = 'none';
+                alert('تم إلغاء الرحلة المقبولة بنجاح. يمكنك الآن طلب مشوار جديد.');
+            } catch(e) {
+                alert('حدث خطأ أثناء الإلغاء');
+            }
+        };
+
+        window.viewExistingAcceptedRide = function() {
+            var m = document.getElementById('passenger-active-blocked-modal');
+            if (m) m.style.display = 'none';
+            var existing = null;
+            try { existing = JSON.parse(localStorage.getItem('active_accepted_ride') || 'null'); } catch(_) {}
+            if (existing) {
+                showDispatchModal(existing);
+                onRideAccepted(existing);
+            }
+        };
+
         window.cancelRideRequest = function() {
+            var existing = null;
+            try { existing = JSON.parse(localStorage.getItem('active_accepted_ride') || 'null'); } catch(_) {}
+            if (existing && existing.id) {
+                var modal = document.getElementById('ride-dispatch-modal');
+                if (modal) modal.style.display = 'none';
+                return;
+            }
             if (bRidePollTimer) clearInterval(bRidePollTimer);
             if (bDispatchTimer) clearInterval(bDispatchTimer);
             bActiveRideId = null;
@@ -3144,8 +3395,20 @@ class AuthController {
             var btnBg = bDriverOnline ? '#dc2626' : '#16a34a';
             var btnText = bDriverOnline ? 'قطع الاتصال' : 'اتصال الآن';
 
+            var activeCardHtml = '';
+            var curRide = null;
+            try { curRide = bDriverActiveRide || JSON.parse(localStorage.getItem('driver_active_ride') || 'null'); } catch(_) {}
+            if (curRide && curRide.status !== 'Completed' && curRide.status !== 'Cancelled') {
+                activeCardHtml = '<div style="background:#ecfdf5;border:1.5px solid #10b981;border-radius:12px;padding:12px;margin-bottom:10px;">' +
+                    '<div style="font-weight:900;color:#065f46;font-size:13px;margin-bottom:3px;">🚗 المشوار الجاري المقبول</div>' +
+                    '<div style="font-size:11px;color:#047857;margin-bottom:8px;">👤 ' + (curRide.customerName || 'الراكب') + ' · ' + (curRide.fare || 3000).toLocaleString() + ' د.ع</div>' +
+                    '<button type="button" onclick="showDriverActiveRideModal(bDriverActiveRide || curRide)" class="btn-primary" style="background:#059669;padding:8px;font-size:11px;font-weight:900;">فتح تفاصيل الرحلة و Waze 🧭</button>' +
+                '</div>';
+            }
+
             panel.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px;">🚖 لوحة الكابتن والطلبات الحية</div>' +
-                '<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px;display:flex;align-items:center;justify-content:space-between;">' +
+                activeCardHtml +
+                '<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
                     '<div>' +
                         '<div style="font-weight:900;font-size:13px;color:#111;">حالة الاتصال والخدمة</div>' +
                         '<div id="driver-status-text" style="font-size:11px;color:' + statusColor + ';font-weight:700;">' + statusText + '</div>' +
@@ -3323,26 +3586,157 @@ class AuthController {
 
         window.respondToIncomingRide = async function(action) {
             if (!bCurrentIncomingReq) return;
+            var incoming = bCurrentIncomingReq;
             var did = localStorage.getItem('user_id') || 'drv-test';
             var modal = document.getElementById('driver-incoming-modal');
             if (modal) modal.style.display = 'none';
             if (bDriverReqTimer) clearInterval(bDriverReqTimer);
 
             try {
-                await fetch('/api/ride/respond', {
+                var res = await fetch('/api/ride/respond', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        requestId: bCurrentIncomingReq.id,
+                        requestId: incoming.id,
                         driverId: did,
                         action: action
                     })
                 });
+                var data = await res.json();
                 if (action === 'accept') {
-                    alert('🎉 قبلت المشوار بنجاح! سيتم توجيه الراكب للتواصل معك.');
+                    incoming.status = 'Accepted';
+                    bDriverActiveRide = incoming;
+                    localStorage.setItem('driver_active_ride', JSON.stringify(incoming));
+                    showDriverActiveRideModal(incoming);
                 }
             } catch(_) {}
             bCurrentIncomingReq = null;
+        };
+
+        window.showDriverActiveRideModal = function(req) {
+            if (!req) return;
+            bDriverActiveRide = req;
+            localStorage.setItem('driver_active_ride', JSON.stringify(req));
+            var modal = document.getElementById('driver-active-ride-modal');
+            if (!modal) return;
+            var pName = document.getElementById('driver-active-passenger-name');
+            var pFare = document.getElementById('driver-active-fare');
+            var pPick = document.getElementById('driver-active-pickup');
+            var pDrop = document.getElementById('driver-active-dropoff');
+            var pWa = document.getElementById('driver-active-wa-link');
+            var pTel = document.getElementById('driver-active-tel-link');
+            var stEl = document.getElementById('driver-active-ride-status');
+            var btnArrived = document.getElementById('btn-driver-arrived');
+
+            if (pName) pName.textContent = '👤 الراكب: ' + (req.customerName || 'راكب توصيله');
+            if (pFare) pFare.textContent = '💰 ' + (req.fare || 3000).toLocaleString() + ' د.ع';
+            if (pPick) pPick.textContent = '🟢 الانطلاق: ' + (req.pickupName || 'موقع الركوب');
+            if (pDrop) pDrop.textContent = '🔴 الوجهة: ' + (req.dropoffName || 'وجهة الوصول');
+
+            if (stEl) {
+                stEl.textContent = req.status === 'Arrived' ? '📍 أنت في موقع الراكب الآن' : 'أنت الآن في طريقك إلى موقع الراكب';
+                stEl.style.color = req.status === 'Arrived' ? '#15803d' : '#6b7280';
+            }
+            if (btnArrived) {
+                if (req.status === 'Arrived') {
+                    btnArrived.disabled = true;
+                    btnArrived.style.opacity = '0.6';
+                    btnArrived.textContent = '✅ تم تأكيد وصولك للراكب';
+                } else {
+                    btnArrived.disabled = false;
+                    btnArrived.style.opacity = '1';
+                    btnArrived.textContent = '📍 أنا وصلت عند موقع الراكب';
+                }
+            }
+
+            var phone = req.customerPhone || '';
+            var waNum = phone.replace(/[^0-9]/g, '').replace(/^07/, '9647');
+            if (pWa) pWa.href = waNum ? 'https://wa.me/' + waNum : '#';
+            if (pTel) pTel.href = phone ? 'tel:' + phone : '#';
+
+            modal.style.display = 'flex';
+        };
+
+        window.closeDriverActiveRideModal = function() {
+            var modal = document.getElementById('driver-active-ride-modal');
+            if (!modal) return;
+            modal.style.display = 'none';
+        };
+
+        window.openDriverWaze = function(target) {
+            if (!bDriverActiveRide) return;
+            var lat, lon;
+            if (target === 'dropoff') {
+                lat = bDriverActiveRide.dropoffLat;
+                lon = bDriverActiveRide.dropoffLon;
+            } else {
+                lat = bDriverActiveRide.pickupLat;
+                lon = bDriverActiveRide.pickupLon;
+            }
+            if (!lat || !lon) {
+                alert('إحداثيات الموقع غير متوفرة للتنقل عبر Waze');
+                return;
+            }
+            var wazeUrl = 'https://waze.com/ul?ll=' + lat + ',' + lon + '&navigate=yes';
+            window.open(wazeUrl, '_blank');
+        };
+
+        window.driverMarkArrived = async function() {
+            if (!bDriverActiveRide) return;
+            var did = localStorage.getItem('user_id') || 'drv-test';
+            try {
+                var res = await fetch('/api/ride/arrived', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId: bDriverActiveRide.id, driverId: did })
+                });
+                var data = await res.json();
+                if (data.success) {
+                    bDriverActiveRide.status = 'Arrived';
+                    localStorage.setItem('driver_active_ride', JSON.stringify(bDriverActiveRide));
+                    var stEl = document.getElementById('driver-active-ride-status');
+                    if (stEl) {
+                        stEl.textContent = '📍 تم إشعار الراكب بوصولك إلى الموقع!';
+                        stEl.style.color = '#15803d';
+                        stEl.style.fontWeight = '900';
+                    }
+                    var btnArrived = document.getElementById('btn-driver-arrived');
+                    if (btnArrived) {
+                        btnArrived.disabled = true;
+                        btnArrived.style.opacity = '0.6';
+                        btnArrived.textContent = '✅ تم تأكيد وصولك للراكب';
+                    }
+                    alert('تم إشعار الراكب بوصولك بنجاح! 📍');
+                } else {
+                    alert(data.error || 'تعذر تأكيد الوصول');
+                }
+            } catch(e) {
+                alert('خطأ في الاتصال بالخادم');
+            }
+        };
+
+        window.driverCompleteRide = async function() {
+            if (!bDriverActiveRide) return;
+            if (!confirm('هل وصلت للوجهة وتريد إنهاء المشوار بنجاح؟')) return;
+            var did = localStorage.getItem('user_id') || 'drv-test';
+            try {
+                var res = await fetch('/api/ride/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId: bDriverActiveRide.id, driverId: did })
+                });
+                var data = await res.json();
+                if (data.success) {
+                    alert('🎉 تم إنهاء المشوار بنجاح! شكراً لك.');
+                    closeDriverActiveRideModal();
+                    bDriverActiveRide = null;
+                    localStorage.removeItem('driver_active_ride');
+                } else {
+                    alert(data.error || 'تعذر إكمال المشوار');
+                }
+            } catch(e) {
+                alert('خطأ في الاتصال بالخادم');
+            }
         };
 
         (function() {
@@ -3358,6 +3752,12 @@ class AuthController {
             if (urlParams.get('openMap') === '1' || urlParams.get('showMap') === '1') {
                 window.openBookingApp(urlParams.get('tripType') || 'short');
             }
+            try {
+                var savedRide = JSON.parse(localStorage.getItem('active_accepted_ride') || 'null');
+                if (savedRide && savedRide.id) {
+                    startPassengerRideMonitor(savedRide.id);
+                }
+            } catch(_) {}
         })();
     </script>
 </body>
