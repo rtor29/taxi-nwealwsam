@@ -223,6 +223,163 @@ async function handleCallback(chatId, data, user) {
             }
             break;
         }
+        case 'passenger_trip_short': {
+            let passenger = (db.memoryState.customers || []).find(c => String(c.telegramChatId) === String(chatId));
+            if (!passenger && state && state.verifiedPhone) {
+                const clean = state.verifiedPhone.replace('+964', '0');
+                passenger = (db.memoryState.customers || []).find(c => c.phoneNumber === clean);
+                if (passenger) { passenger.telegramChatId = String(chatId); db.saveStateSnapshot(); }
+            }
+            if (!passenger) {
+                await sendMessage(chatId, '⚠️ يرجى تسجيل الدخول أولاً كراكب.');
+                break;
+            }
+
+            const pLat = passenger.permanentLat ? parseFloat(passenger.permanentLat) : (passenger.currentLat ? parseFloat(passenger.currentLat) : 31.9961);
+            const pLon = passenger.permanentLon ? parseFloat(passenger.permanentLon) : (passenger.currentLon ? parseFloat(passenger.currentLon) : 44.3168);
+
+            const shortDrivers = (db.memoryState.drivers || []).filter(d =>
+                !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' &&
+                (d.isVerified === true || d.status === 'Active' || d.status === 'Approved') &&
+                (d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType)
+            );
+
+            const toRad = (deg) => deg * Math.PI / 180;
+            const haversine = (lat1, lon1, lat2, lon2) => {
+                const R = 6371;
+                const dLat = toRad(lat2 - lat1);
+                const dLon = toRad(lon2 - lon1);
+                const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
+                return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            };
+
+            const driversWithDist = shortDrivers.map((d, idx) => {
+                const dLat = d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : (pLat + (idx % 2 === 0 ? 0.003 * (idx + 1) : -0.003 * (idx + 1))));
+                const dLon = d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : (pLon + (idx % 2 === 0 ? 0.002 * (idx + 1) : -0.002 * (idx + 1))));
+                const dist = haversine(pLat, pLon, dLat, dLon);
+                return { ...d, _dist: dist };
+            }).sort((a, b) => a._dist - b._dist);
+
+            const token = 'jwt_customer_' + passenger.customerId;
+            const appUrl = `https://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(passenger.customerId)}&role=Customer&fullName=${encodeURIComponent(passenger.fullName)}&tripType=short`;
+
+            if (driversWithDist.length === 0) {
+                await sendKeyboard(chatId,
+                    `⚡ <b>تم اختيار: مشوار قصير</b>\n\n🚕 لا يوجد سائقون مسجلون للمشاوير القصيرة بالقرب منك حالياً.\nيمكنك طلب المشوار عبر التطبيق وسيتم إشعار الكباتن القريبين فوراً:`,
+                    [
+                        [{ text: '🚗 حجز مشوار قصير عبر التطبيق', url: appUrl }],
+                        [{ text: '🔄 التبديل إلى خط دائم', callback_data: 'passenger_trip_daily' }]
+                    ]
+                );
+            } else {
+                let msg = `⚡ <b>تم اختيار: مشوار قصير</b>\n📍 <b>السائقون المسجلون كمشوار قصير والقريبون منك:</b>\n\n`;
+                driversWithDist.slice(0, 8).forEach((d, i) => {
+                    const waNum = (d.phoneNumber || '').replace(/[^0-9]/g, '').replace(/^07/, '9647');
+                    const distText = d._dist ? ` (${d._dist.toFixed(1)} كم)` : '';
+                    const vMake = d.vehicleMake || (d.vehicle ? d.vehicle.make : 'تويوتا');
+                    const vModel = d.vehicleModel || (d.vehicle ? (d.vehicle.model || '') : 'كورولا');
+                    const carInfo = `${vMake} ${vModel}`.trim();
+                    msg += `${i+1}. 🚕 <b>${d.fullName}</b>${distText}\n`;
+                    msg += `   🚗 المركبة: ${carInfo}\n`;
+                    msg += `   📞 الهاتف: <code>${d.phoneNumber || '07800000000'}</code>\n`;
+                    msg += `   💬 <a href="https://wa.me/${waNum}">مراسلة واتساب مباشرة</a>\n\n`;
+                });
+                msg += `💡 يمكنك التواصل مع السائق مباشرة أو فتح التطبيق لتأكيد المشوار.`;
+
+                await sendKeyboard(chatId, msg, [
+                    [{ text: '🚗 فتح التطبيق للمشوار القصير', url: appUrl }],
+                    [{ text: '🔄 التبديل إلى خط دائم', callback_data: 'passenger_trip_daily' }]
+                ]);
+            }
+            break;
+        }
+        case 'passenger_trip_daily': {
+            let passenger = (db.memoryState.customers || []).find(c => String(c.telegramChatId) === String(chatId));
+            if (!passenger && state && state.verifiedPhone) {
+                const clean = state.verifiedPhone.replace('+964', '0');
+                passenger = (db.memoryState.customers || []).find(c => c.phoneNumber === clean);
+                if (passenger) { passenger.telegramChatId = String(chatId); db.saveStateSnapshot(); }
+            }
+            if (!passenger) {
+                await sendMessage(chatId, '⚠️ يرجى تسجيل الدخول أولاً كراكب.');
+                break;
+            }
+            const token = 'jwt_customer_' + passenger.customerId;
+            const appUrl = `https://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(passenger.customerId)}&role=Customer&fullName=${encodeURIComponent(passenger.fullName)}&tripType=daily`;
+
+            const dailyDrivers = (db.memoryState.drivers || []).filter(d =>
+                !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' &&
+                (d.isVerified === true || d.status === 'Active' || d.status === 'Approved') &&
+                (d.serviceType === 'PermanentLine' || d.serviceType === 'Both' || !d.serviceType)
+            );
+
+            let msg = `🔄 <b>تم اختيار: خط دائم</b>\n\n`;
+            msg += `📋 خدمة الخطوط الدائمة تتيح لك تثبيت مسارك اليومي للدوام أو الجامعة مع سائق معتمد.\n\n`;
+            if (dailyDrivers.length > 0) {
+                msg += `🚖 يتوفر حالياً <b>${dailyDrivers.length}</b> سائق مسجل للخطوط والاشتراكات الدائمة.\n\n`;
+            }
+            msg += `👇 اضغط أدناه لتثبيت مسارك واختيار الكابتن عبر الخريطة:`;
+
+            await sendKeyboard(chatId, msg, [
+                [{ text: '🗺️ فتح التطبيق وتحديد مسار الخط الدائم', url: appUrl }],
+                [{ text: '⚡ التبديل إلى مشوار قصير', callback_data: 'passenger_trip_short' }]
+            ]);
+            break;
+        }
+        case 'driver_set_short':
+        case 'driver_set_daily':
+        case 'driver_set_both': {
+            let driver = (db.memoryState.drivers || []).find(d => String(d.telegramChatId) === String(chatId));
+            if (!driver && state && state.verifiedPhone) {
+                const clean = state.verifiedPhone.replace('+964', '0');
+                driver = (db.memoryState.drivers || []).find(d => d.phoneNumber === clean);
+                if (driver) { driver.telegramChatId = String(chatId); }
+            }
+            if (!driver) {
+                await sendMessage(chatId, '⚠️ لم يتم العثور على حساب السائق. يرجى تسجيل الدخول أولاً.');
+                break;
+            }
+
+            let typeName = '';
+            let serviceTypeValue = '';
+            if (data === 'driver_set_short') {
+                driver.serviceType = 'ShortTrip';
+                serviceTypeValue = 'ShortTrip';
+                typeName = 'مشاوير قصيرة ⚡';
+            } else if (data === 'driver_set_daily') {
+                driver.serviceType = 'PermanentLine';
+                serviceTypeValue = 'PermanentLine';
+                typeName = 'خطوط دائمة 🔄';
+            } else {
+                driver.serviceType = 'Both';
+                serviceTypeValue = 'Both';
+                typeName = 'كلاهما (مشاوير قصيرة وخطوط دائمة) 🚖';
+            }
+            db.saveStateSnapshot();
+
+            const token = 'jwt_driver_' + driver.driverId;
+            const appUrl = `https://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driver.driverId)}&role=Driver&fullName=${encodeURIComponent(driver.fullName)}&serviceType=${serviceTypeValue}`;
+
+            await sendKeyboard(chatId,
+                `✅ <b>تم حفظ خيارك بنجاح!</b>\nنوع الخدمة المعتمد: <b>${typeName}</b>\n\nستصلك إشعارات الطلبات المتوافقة مع خيارك. يمكنك فتح التطبيق والبدء بالعمل:`,
+                [
+                    [{ text: '🚗 فتح تطبيق السائق', url: appUrl }],
+                    [{ text: '⚙️ تغيير نوع الخدمة', callback_data: 'driver_choose_service' }]
+                ]
+            );
+            break;
+        }
+        case 'driver_choose_service': {
+            await sendKeyboard(chatId,
+                `🚖 <b>تحديد نوع المشاوير التي تقدمها:</b>\nاختر من الخيارات التالية:`,
+                [
+                    [{ text: '⚡ مشاوير قصيرة', callback_data: 'driver_set_short' }],
+                    [{ text: '🔄 خطوط دائمة', callback_data: 'driver_set_daily' }],
+                    [{ text: '🚖 كلاهما (مشاوير قصيرة وخطوط دائمة)', callback_data: 'driver_set_both' }]
+                ]
+            );
+            break;
+        }
         case 'contact_admin': {
             const cfg = db.memoryState.appConfig || {};
             const tgLink = cfg.telegramAdminLink || 'https://t.me/tawseela_iq_bot';
@@ -508,10 +665,16 @@ async function handleMessage(chatId, text, user) {
                 db.saveStateSnapshot();
                 db.persistTelegramChatId('Customer', customer.customerId, chatId).catch(()=>{});
                 const token = 'jwt_customer_' + customer.customerId;
-                await sendKeyboard(chatId, `✅ تم الدخول كراكب!\n👤 ${customer.fullName}\n\nيمكنك الآن استعراض السائقين القريبين:`, [
-                    [{ text: '🗺️ السائقون القريبون', callback_data: 'nearby_drivers' }],
-                    [{ text: '🚗 افتح التطبيق', url: 'https://tawseelaiq.app/?login_token=' + encodeURIComponent(token) + '&userId=' + encodeURIComponent(customer.customerId) + '&role=Customer&fullName=' + encodeURIComponent(customer.fullName) }]
-                ]);
+                await sendKeyboard(chatId,
+                    `✅ <b>تم تسجيل الدخول كراكب بنجاح!</b>\n👤 مرحباً بك: <b>${customer.fullName}</b>\n\nيرجى تحديد نوع المشوار للمتابعة:`,
+                    [
+                        [
+                            { text: '⚡ مشوار قصير', callback_data: 'passenger_trip_short' },
+                            { text: '🔄 خط دائم', callback_data: 'passenger_trip_daily' }
+                        ],
+                        [{ text: '🚗 افتح التطبيق مباشرة', url: 'https://tawseelaiq.app/?login_token=' + encodeURIComponent(token) + '&userId=' + encodeURIComponent(customer.customerId) + '&role=Customer&fullName=' + encodeURIComponent(customer.fullName) }]
+                    ]
+                );
             } else if (driver) {
                 driver.telegramChatId = String(chatId);
                 db.saveStateSnapshot();
@@ -528,8 +691,14 @@ async function handleMessage(chatId, text, user) {
                         `سيتم التفعيل بعد مراجعة الإدارة في لوحة التحكم.`
                     );
                 } else {
-                    const token = 'jwt_driver_' + driver.driverId;
-                    await sendMessage(chatId, `✅ تم الدخول كسائق!\n👤 ${driver.fullName}\n\n🔗 افتح التطبيق:\nhttps://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driver.driverId)}&role=Driver&fullName=${encodeURIComponent(driver.fullName)}`);
+                    await sendKeyboard(chatId,
+                        `✅ <b>تم تسجيل الدخول كسائق بنجاح!</b>\n👤 مرحباً بك الكابتن: <b>${driver.fullName}</b>\n\nيرجى تحديد نوع المشاوير التي ترغب بتقديمها:`,
+                        [
+                            [{ text: '⚡ مشاوير قصيرة', callback_data: 'driver_set_short' }],
+                            [{ text: '🔄 خطوط دائمة', callback_data: 'driver_set_daily' }],
+                            [{ text: '🚖 كلاهما (مشاوير قصيرة وخطوط دائمة)', callback_data: 'driver_set_both' }]
+                        ]
+                    );
                 }
             } else {
                 await sendMessage(chatId, '❌ لا يوجد حساب بهذا الرقم. سجّل أولاً عبر /start');

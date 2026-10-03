@@ -312,14 +312,16 @@ class AuthController {
     </div>
 
     <!-- Trip type selection (shown after login, before opening app) -->
-    <div id="trip-type-modal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center">
-        <div class="card" style="max-width:380px;width:92%;margin:0 auto;padding:28px 20px">
-            <div style="text-align:center;margin-bottom:20px">
-                <div style="font-size:32px;margin-bottom:8px">🚕</div>
-                <h2 style="font-size:18px;font-weight:900;margin:0 0 4px;color:#111">اختر نوع الرحلة</h2>
-                <p style="font-size:13px;color:#6b7280;margin:0">حدد ما يناسبك قبل فتح التطبيق</p>
+    <div id="trip-type-modal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;padding:16px">
+        <div class="card" style="max-width:420px;width:100%;margin:0 auto;padding:24px 20px;max-height:90vh;overflow-y:auto;box-sizing:border-box">
+            <div style="text-align:center;margin-bottom:18px">
+                <div id="trip-modal-icon" style="font-size:32px;margin-bottom:6px">🚕</div>
+                <h2 id="trip-modal-title" style="font-size:18px;font-weight:900;margin:0 0 4px;color:#111">اختر نوع الرحلة</h2>
+                <p id="trip-modal-subtitle" style="font-size:13px;color:#6b7280;margin:0">حدد ما يناسبك قبل فتح التطبيق</p>
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+
+            <!-- Passenger Options (2 cards) -->
+            <div id="passenger-trip-options" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
                 <div class="trip-card" id="trip-short" onclick="selectTripType('short')">
                     <div style="font-size:28px;margin-bottom:8px">⚡</div>
                     <div style="font-size:14px;font-weight:900;margin-bottom:4px">مشوار قصير</div>
@@ -331,7 +333,41 @@ class AuthController {
                     <div style="font-size:12px;color:#6b7280">اشتراك يومي على مسار ثابت</div>
                 </div>
             </div>
-            <button class="btn-primary" id="btn-open-app" onclick="confirmTripTypeAndOpen()" disabled style="opacity:0.5">
+
+            <!-- Short trip drivers preview container (appears when passenger selects short trip) -->
+            <div id="passenger-short-drivers-box" style="display:none;margin-bottom:16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:12px">
+                <div style="font-size:12px;font-weight:800;color:#1f2937;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+                    <span>⚡</span><span>السائقون المسجلون كمشوار قصير والقريبون منك:</span>
+                </div>
+                <div id="passenger-short-drivers-list" style="max-height:180px;overflow-y:auto"></div>
+            </div>
+
+            <!-- Driver Options (3 cards) -->
+            <div id="driver-trip-options" style="display:none;grid-template-columns:1fr;gap:10px;margin-bottom:16px">
+                <div class="trip-card" id="drv-opt-short" onclick="selectDriverServiceType('ShortTrip')" style="text-align:right;padding:12px 14px;display:flex;align-items:center;gap:12px">
+                    <div style="font-size:26px">⚡</div>
+                    <div>
+                        <div style="font-size:14px;font-weight:900">مشاوير قصيرة</div>
+                        <div style="font-size:11px;color:#6b7280">استقبال طلبات الرحلات الفورية السريعة</div>
+                    </div>
+                </div>
+                <div class="trip-card" id="drv-opt-daily" onclick="selectDriverServiceType('PermanentLine')" style="text-align:right;padding:12px 14px;display:flex;align-items:center;gap:12px">
+                    <div style="font-size:26px">🔄</div>
+                    <div>
+                        <div style="font-size:14px;font-weight:900">خطوط دائمة</div>
+                        <div style="font-size:11px;color:#6b7280">الاشتراكات اليومية والمسارات الثابتة للدوام والجامعة</div>
+                    </div>
+                </div>
+                <div class="trip-card" id="drv-opt-both" onclick="selectDriverServiceType('Both')" style="text-align:right;padding:12px 14px;display:flex;align-items:center;gap:12px">
+                    <div style="font-size:26px">🚖</div>
+                    <div>
+                        <div style="font-size:14px;font-weight:900">كلاهما</div>
+                        <div style="font-size:11px;color:#6b7280">تقديم المشاوير القصيرة والخطوط الدائمة معاً</div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn-primary" id="btn-open-app" onclick="confirmTripTypeAndOpen()" disabled style="opacity:0.5;width:100%">
                 متابعة وفتح التطبيق
             </button>
             <button type="button" onclick="closeTripTypeModal()" style="margin-top:10px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;color:#6b7280;cursor:pointer;width:100%">
@@ -813,33 +849,173 @@ class AuthController {
         // ===== Trip type modal (after login) =====
         var _pendingAppParams = null;
         var selectedTripType = null;
+        var selectedDriverServiceType = null;
+
         function selectTripType(type) {
             selectedTripType = type;
-            document.getElementById('trip-short').className = type === 'short' ? 'trip-card selected' : 'trip-card';
-            document.getElementById('trip-daily').className = type === 'daily' ? 'trip-card selected' : 'trip-card';
+            var cShort = document.getElementById('trip-short');
+            var cDaily = document.getElementById('trip-daily');
+            if (cShort) cShort.className = (type === 'short') ? 'trip-card selected' : 'trip-card';
+            if (cDaily) cDaily.className = (type === 'daily') ? 'trip-card selected' : 'trip-card';
+            var btn = document.getElementById('btn-open-app');
+            if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+
+            var nearbyBox = document.getElementById('passenger-short-drivers-box');
+            if (type === 'short') {
+                if (nearbyBox) {
+                    nearbyBox.style.display = 'block';
+                    loadNearbyShortDrivers();
+                }
+            } else {
+                if (nearbyBox) {
+                    nearbyBox.style.display = 'none';
+                }
+            }
+        }
+
+        function selectDriverServiceType(type) {
+            selectedDriverServiceType = type;
+            var btnShort = document.getElementById('drv-opt-short');
+            var btnDaily = document.getElementById('drv-opt-daily');
+            var btnBoth = document.getElementById('drv-opt-both');
+            if (btnShort) btnShort.className = (type === 'ShortTrip') ? 'trip-card selected' : 'trip-card';
+            if (btnDaily) btnDaily.className = (type === 'PermanentLine') ? 'trip-card selected' : 'trip-card';
+            if (btnBoth) btnBoth.className = (type === 'Both') ? 'trip-card selected' : 'trip-card';
             var btn = document.getElementById('btn-open-app');
             if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
         }
-        function confirmTripTypeAndOpen() {
+
+        async function loadNearbyShortDrivers() {
+            var container = document.getElementById('passenger-short-drivers-list');
+            if (!container) return;
+            container.innerHTML = '<div style="text-align:center;padding:12px;color:#6b7280;font-size:12px"><i class="fa-solid fa-circle-notch fa-spin"></i> جاري البحث عن السائقين القريبين للمشاوير القصيرة...</div>';
+
+            var lat = 31.9961;
+            var lon = 44.3168;
+            if (navigator.geolocation) {
+                try {
+                    var pos = await new Promise(function(resolve, reject){
+                        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3500 });
+                    });
+                    if (pos && pos.coords) {
+                        lat = pos.coords.latitude;
+                        lon = pos.coords.longitude;
+                    }
+                } catch(_) {}
+            }
+
+            try {
+                var res = await fetch('/api/drivers/nearby?tripType=short&lat=' + lat + '&lon=' + lon);
+                var drivers = await res.json();
+                if (!Array.isArray(drivers) || drivers.length === 0) {
+                    container.innerHTML = '<div style="background:#fff;border:1px dashed #d1d5db;border-radius:10px;padding:12px;text-align:center;font-size:12px;color:#6b7280">🚕 لا يوجد سائقون قريبون للمشاوير القصيرة حالياً في نطاقك.<br><span style="font-size:11px;color:#9ca3af">يمكنك المتابعة وسيتم تنبيه السائقين فور توفرهم.</span></div>';
+                    return;
+                }
+
+                var html = '';
+                drivers.slice(0, 6).forEach(function(d) {
+                    var name = d.driverName || d.fullName || 'كابتن توصيله';
+                    var vehicle = d.vehicleInfo || d.carModel || 'تويوتا كورولا';
+                    var dist = (d.distanceKm !== undefined ? d.distanceKm.toFixed(1) + ' كم' : 'قريب منك');
+                    var phone = d.phone || d.phoneNumber || '';
+                    var waNum = phone.replace(/[^0-9]/g, '').replace(/^07/, '9647');
+                    
+                    html += '<div style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:9px 12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;text-align:right">' +
+                        '<div>' +
+                            '<div style="font-weight:800;font-size:13px;color:#111;display:flex;align-items:center;gap:6px">' +
+                                '<span>🚕</span><span>' + name + '</span>' +
+                                '<span style="background:#e0f2fe;color:#0369a1;font-size:10px;padding:2px 6px;border-radius:6px;font-weight:700">⚡ مشوار قصير</span>' +
+                            '</div>' +
+                            '<div style="font-size:11px;color:#6b7280;margin-top:2px">' + vehicle + ' • 📍 ' + dist + '</div>' +
+                        '</div>' +
+                        '<div style="display:flex;gap:6px">' +
+                            (waNum ? '<a href="https://wa.me/' + waNum + '" target="_blank" style="background:#25D366;color:#fff;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:4px">واتساب</a>' : '') +
+                        '</div>' +
+                    '</div>';
+                });
+                container.innerHTML = html;
+            } catch(e) {
+                container.innerHTML = '<div style="font-size:12px;color:#ef4444;text-align:center;padding:8px">تعذر جلب السائقين القريبين حالياً. اضغط متابعة لفتح التطبيق.</div>';
+            }
+        }
+
+        async function confirmTripTypeAndOpen() {
             if (!_pendingAppParams) return;
             var modal = document.getElementById('trip-type-modal');
-            if (modal) modal.style.display = 'none';
             var p = _pendingAppParams;
-            // Store trip type in localStorage for flutter app
-            try {
-                localStorage.setItem('selected_trip_type', selectedTripType || 'short');
-                localStorage.setItem('flutter.selected_trip_type', JSON.stringify(selectedTripType || 'short'));
-            } catch(_) {}
+            var isDriver = (p.role === 'Driver' || p.role === 'driver');
+            
+            if (isDriver) {
+                var sType = selectedDriverServiceType || 'Both';
+                try {
+                    localStorage.setItem('driver_service_type', sType);
+                    localStorage.setItem('flutter.driver_service_type', JSON.stringify(sType));
+                    await fetch('/api/driver/service-type', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ driverId: p.userId, serviceType: sType })
+                    });
+                } catch(_) {}
+            } else {
+                try {
+                    localStorage.setItem('selected_trip_type', selectedTripType || 'short');
+                    localStorage.setItem('flutter.selected_trip_type', JSON.stringify(selectedTripType || 'short'));
+                } catch(_) {}
+            }
+            if (modal) modal.style.display = 'none';
             openAppView(p.token, p.userId, p.role, p.fullName);
         }
 
         function showTripTypeModal(token, userId, role, fullName) {
             _pendingAppParams = { token, userId, role, fullName };
-            selectedTripType = null;
-            document.getElementById('trip-short').className = 'trip-card';
-            document.getElementById('trip-daily').className = 'trip-card';
+            var isDriver = (role === 'Driver' || role === 'driver');
+            
+            var modalIcon = document.getElementById('trip-modal-icon');
+            var modalTitle = document.getElementById('trip-modal-title');
+            var modalSubtitle = document.getElementById('trip-modal-subtitle');
+            var passContainer = document.getElementById('passenger-trip-options');
+            var drvContainer = document.getElementById('driver-trip-options');
+            var nearbyBox = document.getElementById('passenger-short-drivers-box');
             var btn = document.getElementById('btn-open-app');
-            if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+
+            if (nearbyBox) nearbyBox.style.display = 'none';
+
+            if (isDriver) {
+                selectedDriverServiceType = null;
+                if (modalIcon) modalIcon.textContent = '🚖';
+                if (modalTitle) modalTitle.textContent = 'نوع المشاوير التي تقدمها';
+                if (modalSubtitle) modalSubtitle.textContent = 'اختر نمط عملك المفضل في توصيلة كابتن';
+                if (passContainer) passContainer.style.display = 'none';
+                if (drvContainer) drvContainer.style.display = 'grid';
+                var btnShort = document.getElementById('drv-opt-short');
+                var btnDaily = document.getElementById('drv-opt-daily');
+                var btnBoth = document.getElementById('drv-opt-both');
+                if (btnShort) btnShort.className = 'trip-card';
+                if (btnDaily) btnDaily.className = 'trip-card';
+                if (btnBoth) btnBoth.className = 'trip-card';
+                if (btn) {
+                    btn.textContent = 'متابعة ودخول لوحة السائق';
+                    btn.disabled = true;
+                    btn.style.opacity = '0.5';
+                }
+            } else {
+                selectedTripType = null;
+                if (modalIcon) modalIcon.textContent = '🚕';
+                if (modalTitle) modalTitle.textContent = 'اختر نوع الرحلة';
+                if (modalSubtitle) modalSubtitle.textContent = 'حدد ما يناسبك قبل فتح التطبيق';
+                if (drvContainer) drvContainer.style.display = 'none';
+                if (passContainer) passContainer.style.display = 'grid';
+                var cShort = document.getElementById('trip-short');
+                var cDaily = document.getElementById('trip-daily');
+                if (cShort) cShort.className = 'trip-card';
+                if (cDaily) cDaily.className = 'trip-card';
+                if (btn) {
+                    btn.textContent = 'متابعة وفتح التطبيق';
+                    btn.disabled = true;
+                    btn.style.opacity = '0.5';
+                }
+            }
+
             var modal = document.getElementById('trip-type-modal');
             if (modal) { modal.style.display = 'flex'; }
         }
@@ -1652,7 +1828,9 @@ class AuthController {
             var frame=document.getElementById('app-frame');
             if(!container||!frame) return;
             var targetHash=(role==='Driver'||role==='driver') && !forceMap ?'/driver':'/customer';
-            var targetUrl='/app-view/#'+targetHash+'?login_token='+encodeURIComponent(token)+'&userId='+encodeURIComponent(userId)+'&role='+encodeURIComponent(role)+'&fullName='+encodeURIComponent(fullName);
+            var tripTypeParam = selectedTripType ? '&tripType=' + encodeURIComponent(selectedTripType) : '';
+            var serviceTypeParam = selectedDriverServiceType ? '&serviceType=' + encodeURIComponent(selectedDriverServiceType) : '';
+            var targetUrl='/app-view/#'+targetHash+'?login_token='+encodeURIComponent(token)+'&userId='+encodeURIComponent(userId)+'&role='+encodeURIComponent(role)+'&fullName='+encodeURIComponent(fullName)+tripTypeParam+serviceTypeParam;
             frame.src=targetUrl;
             container.style.display='block';
             document.body.style.overflow='hidden';

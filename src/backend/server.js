@@ -1208,39 +1208,107 @@ async function startServer() {
         if (pathname === '/api/admin/fleet/live' || pathname === '/api/drivers/nearby') {
             const lat = parseFloat(parsedUrl.searchParams.get('lat') || config.najafDefaults.latitude);
             const lon = parseFloat(parsedUrl.searchParams.get('lon') || config.najafDefaults.longitude);
+            const tripType = parsedUrl.searchParams.get('tripType'); // 'short' or 'daily'
             
-            const activeDrivers = db.memoryState.drivers
+            const toRad = (deg) => deg * Math.PI / 180;
+            const haversine = (lat1, lon1, lat2, lon2) => {
+                const R = 6371;
+                const dLat = toRad(lat2 - lat1);
+                const dLon = toRad(lon2 - lon1);
+                const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
+                return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            };
+
+            const activeDrivers = (db.memoryState.drivers || [])
                 .filter(d => !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' && (d.isVerified === true || d.status === 'Approved' || d.status === 'Active'))
-                .map((d, idx) => ({
-                    driverId: d.driverId,
-                    driverName: d.fullName || 'كابتن توصيله',
-                    fullName: d.fullName || 'كابتن توصيله',
-                    phone: d.phoneNumber || '07800000000',
-                    phoneNumber: d.phoneNumber || '07800000000',
-                    rating: d.ratingAverage || 5.0,
-                    vehicleInfo: `${d.vehicleMake || 'تويوتا'} ${d.vehicleModel || 'كورولا'} (${d.vehiclePlate || 'النجف'})`,
-                    carModel: d.vehicleMake ? `${d.vehicleMake} ${d.vehicleModel || ''}` : 'تويوتا كورولا',
-                    plateNumber: d.vehiclePlate || 'النجف',
-                    latitude: d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : (lat + (idx % 2 === 0 ? 0.003 * (idx + 1) : -0.003 * (idx + 1)))),
-                    longitude: d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : (lon + (idx % 2 === 0 ? 0.002 * (idx + 1) : -0.002 * (idx + 1)))),
-                    heading: d.heading || (idx * 45) % 360,
-                    status: d.tripStatus || 'Online',
-                    speedKmh: d.speedKmh || Math.floor(25 + Math.random() * 30)
-                }));
+                .filter(d => {
+                    if (tripType === 'short') {
+                        return d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType;
+                    }
+                    if (tripType === 'daily') {
+                        return d.serviceType === 'PermanentLine' || d.serviceType === 'Both' || !d.serviceType;
+                    }
+                    return true;
+                })
+                .map((d, idx) => {
+                    const dLat = d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : (lat + (idx % 2 === 0 ? 0.003 * (idx + 1) : -0.003 * (idx + 1))));
+                    const dLon = d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : (lon + (idx % 2 === 0 ? 0.002 * (idx + 1) : -0.002 * (idx + 1))));
+                    const distanceKm = haversine(lat, lon, dLat, dLon);
+                    const vMake = d.vehicleMake || (d.vehicle ? d.vehicle.make : 'تويوتا');
+                    const vModel = d.vehicleModel || (d.vehicle ? (d.vehicle.model || '') : 'كورولا');
+                    const vPlate = d.vehiclePlate || (d.vehicle ? (d.vehicle.plateNumber || d.vehicle.plate) : 'النجف');
+                    return {
+                        driverId: d.driverId,
+                        driverName: d.fullName || 'كابتن توصيله',
+                        fullName: d.fullName || 'كابتن توصيله',
+                        phone: d.phoneNumber || '07800000000',
+                        phoneNumber: d.phoneNumber || '07800000000',
+                        rating: d.ratingAverage || 5.0,
+                        serviceType: d.serviceType || 'Both',
+                        vehicleInfo: `${vMake} ${vModel} (${vPlate})`.trim(),
+                        carModel: `${vMake} ${vModel}`.trim(),
+                        plateNumber: vPlate,
+                        latitude: dLat,
+                        longitude: dLon,
+                        distanceKm: Math.round(distanceKm * 10) / 10,
+                        heading: d.heading || (idx * 45) % 360,
+                        status: d.tripStatus || 'Online',
+                        speedKmh: d.speedKmh || Math.floor(25 + Math.random() * 30)
+                    };
+                })
+                .sort((a, b) => a.distanceKm - b.distanceKm);
 
             return sendJson(activeDrivers);
         }
 
         if (pathname === '/api/fleet/active-drivers') {
+            const tripType = parsedUrl.searchParams.get('tripType');
             const activeDrivers = (db.memoryState.drivers || [])
                 .filter(d => !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' && (d.isVerified === true || d.status === 'Approved' || d.status === 'Active'))
+                .filter(d => {
+                    if (tripType === 'short') {
+                        return d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType;
+                    }
+                    if (tripType === 'daily') {
+                        return d.serviceType === 'PermanentLine' || d.serviceType === 'Both' || !d.serviceType;
+                    }
+                    return true;
+                })
                 .map(d => ({
                     id: d.driverId,
                     name: d.fullName,
+                    phone: d.phoneNumber,
+                    serviceType: d.serviceType || 'Both',
                     lat: d.currentLat ? parseFloat(d.currentLat) : 32.025,
                     lon: d.currentLon ? parseFloat(d.currentLon) : 44.33
                 }));
             return sendJson({ success: true, drivers: activeDrivers });
+        }
+
+        // Driver Service Type Selection (ShortTrip / PermanentLine / Both)
+        if (pathname === '/api/driver/service-type' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const { driverId, serviceType } = body;
+                const validTypes = ['ShortTrip', 'PermanentLine', 'Both'];
+                if (!driverId || !validTypes.includes(serviceType)) {
+                    return sendJson({ success: false, error: 'driverId and valid serviceType required' }, 400);
+                }
+                const driver = (db.memoryState.drivers || []).find(d => d.driverId === driverId);
+                if (driver) {
+                    driver.serviceType = serviceType;
+                    db.saveStateSnapshot();
+                    try {
+                        if (db.query) {
+                            await db.query(`UPDATE drivers SET service_type = $1 WHERE driver_id = $2`, [serviceType, driverId]);
+                        }
+                    } catch (_) {}
+                    return sendJson({ success: true, driverId, serviceType: driver.serviceType });
+                }
+                return sendJson({ success: false, error: 'Driver not found' }, 404);
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
         }
 
         // Driver Live Location Update Broadcast
