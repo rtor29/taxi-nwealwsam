@@ -391,25 +391,23 @@ class AuthController {
                 <span style="font-size:26px;">🚕</span>
                 <div>
                     <div style="font-size:15px;font-weight:900;line-height:1.2;">توصيلة النجف</div>
-                    <div style="font-size:11px;color:#9ca3af;">مشاوير قصيرة وخطوط دائمة</div>
+                    <div style="font-size:11px;color:#9ca3af;">تثبيت المسار وإدارة طلبات الانضمام</div>
                 </div>
             </div>
 
-            <!-- Tabs: Short Trip / Permanent Line / Driver Console -->
+            <!-- Tabs: ثبت مسارك / إدارة طلبات الانضمام -->
             <div style="display:flex;background:#1f2937;padding:3px;border-radius:10px;gap:4px;">
-                <button id="book-tab-short" type="button" onclick="switchBookingTab('short')" style="background:#f59e0b;color:#111;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;">
-                    ⚡ مشوار قصير
+                <button id="book-tab-set-route" type="button" onclick="switchRouteTab('set-route')" style="background:#2563eb;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;">
+                    🛣️ ثبت مسارك
                 </button>
-                <button id="book-tab-daily" type="button" onclick="switchBookingTab('daily')" style="background:transparent;color:#d1d5db;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
-                    🔄 خط دائمي
-                </button>
-                <button id="book-tab-driver" type="button" onclick="switchBookingTab('driver')" style="background:transparent;color:#d1d5db;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
-                    🚖 واجهة الكابتن
+                <button id="book-tab-join-requests" type="button" onclick="switchRouteTab('join-requests')" style="background:transparent;color:#d1d5db;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
+                    🙋 إدارة طلبات الانضمام
                 </button>
             </div>
 
-            <button type="button" onclick="closeBookingApp()" style="background:#374151;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
-                ✕ إغلاق
+            <!-- Fast Exit X Button (اعلى نافذة الخريطة للإغلاق السريع) -->
+            <button type="button" onclick="closeBookingApp()" style="background:#ef4444;color:#fff;border:none;border-radius:50%;width:38px;height:38px;font-size:18px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(239,68,68,0.4);" title="إغلاق سريع (X)">
+                ✕
             </button>
         </header>
 
@@ -418,7 +416,9 @@ class AuthController {
             <!-- SIDEBAR PANEL (DRAWER: ON RIGHT IN RTL, ON TOP IN PHONES/COLUMN) -->
             <div id="booking-sidebar" style="width:390px;max-width:100%;background:#ffffff;border-left:1.5px solid #e2e8f0;overflow-y:auto;display:flex;flex-direction:column;padding:16px;gap:14px;box-shadow:-2px 0 10px rgba(0,0,0,0.05);flex-shrink:0;z-index:15;">
                 <!-- Panel content will be dynamically rendered or toggled -->
-                <div id="sidebar-panel-short" style="display:flex;flex-direction:column;gap:12px;"></div>
+                <div id="sidebar-panel-set-route" style="display:flex;flex-direction:column;gap:12px;"></div>
+                <div id="sidebar-panel-join-requests" style="display:none;flex-direction:column;gap:12px;"></div>
+                <div id="sidebar-panel-short" style="display:none;flex-direction:column;gap:12px;"></div>
                 <div id="sidebar-panel-daily" style="display:none;flex-direction:column;gap:12px;"></div>
                 <div id="sidebar-panel-driver" style="display:none;flex-direction:column;gap:12px;"></div>
             </div>
@@ -714,16 +714,15 @@ class AuthController {
                 <span style="font-size:12px;font-weight:700;color:#6b7280">الحالة:</span>
                 <span style="font-size:12px;font-weight:900;color:#15803d">✅ نشط ومعتمد</span>
             </div>
-            <button type="button" onclick="openUserAppNow()" class="btn-primary" style="margin-top:12px;padding:11px 14px;font-size:13px">
-                <i class="fa-solid fa-play" aria-hidden="true"></i> متابعة وفتح تطبيق الرحلات
-            </button>
-            <div id="driver-route-btn-wrap" style="display:none;margin-top:8px">
-                <button type="button" onclick="openBookingApp('driver')" class="btn-primary" style="margin-bottom:8px;padding:12px 14px;font-size:13px;background:linear-gradient(135deg,#111827,#1f2937);display:flex;align-items:center;justify-content:center;gap:8px">
-                    <span>🗺️</span> <span>خريطة حجز التكسي والخطوط المباشرة (Mapbox)</span>
-                </button>
-                <button type="button" onclick="showDriverSetRouteFromBox()" class="btn-primary" style="padding:10px 14px;font-size:12px;background:#3b82f6">
-                    🛣️ تثبيت مسارك وإدارة طلبات الانضمام
-                </button>
+            <div id="driver-route-btn-wrap" style="display:none;margin-top:12px">
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <button type="button" onclick="openRouteApp('set-route')" class="btn-primary" style="padding:12px 14px;font-size:13px;background:linear-gradient(135deg,#2563eb,#1d4ed8);display:flex;align-items:center;justify-content:center;gap:8px;">
+                        <span>🛣️</span> <span>ثبت مسارك (على الخريطة)</span>
+                    </button>
+                    <button type="button" onclick="openRouteApp('join-requests')" class="btn-primary" style="padding:12px 14px;font-size:13px;background:linear-gradient(135deg,#059669,#047857);display:flex;align-items:center;justify-content:center;gap:8px;">
+                        <span>🙋</span> <span>إدارة طلبات الانضمام</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -1311,18 +1310,13 @@ class AuthController {
         };
 
         window.openUserAppNow = function() {
-            var token = localStorage.getItem('auth_token');
-            var userId = localStorage.getItem('user_id') || 'usr-current';
             var role = localStorage.getItem('user_role') || 'Customer';
-            var fullName = localStorage.getItem('user_fullname') || (role === 'Driver' ? 'كابتن توصيله' : 'راكب توصيله');
             var status = localStorage.getItem('driver_status') || '';
             if (role === 'Driver' && (status === 'Pending' || status === 'Rejected')) {
                 alert('⚠️ حسابك معلّق بانتظار التوثيق من قبل إدارة المنصة.\\nيرجى إرسال المستمسكات عبر الواتساب أو التيليجرام للاعتماد.');
                 return;
             }
-            if (token) {
-                showTripTypeModal(token, userId, role, fullName);
-            }
+            openRouteApp('set-route');
         };
 
         // ===== Captain Login =====
@@ -2141,18 +2135,15 @@ class AuthController {
                         if (nameEl) nameEl.textContent = fullName;
                         if (roleEl) roleEl.textContent = role === 'Driver' ? 'كابتن معتمد' : 'راكب';
                         // Feature 5: Show driver route button
-                        if (role === 'Driver') {
-                            var drBtnWrap = document.getElementById('driver-route-btn-wrap');
-                            if (drBtnWrap) drBtnWrap.style.display = 'block';
-                        }
+                        var drBtnWrap = document.getElementById('driver-route-btn-wrap');
+                        if (drBtnWrap) drBtnWrap.style.display = 'block';
                     }
                 }
             } catch (_) {}
         }
 
         window.showDriverSetRouteFromBox = function() {
-            var driverId = localStorage.getItem('user_id') || '';
-            showDriverSetRoute(driverId);
+            openRouteApp('set-route');
         };
 
         window.handleLogout = function() {
@@ -2522,13 +2513,18 @@ class AuthController {
         var bPermDays = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء'];
         var bDriverOnline = false, bDriverWatchId = null, bDriverIncomingTimer = null, bDriverReqTimer = null;
 
+        window.openRouteApp = function(tab) {
+            window.openBookingApp(tab || 'set-route');
+        };
+
         window.openBookingApp = async function(tab) {
             var modal = document.getElementById('booking-modal-view');
             if (!modal) return;
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
-            if (tab) bActiveTab = tab;
-            window.switchBookingTab(bActiveTab);
+            var targetTab = (tab === 'join-requests' || tab === 'requests') ? 'join-requests' : 'set-route';
+            bActiveTab = targetTab;
+            window.switchRouteTab(bActiveTab);
 
             if (typeof mapboxgl === 'undefined' && window.loadMapboxDynamically) {
                 await window.loadMapboxDynamically();
@@ -2550,35 +2546,344 @@ class AuthController {
             if (bDriversPollTimer) clearInterval(bDriversPollTimer);
         };
 
-        window.switchBookingTab = function(tab) {
+        window.switchRouteTab = function(tab) {
             bActiveTab = tab;
-            var tShort = document.getElementById('book-tab-short');
-            var tDaily = document.getElementById('book-tab-daily');
-            var tDriver = document.getElementById('book-tab-driver');
+            var tSet = document.getElementById('book-tab-set-route');
+            var tJoin = document.getElementById('book-tab-join-requests');
+            var pSet = document.getElementById('sidebar-panel-set-route');
+            var pJoin = document.getElementById('sidebar-panel-join-requests');
             var pShort = document.getElementById('sidebar-panel-short');
             var pDaily = document.getElementById('sidebar-panel-daily');
             var pDriver = document.getElementById('sidebar-panel-driver');
 
-            [tShort, tDaily, tDriver].forEach(function(b) {
-                if (b) { b.style.background = 'transparent'; b.style.color = '#d1d5db'; b.style.fontWeight = '700'; }
-            });
-            [pShort, pDaily, pDriver].forEach(function(p) { if (p) p.style.display = 'none'; });
+            if (pShort) pShort.style.display = 'none';
+            if (pDaily) pDaily.style.display = 'none';
+            if (pDriver) pDriver.style.display = 'none';
 
-            if (tab === 'short') {
-                if (tShort) { tShort.style.background = '#f59e0b'; tShort.style.color = '#111'; tShort.style.fontWeight = '900'; }
-                if (pShort) pShort.style.display = 'flex';
-                renderShortTripSidebar();
-            } else if (tab === 'daily') {
-                if (tDaily) { tDaily.style.background = '#f59e0b'; tDaily.style.color = '#111'; tDaily.style.fontWeight = '900'; }
-                if (pDaily) pDaily.style.display = 'flex';
-                renderDailyTripSidebar();
-                loadPassengerPermanentRoutes();
-            } else if (tab === 'driver') {
-                if (tDriver) { tDriver.style.background = '#f59e0b'; tDriver.style.color = '#111'; tDriver.style.fontWeight = '900'; }
-                if (pDriver) pDriver.style.display = 'flex';
-                renderDriverSidebar();
+            if (tSet) {
+                tSet.style.background = tab === 'set-route' ? '#2563eb' : 'transparent';
+                tSet.style.color = tab === 'set-route' ? '#fff' : '#d1d5db';
+                tSet.style.fontWeight = tab === 'set-route' ? '900' : '700';
             }
-            if (bMap) setTimeout(function() { bMap.resize(); }, 100);
+            if (tJoin) {
+                tJoin.style.background = tab === 'join-requests' ? '#059669' : 'transparent';
+                tJoin.style.color = tab === 'join-requests' ? '#fff' : '#d1d5db';
+                tJoin.style.fontWeight = tab === 'join-requests' ? '900' : '700';
+            }
+
+            if (pSet) pSet.style.display = tab === 'set-route' ? 'flex' : 'none';
+            if (pJoin) pJoin.style.display = tab === 'join-requests' ? 'flex' : 'none';
+
+            if (tab === 'set-route') {
+                renderSetRouteSidebar();
+            } else if (tab === 'join-requests') {
+                renderJoinRequestsSidebar();
+            }
+            if (bMap) setTimeout(function() { bMap.resize(); }, 150);
+        };
+
+        window.switchBookingTab = function(tab) {
+            if (tab === 'join-requests' || tab === 'driver') window.switchRouteTab('join-requests');
+            else window.switchRouteTab('set-route');
+        };
+
+        function renderSetRouteSidebar() {
+            var panel = document.getElementById('sidebar-panel-set-route');
+            if (!panel) return;
+            var role = localStorage.getItem('user_role') || 'Customer';
+            var isDriver = (role === 'Driver' || role === 'driver');
+
+            panel.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px;">🛣️ تثبيت مسارك على الخريطة</div>' +
+                '<p style="font-size:12px;color:#6b7280;margin:0 0 10px;">انقر على الخريطة أو ابحث لتحديد نقطة الانطلاق والوصول:</p>' +
+                '<div style="position:relative;margin-bottom:8px;">' +
+                    '<label class="label" style="font-size:11px;">🟢 نقطة الانطلاق</label>' +
+                    '<div style="display:flex;gap:6px;">' +
+                        '<input type="text" id="book-pickup-input" class="inp" placeholder="حدد الانطلاق على الخريطة أو عبر GPS" value="' + (bPickupName||'') + '" style="font-size:12px;padding:9px 12px;">' +
+                        '<button type="button" onclick="centerOnUserGps()" class="btn-small" style="padding:8px 10px;" title="موقعي الحالي">📍</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div style="position:relative;margin-bottom:10px;">' +
+                    '<label class="label" style="font-size:11px;">🔴 نقطة الوصول</label>' +
+                    '<input type="text" id="book-dropoff-input" class="inp" placeholder="ابحث: جامعة الكوفة، مركز النجف، شارع الروان..." value="' + (bDropoffName||'') + '" oninput="onBookingDropoffSearch(this.value)" style="font-size:12px;padding:9px 12px;">' +
+                    '<div id="book-dropoff-results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;"></div>' +
+                '</div>' +
+                '<div id="side-route-summary" style="display:' + (bRouteDist > 0 ? 'block' : 'none') + ';background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px;margin-bottom:10px;">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+                        '<span style="font-weight:900;color:#111;">معلومات المسار:</span>' +
+                        '<span style="font-weight:900;color:#059669;font-size:14px;">' + (bRouteFare||0).toLocaleString() + ' د.ع</span>' +
+                    '</div>' +
+                    '<div style="font-size:11px;color:#64748b;display:flex;gap:12px;">' +
+                        '<span>📏 ' + bRouteDist + ' كم</span>' +
+                        '<span>⏱️ ' + bRouteDur + ' دقيقة</span>' +
+                    '</div>' +
+                '</div>' +
+                '<button type="button" id="btn-save-route-db" onclick="saveUserRouteToDatabase()" class="btn-primary" style="background:#111827;font-size:13px;padding:12px;display:flex;align-items:center;justify-content:center;gap:8px;">' +
+                    '<span>📌</span> <span>تثبيت المسار في قاعدة البيانات</span>' +
+                '</button>' +
+                (!isDriver ? 
+                    '<div style="margin-top:14px;">' +
+                        '<div style="font-size:12px;font-weight:800;color:#374151;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">' +
+                            '<span>السائقون القريبون المطابقون لمسارك:</span>' +
+                            '<button type="button" onclick="loadMatchingDriversForPassenger()" style="background:none;border:none;color:#2563eb;font-size:11px;cursor:pointer;">تحديث 🔄</button>' +
+                        '</div>' +
+                        '<div id="passenger-matching-drivers-list" style="display:flex;flex-direction:column;gap:8px;"></div>' +
+                    '</div>' : '');
+
+            if (!isDriver) {
+                loadMatchingDriversForPassenger();
+            }
+        }
+
+        window.saveUserRouteToDatabase = async function() {
+            if (!bPickupCoords || !bDropoffCoords) {
+                alert('⚠️ يرجى تحديد نقطة الانطلاق ونقطة الوصول على الخريطة أولاً');
+                return;
+            }
+            var userId = localStorage.getItem('user_id') || 'usr-current';
+            var role = localStorage.getItem('user_role') || 'Customer';
+            var isDriver = (role === 'Driver' || role === 'driver');
+            var fullName = localStorage.getItem('user_fullname') || (isDriver ? 'كابتن توصيله' : 'راكب توصيله');
+            var phone = localStorage.getItem('user_phone') || '';
+            var fromText = bPickupName || 'نقطة الانطلاق';
+            var toText = bDropoffName || 'نقطة الوصول';
+
+            var saveBtn = document.getElementById('btn-save-route-db');
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '⏳ جاري الحفظ في قاعدة البيانات...';
+            }
+
+            try {
+                if (isDriver) {
+                    var res = await fetch('/api/driver/set-route', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            driverId: userId,
+                            fromText: fromText,
+                            toText: toText,
+                            fromLat: bPickupCoords[1],
+                            fromLon: bPickupCoords[0],
+                            toLat: bDropoffCoords[1],
+                            toLon: bDropoffCoords[0]
+                        })
+                    });
+                    var data = await res.json();
+                    if (data.success) {
+                        alert('✅ تم تثبيت مسارك بنجاح في قاعدة البيانات.');
+                        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '✅ تم حفظ وتثبيت المسار'; }
+                    } else {
+                        alert(data.error || 'تعذر حفظ المسار');
+                        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '📌 تثبيت المسار في قاعدة البيانات'; }
+                    }
+                } else {
+                    await fetch('/api/passenger/set-permanent-location', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            customerId: userId,
+                            lat: bPickupCoords[1],
+                            lon: bPickupCoords[0],
+                            locationName: fromText,
+                            dropoffLat: bDropoffCoords[1],
+                            dropoffLon: bDropoffCoords[0],
+                            dropoffName: toText
+                        })
+                    });
+
+                    await fetch('/api/routes/permanent', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            passengerId: userId,
+                            passengerName: fullName,
+                            passengerPhone: phone,
+                            startLat: bPickupCoords[1],
+                            startLon: bPickupCoords[0],
+                            startName: fromText,
+                            endLat: bDropoffCoords[1],
+                            endLon: bDropoffCoords[0],
+                            endName: toText,
+                            days: bPermDays || ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء'],
+                            departureTime: '08:00 AM',
+                            routeGeometry: bRouteGeom
+                        })
+                    });
+
+                    alert('✅ تم تثبيت مسارك في قاعدة البيانات بنجاح!');
+                    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '✅ تم تثبيت المسار'; }
+                    loadMatchingDriversForPassenger();
+                }
+            } catch(e) {
+                alert('خطأ في الاتصال بقاعدة البيانات');
+                if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '📌 تثبيت المسار في قاعدة البيانات'; }
+            }
+        };
+
+        window.loadMatchingDriversForPassenger = async function() {
+            var container = document.getElementById('passenger-matching-drivers-list');
+            if (!container) return;
+            container.innerHTML = '<div style="font-size:12px;color:#6b7280;text-align:center;padding:12px;"><i class="fa-solid fa-circle-notch fa-spin"></i> جاري مطابقة السائقين القريبين لمسارك...</div>';
+
+            var pLat = bPickupCoords ? bPickupCoords[1] : 32.0;
+            var pLon = bPickupCoords ? bPickupCoords[0] : 44.3;
+
+            try {
+                var res = await fetch('/api/drivers/nearby?lat=' + pLat + '&lon=' + pLon + '&rangeKm=15');
+                var data = await res.json();
+                var drivers = data.drivers || [];
+
+                if (drivers.length === 0) {
+                    container.innerHTML = '<div style="font-size:12px;color:#94a3b8;text-align:center;padding:12px;background:#f8fafc;border-radius:10px;">لا يوجد سائقون قريبون متاحون حالياً على مسارك</div>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                drivers.slice(0, 10).forEach(function(d) {
+                    var card = document.createElement('div');
+                    card.className = 'driver-mini-card';
+                    card.style.cssText = 'background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:8px;';
+                    var waNum = (d.driverPhone || '').replace(/[^0-9]/g, '').replace(/^07/, '9647');
+                    var waBtn = waNum ? '<a href="https://wa.me/' + waNum + '" target="_blank" class="btn-small" style="background:#25d366;color:#fff;text-decoration:none;padding:6px 10px;font-size:11px;font-weight:700;">واتساب 💬</a>' : '';
+
+                    card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+                        '<span style="font-weight:900;font-size:13px;color:#111;">🚕 ' + (d.driverName || 'كابتن') + '</span>' +
+                        '<span style="font-size:11px;font-weight:800;color:#059669;">📍 يبعد ' + (d.distanceKm || 1) + ' كم</span>' +
+                        '</div>' +
+                        '<div style="font-size:11px;color:#64748b;margin-bottom:6px;">🚗 ' + (d.carModel || 'تويوتا') + '</div>' +
+                        '<div style="display:flex;gap:6px;align-items:center;">' +
+                        '<button type="button" onclick="sendPassengerJoinRequest(&quot;' + d.driverId + '&quot;)" class="btn-primary" style="flex:1;padding:6px 10px;font-size:11px;background:#2563eb;">🙋 طلب انضمام</button>' +
+                        waBtn +
+                        '</div>';
+                    container.appendChild(card);
+                });
+            } catch(e) {
+                container.innerHTML = '<div style="font-size:12px;color:#dc2626;text-align:center;">تعذر تحميل السائقين القريبين</div>';
+            }
+        };
+
+        window.sendPassengerJoinRequest = async function(driverId) {
+            var userId = localStorage.getItem('user_id') || 'usr-current';
+            if (!bPickupCoords || !bDropoffCoords) {
+                alert('يرجى تحديد مسارك على الخريطة أولاً');
+                return;
+            }
+            try {
+                var res = await fetch('/api/passenger/join-request', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        passengerId: userId,
+                        driverId: driverId,
+                        pickupLat: bPickupCoords[1],
+                        pickupLon: bPickupCoords[0],
+                        dropoffLat: bDropoffCoords[1],
+                        dropoffLon: bDropoffCoords[0],
+                        pickupText: bPickupName || 'موقع الركوب',
+                        dropoffText: bDropoffName || 'وجهة الوصول'
+                    })
+                });
+                var data = await res.json();
+                if (data.success) {
+                    alert('🎉 تم إرسال طلب الانضمام إلى الكابتن بنجاح! سيتم إشعارك فور القبول.');
+                } else {
+                    alert(data.error || 'تعذر إرسال طلب الانضمام');
+                }
+            } catch(e) {
+                alert('خطأ في الاتصال بالخادم');
+            }
+        };
+
+        window.renderJoinRequestsSidebar = async function() {
+            var panel = document.getElementById('sidebar-panel-join-requests');
+            if (!panel) return;
+            var role = localStorage.getItem('user_role') || 'Customer';
+            var isDriver = (role === 'Driver' || role === 'driver');
+            var driverId = localStorage.getItem('user_id') || '';
+
+            if (isDriver) {
+                panel.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:6px;">🙋 طلبات الانضمام لمسارك</div>' +
+                    '<div style="font-size:12px;color:#6b7280;margin-bottom:12px;">طلبات الركاب الراغبين بالانضمام إلى مسارك المعتمد</div>' +
+                    '<div id="driver-join-requests-container" style="display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow-y:auto;">' +
+                    '<div style="text-align:center;padding:12px;color:#6b7280;font-size:12px;"><i class="fa-solid fa-circle-notch fa-spin"></i> جاري جلب الطلبات...</div>' +
+                    '</div>';
+
+                try {
+                    var res = await fetch('/api/driver/join-requests/' + driverId);
+                    var data = await res.json();
+                    var requests = data.requests || [];
+                    var box = document.getElementById('driver-join-requests-container');
+                    if (!box) return;
+                    if (requests.length === 0) {
+                        box.innerHTML = '<div style="font-size:12px;color:#94a3b8;text-align:center;padding:16px;background:#f8fafc;border-radius:12px;">لا توجد طلبات انضمام جديدة حالياً</div>';
+                        return;
+                    }
+                    box.innerHTML = '';
+                    requests.forEach(function(jr) {
+                        var card = document.createElement('div');
+                        card.style.cssText = 'background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px;';
+                        card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                            '<span style="font-weight:900;font-size:13px;color:#111;">👤 ' + (jr.passengerName || 'راكب') + '</span>' +
+                            '<span style="font-size:10px;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:6px;font-weight:700;">طلب انضمام</span>' +
+                            '</div>' +
+                            '<div style="font-size:11px;color:#16a34a;">🟢 الانطلاق: ' + (jr.pickupText || 'موقع الركوب') + '</div>' +
+                            '<div style="font-size:11px;color:#dc2626;">🔴 الوجهة: ' + (jr.dropoffText || 'نقطة الوصول') + '</div>' +
+                            '<div style="display:flex;gap:6px;margin-top:6px;">' +
+                            '<button type="button" onclick="driverApproveJoinRequest(&quot;' + jr.requestId + '&quot;)" class="btn-primary" style="flex:1;background:#16a34a;padding:8px;font-size:12px;font-weight:900;">✅ قبول وملاحة Waze</button>' +
+                            '<button type="button" onclick="driverRejectJoinRequest(&quot;' + jr.requestId + '&quot;)" class="btn-secondary" style="color:#dc2626;border-color:#fecaca;padding:8px;font-size:12px;">❌ رفض</button>' +
+                            '</div>';
+                        box.appendChild(card);
+                    });
+                } catch(_) {
+                    var b = document.getElementById('driver-join-requests-container');
+                    if (b) b.innerHTML = '<div style="font-size:12px;color:#dc2626;text-align:center;">تعذر تحميل الطلبات</div>';
+                }
+            } else {
+                panel.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:6px;">🙋 السائقون المطابقون لمسارك</div>' +
+                    '<div style="font-size:12px;color:#6b7280;margin-bottom:12px;">السائقون القريبون على نفس مسارك لتثبيت الانضمام</div>' +
+                    '<div id="passenger-matching-drivers-list"></div>';
+                loadMatchingDriversForPassenger();
+            }
+        };
+
+        window.driverApproveJoinRequest = async function(requestId) {
+            var driverId = localStorage.getItem('user_id') || '';
+            try {
+                var res = await fetch('/api/driver/approve-join', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId: requestId, driverId: driverId })
+                });
+                var data = await res.json();
+                if (data.success) {
+                    alert('✅ تم قبول الراكب بنجاح! جاري فتح ملاحة Waze...');
+                    if (data.wazeUrl) {
+                        window.open(data.wazeUrl, '_blank');
+                    } else if (data.pickupLat && data.pickupLon) {
+                        window.open('https://waze.com/ul?ll=' + data.pickupLat + ',' + data.pickupLon + '&navigate=yes', '_blank');
+                    }
+                    renderJoinRequestsSidebar();
+                } else {
+                    alert(data.error || 'تعذر قبول الطلب');
+                }
+            } catch(e) {
+                alert('خطأ في الاتصال');
+            }
+        };
+
+        window.driverRejectJoinRequest = async function(requestId) {
+            if (!confirm('هل تريد رفض طلب الانضمام؟')) return;
+            try {
+                var res = await fetch('/api/driver/reject-join', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requestId: requestId })
+                });
+                var data = await res.json();
+                if (data.success) {
+                    renderJoinRequestsSidebar();
+                }
+            } catch(_) {}
         };
 
         window.setBookingSearchRange = function(km) {
