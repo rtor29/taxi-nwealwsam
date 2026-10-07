@@ -2255,28 +2255,53 @@ class AuthController {
         };
 
         
-        // Auto-show Flutter app if redirected from Telegram or with showMap=1
+        // Auto-show Flutter app if redirected from Telegram or with login_token / showMap
         (function() {
             var params = new URLSearchParams(window.location.search);
-            if (params.get('showMap') === '1' || params.get('openMap') === '1') {
-                var token = params.get('login_token') || localStorage.getItem('auth_token') || '';
+            var token = params.get('login_token');
+            var gov = params.get('governorate');
+            var tripType = params.get('tripType');
+
+            if (gov) {
+                localStorage.setItem('user_governorate', gov);
+                try { localStorage.setItem('flutter.user_governorate', JSON.stringify(gov)); } catch(_) {}
+                if (window.IRAQ_GOVERNORATES && window.IRAQ_GOVERNORATES[gov]) {
+                    window.selectedGovernorate = gov;
+                }
+            }
+
+            if (tripType) {
+                localStorage.setItem('trip_type', tripType);
+                try { localStorage.setItem('flutter.trip_type', JSON.stringify(tripType)); } catch(_) {}
+            }
+
+            if (token || params.get('showMap') === '1' || params.get('openMap') === '1') {
+                var tokenToUse = token || localStorage.getItem('auth_token') || '';
                 var userId = params.get('userId') || localStorage.getItem('user_id') || '';
                 var role = params.get('role') || localStorage.getItem('user_role') || 'Customer';
                 var fullName = params.get('fullName') || localStorage.getItem('user_fullname') || '';
                 
-                if (token) {
-                    // Save to local storage in case we need it
-                    localStorage.setItem('auth_token', token);
+                if (tokenToUse) {
+                    localStorage.setItem('auth_token', tokenToUse);
                     localStorage.setItem('user_id', userId);
                     localStorage.setItem('user_role', role);
                     if (fullName) localStorage.setItem('user_fullname', fullName);
+
+                    try {
+                        localStorage.setItem('flutter.auth_token', JSON.stringify(tokenToUse));
+                        localStorage.setItem('flutter.user_id', JSON.stringify(userId));
+                        localStorage.setItem('flutter.user_role', JSON.stringify(role));
+                        if (fullName) localStorage.setItem('flutter.user_fullname', JSON.stringify(fullName));
+                    } catch(_) {}
                     
                     setTimeout(function() {
-                        window.openAppView(token, userId, role, fullName, true);
+                        if (typeof window.openAppView === 'function') {
+                            window.openAppView(tokenToUse, userId, role, fullName, true);
+                        }
                     }, 100);
-                } else {
+                } else if (params.get('showMap') === '1' || params.get('openMap') === '1') {
                     setTimeout(function() {
-                        alert('يرجى تسجيل الدخول أولاً لتثبيت المسار الدائمي.');
+                        alert('يرجى تسجيل الدخول أولاً لتثبيت المسار.');
                     }, 500);
                 }
             }
