@@ -207,177 +207,234 @@ async function handleStart(chatId, user) {
     );
 }
 
-async function handleCallback(chatId, data, user) {
-    if (!db.memoryState.botSubscribers) db.memoryState.botSubscribers = [];
-    if (!db.memoryState.botSubscribers.includes(String(chatId))) { db.memoryState.botSubscribers.push(String(chatId)); db.saveStateSnapshot(); }
-
+// --- Step 2: Complete Registration By User Location ---
+async function completePassengerRegistration(chatId, user, locationInput) {
     const state = userStates.get(chatId) || {};
+    const cleanPhone = (state.verifiedPhone || state.phone || '').replace('+964', '0');
+    const tgName = (user ? ((user.first_name || '') + ' ' + (user.last_name || '')).trim() : 'راكب توصيله');
+    const fullName = state.fullName || tgName || 'راكب توصيله';
+    const password = state.password || cleanPhone || '123456';
+    const crypto = require('crypto');
+    const customerId = 'usr-c-' + Math.random().toString(36).substr(2, 9);
+    const now = new Date().toISOString();
+    const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
 
-    // --- Step 2: Passenger selects Governorate ---
-    if (data.startsWith('tgov_p_')) {
-        const govKey = data.replace('tgov_p_', '');
-        const govObj = IRAQ_GOVERNORATES.find(g => g.key === govKey) || { name: 'النجف', key: 'najaf' };
-        const cleanPhone = (state.verifiedPhone || state.phone || '').replace('+964', '0');
-        const tgName = (user ? ((user.first_name || '') + ' ' + (user.last_name || '')).trim() : 'راكب توصيله');
-        const fullName = state.fullName || tgName || 'راكب توصيله';
-        const password = state.password || cleanPhone || '123456';
-        const crypto = require('crypto');
-        const customerId = 'usr-c-' + Math.random().toString(36).substr(2, 9);
-        const now = new Date().toISOString();
-        const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+    // Parse location
+    let lat = 31.9961;
+    let lon = 44.3168;
+    let locDisplay = 'الموقع الحالي';
+    if (locationInput && typeof locationInput === 'object' && locationInput.latitude) {
+        lat = Number(locationInput.latitude);
+        lon = Number(locationInput.longitude);
+        locDisplay = `موقعي الحالي (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+    } else if (typeof locationInput === 'string' && locationInput.trim() && !locationInput.includes('تخطي')) {
+        locDisplay = locationInput.trim();
+    }
 
-        // Check duplicate
-        const existsCust = (db.memoryState.customers || []).find(c => c.phoneNumber === cleanPhone);
-        const existsDrv = (db.memoryState.drivers || []).find(d => d.phoneNumber === cleanPhone);
-        if (existsCust || existsDrv) {
-            const roleAr = existsCust ? 'كراكب' : 'كسائق';
-            await sendKeyboard(chatId,
-                `⚠️ <b>الرقم (${cleanPhone}) مسجل بالفعل ${roleAr}. يمكنك تسجيل الدخول مباشرة:</b>`,
-                [[{ text: '🔑 تسجيل دخول', callback_data: 'login' }]]
-            );
-            userStates.delete(chatId);
-            return;
-        }
+    // Check duplicate
+    const existsCust = (db.memoryState.customers || []).find(c => c.phoneNumber === cleanPhone);
+    const existsDrv = (db.memoryState.drivers || []).find(d => d.phoneNumber === cleanPhone);
+    if (existsCust || existsDrv) {
+        const roleAr = existsCust ? 'كراكب' : 'كسائق';
+        await tgRequest('sendMessage', {
+            chat_id: chatId,
+            text: `⚠️ <b>الرقم (${cleanPhone}) مسجل بالفعل ${roleAr}. يمكنك تسجيل الدخول مباشرة:</b>`,
+            parse_mode: 'HTML',
+            reply_markup: {
+                remove_keyboard: true,
+                inline_keyboard: [[{ text: '🔑 تسجيل دخول', callback_data: 'login' }]]
+            }
+        });
+        userStates.delete(chatId);
+        return;
+    }
 
-        const newCustomer = {
-            customerId,
-            fullName,
-            phoneNumber: cleanPhone,
-            email: `${cleanPhone}@tawseelaiq.app`,
-            plainPassword: password,
-            passwordHash,
-            governorate: govObj.key,
-            route: govObj.name,
-            address: govObj.name,
-            preferredPaymentMethod: 'Cash',
-            area: govObj.name,
-            ratingAverage: 5.0,
-            totalBookings: 0,
-            isActive: true,
-            isBlocked: false,
-            registeredAt: now,
-            telegramChatId: String(chatId)
-        };
+    const newCustomer = {
+        customerId,
+        fullName,
+        phoneNumber: cleanPhone,
+        email: `${cleanPhone}@tawseelaiq.app`,
+        plainPassword: password,
+        passwordHash,
+        governorate: 'najaf',
+        route: locDisplay,
+        address: locDisplay,
+        pickupLat: lat,
+        pickupLon: lon,
+        preferredPaymentMethod: 'Cash',
+        area: locDisplay,
+        ratingAverage: 5.0,
+        totalBookings: 0,
+        isActive: true,
+        isBlocked: false,
+        registeredAt: now,
+        telegramChatId: String(chatId)
+    };
 
-        db.memoryState.customers.unshift(newCustomer);
-        db.saveStateSnapshot();
-        db.persistNewCustomer(newCustomer).catch(() => {});
+    db.memoryState.customers.unshift(newCustomer);
+    db.saveStateSnapshot();
+    db.persistNewCustomer(newCustomer).catch(() => {});
 
-        const token = 'jwt_customer_' + customerId;
-        const appUrl = `https://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(customerId)}&role=Customer&fullName=${encodeURIComponent(fullName)}&governorate=${encodeURIComponent(govObj.key)}&tripType=short`;
+    const token = 'jwt_customer_' + customerId;
+    const appUrl = `https://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(customerId)}&role=Customer&fullName=${encodeURIComponent(fullName)}&tripType=short`;
 
-        await sendKeyboard(chatId,
-            `🎉 <b>تم تسجيلك كراكب بنجاح!</b>\n\n` +
+    await tgRequest('sendMessage', {
+        chat_id: chatId,
+        text: `🎉 <b>تم تسجيلك كراكب بنجاح!</b>\n\n` +
             `👤 <b>الاسم:</b> ${fullName}\n` +
             `📱 <b>الهاتف:</b> ${cleanPhone}\n` +
-            `🏙️ <b>المحافظة:</b> ${govObj.name}\n\n` +
+            `📍 <b>الموقع:</b> ${locDisplay}\n\n` +
             `✅ <b>تم حفظ البيانات في لوحة التحكم (Dashboard) وتزامنها مع تطبيق الويب.</b>\n` +
             `اختر نوع مشوارك للمتابعة أو افتح التطبيق مباشرة:`,
-            [
+        parse_mode: 'HTML',
+        reply_markup: {
+            remove_keyboard: true,
+            inline_keyboard: [
                 [
                     { text: '⚡ مشوار قصير', callback_data: 'passenger_trip_short' },
                     { text: '🔄 خط دائم', callback_data: 'passenger_trip_daily' }
                 ],
                 [{ text: '🚗 فتح تطبيق الويب مباشرة', url: appUrl }]
             ]
-        );
+        }
+    });
 
+    userStates.delete(chatId);
+}
+
+async function completeDriverRegistration(chatId, user, locationInput) {
+    const state = userStates.get(chatId) || {};
+    const cleanPhone = (state.verifiedPhone || state.phone || '').replace('+964', '0');
+    const tgName = (user ? ((user.first_name || '') + ' ' + (user.last_name || '')).trim() : 'كابتن توصيله');
+    const fullName = state.fullName || tgName || 'كابتن توصيله';
+    const password = state.password || cleanPhone || '123456';
+    const crypto = require('crypto');
+    const driverId = 'drv-t-' + Math.random().toString(36).substr(2, 9);
+    const now = new Date().toISOString();
+    const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+
+    // Parse location
+    let lat = 31.9961;
+    let lon = 44.3168;
+    let locDisplay = 'الموقع الحالي';
+    if (locationInput && typeof locationInput === 'object' && locationInput.latitude) {
+        lat = Number(locationInput.latitude);
+        lon = Number(locationInput.longitude);
+        locDisplay = `موقعي الحالي (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+    } else if (typeof locationInput === 'string' && locationInput.trim() && !locationInput.includes('تخطي')) {
+        locDisplay = locationInput.trim();
+    }
+
+    const existsCust = (db.memoryState.customers || []).find(c => c.phoneNumber === cleanPhone);
+    const existsDrv = (db.memoryState.drivers || []).find(d => d.phoneNumber === cleanPhone);
+    if (existsCust || existsDrv) {
+        const roleAr = existsDrv ? 'كسائق' : 'كراكب';
+        await tgRequest('sendMessage', {
+            chat_id: chatId,
+            text: `⚠️ <b>الرقم (${cleanPhone}) مسجل بالفعل ${roleAr}. يمكنك تسجيل الدخول مباشرة:</b>`,
+            parse_mode: 'HTML',
+            reply_markup: {
+                remove_keyboard: true,
+                inline_keyboard: [[{ text: '🔑 تسجيل دخول', callback_data: 'login' }]]
+            }
+        });
         userStates.delete(chatId);
         return;
     }
 
-    // --- Step 2: Driver selects Governorate ---
-    if (data.startsWith('tgov_d_')) {
-        const govKey = data.replace('tgov_d_', '');
-        const govObj = IRAQ_GOVERNORATES.find(g => g.key === govKey) || { name: 'النجف', key: 'najaf' };
-        const cleanPhone = (state.verifiedPhone || state.phone || '').replace('+964', '0');
-        const tgName = (user ? ((user.first_name || '') + ' ' + (user.last_name || '')).trim() : 'كابتن توصيله');
-        const fullName = state.fullName || tgName || 'كابتن توصيله';
-        const password = state.password || cleanPhone || '123456';
-        const crypto = require('crypto');
-        const driverId = 'drv-t-' + Math.random().toString(36).substr(2, 9);
-        const now = new Date().toISOString();
-        const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+    const newDriver = {
+        driverId,
+        fullName,
+        phoneNumber: cleanPhone,
+        email: `${cleanPhone}@tawseelaiq.app`,
+        passwordHash,
+        plainPassword: password,
+        licenseNumber: 'PENDING',
+        vehicle: { make: state.vehicle || 'تويوتا', plateNumber: state.plate || 'خصوصي', year: 2023 },
+        governorate: 'najaf',
+        route: locDisplay,
+        currentLat: lat,
+        currentLon: lon,
+        status: 'Pending',
+        isVerified: false,
+        isBlocked: false,
+        ratingAverage: 5.0,
+        totalTrips: 0,
+        registeredAt: now,
+        telegramChatId: String(chatId)
+    };
 
-        const existsCust = (db.memoryState.customers || []).find(c => c.phoneNumber === cleanPhone);
-        const existsDrv = (db.memoryState.drivers || []).find(d => d.phoneNumber === cleanPhone);
-        if (existsCust || existsDrv) {
-            const roleAr = existsDrv ? 'كسائق' : 'كراكب';
-            await sendKeyboard(chatId,
-                `⚠️ <b>الرقم (${cleanPhone}) مسجل بالفعل ${roleAr}. يمكنك تسجيل الدخول مباشرة:</b>`,
-                [[{ text: '🔑 تسجيل دخول', callback_data: 'login' }]]
-            );
-            userStates.delete(chatId);
-            return;
-        }
+    db.memoryState.drivers.unshift(newDriver);
 
-        const newDriver = {
-            driverId,
-            fullName,
-            phoneNumber: cleanPhone,
-            email: `${cleanPhone}@tawseelaiq.app`,
-            passwordHash,
-            plainPassword: password,
-            licenseNumber: 'PENDING',
-            vehicle: { make: state.vehicle || 'تويوتا', plateNumber: state.plate || 'خصوصي', year: 2023 },
-            governorate: govObj.key,
-            route: govObj.name,
-            status: 'Pending',
-            isVerified: false,
-            isBlocked: false,
-            ratingAverage: 5.0,
-            totalTrips: 0,
-            registeredAt: now,
-            telegramChatId: String(chatId)
-        };
+    db.memoryState.verifications.unshift({
+        verificationId: 'ver-' + Math.random().toString(36).substr(2, 9),
+        driverId,
+        driverName: fullName,
+        phoneNumber: cleanPhone,
+        governorate: locDisplay,
+        status: 'Pending',
+        submittedAt: now
+    });
 
-        db.memoryState.drivers.unshift(newDriver);
+    db.saveStateSnapshot();
+    db.persistNewDriver(newDriver).catch(() => {});
 
-        db.memoryState.verifications.unshift({
-            verificationId: 'ver-' + Math.random().toString(36).substr(2, 9),
-            driverId,
-            driverName: fullName,
-            phoneNumber: cleanPhone,
-            governorate: govObj.name,
-            status: 'Pending',
-            submittedAt: now
-        });
+    const cfg = db.memoryState.appConfig || {};
+    const waAdminLink = cfg.whatsappAdminLink || 'https://wa.me/9647706204066';
+    const tgAdminLink = cfg.telegramAdminLink || 'https://t.me/tawseela_najaf_bot';
 
-        db.saveStateSnapshot();
-        db.persistNewDriver(newDriver).catch(() => {});
+    const token = 'jwt_driver_' + driverId;
+    const appUrl = `https://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driverId)}&role=Driver&fullName=${encodeURIComponent(fullName)}`;
 
-        const cfg = db.memoryState.appConfig || {};
-        const waAdminLink = cfg.whatsappAdminLink || 'https://wa.me/9647706204066';
-        const tgAdminLink = cfg.telegramAdminLink || 'https://t.me/tawseela_najaf_bot';
-
-        const token = 'jwt_driver_' + driverId;
-        const appUrl = `https://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driverId)}&role=Driver&fullName=${encodeURIComponent(fullName)}&governorate=${encodeURIComponent(govObj.key)}`;
-
-        await sendKeyboard(chatId,
-            `🎉 <b>تم تسجيل بياناتك كسائق بنجاح!</b>\n\n` +
+    await tgRequest('sendMessage', {
+        chat_id: chatId,
+        text: `🎉 <b>تم تسجيل بياناتك كسائق بنجاح!</b>\n\n` +
             `👤 <b>الاسم:</b> ${fullName}\n` +
             `📱 <b>الهاتف:</b> ${cleanPhone}\n` +
-            `🏙️ <b>المحافظة:</b> ${govObj.name}\n` +
+            `📍 <b>الموقع:</b> ${locDisplay}\n` +
             `🚗 <b>المركبة:</b> ${state.vehicle || 'تويوتا'} (${state.plate || 'خصوصي'})\n\n` +
             `✅ <b>تم حفظ البيانات في لوحة التحكم (Dashboard) وتزامنها مع تطبيق الويب.</b>\n` +
             `⏳ حسابك الآن بانتظار توثيق الإدارة. يرجى إرسال المستمسكات عبر:\n` +
             `📱 واتساب: ${waAdminLink}\n` +
             `💬 تيليجرام: ${tgAdminLink}`,
-            [
+        parse_mode: 'HTML',
+        reply_markup: {
+            remove_keyboard: true,
+            inline_keyboard: [
                 [{ text: '🚗 فتح تطبيق الويب مباشرة', url: appUrl }]
             ]
-        );
+        }
+    });
 
-        // Notify admin with governorate
-        await sendKeyboard(ADMIN_CHAT_ID,
-            `🚕 <b>سائق جديد بانتظار التوثيق (${govObj.name}):</b>\n👤 ${fullName}\n📱 ${cleanPhone}\n🏙️ ${govObj.name}\n🚗 ${state.vehicle || 'تويوتا'} - ${state.plate || 'خصوصي'}`,
-            [[
-                { text: '✅ قبول', callback_data: `approve_${driverId}` },
-                { text: '❌ رفض', callback_data: `reject_${driverId}` }
-            ]]
-        );
+    // Notify admin with location
+    await sendKeyboard(ADMIN_CHAT_ID,
+        `🚕 <b>سائق جديد بانتظار التوثيق:</b>\n👤 ${fullName}\n📱 ${cleanPhone}\n📍 ${locDisplay}\n🚗 ${state.vehicle || 'تويوتا'} - ${state.plate || 'خصوصي'}`,
+        [[
+            { text: '✅ قبول', callback_data: `approve_${driverId}` },
+            { text: '❌ رفض', callback_data: `reject_${driverId}` }
+        ]]
+    );
 
-        userStates.delete(chatId);
+    userStates.delete(chatId);
+}
+
+async function handleCallback(chatId, data, user) {
+    if (!db.memoryState.botSubscribers) db.memoryState.botSubscribers = [];
+    if (!db.memoryState.botSubscribers.includes(String(chatId))) { db.memoryState.botSubscribers.push(String(chatId)); db.saveStateSnapshot(); }
+
+    const state = userStates.get(chatId) || {};
+
+    // Fallback callbacks for governorates if any old button pressed
+    if (data.startsWith('tgov_p_')) {
+        const govKey = data.replace('tgov_p_', '');
+        const govObj = IRAQ_GOVERNORATES.find(g => g.key === govKey) || { name: 'النجف', key: 'najaf' };
+        await completePassengerRegistration(chatId, user, govObj.name);
+        return;
+    }
+    if (data.startsWith('tgov_d_')) {
+        const govKey = data.replace('tgov_d_', '');
+        const govObj = IRAQ_GOVERNORATES.find(g => g.key === govKey) || { name: 'النجف', key: 'najaf' };
+        await completeDriverRegistration(chatId, user, govObj.name);
         return;
     }
 
@@ -583,12 +640,13 @@ async function handleCallback(chatId, data, user) {
     }
 }
 
-async function handleMessage(chatId, text, user) {
+async function handleMessage(chatId, text, user, location) {
     if (!db.memoryState.botSubscribers) db.memoryState.botSubscribers = [];
     if (!db.memoryState.botSubscribers.includes(String(chatId))) { db.memoryState.botSubscribers.push(String(chatId)); db.saveStateSnapshot(); }
 
     const state = userStates.get(chatId);
     if (!state) {
+        if (!text) return;
         const digits = text.replace(/[^0-9]/g, '');
         if (digits.length >= 10) {
             const existing = await checkPhoneRegistration(text);
@@ -643,35 +701,44 @@ async function handleMessage(chatId, text, user) {
         }
         case 'passenger_name': {
             state.fullName = text.trim();
-            state.step = 'passenger_gov';
+            state.step = 'passenger_location';
             userStates.set(chatId, state);
-            await sendKeyboard(chatId,
-                '🏙️ <b>الخطوة 2: حدد محافظتك:</b>\nاختر محافظتك من القائمة أدناه لحفظ وتثبيت بياناتك تلقائياً في لوحة التحكم وتطبيق الويب:',
-                getGovernoratesKeyboard('p')
-            );
+            await tgRequest('sendMessage', {
+                chat_id: chatId,
+                text: '📍 <b>الخطوة 2: تحديد موقعك الحالي:</b>\nاضغط على الزر أدناه لمشاركة موقعك الحالي تلقائياً، أو أرسل اسم منطقتك / عنوانك في رسالة:',
+                parse_mode: 'HTML',
+                reply_markup: {
+                    keyboard: [
+                        [{ text: '📍 مشاركة موقعي الحالي', request_location: true }],
+                        [{ text: 'تخطي وتحديد الموقع تلقائياً في التطبيق' }]
+                    ],
+                    resize_keyboard: true,
+                    one_time_keyboard: true
+                }
+            });
             break;
         }
-        case 'passenger_gov': {
-            const cleanTxt = text.trim();
-            const foundGov = IRAQ_GOVERNORATES.find(g => cleanTxt.includes(g.name) || cleanTxt.toLowerCase() === g.key);
-            if (foundGov) {
-                await handleCallback(chatId, `tgov_p_${foundGov.key}`, user);
-            } else {
-                await sendKeyboard(chatId,
-                    '🏙️ <b>الخطوة 2: حدد محافظتك:</b>\nيرجى الضغط على زر محافظتك من القائمة أدناه لإتمام التسجيل:',
-                    getGovernoratesKeyboard('p')
-                );
-            }
+        case 'passenger_location': {
+            await completePassengerRegistration(chatId, user, location || text);
             break;
         }
         case 'passenger_password': {
             if (text.trim().length >= 4) state.password = text.trim();
-            state.step = 'passenger_gov';
+            state.step = 'passenger_location';
             userStates.set(chatId, state);
-            await sendKeyboard(chatId,
-                '🏙️ <b>الخطوة 2: حدد محافظتك:</b>\nاختر محافظتك من القائمة أدناه لحفظ وتثبيت بياناتك تلقائياً:',
-                getGovernoratesKeyboard('p')
-            );
+            await tgRequest('sendMessage', {
+                chat_id: chatId,
+                text: '📍 <b>الخطوة 2: تحديد موقعك الحالي:</b>\nاضغط على الزر أدناه لمشاركة موقعك الحالي تلقائياً، أو أرسل اسم منطقتك / عنوانك في رسالة:',
+                parse_mode: 'HTML',
+                reply_markup: {
+                    keyboard: [
+                        [{ text: '📍 مشاركة موقعي الحالي', request_location: true }],
+                        [{ text: 'تخطي وتحديد الموقع تلقائياً في التطبيق' }]
+                    ],
+                    resize_keyboard: true,
+                    one_time_keyboard: true
+                }
+            });
             break;
         }
 
@@ -719,35 +786,44 @@ async function handleMessage(chatId, text, user) {
         }
         case 'driver_plate': {
             state.plate = text.trim();
-            state.step = 'driver_gov';
+            state.step = 'driver_location';
             userStates.set(chatId, state);
-            await sendKeyboard(chatId,
-                '🏙️ <b>الخطوة 2: حدد محافظتك:</b>\nاختر محافظتك من القائمة أدناه لحفظ وتثبيت بياناتك تلقائياً في لوحة التحكم وتطبيق الويب:',
-                getGovernoratesKeyboard('d')
-            );
+            await tgRequest('sendMessage', {
+                chat_id: chatId,
+                text: '📍 <b>الخطوة 2: تحديد موقعك الحالي:</b>\nاضغط على الزر أدناه لمشاركة موقعك الحالي تلقائياً، أو أرسل اسم منطقتك / عنوانك في رسالة:',
+                parse_mode: 'HTML',
+                reply_markup: {
+                    keyboard: [
+                        [{ text: '📍 مشاركة موقعي الحالي', request_location: true }],
+                        [{ text: 'تخطي وتحديد الموقع تلقائياً في التطبيق' }]
+                    ],
+                    resize_keyboard: true,
+                    one_time_keyboard: true
+                }
+            });
             break;
         }
-        case 'driver_gov': {
-            const cleanTxt = text.trim();
-            const foundGov = IRAQ_GOVERNORATES.find(g => cleanTxt.includes(g.name) || cleanTxt.toLowerCase() === g.key);
-            if (foundGov) {
-                await handleCallback(chatId, `tgov_d_${foundGov.key}`, user);
-            } else {
-                await sendKeyboard(chatId,
-                    '🏙️ <b>الخطوة 2: حدد محافظتك:</b>\nيرجى الضغط على زر محافظتك من القائمة أدناه لإتمام التسجيل:',
-                    getGovernoratesKeyboard('d')
-                );
-            }
+        case 'driver_location': {
+            await completeDriverRegistration(chatId, user, location || text);
             break;
         }
         case 'driver_password': {
             if (text.trim().length >= 4) state.password = text.trim();
-            state.step = 'driver_gov';
+            state.step = 'driver_location';
             userStates.set(chatId, state);
-            await sendKeyboard(chatId,
-                '🏙️ <b>الخطوة 2: حدد محافظتك:</b>\nاختر محافظتك من القائمة أدناه لحفظ وتثبيت بياناتك تلقائياً:',
-                getGovernoratesKeyboard('d')
-            );
+            await tgRequest('sendMessage', {
+                chat_id: chatId,
+                text: '📍 <b>الخطوة 2: تحديد موقعك الحالي:</b>\nاضغط على الزر أدناه لمشاركة موقعك الحالي تلقائياً، أو أرسل اسم منطقتك / عنوانك في رسالة:',
+                parse_mode: 'HTML',
+                reply_markup: {
+                    keyboard: [
+                        [{ text: '📍 مشاركة موقعي الحالي', request_location: true }],
+                        [{ text: 'تخطي وتحديد الموقع تلقائياً في التطبيق' }]
+                    ],
+                    resize_keyboard: true,
+                    one_time_keyboard: true
+                }
+            });
             break;
         }
 
@@ -925,10 +1001,12 @@ async function poll() {
                             await tgRequest('answerCallbackQuery', { callback_query_id: cb.id });
                             await handleCallback(chatId, cb.data, cb.from);
                         }
-                    } else if (update.message && update.message.text) {
+                    } else if (update.message) {
                         const msg = update.message;
-                        const chatId = msg.chat.id;
-                        const text = msg.text.trim();
+                        const chatId = msg.chat?.id;
+                        if (!chatId) continue;
+                        const text = (msg.text || '').trim();
+                        const location = msg.location;
 
                         // Commands
                         if (text === '/start') { await handleStart(chatId, msg.from); }
@@ -942,7 +1020,7 @@ async function poll() {
                                 [{ text: '⏳ سائقين معلقين', callback_data: 'admin_pending' }]
                             ]);
                         }
-                        else { await handleMessage(chatId, text, msg.from); }
+                        else { await handleMessage(chatId, text, msg.from, location); }
                     }
                 } catch (e) {
                     console.error('[TelegramBot] Update error:', e.message);

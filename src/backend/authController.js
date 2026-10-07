@@ -3930,6 +3930,7 @@ class AuthController {
                 if (data.activeRideExists) {
                     var actReq = data.activeRequest || { id: data.activeRequestId };
                     localStorage.setItem('active_accepted_ride', JSON.stringify(actReq));
+                    resetSaveRouteButton();
                     showPassengerActiveBlockedModal(actReq);
                     return;
                 }
@@ -3937,9 +3938,11 @@ class AuthController {
                     bActiveRideId = data.request.id;
                     showDispatchModal(data.request);
                 } else {
+                    resetSaveRouteButton();
                     alert(data.error || 'تعذر إرسال طلب المشوار');
                 }
             } catch(e) {
+                resetSaveRouteButton();
                 alert('خطأ في الاتصال بالخادم');
             }
         };
@@ -4031,6 +4034,7 @@ class AuthController {
                         clearInterval(bPassengerMonitorTimer);
                         stopLiveDriverTracking();
                         localStorage.removeItem('active_accepted_ride');
+                        resetSaveRouteButton();
                         var arrModal = document.getElementById('passenger-arrived-modal');
                         if (arrModal) arrModal.style.display = 'none';
                         var dispModal = document.getElementById('ride-dispatch-modal');
@@ -4040,6 +4044,7 @@ class AuthController {
                         clearInterval(bPassengerMonitorTimer);
                         stopLiveDriverTracking();
                         localStorage.removeItem('active_accepted_ride');
+                        resetSaveRouteButton();
                         var arrModal = document.getElementById('passenger-arrived-modal');
                         if (arrModal) arrModal.style.display = 'none';
                         var dispModal = document.getElementById('ride-dispatch-modal');
@@ -4209,6 +4214,7 @@ class AuthController {
                 if (bDispatchTimer) clearInterval(bDispatchTimer);
                 if (bPassengerMonitorTimer) clearInterval(bPassengerMonitorTimer);
                 bActiveRideId = null;
+                resetSaveRouteButton();
                 var m = document.getElementById('passenger-active-blocked-modal');
                 if (m) m.style.display = 'none';
                 var dispModal = document.getElementById('ride-dispatch-modal');
@@ -4230,19 +4236,48 @@ class AuthController {
             }
         };
 
+        window.resetSaveRouteButton = function() {
+            var saveBtn = document.getElementById('btn-floating-save-route') || document.getElementById('btn-save-route-db');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                var fareHtml = '';
+                if (bRouteFare) {
+                    fareHtml = ' <span id="floating-btn-fare" style="background:#059669;color:#fff;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:800;">' + Number(bRouteFare).toLocaleString() + ' د.ع</span>';
+                }
+                saveBtn.innerHTML = '<span>📌</span> <span id="floating-save-btn-text">تأكيد وتثبيت المسار</span>' + fareHtml;
+            }
+            var statusEl = document.getElementById('map-target-status');
+            if (statusEl) {
+                statusEl.textContent = '📍 تم تثبيت المسار - جاهز للطلب';
+                statusEl.style.background = '#e0f2fe';
+                statusEl.style.color = '#0369a1';
+            }
+        };
+
         window.cancelRideRequest = function() {
             var existing = null;
             try { existing = JSON.parse(localStorage.getItem('active_accepted_ride') || 'null'); } catch(_) {}
             if (existing && existing.id) {
                 var modal = document.getElementById('ride-dispatch-modal');
                 if (modal) modal.style.display = 'none';
+                resetSaveRouteButton();
                 return;
+            }
+            if (bActiveRideId) {
+                try {
+                    fetch('/api/ride/cancel', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ requestId: bActiveRideId, reason: 'إلغاء من قبل الراكب' })
+                    }).catch(function() {});
+                } catch(_) {}
             }
             if (bRidePollTimer) clearInterval(bRidePollTimer);
             if (bDispatchTimer) clearInterval(bDispatchTimer);
             bActiveRideId = null;
             var modal = document.getElementById('ride-dispatch-modal');
             if (modal) modal.style.display = 'none';
+            resetSaveRouteButton();
         };
 
         // Render Permanent Line Sidebar (Stage 3)
