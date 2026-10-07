@@ -2640,7 +2640,7 @@ class AuthController {
                         '<div style="font-size:10px;color:#64748b;font-weight:700;">' + (isDriver ? 'كابتن معتمد' : 'راكب') + '</div>' +
                     '</div>' +
                 '</div>' +
-                '<button type="button" onclick="switchRouteTab(\'join-requests\')" style="background:#059669;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">' +
+                '<button type="button" onclick="switchRouteTab(&quot;join-requests&quot;)" style="background:#059669;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">' +
                     '🙋 طلبات الانضمام' +
                 '</button>' +
             '</div>';
@@ -2863,7 +2863,7 @@ class AuthController {
                         '<div style="font-size:10px;color:#64748b;font-weight:700;">' + (isDriver ? 'كابتن معتمد' : 'راكب') + '</div>' +
                     '</div>' +
                 '</div>' +
-                '<button type="button" onclick="switchRouteTab(\'set-route\')" style="background:' + (isDriver ? '#059669' : '#2563eb') + ';color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">' +
+                '<button type="button" onclick="switchRouteTab(&quot;set-route&quot;)" style="background:' + (isDriver ? '#059669' : '#2563eb') + ';color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">' +
                     (isDriver ? '🚖 واجهة السائق' : '👤 واجهة الراكب') +
                 '</button>' +
             '</div>';
