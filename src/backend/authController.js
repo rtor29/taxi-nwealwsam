@@ -870,31 +870,8 @@ class AuthController {
                             بيانات الحساب
                         </div>
 
-                        <!-- Governorate Dropdown -->
-                        <div style="margin-bottom:12px">
-                            <label for="cust-reg-governorate" class="label">المحافظة <span style="color:#dc2626">*</span></label>
-                            <select id="cust-reg-governorate" class="inp" onchange="onGovernorateChange(this.value,'customer')" style="font-size:13px;padding:10px 12px;cursor:pointer" aria-label="اختر المحافظة">
-                                <option value="" disabled selected>🏙️ اختر محافظتك</option>
-                                <option value="baghdad">بغداد</option>
-                                <option value="basra">البصرة</option>
-                                <option value="najaf">النجف</option>
-                                <option value="karbala">كربلاء</option>
-                                <option value="erbil">أربيل</option>
-                                <option value="sulaymaniyah">السليمانية</option>
-                                <option value="duhok">دهوك</option>
-                                <option value="kirkuk">كركوك</option>
-                                <option value="nineveh">نينوى</option>
-                                <option value="diyala">ديالى</option>
-                                <option value="anbar">الأنبار</option>
-                                <option value="babil">بابل</option>
-                                <option value="wasit">واسط</option>
-                                <option value="saladin">صلاح الدين</option>
-                                <option value="dhi_qar">ذي قار</option>
-                                <option value="maysan">ميسان</option>
-                                <option value="muthanna">المثنى</option>
-                                <option value="qadisiyyah">القادسية</option>
-                            </select>
-                        </div>
+                        <!-- Governorate Dropdown (Auto-located) -->
+                        <input type="hidden" id="cust-reg-governorate" value="najaf">
 
                         <!-- First & Last Name -->
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
@@ -1038,31 +1015,8 @@ class AuthController {
                             بيانات الكابتن
                         </div>
 
-                        <!-- Governorate Dropdown -->
-                        <div style="margin-bottom:12px">
-                            <label for="driver-reg-governorate" class="label">المحافظة <span style="color:#dc2626">*</span></label>
-                            <select id="driver-reg-governorate" class="inp" onchange="onGovernorateChange(this.value,'driver')" style="font-size:13px;padding:10px 12px;cursor:pointer" aria-label="اختر المحافظة">
-                                <option value="" disabled selected>🏙️ اختر محافظتك</option>
-                                <option value="baghdad">بغداد</option>
-                                <option value="basra">البصرة</option>
-                                <option value="najaf">النجف</option>
-                                <option value="karbala">كربلاء</option>
-                                <option value="erbil">أربيل</option>
-                                <option value="sulaymaniyah">السليمانية</option>
-                                <option value="duhok">دهوك</option>
-                                <option value="kirkuk">كركوك</option>
-                                <option value="nineveh">نينوى</option>
-                                <option value="diyala">ديالى</option>
-                                <option value="anbar">الأنبار</option>
-                                <option value="babil">بابل</option>
-                                <option value="wasit">واسط</option>
-                                <option value="saladin">صلاح الدين</option>
-                                <option value="dhi_qar">ذي قار</option>
-                                <option value="maysan">ميسان</option>
-                                <option value="muthanna">المثنى</option>
-                                <option value="qadisiyyah">القادسية</option>
-                            </select>
-                        </div>
+                        <!-- Governorate Dropdown (Auto-located) -->
+                        <input type="hidden" id="driver-reg-governorate" value="najaf">
 
                         <!-- Driver Service Type Selection -->
                         <div style="margin-bottom:12px">
@@ -1342,10 +1296,9 @@ class AuthController {
             if (b) b.className = (type === 'Both') ? 'trip-card selected' : 'trip-card';
         };
 
-        // Helper: get active governorate bbox string
+        // Helper: get active search bbox string (Iraq-wide)
         function getActiveGovBbox() {
-            var gov = IRAQ_GOVERNORATES[selectedGovernorate || localStorage.getItem('user_governorate') || 'najaf'];
-            return gov ? gov.bbox : '44.05,31.75,44.65,32.35';
+            return '38.79,29.07,48.63,37.38';
         }
 
         // ===== Trip type modal (after login) =====
@@ -1662,8 +1615,7 @@ class AuthController {
             var alertBox = document.getElementById('cust-reg-alert');
             if (alertBox) alertBox.style.display = 'none';
             if (!window.__isPhoneVerified) { alert('يرجى التحقق من رقم الهاتف أولاً'); return; }
-            var gov = (document.getElementById('cust-reg-governorate')?.value||'').trim();
-            if (!gov) { alert('يرجى اختيار المحافظة أولاً'); return; }
+            var gov = (document.getElementById('cust-reg-governorate')?.value||'').trim() || localStorage.getItem('user_governorate') || 'najaf';
             localStorage.setItem('user_governorate', gov);
             var fname = (document.getElementById('cust-reg-firstname').value||'').trim();
             var lname = (document.getElementById('cust-reg-lastname').value||'').trim();
@@ -1799,8 +1751,7 @@ class AuthController {
             var alertBox=document.getElementById('driver-reg-alert');
             if(alertBox) alertBox.style.display='none';
             if(!window.__isDriverPhoneVerified){alert('يرجى التحقق من رقم الهاتف أولاً');return;}
-            var gov = (document.getElementById('driver-reg-governorate')?.value||'').trim();
-            if (!gov) { alert('يرجى اختيار المحافظة أولاً'); return; }
+            var gov = (document.getElementById('driver-reg-governorate')?.value||'').trim() || localStorage.getItem('user_governorate') || 'najaf';
             if (!selectedDriverRegService) { alert('يرجى اختيار نوع الخدمة (مشاوير، خطوط دائمة، كلاهما)'); return; }
             localStorage.setItem('user_governorate', gov);
             var name=(document.getElementById('driver-reg-name').value||'').trim();
@@ -1969,10 +1920,15 @@ class AuthController {
                 if(!window.mapboxgl) await window.loadMapboxDynamically();
                 if(!window.mapboxgl) return;
                 mapboxgl.accessToken=('pk.'+'eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9'+'._J6DYjYBDhsdcidErQrblA');
-                var activeGov = IRAQ_GOVERNORATES[selectedGovernorate || localStorage.getItem('user_governorate') || 'najaf'] || IRAQ_GOVERNORATES.najaf;
-                var govParts = activeGov.bbox.split(',').map(Number);
-                var govBounds = [[govParts[0], govParts[1]], [govParts[2], govParts[3]]];
-                passengerMap=new mapboxgl.Map({container:'passenger-map',style:'mapbox://styles/mapbox/streets-v12',center:activeGov.center,zoom:13,maxBounds:govBounds});
+                var initialCenter = [bUserLon || 44.3168, bUserLat || 31.9961];
+                passengerMap=new mapboxgl.Map({container:'passenger-map',style:'mapbox://styles/mapbox/streets-v12',center:initialCenter,zoom:13});
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(function(pos) {
+                        if (passengerMap) {
+                            passengerMap.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 14 });
+                        }
+                    }, function(_) {}, { enableHighAccuracy: true, timeout: 10000 });
+                }
                 if(typeof mapboxgl.getRTLTextPluginStatus==='function'&&mapboxgl.getRTLTextPluginStatus()==='unavailable'){
                     mapboxgl.setRTLTextPlugin('https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js',null,true);
                 }
@@ -3482,17 +3438,12 @@ class AuthController {
                     mapboxgl.setRTLTextPlugin('https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js', null, true);
                 } catch(_) {}
             }
-            var activeGov = IRAQ_GOVERNORATES[selectedGovernorate || localStorage.getItem('user_governorate') || 'najaf'] || IRAQ_GOVERNORATES.najaf;
-            bUserLat = activeGov.center[1];
-            bUserLon = activeGov.center[0];
-            var parts = activeGov.bbox.split(',').map(Number);
-            var bounds = [[parts[0], parts[1]], [parts[2], parts[3]]];
+            var initialCenter = [bUserLon || 44.3168, bUserLat || 31.9961];
             bMap = new mapboxgl.Map({
                 container: 'booking-mapbox-map',
                 style: 'mapbox://styles/mapbox/streets-v12',
-                center: [bUserLon, bUserLat],
-                zoom: 13,
-                maxBounds: bounds
+                center: initialCenter,
+                zoom: 14
             });
             setTimeout(function() { if (bMap) bMap.resize(); }, 150);
             setTimeout(function() { if (bMap) bMap.resize(); }, 500);
@@ -3515,6 +3466,24 @@ class AuthController {
                 }
                 fetchNearbyDriversForMap();
             });
+
+            // Fallback immediate GPS lookup
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(pos) {
+                    bUserLat = pos.coords.latitude;
+                    bUserLon = pos.coords.longitude;
+                    bHasUserGps = true;
+                    if (bMap) {
+                        bMap.flyTo({ center: [bUserLon, bUserLat], zoom: 15 });
+                    }
+                    if (!bPickupCoords) {
+                        setBookingPickup(bUserLon, bUserLat, 'موقعي الحالي');
+                    }
+                    fetchNearbyDriversForMap();
+                }, function(err) {
+                    console.log('GPS lookup info:', err);
+                }, { enableHighAccuracy: true, timeout: 10000 });
+            }
 
             bMap.on('load', function() {
                 // Auto request geolocation on open (Stage 1)
