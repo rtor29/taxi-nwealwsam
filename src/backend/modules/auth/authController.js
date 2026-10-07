@@ -491,7 +491,9 @@ class AuthController {
                                     <input type="text" id="book-pickup-input" class="inp" placeholder="🟢 نقطة الانطلاق أو انقر الخريطة..." value="" oninput="onBookingPickupSearch(this.value)" onfocus="setMapTarget('pickup');onBookingPickupSearch(this.value)" style="font-size:11px;padding:8px 10px;padding-left:22px;">
                                     <button type="button" onclick="clearPickupInput()" id="btn-clear-pickup" style="display:none;position:absolute;left:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;font-size:12px;">✕</button>
                                 </div>
-                                <button type="button" onclick="centerOnUserGps()" id="btn-gps-pickup" style="background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px 9px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;font-family:inherit;box-shadow:0 2px 8px rgba(37,99,235,0.25);" title="موقعي الحالي">📍</button>
+                                <button type="button" onclick="centerOnUserGps()" id="btn-gps-pickup" style="background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;font-family:inherit;box-shadow:0 2px 8px rgba(37,99,235,0.25);display:flex;align-items:center;gap:4px;" title="تحديد موقعي الحالي تلقائياً">
+                                    <span>📍 موقعي الحالي</span>
+                                </button>
                             </div>
                             <div id="book-pickup-results" class="search-autocomplete-dropdown"></div>
                         </div>
@@ -545,8 +547,8 @@ class AuthController {
     <div id="ride-dispatch-modal" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
         <div class="card" style="max-width:400px;width:100%;padding:24px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.3);">
             <div style="font-size:36px;margin-bottom:8px;" id="dispatch-modal-icon">⏳</div>
-            <h3 id="dispatch-modal-title" style="font-size:17px;font-weight:900;margin:0 0 6px;color:#111;">جاري انتظار رد الكابتن...</h3>
-            <p id="dispatch-modal-subtitle" style="font-size:12px;color:#6b7280;margin:0 0 16px;">إذا لم يرد السائق خلال 30 ثانية سيتم تحويل الطلب تلقائياً للأقرب التالي</p>
+            <h3 id="dispatch-modal-title" style="font-size:17px;font-weight:900;margin:0 0 6px;color:#111;">جاري البحث عن أقرب سائق متواجد...</h3>
+            <p id="dispatch-modal-subtitle" style="font-size:12px;color:#6b7280;margin:0 0 16px;">يتم الآن فحص وتحديد أقرب كابتن لتنفيذ مشوارك السريع</p>
 
             <!-- Circular timer -->
             <div style="display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;border-radius:50%;border:4px solid #f59e0b;margin-bottom:14px;">
@@ -3131,15 +3133,17 @@ class AuthController {
             var userId = localStorage.getItem('user_id') || 'usr-current';
             var role = localStorage.getItem('user_role') || 'Customer';
             var isDriver = (role === 'Driver' || role === 'driver');
+            var tripType = localStorage.getItem('selected_trip_type') || bActiveTab || 'short';
+            var isShortTrip = !isDriver && (tripType === 'short' || tripType === 'ShortTrip');
             var fullName = localStorage.getItem('user_fullname') || (isDriver ? 'كابتن توصيله' : 'راكب توصيله');
             var phone = localStorage.getItem('user_phone') || '';
             var fromText = bPickupName || 'نقطة الانطلاق';
             var toText = bDropoffName || 'نقطة الوصول';
 
-            var saveBtn = document.getElementById('btn-save-route-db');
+            var saveBtn = document.getElementById('btn-floating-save-route') || document.getElementById('btn-save-route-db');
             if (saveBtn) {
                 saveBtn.disabled = true;
-                saveBtn.innerHTML = '⏳ جاري الحفظ في قاعدة البيانات...';
+                saveBtn.innerHTML = isShortTrip ? '<span>🔍</span> <span>جاري البحث عن أقرب سائق متواجد...</span>' : '⏳ جاري الحفظ في قاعدة البيانات...';
             }
 
             try {
@@ -3163,7 +3167,7 @@ class AuthController {
                         if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '✅ تم حفظ وتثبيت المسار'; }
                     } else {
                         alert(data.error || 'تعذر حفظ المسار');
-                        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '📌 تثبيت المسار في قاعدة البيانات'; }
+                        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '📌 تأكيد وتثبيت المسار'; }
                     }
                 } else {
                     await fetch('/api/passenger/set-permanent-location', {
@@ -3180,32 +3184,58 @@ class AuthController {
                         })
                     });
 
-                    await fetch('/api/routes/permanent', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            passengerId: userId,
-                            passengerName: fullName,
-                            passengerPhone: phone,
-                            startLat: bPickupCoords[1],
-                            startLon: bPickupCoords[0],
-                            startName: fromText,
-                            endLat: bDropoffCoords[1],
-                            endLon: bDropoffCoords[0],
-                            endName: toText,
-                            days: bPermDays || ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء'],
-                            departureTime: '08:00 AM',
-                            routeGeometry: bRouteGeom
-                        })
-                    });
+                    if (isShortTrip) {
+                        var statusEl = document.getElementById('map-target-status');
+                        if (statusEl) {
+                            statusEl.textContent = '🔍 جاري البحث عن أقرب سائق متواجد...';
+                            statusEl.style.background = '#fef3c7';
+                            statusEl.style.color = '#b45309';
+                        }
+                        if (saveBtn) {
+                            saveBtn.disabled = true;
+                            saveBtn.innerHTML = '<span>🔍</span> <span>جاري البحث عن أقرب سائق متواجد...</span>';
+                        }
+                        var modal = document.getElementById('ride-dispatch-modal');
+                        if (modal) {
+                            modal.style.display = 'flex';
+                            var titleEl = document.getElementById('dispatch-modal-title');
+                            if (titleEl) titleEl.textContent = 'جاري البحث عن أقرب سائق متواجد...';
+                            var subEl = document.getElementById('dispatch-modal-subtitle');
+                            if (subEl) subEl.textContent = 'تم تثبيت مسارك، جاري الاتصال بأقرب كابتن لتنفيذ المشوار...';
+                            var drvName = document.getElementById('dispatch-drv-name');
+                            if (drvName) drvName.textContent = '🚕 جاري البحث عن أقرب كابتن...';
+                            var drvStatus = document.getElementById('dispatch-drv-status');
+                            if (drvStatus) { drvStatus.textContent = 'الحالة: جاري إرسال الطلب...'; drvStatus.style.color = '#2563eb'; }
+                        }
+                        await requestNearestDriver();
+                    } else {
+                        await fetch('/api/routes/permanent', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                passengerId: userId,
+                                passengerName: fullName,
+                                passengerPhone: phone,
+                                startLat: bPickupCoords[1],
+                                startLon: bPickupCoords[0],
+                                startName: fromText,
+                                endLat: bDropoffCoords[1],
+                                endLon: bDropoffCoords[0],
+                                endName: toText,
+                                days: bPermDays || ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء'],
+                                departureTime: '08:00 AM',
+                                routeGeometry: bRouteGeom
+                            })
+                        });
 
-                    alert('✅ تم تثبيت مسارك في قاعدة البيانات بنجاح!');
-                    if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '✅ تم تثبيت المسار'; }
-                    loadMatchingDriversForPassenger();
+                        alert('✅ تم تثبيت مسارك في قاعدة البيانات بنجاح!');
+                        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '✅ تم تثبيت المسار'; }
+                        loadMatchingDriversForPassenger();
+                    }
                 }
             } catch(e) {
                 alert('خطأ في الاتصال بقاعدة البيانات');
-                if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '📌 تثبيت المسار في قاعدة البيانات'; }
+                if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '📌 تأكيد وتثبيت المسار'; }
             }
         };
 
@@ -3876,6 +3906,8 @@ class AuthController {
             if (!modal) return;
             modal.style.display = 'flex';
             bDispatchSeconds = 30;
+            var titleEl = document.getElementById('dispatch-modal-title');
+            if (titleEl) titleEl.textContent = 'جاري البحث عن أقرب سائق متواجد...';
             updateDispatchUi(req);
 
             if (bDispatchTimer) clearInterval(bDispatchTimer);
@@ -3910,11 +3942,18 @@ class AuthController {
             var nameEl = document.getElementById('dispatch-drv-name');
             var carEl = document.getElementById('dispatch-drv-car');
             var stEl = document.getElementById('dispatch-drv-status');
+            var titleEl = document.getElementById('dispatch-modal-title');
+            if (titleEl) titleEl.textContent = 'جاري البحث عن أقرب سائق متواجد...';
             if (nameEl) nameEl.textContent = '🚕 الكابتن: ' + (req.assignedDriverName || 'أقرب سائق متاح');
             if (carEl) carEl.textContent = '🚗 المركبة: ' + (req.assignedDriverVehicle || 'تويوتا');
             if (stEl) {
-                stEl.textContent = '⏳ جاري انتظار القبول (السائق #' + ((req.currentDriverIndex || 0) + 1) + ')';
-                stEl.style.color = '#d97706';
+                if (req.assignedDriverName) {
+                    stEl.textContent = '⏳ جاري انتظار القبول (السائق #' + ((req.currentDriverIndex || 0) + 1) + ')';
+                    stEl.style.color = '#d97706';
+                } else {
+                    stEl.textContent = '🔍 جاري البحث عن أقرب سائق متواجد...';
+                    stEl.style.color = '#2563eb';
+                }
             }
         }
 
