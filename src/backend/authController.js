@@ -349,6 +349,9 @@ class AuthController {
             }
             #booking-map-wrapper { flex: 1 !important; height: 100% !important; }
         }
+        #booking-sidebar.drawer-collapsed {
+            display: none !important;
+        }
     </style>
 
     <script>
@@ -388,17 +391,21 @@ class AuthController {
         <!-- Top App Bar -->
         <header style="background:#111827;color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 10px rgba(0,0,0,0.25);flex-shrink:0;z-index:20;">
             <div style="display:flex;align-items:center;gap:10px;">
+                <button type="button" id="btn-toggle-booking-drawer" onclick="toggleBookingDrawer()" style="background:#1f2937;color:#fff;border:1px solid #374151;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:6px;font-family:inherit;" title="القائمة الجانبية (Drawer)">
+                    <i class="fa-solid fa-bars"></i>
+                    <span style="font-size:11px;font-weight:700;">القائمة</span>
+                </button>
                 <span style="font-size:26px;">🚕</span>
                 <div>
                     <div style="font-size:15px;font-weight:900;line-height:1.2;">توصيلة النجف</div>
-                    <div style="font-size:11px;color:#9ca3af;">تثبيت المسار وإدارة طلبات الانضمام</div>
+                    <div id="booking-header-subtitle" style="font-size:11px;color:#9ca3af;">تثبيت المسار وإدارة طلبات الانضمام</div>
                 </div>
             </div>
 
-            <!-- Tabs: ثبت مسارك / إدارة طلبات الانضمام -->
+            <!-- Tabs: واجهة الراكب / واجهة السائق & إدارة طلبات الانضمام -->
             <div style="display:flex;background:#1f2937;padding:3px;border-radius:10px;gap:4px;">
                 <button id="book-tab-set-route" type="button" onclick="switchRouteTab('set-route')" style="background:#2563eb;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;">
-                    🛣️ ثبت مسارك
+                    👤 واجهة الراكب
                 </button>
                 <button id="book-tab-join-requests" type="button" onclick="switchRouteTab('join-requests')" style="background:transparent;color:#d1d5db;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
                     🙋 إدارة طلبات الانضمام
@@ -715,14 +722,9 @@ class AuthController {
                 <span style="font-size:12px;font-weight:900;color:#15803d">✅ نشط ومعتمد</span>
             </div>
             <div id="driver-route-btn-wrap" style="display:none;margin-top:12px">
-                <div style="display:flex;flex-direction:column;gap:8px;">
-                    <button type="button" onclick="openRouteApp('set-route')" class="btn-primary" style="padding:12px 14px;font-size:13px;background:linear-gradient(135deg,#2563eb,#1d4ed8);display:flex;align-items:center;justify-content:center;gap:8px;">
-                        <span>🛣️</span> <span>ثبت مسارك (على الخريطة)</span>
-                    </button>
-                    <button type="button" onclick="openRouteApp('join-requests')" class="btn-primary" style="padding:12px 14px;font-size:13px;background:linear-gradient(135deg,#059669,#047857);display:flex;align-items:center;justify-content:center;gap:8px;">
-                        <span>🙋</span> <span>إدارة طلبات الانضمام</span>
-                    </button>
-                </div>
+                <button type="button" id="btn-user-main-app" onclick="openRouteApp('set-route')" class="btn-primary" style="padding:13px 16px;font-size:14px;font-weight:900;background:linear-gradient(135deg,#2563eb,#1d4ed8);display:flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;width:100%;box-shadow:0 4px 14px rgba(37,99,235,0.3);">
+                    <span id="btn-user-main-app-icon">👤</span> <span id="btn-user-main-app-text">واجهة الراكب</span>
+                </button>
             </div>
         </div>
 
@@ -2132,9 +2134,18 @@ class AuthController {
                         box.style.display = 'block';
                         var nameEl = document.getElementById('logged-user-name');
                         var roleEl = document.getElementById('logged-user-role');
+                        var isDriver = (role === 'Driver' || role === 'driver');
                         if (nameEl) nameEl.textContent = fullName;
-                        if (roleEl) roleEl.textContent = role === 'Driver' ? 'كابتن معتمد' : 'راكب';
-                        // Feature 5: Show driver route button
+                        if (roleEl) roleEl.textContent = isDriver ? 'كابتن معتمد' : 'راكب';
+
+                        var btnAppText = document.getElementById('btn-user-main-app-text');
+                        var btnAppIcon = document.getElementById('btn-user-main-app-icon');
+                        var btnApp = document.getElementById('btn-user-main-app');
+                        if (btnAppText) btnAppText.textContent = isDriver ? 'واجهة السائق' : 'واجهة الراكب';
+                        if (btnAppIcon) btnAppIcon.textContent = isDriver ? '🚖' : '👤';
+                        if (btnApp) {
+                            btnApp.style.background = isDriver ? 'linear-gradient(135deg,#059669,#047857)' : 'linear-gradient(135deg,#2563eb,#1d4ed8)';
+                        }
                         var drBtnWrap = document.getElementById('driver-route-btn-wrap');
                         if (drBtnWrap) drBtnWrap.style.display = 'block';
                     }
@@ -2522,6 +2533,22 @@ class AuthController {
             if (!modal) return;
             modal.style.display = 'flex';
             document.body.style.overflow = 'hidden';
+
+            var role = localStorage.getItem('user_role') || 'Customer';
+            var isDriver = (role === 'Driver' || role === 'driver');
+
+            var sidebar = document.getElementById('booking-sidebar');
+            if (sidebar) sidebar.classList.remove('drawer-collapsed');
+
+            var tabSet = document.getElementById('book-tab-set-route');
+            if (tabSet) {
+                tabSet.innerHTML = isDriver ? '🚖 واجهة السائق' : '👤 واجهة الراكب';
+            }
+            var headerSub = document.getElementById('booking-header-subtitle');
+            if (headerSub) {
+                headerSub.textContent = isDriver ? 'واجهة السائق - تثبيت المسار وإدارة طلبات الانضمام' : 'واجهة الراكب - تثبيت المسار وإدارة طلبات الانضمام';
+            }
+
             var targetTab = (tab === 'join-requests' || tab === 'requests') ? 'join-requests' : 'set-route';
             bActiveTab = targetTab;
             window.switchRouteTab(bActiveTab);
@@ -2539,6 +2566,13 @@ class AuthController {
             }
         };
 
+        window.toggleBookingDrawer = function() {
+            var sidebar = document.getElementById('booking-sidebar');
+            if (!sidebar) return;
+            sidebar.classList.toggle('drawer-collapsed');
+            if (bMap) setTimeout(function() { bMap.resize(); }, 150);
+        };
+
         window.closeBookingApp = function() {
             var modal = document.getElementById('booking-modal-view');
             if (modal) modal.style.display = 'none';
@@ -2548,6 +2582,9 @@ class AuthController {
 
         window.switchRouteTab = function(tab) {
             bActiveTab = tab;
+            var role = localStorage.getItem('user_role') || 'Customer';
+            var isDriver = (role === 'Driver' || role === 'driver');
+
             var tSet = document.getElementById('book-tab-set-route');
             var tJoin = document.getElementById('book-tab-join-requests');
             var pSet = document.getElementById('sidebar-panel-set-route');
@@ -2561,7 +2598,8 @@ class AuthController {
             if (pDriver) pDriver.style.display = 'none';
 
             if (tSet) {
-                tSet.style.background = tab === 'set-route' ? '#2563eb' : 'transparent';
+                tSet.innerHTML = isDriver ? '🚖 واجهة السائق' : '👤 واجهة الراكب';
+                tSet.style.background = tab === 'set-route' ? (isDriver ? '#059669' : '#2563eb') : 'transparent';
                 tSet.style.color = tab === 'set-route' ? '#fff' : '#d1d5db';
                 tSet.style.fontWeight = tab === 'set-route' ? '900' : '700';
             }
@@ -2592,8 +2630,23 @@ class AuthController {
             if (!panel) return;
             var role = localStorage.getItem('user_role') || 'Customer';
             var isDriver = (role === 'Driver' || role === 'driver');
+            var fullName = localStorage.getItem('user_fullname') || (isDriver ? 'كابتن توصيله' : 'راكب توصيله');
 
-            panel.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px;">🛣️ تثبيت مسارك على الخريطة</div>' +
+            var drawerNavHtml = '<div style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:12px;padding:8px 10px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">' +
+                '<div style="display:flex;align-items:center;gap:8px;">' +
+                    '<span style="font-size:18px;">' + (isDriver ? '🚖' : '👤') + '</span>' +
+                    '<div>' +
+                        '<div style="font-size:12px;font-weight:900;color:#111;">' + fullName + '</div>' +
+                        '<div style="font-size:10px;color:#64748b;font-weight:700;">' + (isDriver ? 'كابتن معتمد' : 'راكب') + '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<button type="button" onclick="switchRouteTab(\'join-requests\')" style="background:#059669;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">' +
+                    '🙋 طلبات الانضمام' +
+                '</button>' +
+            '</div>';
+
+            panel.innerHTML = drawerNavHtml +
+                '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px;">' + (isDriver ? '🚖 واجهة السائق (تثبيت المسار)' : '👤 واجهة الراكب (تثبيت المسار)') + '</div>' +
                 '<p style="font-size:12px;color:#6b7280;margin:0 0 10px;">انقر على الخريطة أو ابحث لتحديد نقطة الانطلاق والوصول:</p>' +
                 '<div style="position:relative;margin-bottom:8px;">' +
                     '<label class="label" style="font-size:11px;">🟢 نقطة الانطلاق</label>' +
@@ -2800,9 +2853,24 @@ class AuthController {
             var role = localStorage.getItem('user_role') || 'Customer';
             var isDriver = (role === 'Driver' || role === 'driver');
             var driverId = localStorage.getItem('user_id') || '';
+            var fullName = localStorage.getItem('user_fullname') || (isDriver ? 'كابتن توصيله' : 'راكب توصيله');
+
+            var drawerNavHtml = '<div style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:12px;padding:8px 10px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">' +
+                '<div style="display:flex;align-items:center;gap:8px;">' +
+                    '<span style="font-size:18px;">' + (isDriver ? '🚖' : '👤') + '</span>' +
+                    '<div>' +
+                        '<div style="font-size:12px;font-weight:900;color:#111;">' + fullName + '</div>' +
+                        '<div style="font-size:10px;color:#64748b;font-weight:700;">' + (isDriver ? 'كابتن معتمد' : 'راكب') + '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<button type="button" onclick="switchRouteTab(\'set-route\')" style="background:' + (isDriver ? '#059669' : '#2563eb') + ';color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">' +
+                    (isDriver ? '🚖 واجهة السائق' : '👤 واجهة الراكب') +
+                '</button>' +
+            '</div>';
 
             if (isDriver) {
-                panel.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:6px;">🙋 طلبات الانضمام لمسارك</div>' +
+                panel.innerHTML = drawerNavHtml +
+                    '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:6px;">🙋 إدارة طلبات الانضمام لمسارك</div>' +
                     '<div style="font-size:12px;color:#6b7280;margin-bottom:12px;">طلبات الركاب الراغبين بالانضمام إلى مسارك المعتمد</div>' +
                     '<div id="driver-join-requests-container" style="display:flex;flex-direction:column;gap:10px;max-height:60vh;overflow-y:auto;">' +
                     '<div style="text-align:center;padding:12px;color:#6b7280;font-size:12px;"><i class="fa-solid fa-circle-notch fa-spin"></i> جاري جلب الطلبات...</div>' +
@@ -2839,7 +2907,8 @@ class AuthController {
                     if (b) b.innerHTML = '<div style="font-size:12px;color:#dc2626;text-align:center;">تعذر تحميل الطلبات</div>';
                 }
             } else {
-                panel.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:6px;">🙋 السائقون المطابقون لمسارك</div>' +
+                panel.innerHTML = drawerNavHtml +
+                    '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:6px;">🙋 إدارة طلبات الانضمام</div>' +
                     '<div style="font-size:12px;color:#6b7280;margin-bottom:12px;">السائقون القريبون على نفس مسارك لتثبيت الانضمام</div>' +
                     '<div id="passenger-matching-drivers-list"></div>';
                 loadMatchingDriversForPassenger();
