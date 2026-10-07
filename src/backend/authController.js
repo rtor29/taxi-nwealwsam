@@ -302,55 +302,98 @@ class AuthController {
             touch-action: manipulation;
             font-family: inherit;
         }
-        /* Mobile Phones (< 768px): Drawer on Top, Map below */
-        @media (max-width: 767px) {
-            #booking-main-body { flex-direction: column !important; }
-            #booking-sidebar {
-                width: 100% !important;
-                max-height: 48vh !important;
-                border-left: none !important;
-                border-bottom: 2px solid #e2e8f0 !important;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.08) !important;
-                flex-shrink: 0 !important;
-                padding: 12px 14px !important;
-                overflow-y: auto !important;
-                -webkit-overflow-scrolling: touch !important;
-            }
-            #booking-map-wrapper {
-                width: 100% !important;
-                flex: 1 !important;
-                min-height: 240px !important;
-                height: 52vh !important;
-            }
+        /* Full Screen Map & Floating Controls */
+        #booking-main-body {
+            position: relative !important;
+            flex: 1 !important;
+            width: 100% !important;
+            height: 100% !important;
+            overflow: hidden !important;
         }
-        /* iPads & Tablets (768px to 1024px): Drawer on Right, Map next to it */
-        @media (min-width: 768px) and (max-width: 1024px) {
-            #booking-main-body { flex-direction: row !important; }
-            #booking-sidebar {
-                width: 360px !important;
-                max-width: 42% !important;
-                height: 100% !important;
-                border-left: 1.5px solid #e2e8f0 !important;
-                box-shadow: -4px 0 15px rgba(0,0,0,0.06) !important;
-                overflow-y: auto !important;
-                -webkit-overflow-scrolling: touch !important;
-            }
-            #booking-map-wrapper { flex: 1 !important; height: 100% !important; }
+        #booking-map-wrapper {
+            position: absolute !important;
+            inset: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 1 !important;
         }
-        /* Desktops (> 1024px): Drawer on Right, Map on Left */
-        @media (min-width: 1025px) {
-            #booking-main-body { flex-direction: row !important; }
-            #booking-sidebar {
-                width: 400px !important;
-                height: 100% !important;
-                border-left: 1.5px solid #e2e8f0 !important;
-                box-shadow: -4px 0 15px rgba(0,0,0,0.06) !important;
-                overflow-y: auto !important;
-            }
-            #booking-map-wrapper { flex: 1 !important; height: 100% !important; }
+        #booking-mapbox-map {
+            width: 100% !important;
+            height: 100% !important;
         }
-        #booking-sidebar.drawer-collapsed {
-            display: none !important;
+        #booking-sidebar {
+            position: absolute !important;
+            top: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 380px !important;
+            max-width: 90vw !important;
+            height: 100% !important;
+            background: #ffffff !important;
+            box-shadow: -4px 0 25px rgba(0,0,0,0.2) !important;
+            z-index: 40 !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+            transform: translateX(105%) !important;
+            padding: 16px !important;
+        }
+        #booking-sidebar.drawer-open {
+            transform: translateX(0) !important;
+        }
+        #booking-sidebar-backdrop {
+            display: none;
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 35;
+        }
+        #booking-sidebar-backdrop.active {
+            display: block;
+        }
+        .search-autocomplete-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: #ffffff;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            max-height: 220px;
+            overflow-y: auto;
+            margin-top: 4px;
+        }
+        .search-result-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-bottom: 1px solid #f1f5f9;
+            cursor: pointer;
+            transition: background 0.15s;
+            font-size: 13px;
+        }
+        .search-result-item:hover, .search-result-item:active {
+            background: #f8fafc;
+        }
+        .search-result-item:last-child {
+            border-bottom: none;
+        }
+        .mode-chip {
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 800;
+            border: 1.5px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: inherit;
+        }
+        .mode-chip.active {
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
         }
     </style>
 
@@ -419,41 +462,101 @@ class AuthController {
         </header>
 
         <!-- Main Body -->
-        <div id="booking-main-body" style="display:flex;flex:1;overflow:hidden;position:relative;">
-            <!-- SIDEBAR PANEL (DRAWER: ON RIGHT IN RTL, ON TOP IN PHONES/COLUMN) -->
-            <div id="booking-sidebar" style="width:390px;max-width:100%;background:#ffffff;border-left:1.5px solid #e2e8f0;overflow-y:auto;display:flex;flex-direction:column;padding:16px;gap:14px;box-shadow:-2px 0 10px rgba(0,0,0,0.05);flex-shrink:0;z-index:15;">
-                <!-- Panel content will be dynamically rendered or toggled -->
-                <div id="sidebar-panel-set-route" style="display:flex;flex-direction:column;gap:12px;"></div>
-                <div id="sidebar-panel-join-requests" style="display:none;flex-direction:column;gap:12px;"></div>
-                <div id="sidebar-panel-short" style="display:none;flex-direction:column;gap:12px;"></div>
-                <div id="sidebar-panel-daily" style="display:none;flex-direction:column;gap:12px;"></div>
-                <div id="sidebar-panel-driver" style="display:none;flex-direction:column;gap:12px;"></div>
-            </div>
+        <div id="booking-main-body">
+            <!-- MAP VIEWPORT (FULL SCREEN) -->
+            <div id="booking-map-wrapper">
+                <div id="booking-mapbox-map"></div>
 
-            <!-- MAP VIEWPORT -->
-            <div id="booking-map-wrapper" style="flex:1;height:100%;min-height:260px;position:relative;">
-                <div id="booking-mapbox-map" style="width:100%;height:100%;min-height:260px;background:#e2e8f0;"></div>
+                <!-- Top Floating Controls Card (Floating over map) -->
+                <div id="floating-route-card" style="position:absolute;top:12px;right:12px;left:12px;max-width:480px;margin:0 auto;z-index:25;background:rgba(255,255,255,0.96);backdrop-filter:blur(10px);border:1.5px solid #e2e8f0;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,0.12);padding:12px 14px;display:flex;flex-direction:column;gap:8px;">
+                    <!-- Active target switcher & click helper -->
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span id="map-target-status" style="font-size:11px;font-weight:800;color:#1e40af;background:#eff6ff;padding:3px 8px;border-radius:8px;">
+                            📍 انقر على الخريطة أو ابحث
+                        </span>
+                        <div style="display:flex;gap:4px;">
+                            <button type="button" id="btn-target-pickup" onclick="setMapTarget('pickup')" class="mode-chip active" style="background:#dcfce7;color:#15803d;border-color:#86efac;">🟢 الانطلاق</button>
+                            <button type="button" id="btn-target-dropoff" onclick="setMapTarget('dropoff')" class="mode-chip" style="background:#fee2e2;color:#b91c1c;border-color:#fca5a5;">🔴 الوصول</button>
+                        </div>
+                    </div>
 
-                <!-- Floating Range Selector (Stage 1) -->
-                <div style="position:absolute;top:12px;right:12px;z-index:10;display:flex;gap:6px;background:rgba(255,255,255,0.92);backdrop-filter:blur(6px);padding:6px 10px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.12);align-items:center;">
-                    <span style="font-size:11px;font-weight:800;color:#374151;">النطاق:</span>
+                    <!-- 🟢 Pickup Search Input Row + Dedicated GPS Button -->
+                    <div style="position:relative;">
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <div style="position:relative;flex:1;">
+                                <input type="text" id="book-pickup-input" class="inp" placeholder="🟢 ابحث عن نقطة الانطلاق أو انقر عالخريطة..." value="" oninput="onBookingPickupSearch(this.value)" onfocus="setMapTarget('pickup');onBookingPickupSearch(this.value)" style="font-size:12px;padding:9px 12px;padding-left:26px;">
+                                <button type="button" onclick="clearPickupInput()" id="btn-clear-pickup" style="display:none;position:absolute;left:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;font-size:13px;">✕</button>
+                            </div>
+                            <!-- Dedicated GPS button for current location -->
+                            <button type="button" onclick="centerOnUserGps()" id="btn-gps-pickup" style="background:#2563eb;color:#fff;border:none;border-radius:10px;padding:9px 12px;font-size:11px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap;font-family:inherit;box-shadow:0 2px 8px rgba(37,99,235,0.25);" title="تحديد الموقع الحالي تلقائياً">
+                                <span>📍 موقعي الحالي</span>
+                            </button>
+                        </div>
+                        <div id="book-pickup-results" class="search-autocomplete-dropdown"></div>
+                    </div>
+
+                    <!-- 🔴 Dropoff Search Input Row -->
+                    <div style="position:relative;">
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <div style="position:relative;flex:1;">
+                                <input type="text" id="book-dropoff-input" class="inp" placeholder="🔴 ابحث: حولي النجف، مرقد الإمام علي، بنات الحسن، المحافظة..." value="" oninput="onBookingDropoffSearch(this.value)" onfocus="setMapTarget('dropoff');onBookingDropoffSearch(this.value)" style="font-size:12px;padding:9px 12px;padding-left:26px;">
+                                <button type="button" onclick="clearDropoffInput()" id="btn-clear-dropoff" style="display:none;position:absolute;left:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;font-size:13px;">✕</button>
+                            </div>
+                        </div>
+                        <div id="book-dropoff-results" class="search-autocomplete-dropdown"></div>
+                    </div>
+
+                    <!-- Live Route Summary Badge (inside card when route calculated) -->
+                    <div id="floating-route-summary-pill" style="display:none;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:6px 12px;align-items:center;justify-content:space-between;font-size:11px;font-weight:800;">
+                        <span id="card-route-dist" style="color:#1e293b;">📏 -- كم</span>
+                        <span id="card-route-dur" style="color:#1e293b;">⏱️ -- دقيقة</span>
+                        <span id="card-route-fare" style="color:#059669;font-weight:900;">💰 -- د.ع</span>
+                    </div>
+                </div>
+
+                <!-- Floating Range Selector -->
+                <div style="position:absolute;top:150px;right:12px;z-index:10;display:flex;gap:4px;background:rgba(255,255,255,0.92);backdrop-filter:blur(6px);padding:4px 8px;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);align-items:center;">
+                    <span style="font-size:10px;font-weight:800;color:#374151;">النطاق:</span>
                     <button type="button" class="range-chip" onclick="setBookingSearchRange(3)" id="rng-chip-3">3 كم</button>
                     <button type="button" class="range-chip active" onclick="setBookingSearchRange(5)" id="rng-chip-5">5 كم</button>
                     <button type="button" class="range-chip" onclick="setBookingSearchRange(10)" id="rng-chip-10">10 كم</button>
-                    <button type="button" class="range-chip" onclick="setBookingSearchRange(15)" id="rng-chip-15">15 كم</button>
                 </div>
 
-                <!-- Floating GPS Button -->
-                <button type="button" onclick="centerOnUserGps()" style="position:absolute;bottom:24px;left:16px;z-index:10;background:#fff;border:1.5px solid #d1d5db;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(0,0,0,0.15);cursor:pointer;font-size:18px;color:#1d4ed8;" title="تحديد موقعي">
+                <!-- Floating GPS Button (Bottom Left) -->
+                <button type="button" onclick="centerOnUserGps()" style="position:absolute;bottom:85px;left:16px;z-index:24;background:#fff;border:1.5px solid #d1d5db;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(0,0,0,0.15);cursor:pointer;font-size:18px;color:#1d4ed8;" title="تحديد موقعي">
                     <i class="fa-solid fa-crosshairs"></i>
                 </button>
 
-                <!-- Floating Route Summary Pill (Stage 2) -->
-                <div id="booking-route-pill" style="display:none;position:absolute;bottom:16px;right:16px;left:70px;max-width:380px;z-index:10;margin:0 auto;background:#111827;color:#fff;padding:10px 14px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,0.25);font-size:12px;font-weight:800;align-items:center;justify-content:space-between;">
+                <!-- Floating Route Summary Pill (legacy fallback) -->
+                <div id="booking-route-pill" style="display:none;position:absolute;bottom:85px;right:16px;left:70px;max-width:340px;z-index:23;margin:0 auto;background:#111827;color:#fff;padding:8px 12px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,0.25);font-size:11px;font-weight:800;align-items:center;justify-content:space-between;">
                     <span id="route-pill-dist">📏 -- كم</span>
                     <span id="route-pill-dur">⏱️ -- دقيقة</span>
                     <span id="route-pill-fare" style="color:#f59e0b;">💰 -- د.ع</span>
                 </div>
+
+                <!-- 📌 Bottom Floating Confirm & Save Route Button -->
+                <div id="floating-save-route-container" style="position:absolute;bottom:16px;left:16px;right:16px;max-width:440px;margin:0 auto;z-index:25;">
+                    <button type="button" id="btn-floating-save-route" onclick="saveUserRouteToDatabase()" style="background:linear-gradient(135deg,#111827,#1f2937);color:#fff;border:2px solid #374151;border-radius:14px;padding:14px 20px;font-size:14px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 8px 25px rgba(0,0,0,0.3);font-family:inherit;width:100%;transition:all .2s;">
+                        <span style="font-size:18px;">📌</span>
+                        <span id="floating-save-btn-text">تأكيد وتثبيت المسار</span>
+                        <span id="floating-btn-fare" style="display:none;background:#059669;color:#fff;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:800;"></span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- OFF-CANVAS SIDEBAR DRAWER (FOR REQUESTS & MATCHING DRIVERS) -->
+            <div id="booking-sidebar-backdrop" onclick="toggleBookingDrawer(false)"></div>
+            <div id="booking-sidebar">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <span style="font-size:14px;font-weight:900;color:#111;">القائمة وإدارة الطلبات</span>
+                    <button type="button" onclick="toggleBookingDrawer(false)" style="background:#f3f4f6;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-weight:900;color:#6b7280;font-size:14px;">✕</button>
+                </div>
+                <!-- Panel content will be dynamically rendered -->
+                <div id="sidebar-panel-set-route" style="display:none;flex-direction:column;gap:12px;"></div>
+                <div id="sidebar-panel-join-requests" style="display:flex;flex-direction:column;gap:12px;"></div>
+                <div id="sidebar-panel-short" style="display:none;flex-direction:column;gap:12px;"></div>
+                <div id="sidebar-panel-daily" style="display:none;flex-direction:column;gap:12px;"></div>
+                <div id="sidebar-panel-driver" style="display:none;flex-direction:column;gap:12px;"></div>
             </div>
         </div>
     </div>
@@ -2523,6 +2626,7 @@ class AuthController {
         var bPassengerMonitorTimer = null, bDriverActiveRide = null;
         var bPermDays = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء'];
         var bDriverOnline = false, bDriverWatchId = null, bDriverIncomingTimer = null, bDriverReqTimer = null;
+        var bMapPickTarget = 'pickup';
 
         window.openRouteApp = function(tab) {
             window.openBookingApp(tab || 'set-route');
@@ -2538,7 +2642,10 @@ class AuthController {
             var isDriver = (role === 'Driver' || role === 'driver');
 
             var sidebar = document.getElementById('booking-sidebar');
-            if (sidebar) sidebar.classList.remove('drawer-collapsed');
+            if (sidebar) sidebar.classList.add('drawer-collapsed');
+            var backdrop = document.getElementById('booking-sidebar-backdrop');
+            if (backdrop) backdrop.style.display = 'none';
+            bMapPickTarget = 'pickup';
 
             var tabSet = document.getElementById('book-tab-set-route');
             if (tabSet) {
@@ -2566,10 +2673,150 @@ class AuthController {
             }
         };
 
-        window.toggleBookingDrawer = function() {
+
+        var NAJAF_PLACES = [
+            { name: 'مرقد الإمام علي عليه السلام', lat: 31.9962, lon: 44.3113 },
+            { name: 'حولي النجف', lat: 32.0010, lon: 44.3350 },
+            { name: 'بنات الحسن', lat: 31.9900, lon: 44.3050 },
+            { name: 'المحافظة - مبنى المحافظة', lat: 31.9955, lon: 44.3170 },
+            { name: 'جامعة الكوفة', lat: 32.0296, lon: 44.3828 },
+            { name: 'كلية الطب - جامعة الكوفة', lat: 32.0270, lon: 44.3800 },
+            { name: 'كلية الهندسة - جامعة الكوفة', lat: 32.0310, lon: 44.3850 },
+            { name: 'جامعة الإمام الصادق', lat: 32.0050, lon: 44.3200 },
+            { name: 'مستشفى الصدر التعليمي', lat: 31.9985, lon: 44.3220 },
+            { name: 'مستشفى الحكيم', lat: 32.0010, lon: 44.3260 },
+            { name: 'مستشفى النجف التعليمي', lat: 31.9960, lon: 44.3120 },
+            { name: 'مركز صحي حي الجامعة', lat: 32.0100, lon: 44.3300 },
+            { name: 'حي الجامعة', lat: 32.0100, lon: 44.3300 },
+            { name: 'حي الحسين', lat: 31.9950, lon: 44.3100 },
+            { name: 'حي القادسية', lat: 32.0150, lon: 44.3400 },
+            { name: 'حي الصالحية', lat: 32.0080, lon: 44.3180 },
+            { name: 'حي الشرطة', lat: 32.0020, lon: 44.3200 },
+            { name: 'حي الرسالة', lat: 31.9870, lon: 44.3050 },
+            { name: 'حي الإسكان', lat: 32.0200, lon: 44.3500 },
+            { name: 'حي الزهراء', lat: 31.9930, lon: 44.3000 },
+            { name: 'حي الكوفة القديمة', lat: 32.0280, lon: 44.4000 },
+            { name: 'حي العلوية', lat: 32.0060, lon: 44.3140 },
+            { name: 'حي المنطقة الصناعية', lat: 32.0400, lon: 44.3600 },
+            { name: 'شارع الروان', lat: 31.9980, lon: 44.3160 },
+            { name: 'شارع الكوفة', lat: 32.0100, lon: 44.3600 },
+            { name: 'السوق الكبير - النجف', lat: 31.9970, lon: 44.3140 },
+            { name: 'الصحن الشريف - الحرم العلوي', lat: 31.9962, lon: 44.3113 },
+            { name: 'بلدية النجف', lat: 31.9965, lon: 44.3180 },
+            { name: 'مديرية تربية النجف', lat: 32.0015, lon: 44.3250 },
+            { name: 'مطار النجف الأشرف', lat: 31.9906, lon: 44.4040 },
+            { name: 'الحيرة', lat: 32.0700, lon: 44.4000 },
+            { name: 'الكوفة', lat: 32.0300, lon: 44.4000 },
+            { name: 'المشخاب', lat: 31.7600, lon: 44.3500 }
+        ];
+
+        function normalizeArabicText(s) {
+            return (s || '').replace(/\u0623|\u0625|\u0622/g, '\u0627').replace(/\u0629/g, '\u0647').replace(/\u0649/g, '\u064a').toLowerCase().trim();
+        }
+
+        function searchLocalNajafPlaces(query) {
+            var q = normalizeArabicText(query);
+            if (q.length < 2) return [];
+            return NAJAF_PLACES.filter(function(p) {
+                return normalizeArabicText(p.name).indexOf(q) !== -1;
+            }).slice(0, 5);
+        }
+
+        window.setMapTarget = function(target) {
+            bMapPickTarget = target;
+            var statusEl = document.getElementById('map-target-status');
+            var btnPickup = document.getElementById('btn-target-pickup');
+            var btnDropoff = document.getElementById('btn-target-dropoff');
+            if (target === 'pickup') {
+                if (statusEl) statusEl.textContent = '\u{1F4CD} \u0627\u0646\u0642\u0631 \u0627\u0644\u062e\u0631\u064a\u0637\u0629 \u0644\u062a\u062d\u062f\u064a\u062f \u0646\u0642\u0637\u0629 \u0627\u0644\u0627\u0646\u0637\u0644\u0627\u0642 \uD83D\uDFE2';
+                if (btnPickup) { btnPickup.style.background = '#dcfce7'; btnPickup.style.color = '#15803d'; btnPickup.style.borderColor = '#86efac'; btnPickup.style.fontWeight = '900'; }
+                if (btnDropoff) { btnDropoff.style.background = 'transparent'; btnDropoff.style.color = '#6b7280'; btnDropoff.style.borderColor = '#e5e7eb'; btnDropoff.style.fontWeight = '700'; }
+            } else {
+                if (statusEl) statusEl.textContent = '\u{1F4CD} \u0627\u0646\u0642\u0631 \u0627\u0644\u062e\u0631\u064a\u0637\u0629 \u0644\u062a\u062d\u062f\u064a\u062f \u0646\u0642\u0637\u0629 \u0627\u0644\u0648\u0635\u0648\u0644 \uD83D\uDD34';
+                if (btnPickup) { btnPickup.style.background = 'transparent'; btnPickup.style.color = '#6b7280'; btnPickup.style.borderColor = '#e5e7eb'; btnPickup.style.fontWeight = '700'; }
+                if (btnDropoff) { btnDropoff.style.background = '#fee2e2'; btnDropoff.style.color = '#b91c1c'; btnDropoff.style.borderColor = '#fca5a5'; btnDropoff.style.fontWeight = '900'; }
+            }
+        };
+
+        window.clearPickupInput = function() {
+            var inp = document.getElementById('book-pickup-input');
+            var clr = document.getElementById('btn-clear-pickup');
+            if (inp) inp.value = '';
+            if (clr) clr.style.display = 'none';
+            bPickupCoords = null; bPickupName = '';
+            if (bPickupMarker) { bPickupMarker.remove(); bPickupMarker = null; }
+        };
+
+        window.clearDropoffInput = function() {
+            var inp = document.getElementById('book-dropoff-input');
+            var clr = document.getElementById('btn-clear-dropoff');
+            if (inp) inp.value = '';
+            if (clr) clr.style.display = 'none';
+            bDropoffCoords = null; bDropoffName = '';
+            if (bDropoffMarker) { bDropoffMarker.remove(); bDropoffMarker = null; }
+        };
+
+        var bPickupTimer = null;
+        window.onBookingPickupSearch = function(query) {
+            clearTimeout(bPickupTimer);
+            var clrBtn = document.getElementById('btn-clear-pickup');
+            if (clrBtn) clrBtn.style.display = query ? 'block' : 'none';
+            var resultsEl = document.getElementById('book-pickup-results');
+            if (!resultsEl) return;
+            if (!query || query.trim().length < 2) { resultsEl.style.display = 'none'; return; }
+            var local = searchLocalNajafPlaces(query);
+            resultsEl.innerHTML = '';
+            if (local.length > 0) {
+                resultsEl.style.display = 'block';
+                local.forEach(function(p) {
+                    var item = document.createElement('div');
+                    item.className = 'search-result-item';
+                    item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</span>';
+                    item.onclick = function() { resultsEl.style.display = 'none'; setBookingPickup(p.lon, p.lat, p.name); setMapTarget('dropoff'); };
+                    resultsEl.appendChild(item);
+                });
+            }
+            bPickupTimer = setTimeout(async function() {
+                try {
+                    var q = encodeURIComponent(query.trim());
+                    var bbox = '44.10,31.70,44.65,32.30';
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&bbox=' + bbox + '&proximity=' + bUserLon + ',' + bUserLat + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=5&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    var res = await fetch(url);
+                    var data = await res.json();
+                    var feats = (data && data.features) ? data.features : [];
+                    resultsEl.innerHTML = '';
+                    searchLocalNajafPlaces(query).forEach(function(p) {
+                        var item = document.createElement('div');
+                        item.className = 'search-result-item';
+                        item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</span>';
+                        item.onclick = function() { resultsEl.style.display = 'none'; setBookingPickup(p.lon, p.lat, p.name); setMapTarget('dropoff'); };
+                        resultsEl.appendChild(item);
+                    });
+                    feats.forEach(function(f) {
+                        var nm = f.place_name_ar || f.place_name || '';
+                        var item = document.createElement('div');
+                        item.className = 'search-result-item';
+                        item.innerHTML = '<span>🗺️</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nm + '</span>';
+                        item.onclick = function() { resultsEl.style.display = 'none'; setBookingPickup(f.center[0], f.center[1], nm); setMapTarget('dropoff'); };
+                        resultsEl.appendChild(item);
+                    });
+                    resultsEl.style.display = resultsEl.children.length > 0 ? 'block' : 'none';
+                } catch(_) {}
+            }, 350);
+        };
+
+        window.toggleBookingDrawer = function(forceOpen) {
             var sidebar = document.getElementById('booking-sidebar');
+            var backdrop = document.getElementById('booking-sidebar-backdrop');
             if (!sidebar) return;
-            sidebar.classList.toggle('drawer-collapsed');
+            var isOpen = !sidebar.classList.contains('drawer-collapsed');
+            if (forceOpen === false || isOpen) {
+                sidebar.classList.add('drawer-collapsed');
+                if (backdrop) backdrop.style.display = 'none';
+            } else {
+                sidebar.classList.remove('drawer-collapsed');
+                if (backdrop) backdrop.style.display = 'block';
+            }
             if (bMap) setTimeout(function() { bMap.resize(); }, 150);
         };
 
@@ -3070,11 +3317,15 @@ class AuthController {
                     paint: { 'line-color': '#2563eb', 'line-width': 4.5, 'line-opacity': 0.95 }
                 });
 
-                // Map Click handler to set pins
+                // Map Click handler to set pins based on active target
                 bMap.on('click', function(e) {
                     var lng = e.lngLat.lng, lat = e.lngLat.lat;
-                    if (!bPickupCoords) setBookingPickup(lng, lat, '');
-                    else setBookingDropoff(lng, lat, '');
+                    if (bMapPickTarget === 'dropoff') {
+                        setBookingDropoff(lng, lat, '');
+                    } else {
+                        setBookingPickup(lng, lat, '');
+                        if (!bDropoffCoords) setMapTarget('dropoff');
+                    }
                 });
 
                 fetchNearbyDriversForMap();
@@ -3193,6 +3444,22 @@ class AuthController {
                     if (fEl) fEl.textContent = '💰 ' + bRouteFare.toLocaleString() + ' د.ع';
                 }
 
+                // Update floating card summary pill
+                var cardPill = document.getElementById('floating-route-summary-pill');
+                if (cardPill) {
+                    cardPill.style.display = 'flex';
+                    var cdEl = document.getElementById('card-route-dist');
+                    var cdurEl = document.getElementById('card-route-dur');
+                    var cfEl = document.getElementById('card-route-fare');
+                    if (cdEl) cdEl.textContent = '📏 ' + bRouteDist + ' كم';
+                    if (cdurEl) cdurEl.textContent = '⏱️ ' + bRouteDur + ' دقيقة';
+                    if (cfEl) cfEl.textContent = '💰 ' + bRouteFare.toLocaleString() + ' د.ع';
+                }
+
+                // Update floating save button fare badge
+                var fareSpan = document.getElementById('floating-btn-fare');
+                if (fareSpan) { fareSpan.style.display = 'inline'; fareSpan.textContent = bRouteFare.toLocaleString() + ' د.ع'; }
+
                 var sideInfo = document.getElementById('side-route-summary');
                 if (sideInfo) {
                     sideInfo.style.display = 'block';
@@ -3230,33 +3497,51 @@ class AuthController {
         var bDropoffTimer = null;
         window.onBookingDropoffSearch = function(query) {
             clearTimeout(bDropoffTimer);
+            var clrBtn = document.getElementById('btn-clear-dropoff');
+            if (clrBtn) clrBtn.style.display = query ? 'block' : 'none';
             var resultsEl = document.getElementById('book-dropoff-results');
             if (!resultsEl) return;
-            if (!query || query.trim().length < 2) {
-                resultsEl.style.display = 'none';
-                return;
+            if (!query || query.trim().length < 2) { resultsEl.style.display = 'none'; return; }
+
+            // Show local Najaf results immediately
+            var local = searchLocalNajafPlaces(query);
+            resultsEl.innerHTML = '';
+            if (local.length > 0) {
+                resultsEl.style.display = 'block';
+                local.forEach(function(p) {
+                    var item = document.createElement('div');
+                    item.className = 'search-result-item';
+                    item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</span>';
+                    item.onclick = function() { resultsEl.style.display = 'none'; setBookingDropoff(p.lon, p.lat, p.name); };
+                    resultsEl.appendChild(item);
+                });
             }
+
             bDropoffTimer = setTimeout(async function() {
                 try {
                     var q = encodeURIComponent(query.trim());
-                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + bUserLon + ',' + bUserLat + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=6&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    var bbox = '44.10,31.70,44.65,32.30';
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&bbox=' + bbox + '&proximity=' + bUserLon + ',' + bUserLat + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=5&access_token=' + BOOKING_MAPBOX_TOKEN;
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
-                    if (feats.length === 0) { resultsEl.style.display = 'none'; return; }
                     resultsEl.innerHTML = '';
-                    resultsEl.style.display = 'block';
-                    feats.forEach(function(f) {
+                    searchLocalNajafPlaces(query).forEach(function(p) {
                         var item = document.createElement('div');
                         item.className = 'search-result-item';
-                        var name = f.place_name_ar || f.place_name || '';
-                        item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + name + '</span>';
-                        item.onclick = function() {
-                            resultsEl.style.display = 'none';
-                            setBookingDropoff(f.center[0], f.center[1], name);
-                        };
+                        item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</span>';
+                        item.onclick = function() { resultsEl.style.display = 'none'; setBookingDropoff(p.lon, p.lat, p.name); };
                         resultsEl.appendChild(item);
                     });
+                    feats.forEach(function(f) {
+                        var nm = f.place_name_ar || f.place_name || '';
+                        var item = document.createElement('div');
+                        item.className = 'search-result-item';
+                        item.innerHTML = '<span>🗺️</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nm + '</span>';
+                        item.onclick = function() { resultsEl.style.display = 'none'; setBookingDropoff(f.center[0], f.center[1], nm); };
+                        resultsEl.appendChild(item);
+                    });
+                    resultsEl.style.display = resultsEl.children.length > 0 ? 'block' : 'none';
                 } catch(_) { resultsEl.style.display = 'none'; }
             }, 300);
         };
