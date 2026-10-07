@@ -45,6 +45,10 @@ function checkAdminAuth() {
             overlay.classList.add('hidden');
         }
         try { loadDashboardStats(); } catch(e) { console.warn(e); }
+        try { loadDrivers(); } catch(e) { console.warn(e); }
+        try { loadCustomers(); } catch(e) { console.warn(e); }
+        try { loadVerifications(); } catch(e) { console.warn(e); }
+        try { loadRoutes(); } catch(e) { console.warn(e); }
         try { loadMatchingSettings(); } catch(e) { console.warn(e); }
         try { loadCustomizationSettings(); } catch(e) { console.warn(e); }
         // Auto-refresh stats & cancellation badge every 30 seconds
@@ -89,6 +93,10 @@ function handleAdminLogin(event) {
         }
         showToast('مرحباً بك في لوحة تحكم منصة توصيله! 🚖');
         try { loadDashboardStats(); } catch(e) { console.warn(e); }
+        try { loadDrivers(); } catch(e) { console.warn(e); }
+        try { loadCustomers(); } catch(e) { console.warn(e); }
+        try { loadVerifications(); } catch(e) { console.warn(e); }
+        try { loadRoutes(); } catch(e) { console.warn(e); }
         try { loadMatchingSettings(); } catch(e) { console.warn(e); }
         try { loadCustomizationSettings(); } catch(e) { console.warn(e); }
     } else {
@@ -269,7 +277,7 @@ async function loadDashboardStats() {
         }
 
         try {
-            const resCan = await fetch(`${API_BASE}/admin/cancellation-requests`);
+            const resCan = await fetch(`${API_BASE}/cancellation-requests`);
             if (resCan.ok) {
                 const dataCan = await resCan.json();
                 const pendingCan = (dataCan.requests || []).filter(r => r.status === 'Pending').length;
@@ -3652,7 +3660,7 @@ async function loadCancellationRequests() {
     if (body) body.innerHTML = '';
 
     try {
-        const res = await fetch(`${API_BASE}/admin/cancellation-requests`);
+        const res = await fetch(`${API_BASE}/cancellation-requests`);
         const data = await res.json();
         const requests = (data && data.requests) ? data.requests : [];
 
@@ -3741,7 +3749,7 @@ async function loadCancellationRequests() {
 async function approveCancellationRequest(requestId) {
     if (!confirm('هل أنت متأكد من قبول طلب الإلغاء؟ سيتم إلغاء حجز الراكب وتحرير المقعد فورياً للمسار.')) return;
     try {
-        const res = await fetch(`${API_BASE}/admin/cancellation-requests/${requestId}/approve`, {
+        const res = await fetch(`${API_BASE}/cancellation-requests/${requestId}/approve`, {
             method: 'POST'
         });
         const data = await res.json();
@@ -3761,7 +3769,7 @@ async function approveCancellationRequest(requestId) {
 async function rejectCancellationRequest(requestId) {
     const reason = prompt('يرجى إدخال سبب رفض طلب الإلغاء:') || 'مرفوض من الإدارة';
     try {
-        const res = await fetch(`${API_BASE}/admin/cancellation-requests/${requestId}/reject`, {
+        const res = await fetch(`${API_BASE}/cancellation-requests/${requestId}/reject`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ reason })

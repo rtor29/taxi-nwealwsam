@@ -138,6 +138,18 @@
                         if (typeof loadDashboardStats === 'function') {
                             try { loadDashboardStats(); } catch(e) {}
                         }
+                        if (typeof loadDrivers === 'function') {
+                            try { loadDrivers(); } catch(e) {}
+                        }
+                        if (typeof loadCustomers === 'function') {
+                            try { loadCustomers(); } catch(e) {}
+                        }
+                        if (typeof loadVerifications === 'function') {
+                            try { loadVerifications(); } catch(e) {}
+                        }
+                        if (typeof loadRoutes === 'function') {
+                            try { loadRoutes(); } catch(e) {}
+                        }
                         if (typeof loadMatchingSettings === 'function') {
                             try { loadMatchingSettings(); } catch(e) {}
                         }
@@ -2561,6 +2573,6 @@
         });
     </script>
 
-    <script src="/dashboard/app.js?v=20261003_v4"></script>
+    <script src="/dashboard/app.js?v=20261007_v5"></script>
 </body>
 </html>
