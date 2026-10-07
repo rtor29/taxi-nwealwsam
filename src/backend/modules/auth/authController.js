@@ -868,6 +868,32 @@ class AuthController {
                             بيانات الحساب
                         </div>
 
+                        <!-- Governorate Dropdown -->
+                        <div style="margin-bottom:12px">
+                            <label for="cust-reg-governorate" class="label">المحافظة <span style="color:#dc2626">*</span></label>
+                            <select id="cust-reg-governorate" class="inp" onchange="onGovernorateChange(this.value,'customer')" style="font-size:13px;padding:10px 12px;cursor:pointer" aria-label="اختر المحافظة">
+                                <option value="" disabled selected>🏙️ اختر محافظتك</option>
+                                <option value="baghdad">بغداد</option>
+                                <option value="basra">البصرة</option>
+                                <option value="najaf">النجف</option>
+                                <option value="karbala">كربلاء</option>
+                                <option value="erbil">أربيل</option>
+                                <option value="sulaymaniyah">السليمانية</option>
+                                <option value="duhok">دهوك</option>
+                                <option value="kirkuk">كركوك</option>
+                                <option value="nineveh">نينوى</option>
+                                <option value="diyala">ديالى</option>
+                                <option value="anbar">الأنبار</option>
+                                <option value="babil">بابل</option>
+                                <option value="wasit">واسط</option>
+                                <option value="saladin">صلاح الدين</option>
+                                <option value="dhi_qar">ذي قار</option>
+                                <option value="maysan">ميسان</option>
+                                <option value="muthanna">المثنى</option>
+                                <option value="qadisiyyah">القادسية</option>
+                            </select>
+                        </div>
+
                         <!-- First & Last Name -->
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
                             <div>
@@ -1009,6 +1035,55 @@ class AuthController {
                             <span style="background:#111;color:#fff;border-radius:999px;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">2</span>
                             بيانات الكابتن
                         </div>
+
+                        <!-- Governorate Dropdown -->
+                        <div style="margin-bottom:12px">
+                            <label for="driver-reg-governorate" class="label">المحافظة <span style="color:#dc2626">*</span></label>
+                            <select id="driver-reg-governorate" class="inp" onchange="onGovernorateChange(this.value,'driver')" style="font-size:13px;padding:10px 12px;cursor:pointer" aria-label="اختر المحافظة">
+                                <option value="" disabled selected>🏙️ اختر محافظتك</option>
+                                <option value="baghdad">بغداد</option>
+                                <option value="basra">البصرة</option>
+                                <option value="najaf">النجف</option>
+                                <option value="karbala">كربلاء</option>
+                                <option value="erbil">أربيل</option>
+                                <option value="sulaymaniyah">السليمانية</option>
+                                <option value="duhok">دهوك</option>
+                                <option value="kirkuk">كركوك</option>
+                                <option value="nineveh">نينوى</option>
+                                <option value="diyala">ديالى</option>
+                                <option value="anbar">الأنبار</option>
+                                <option value="babil">بابل</option>
+                                <option value="wasit">واسط</option>
+                                <option value="saladin">صلاح الدين</option>
+                                <option value="dhi_qar">ذي قار</option>
+                                <option value="maysan">ميسان</option>
+                                <option value="muthanna">المثنى</option>
+                                <option value="qadisiyyah">القادسية</option>
+                            </select>
+                        </div>
+
+                        <!-- Driver Service Type Selection -->
+                        <div style="margin-bottom:12px">
+                            <label class="label" style="margin-bottom:10px">نوع الخدمة <span style="color:#dc2626">*</span></label>
+                            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+                                <div class="trip-card" id="drv-reg-short" onclick="selectDriverRegServiceType('ShortTrip')" style="text-align:center;padding:10px 6px">
+                                    <div style="font-size:20px;margin-bottom:4px">⚡</div>
+                                    <div style="font-size:12px;font-weight:900">مشاوير</div>
+                                    <div style="font-size:10px;color:#6b7280;margin-top:2px">رحلات فورية</div>
+                                </div>
+                                <div class="trip-card" id="drv-reg-daily" onclick="selectDriverRegServiceType('PermanentLine')" style="text-align:center;padding:10px 6px">
+                                    <div style="font-size:20px;margin-bottom:4px">🔄</div>
+                                    <div style="font-size:12px;font-weight:900">خطوط دائمة</div>
+                                    <div style="font-size:10px;color:#6b7280;margin-top:2px">اشتراك يومي</div>
+                                </div>
+                                <div class="trip-card" id="drv-reg-both" onclick="selectDriverRegServiceType('Both')" style="text-align:center;padding:10px 6px">
+                                    <div style="font-size:20px;margin-bottom:4px">🚖</div>
+                                    <div style="font-size:12px;font-weight:900">كلاهما</div>
+                                    <div style="font-size:10px;color:#6b7280;margin-top:2px">مشاوير+خطوط</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div style="margin-bottom:12px">
                             <label for="driver-reg-name" class="label">الاسم الكامل <span style="color:#dc2626">*</span></label>
                             <input type="text" id="driver-reg-name" required class="inp" placeholder="مثال: علي محمد حسن" aria-label="الاسم الكامل للسائق">
@@ -1209,6 +1284,66 @@ class AuthController {
                 cardDaily.className = 'trip-card selected';
                 cardShort.className = 'trip-card';
             }
+        }
+
+        // ===== Iraqi Governorates with bbox & center =====
+        var IRAQ_GOVERNORATES = {
+            baghdad:      { name: 'بغداد',       center: [44.3661, 33.3152], bbox: '44.10,33.10,44.65,33.55' },
+            basra:        { name: 'البصرة',      center: [47.7835, 30.5085], bbox: '47.30,29.90,48.60,31.20' },
+            najaf:        { name: 'النجف',       center: [44.3168, 31.9961], bbox: '44.05,31.75,44.65,32.35' },
+            karbala:      { name: 'كربلاء',      center: [44.0249, 32.6160], bbox: '43.65,32.30,44.45,33.00' },
+            erbil:        { name: 'أربيل',       center: [44.0089, 36.1912], bbox: '43.40,35.70,45.10,37.00' },
+            sulaymaniyah: { name: 'السليمانية',   center: [45.4351, 35.5574], bbox: '44.60,34.90,46.30,36.30' },
+            duhok:        { name: 'دهوك',        center: [42.9884, 36.8670], bbox: '42.30,36.40,44.00,37.40' },
+            kirkuk:       { name: 'كركوك',       center: [44.3958, 35.4681], bbox: '43.50,34.60,45.40,36.10' },
+            nineveh:      { name: 'نينوى',       center: [43.1340, 36.3350], bbox: '41.80,35.40,44.30,37.30' },
+            diyala:       { name: 'ديالى',       center: [44.9500, 33.7487], bbox: '44.30,33.10,46.10,34.80' },
+            anbar:        { name: 'الأنبار',     center: [41.9000, 33.4000], bbox: '38.80,31.50,44.20,35.00' },
+            babil:        { name: 'بابل',        center: [44.4200, 32.4680], bbox: '44.00,32.00,45.00,33.00' },
+            wasit:        { name: 'واسط',        center: [45.8306, 32.6027], bbox: '45.00,32.00,46.80,33.30' },
+            saladin:      { name: 'صلاح الدين',  center: [43.8750, 34.4640], bbox: '43.00,33.50,45.00,35.50' },
+            dhi_qar:      { name: 'ذي قار',      center: [46.2570, 31.0439], bbox: '45.30,30.30,47.30,31.80' },
+            maysan:       { name: 'ميسان',       center: [47.2340, 31.8379], bbox: '46.30,31.00,48.00,33.00' },
+            muthanna:     { name: 'المثنى',      center: [45.2980, 31.3200], bbox: '44.00,29.80,46.40,31.90' },
+            qadisiyyah:   { name: 'القادسية',    center: [44.9330, 31.9845], bbox: '44.40,31.40,45.60,32.60' }
+        };
+
+        var selectedGovernorate = localStorage.getItem('user_governorate') || '';
+        var selectedDriverRegService = null;
+
+        window.onGovernorateChange = function(govKey, role) {
+            selectedGovernorate = govKey;
+            localStorage.setItem('user_governorate', govKey);
+            var gov = IRAQ_GOVERNORATES[govKey];
+            if (!gov) return;
+            bUserLat = gov.center[1];
+            bUserLon = gov.center[0];
+            var parts = gov.bbox.split(',').map(Number);
+            var bounds = [[parts[0], parts[1]], [parts[2], parts[3]]];
+            if (passengerMap) {
+                passengerMap.flyTo({ center: gov.center, zoom: 12 });
+                try { passengerMap.setMaxBounds(bounds); } catch(_) {}
+            }
+            if (bMap) {
+                bMap.flyTo({ center: gov.center, zoom: 12 });
+                try { bMap.setMaxBounds(bounds); } catch(_) {}
+            }
+        };
+
+        window.selectDriverRegServiceType = function(type) {
+            selectedDriverRegService = type;
+            var s = document.getElementById('drv-reg-short');
+            var d = document.getElementById('drv-reg-daily');
+            var b = document.getElementById('drv-reg-both');
+            if (s) s.className = (type === 'ShortTrip') ? 'trip-card selected' : 'trip-card';
+            if (d) d.className = (type === 'PermanentLine') ? 'trip-card selected' : 'trip-card';
+            if (b) b.className = (type === 'Both') ? 'trip-card selected' : 'trip-card';
+        };
+
+        // Helper: get active governorate bbox string
+        function getActiveGovBbox() {
+            var gov = IRAQ_GOVERNORATES[selectedGovernorate || localStorage.getItem('user_governorate') || 'najaf'];
+            return gov ? gov.bbox : '44.05,31.75,44.65,32.35';
         }
 
         // ===== Trip type modal (after login) =====
@@ -1525,12 +1660,15 @@ class AuthController {
             var alertBox = document.getElementById('cust-reg-alert');
             if (alertBox) alertBox.style.display = 'none';
             if (!window.__isPhoneVerified) { alert('يرجى التحقق من رقم الهاتف أولاً'); return; }
+            var gov = (document.getElementById('cust-reg-governorate')?.value||'').trim();
+            if (!gov) { alert('يرجى اختيار المحافظة أولاً'); return; }
+            localStorage.setItem('user_governorate', gov);
             var fname = (document.getElementById('cust-reg-firstname').value||'').trim();
             var lname = (document.getElementById('cust-reg-lastname').value||'').trim();
             var fullName = (fname + ' ' + lname).trim();
             var phone = normalizeArabicDigits(document.getElementById('cust-reg-phone').value.trim());
-            var route = (document.getElementById('cust-reg-route').value||'').trim() || 'النجف الأشرف';
-            var address = (document.getElementById('cust-reg-address').value||'').trim() || 'النجف الأشرف';
+            var route = (document.getElementById('cust-reg-route').value||'').trim() || (IRAQ_GOVERNORATES[gov]?.name || 'العراق');
+            var address = (document.getElementById('cust-reg-address').value||'').trim() || (IRAQ_GOVERNORATES[gov]?.name || 'العراق');
             var password = document.getElementById('cust-reg-password').value;
             var submitBtn = document.getElementById('btn-cust-reg-submit');
             if (!fname || !lname) { alert('يرجى إدخال الاسم واللقب'); return; }
@@ -1556,7 +1694,7 @@ class AuthController {
             try {
                 var res = await fetch('/api/auth/complete-passenger-registration', {
                     method:'POST', headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({fullName,phoneNumber:phone,route,address,password,otpCode:window.__verifiedOtpCode||'',pickupLat:parseFloat(pickupLat),pickupLon:parseFloat(pickupLon),dropoffLat:parseFloat(dropoffLat),dropoffLon:parseFloat(dropoffLon),tripType:selectedRegTripType||'short'})
+                    body:JSON.stringify({fullName,phoneNumber:phone,route,address,password,otpCode:window.__verifiedOtpCode||'',pickupLat:parseFloat(pickupLat),pickupLon:parseFloat(pickupLon),dropoffLat:parseFloat(dropoffLat),dropoffLon:parseFloat(dropoffLon),tripType:selectedRegTripType||'short',governorate:gov})
                 });
                 var data = await res.json();
                 if (res.ok && data.success) {
@@ -1659,6 +1797,10 @@ class AuthController {
             var alertBox=document.getElementById('driver-reg-alert');
             if(alertBox) alertBox.style.display='none';
             if(!window.__isDriverPhoneVerified){alert('يرجى التحقق من رقم الهاتف أولاً');return;}
+            var gov = (document.getElementById('driver-reg-governorate')?.value||'').trim();
+            if (!gov) { alert('يرجى اختيار المحافظة أولاً'); return; }
+            if (!selectedDriverRegService) { alert('يرجى اختيار نوع الخدمة (مشاوير، خطوط دائمة، كلاهما)'); return; }
+            localStorage.setItem('user_governorate', gov);
             var name=(document.getElementById('driver-reg-name').value||'').trim();
             var phone=normalizeArabicDigits(document.getElementById('driver-reg-phone').value.trim());
             var license=(document.getElementById('driver-reg-license').value||'').trim();
@@ -1675,7 +1817,7 @@ class AuthController {
             try {
                 var res = await fetch('/api/auth/complete-driver-registration',{
                     method:'POST',headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({fullName:name,phoneNumber:phone,licenseNumber:license,vehicleMake:vehicle,vehiclePlate:plate,password,fromRoute,toRoute,route:(fromRoute+' ➔ '+toRoute),otpCode:window.__verifiedDriverOtpCode||''})
+                    body:JSON.stringify({fullName:name,phoneNumber:phone,licenseNumber:license,vehicleMake:vehicle,vehiclePlate:plate,password,fromRoute,toRoute,route:(fromRoute+' ➔ '+toRoute),otpCode:window.__verifiedDriverOtpCode||'',governorate:gov,serviceType:selectedDriverRegService})
                 });
                 var data = await res.json();
                 if (res.ok && data.success) {
@@ -1825,7 +1967,10 @@ class AuthController {
                 if(!window.mapboxgl) await window.loadMapboxDynamically();
                 if(!window.mapboxgl) return;
                 mapboxgl.accessToken=('pk.'+'eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9'+'._J6DYjYBDhsdcidErQrblA');
-                passengerMap=new mapboxgl.Map({container:'passenger-map',style:'mapbox://styles/mapbox/streets-v12',center:[44.32,32.02],zoom:13,maxBounds:[[44.05,31.75],[44.65,32.35]]});
+                var activeGov = IRAQ_GOVERNORATES[selectedGovernorate || localStorage.getItem('user_governorate') || 'najaf'] || IRAQ_GOVERNORATES.najaf;
+                var govParts = activeGov.bbox.split(',').map(Number);
+                var govBounds = [[govParts[0], govParts[1]], [govParts[2], govParts[3]]];
+                passengerMap=new mapboxgl.Map({container:'passenger-map',style:'mapbox://styles/mapbox/streets-v12',center:activeGov.center,zoom:13,maxBounds:govBounds});
                 if(typeof mapboxgl.getRTLTextPluginStatus==='function'&&mapboxgl.getRTLTextPluginStatus()==='unavailable'){
                     mapboxgl.setRTLTextPlugin('https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js',null,true);
                 }
@@ -1907,13 +2052,15 @@ class AuthController {
             geocodeTimers[target] = setTimeout(async function() {
                 try {
                     var token = ('pk.'+'eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9'+'._J6DYjYBDhsdcidErQrblA');
-                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'+encodeURIComponent(q)+'.json?proximity=44.32,32.02&bbox=44.05,31.75,44.65,32.35&country=iq&language=ar&types=poi,address,neighborhood,place,locality&limit=5&access_token='+token;
+                    var activeGov = IRAQ_GOVERNORATES[selectedGovernorate || localStorage.getItem('user_governorate') || 'najaf'] || IRAQ_GOVERNORATES.najaf;
+                    var bbox = getActiveGovBbox();
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'+encodeURIComponent(q)+'.json?proximity='+activeGov.center[0]+','+activeGov.center[1]+'&bbox='+bbox+'&country=iq&language=ar&types=poi,address,neighborhood,place,locality&limit=5&access_token='+token;
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
                     if (feats.length === 0) {
                         try {
-                            var or = await fetch('https://nominatim.openstreetmap.org/search?format=json&countrycodes=iq&q='+encodeURIComponent(q+' النجف'));
+                            var or = await fetch('https://nominatim.openstreetmap.org/search?format=json&countrycodes=iq&q='+encodeURIComponent(q+' '+activeGov.name));
                             var od = await or.json();
                             if (od && od.length > 0) feats = od.map(function(o){ return { place_name_ar: o.display_name, center: [parseFloat(o.lon), parseFloat(o.lat)] }; });
                         } catch(_) {}
@@ -2744,7 +2891,8 @@ class AuthController {
             var resultsEl = document.getElementById('book-pickup-results');
             if (!resultsEl) return;
             if (!query || query.trim().length < 2) { resultsEl.style.display = 'none'; return; }
-            var local = searchLocalNajafPlaces(query);
+            var activeGov = IRAQ_GOVERNORATES[selectedGovernorate || localStorage.getItem('user_governorate') || 'najaf'] || IRAQ_GOVERNORATES.najaf;
+            var local = (activeGov.name === 'النجف') ? searchLocalNajafPlaces(query) : [];
             resultsEl.innerHTML = '';
             if (local.length > 0) {
                 resultsEl.style.display = 'block';
@@ -2759,19 +2907,21 @@ class AuthController {
             bPickupTimer = setTimeout(async function() {
                 try {
                     var q = encodeURIComponent(query.trim());
-                    var bbox = '44.10,31.70,44.65,32.30';
+                    var bbox = getActiveGovBbox();
                     var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&bbox=' + bbox + '&proximity=' + bUserLon + ',' + bUserLat + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=5&access_token=' + BOOKING_MAPBOX_TOKEN;
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
                     resultsEl.innerHTML = '';
-                    searchLocalNajafPlaces(query).forEach(function(p) {
-                        var item = document.createElement('div');
-                        item.className = 'search-result-item';
-                        item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</span>';
-                        item.onclick = function() { resultsEl.style.display = 'none'; setBookingPickup(p.lon, p.lat, p.name); setMapTarget('dropoff'); };
-                        resultsEl.appendChild(item);
-                    });
+                    if (activeGov.name === 'النجف') {
+                        searchLocalNajafPlaces(query).forEach(function(p) {
+                            var item = document.createElement('div');
+                            item.className = 'search-result-item';
+                            item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</span>';
+                            item.onclick = function() { resultsEl.style.display = 'none'; setBookingPickup(p.lon, p.lat, p.name); setMapTarget('dropoff'); };
+                            resultsEl.appendChild(item);
+                        });
+                    }
                     feats.forEach(function(f) {
                         var nm = f.place_name_ar || f.place_name || '';
                         var item = document.createElement('div');
@@ -3276,11 +3426,17 @@ class AuthController {
                     mapboxgl.setRTLTextPlugin('https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js', null, true);
                 } catch(_) {}
             }
+            var activeGov = IRAQ_GOVERNORATES[selectedGovernorate || localStorage.getItem('user_governorate') || 'najaf'] || IRAQ_GOVERNORATES.najaf;
+            bUserLat = activeGov.center[1];
+            bUserLon = activeGov.center[0];
+            var parts = activeGov.bbox.split(',').map(Number);
+            var bounds = [[parts[0], parts[1]], [parts[2], parts[3]]];
             bMap = new mapboxgl.Map({
                 container: 'booking-mapbox-map',
                 style: 'mapbox://styles/mapbox/streets-v12',
                 center: [bUserLon, bUserLat],
-                zoom: 13
+                zoom: 13,
+                maxBounds: bounds
             });
             setTimeout(function() { if (bMap) bMap.resize(); }, 150);
             setTimeout(function() { if (bMap) bMap.resize(); }, 500);
@@ -3542,8 +3698,8 @@ class AuthController {
             if (!resultsEl) return;
             if (!query || query.trim().length < 2) { resultsEl.style.display = 'none'; return; }
 
-            // Show local Najaf results immediately
-            var local = searchLocalNajafPlaces(query);
+            var activeGov = IRAQ_GOVERNORATES[selectedGovernorate || localStorage.getItem('user_governorate') || 'najaf'] || IRAQ_GOVERNORATES.najaf;
+            var local = (activeGov.name === 'النجف') ? searchLocalNajafPlaces(query) : [];
             resultsEl.innerHTML = '';
             if (local.length > 0) {
                 resultsEl.style.display = 'block';
@@ -3559,19 +3715,21 @@ class AuthController {
             bDropoffTimer = setTimeout(async function() {
                 try {
                     var q = encodeURIComponent(query.trim());
-                    var bbox = '44.10,31.70,44.65,32.30';
+                    var bbox = getActiveGovBbox();
                     var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&bbox=' + bbox + '&proximity=' + bUserLon + ',' + bUserLat + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=5&access_token=' + BOOKING_MAPBOX_TOKEN;
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
                     resultsEl.innerHTML = '';
-                    searchLocalNajafPlaces(query).forEach(function(p) {
-                        var item = document.createElement('div');
-                        item.className = 'search-result-item';
-                        item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</span>';
-                        item.onclick = function() { resultsEl.style.display = 'none'; setBookingDropoff(p.lon, p.lat, p.name); };
-                        resultsEl.appendChild(item);
-                    });
+                    if (activeGov.name === 'النجف') {
+                        searchLocalNajafPlaces(query).forEach(function(p) {
+                            var item = document.createElement('div');
+                            item.className = 'search-result-item';
+                            item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</span>';
+                            item.onclick = function() { resultsEl.style.display = 'none'; setBookingDropoff(p.lon, p.lat, p.name); };
+                            resultsEl.appendChild(item);
+                        });
+                    }
                     feats.forEach(function(f) {
                         var nm = f.place_name_ar || f.place_name || '';
                         var item = document.createElement('div');
@@ -4481,7 +4639,7 @@ class AuthController {
      * Completes Passenger (Customer) Registration with Duplicate Prevention and Password Hashing
      */
     async handleCompletePassengerRegistration(req, res, body) {
-        const { fullName, email, password, googleId, phoneNumber, route, address, area, paymentMethod, pickupLat, pickupLon, dropoffLat, dropoffLon } = body;
+        const { fullName, email, password, googleId, phoneNumber, route, address, area, paymentMethod, pickupLat, pickupLon, dropoffLat, dropoffLon, governorate, tripType } = body;
         if (!fullName || !phoneNumber || !password) {
             res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
             return res.end(JSON.stringify({ success: false, error: 'الاسم الكامل، رقم الهاتف، وكلمة المرور مطلوبة.' }));
@@ -4583,6 +4741,8 @@ class AuthController {
             googleId: googleId || null,
             preferredPaymentMethod: paymentMethod || 'Cash',
             area: userAddress,
+            governorate: governorate || 'najaf',
+            tripType: tripType || 'short',
             pickupLat: parseFloat(pickupLat),
             pickupLon: parseFloat(pickupLon),
             dropoffLat: parseFloat(dropoffLat),
@@ -4651,7 +4811,7 @@ class AuthController {
      * Completes Driver Registration with Duplicate Prevention, Password Hashing, documents & route
      */
     async handleCompleteDriverRegistration(req, res, body) {
-        const { fullName, email, password, googleId, phoneNumber, vehicleMake, vehiclePlate, vehicleYear, licenseNumber, documents, route } = body;
+        const { fullName, email, password, googleId, phoneNumber, vehicleMake, vehiclePlate, vehicleYear, licenseNumber, documents, route, governorate, serviceType } = body;
         if (!fullName || !phoneNumber || !password) {
             res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
             return res.end(JSON.stringify({ success: false, error: 'الاسم الكامل، رقم الهاتف، وكلمة المرور مطلوبة.' }));
@@ -4738,6 +4898,8 @@ class AuthController {
             route: route || null,
             activeRoute: (body.fromRoute && body.toRoute) ? { fromText: body.fromRoute.trim(), toText: body.toRoute.trim(), setAt: now } : null,
             documents: docUrls,
+            governorate: governorate || 'najaf',
+            serviceType: serviceType || 'Both',
             status: 'Pending',
             isVerified: false,
             isBlocked: false,
