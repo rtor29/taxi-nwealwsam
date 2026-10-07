@@ -467,80 +467,60 @@ class AuthController {
             <div id="booking-map-wrapper">
                 <div id="booking-mapbox-map"></div>
 
-                <!-- Top Floating Controls Card (Floating over map) -->
-                <div id="floating-route-card" style="position:absolute;top:12px;right:12px;left:12px;max-width:480px;margin:0 auto;z-index:25;background:rgba(255,255,255,0.96);backdrop-filter:blur(10px);border:1.5px solid #e2e8f0;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,0.12);padding:12px 14px;display:flex;flex-direction:column;gap:8px;">
-                    <!-- Active target switcher & click helper -->
-                    <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <span id="map-target-status" style="font-size:11px;font-weight:800;color:#1e40af;background:#eff6ff;padding:3px 8px;border-radius:8px;">
-                            📍 انقر على الخريطة أو ابحث
-                        </span>
+                <!-- Top Floating Controls Card (Floating over map) — DRAGGABLE -->
+                <div id="floating-route-card" style="position:absolute;top:12px;right:12px;width:320px;z-index:25;background:rgba(255,255,255,0.96);backdrop-filter:blur(10px);border:1.5px solid #e2e8f0;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,0.12);padding:0;display:flex;flex-direction:column;gap:0;touch-action:none;user-select:none;">
+
+                    <!-- Drag Handle -->
+                    <div id="floating-card-handle" style="background:linear-gradient(135deg,#111827,#1e293b);border-radius:14px 14px 0 0;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;cursor:grab;">
+                        <span style="font-size:11px;font-weight:800;color:#9ca3af;letter-spacing:1px;">☰ اسحب للتحريك</span>
                         <div style="display:flex;gap:4px;">
-                            <button type="button" id="btn-target-pickup" onclick="setMapTarget('pickup')" class="mode-chip active" style="background:#dcfce7;color:#15803d;border-color:#86efac;">🟢 الانطلاق</button>
-                            <button type="button" id="btn-target-dropoff" onclick="setMapTarget('dropoff')" class="mode-chip" style="background:#fee2e2;color:#b91c1c;border-color:#fca5a5;">🔴 الوصول</button>
+                            <button type="button" id="btn-target-pickup" onclick="setMapTarget('pickup')" class="mode-chip active" style="background:#dcfce7;color:#15803d;border-color:#86efac;font-size:10px;padding:3px 7px;">🟢 الانطلاق</button>
+                            <button type="button" id="btn-target-dropoff" onclick="setMapTarget('dropoff')" class="mode-chip" style="background:#fee2e2;color:#b91c1c;border-color:#fca5a5;font-size:10px;padding:3px 7px;">🔴 الوصول</button>
                         </div>
                     </div>
 
-                    <!-- 🟢 Pickup Search Input Row + Dedicated GPS Button -->
-                    <div style="position:relative;">
-                        <div style="display:flex;gap:6px;align-items:center;">
-                            <div style="position:relative;flex:1;">
-                                <input type="text" id="book-pickup-input" class="inp" placeholder="🟢 ابحث عن نقطة الانطلاق أو انقر عالخريطة..." value="" oninput="onBookingPickupSearch(this.value)" onfocus="setMapTarget('pickup');onBookingPickupSearch(this.value)" style="font-size:12px;padding:9px 12px;padding-left:26px;">
-                                <button type="button" onclick="clearPickupInput()" id="btn-clear-pickup" style="display:none;position:absolute;left:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;font-size:13px;">✕</button>
+                    <!-- Card Body -->
+                    <div style="padding:10px 12px;display:flex;flex-direction:column;gap:8px;">
+                        <!-- Status label -->
+                        <span id="map-target-status" style="font-size:11px;font-weight:800;color:#1e40af;background:#eff6ff;padding:3px 8px;border-radius:8px;text-align:center;">📍 انقر على الخريطة أو ابحث</span>
+
+                        <!-- 🟢 Pickup Search Input Row + GPS Button -->
+                        <div style="position:relative;">
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <div style="position:relative;flex:1;">
+                                    <input type="text" id="book-pickup-input" class="inp" placeholder="🟢 نقطة الانطلاق أو انقر الخريطة..." value="" oninput="onBookingPickupSearch(this.value)" onfocus="setMapTarget('pickup');onBookingPickupSearch(this.value)" style="font-size:11px;padding:8px 10px;padding-left:22px;">
+                                    <button type="button" onclick="clearPickupInput()" id="btn-clear-pickup" style="display:none;position:absolute;left:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;font-size:12px;">✕</button>
+                                </div>
+                                <button type="button" onclick="centerOnUserGps()" id="btn-gps-pickup" style="background:#2563eb;color:#fff;border:none;border-radius:8px;padding:8px 9px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;font-family:inherit;box-shadow:0 2px 8px rgba(37,99,235,0.25);" title="موقعي الحالي">📍</button>
                             </div>
-                            <!-- Dedicated GPS button for current location -->
-                            <button type="button" onclick="centerOnUserGps()" id="btn-gps-pickup" style="background:#2563eb;color:#fff;border:none;border-radius:10px;padding:9px 12px;font-size:11px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap;font-family:inherit;box-shadow:0 2px 8px rgba(37,99,235,0.25);" title="تحديد الموقع الحالي تلقائياً">
-                                <span>📍 موقعي الحالي</span>
-                            </button>
+                            <div id="book-pickup-results" class="search-autocomplete-dropdown"></div>
                         </div>
-                        <div id="book-pickup-results" class="search-autocomplete-dropdown"></div>
-                    </div>
 
-                    <!-- 🔴 Dropoff Search Input Row -->
-                    <div style="position:relative;">
-                        <div style="display:flex;gap:6px;align-items:center;">
-                            <div style="position:relative;flex:1;">
-                                <input type="text" id="book-dropoff-input" class="inp" placeholder="🔴 ابحث: حولي النجف، مرقد الإمام علي، بنات الحسن، المحافظة..." value="" oninput="onBookingDropoffSearch(this.value)" onfocus="setMapTarget('dropoff');onBookingDropoffSearch(this.value)" style="font-size:12px;padding:9px 12px;padding-left:26px;">
-                                <button type="button" onclick="clearDropoffInput()" id="btn-clear-dropoff" style="display:none;position:absolute;left:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;font-size:13px;">✕</button>
+                        <!-- 🔴 Dropoff Search Input Row -->
+                        <div style="position:relative;">
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <div style="position:relative;flex:1;">
+                                    <input type="text" id="book-dropoff-input" class="inp" placeholder="🔴 ابحث: حولي النجف، مرقد الإمام علي..." value="" oninput="onBookingDropoffSearch(this.value)" onfocus="setMapTarget('dropoff');onBookingDropoffSearch(this.value)" style="font-size:11px;padding:8px 10px;padding-left:22px;">
+                                    <button type="button" onclick="clearDropoffInput()" id="btn-clear-dropoff" style="display:none;position:absolute;left:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;font-size:12px;">✕</button>
+                                </div>
                             </div>
+                            <div id="book-dropoff-results" class="search-autocomplete-dropdown"></div>
                         </div>
-                        <div id="book-dropoff-results" class="search-autocomplete-dropdown"></div>
+
+                        <!-- Live Route Summary Badge -->
+                        <div id="floating-route-summary-pill" style="display:none;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:5px 10px;align-items:center;justify-content:space-between;font-size:11px;font-weight:800;">
+                            <span id="card-route-dist" style="color:#1e293b;">📏 -- كم</span>
+                            <span id="card-route-dur" style="color:#1e293b;">⏱️ -- دقيقة</span>
+                            <span id="card-route-fare" style="color:#059669;font-weight:900;">💰 -- د.ع</span>
+                        </div>
+
+                        <!-- 📌 Save Route Button (merged into card) -->
+                        <button type="button" id="btn-floating-save-route" onclick="saveUserRouteToDatabase()" style="background:linear-gradient(135deg,#111827,#1f2937);color:#fff;border:2px solid #374151;border-radius:12px;padding:11px 14px;font-size:13px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 4px 15px rgba(0,0,0,0.25);font-family:inherit;width:100%;transition:all .2s;">
+                            <span>📌</span>
+                            <span id="floating-save-btn-text">تأكيد وتثبيت المسار</span>
+                            <span id="floating-btn-fare" style="display:none;background:#059669;color:#fff;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:800;"></span>
+                        </button>
                     </div>
-
-                    <!-- Live Route Summary Badge (inside card when route calculated) -->
-                    <div id="floating-route-summary-pill" style="display:none;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:6px 12px;align-items:center;justify-content:space-between;font-size:11px;font-weight:800;">
-                        <span id="card-route-dist" style="color:#1e293b;">📏 -- كم</span>
-                        <span id="card-route-dur" style="color:#1e293b;">⏱️ -- دقيقة</span>
-                        <span id="card-route-fare" style="color:#059669;font-weight:900;">💰 -- د.ع</span>
-                    </div>
-                </div>
-
-                <!-- Floating Range Selector -->
-                <div style="position:absolute;top:150px;right:12px;z-index:10;display:flex;gap:4px;background:rgba(255,255,255,0.92);backdrop-filter:blur(6px);padding:4px 8px;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);align-items:center;">
-                    <span style="font-size:10px;font-weight:800;color:#374151;">النطاق:</span>
-                    <button type="button" class="range-chip" onclick="setBookingSearchRange(3)" id="rng-chip-3">3 كم</button>
-                    <button type="button" class="range-chip active" onclick="setBookingSearchRange(5)" id="rng-chip-5">5 كم</button>
-                    <button type="button" class="range-chip" onclick="setBookingSearchRange(10)" id="rng-chip-10">10 كم</button>
-                </div>
-
-                <!-- Floating GPS Button (Bottom Left) -->
-                <button type="button" onclick="centerOnUserGps()" style="position:absolute;bottom:85px;left:16px;z-index:24;background:#fff;border:1.5px solid #d1d5db;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(0,0,0,0.15);cursor:pointer;font-size:18px;color:#1d4ed8;" title="تحديد موقعي">
-                    <i class="fa-solid fa-crosshairs"></i>
-                </button>
-
-                <!-- Floating Route Summary Pill (legacy fallback) -->
-                <div id="booking-route-pill" style="display:none;position:absolute;bottom:85px;right:16px;left:70px;max-width:340px;z-index:23;margin:0 auto;background:#111827;color:#fff;padding:8px 12px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,0.25);font-size:11px;font-weight:800;align-items:center;justify-content:space-between;">
-                    <span id="route-pill-dist">📏 -- كم</span>
-                    <span id="route-pill-dur">⏱️ -- دقيقة</span>
-                    <span id="route-pill-fare" style="color:#f59e0b;">💰 -- د.ع</span>
-                </div>
-
-                <!-- 📌 Bottom Floating Confirm & Save Route Button -->
-                <div id="floating-save-route-container" style="position:absolute;bottom:16px;left:16px;right:16px;max-width:440px;margin:0 auto;z-index:25;">
-                    <button type="button" id="btn-floating-save-route" onclick="saveUserRouteToDatabase()" style="background:linear-gradient(135deg,#111827,#1f2937);color:#fff;border:2px solid #374151;border-radius:14px;padding:14px 20px;font-size:14px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 8px 25px rgba(0,0,0,0.3);font-family:inherit;width:100%;transition:all .2s;">
-                        <span style="font-size:18px;">📌</span>
-                        <span id="floating-save-btn-text">تأكيد وتثبيت المسار</span>
-                        <span id="floating-btn-fare" style="display:none;background:#059669;color:#fff;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:800;"></span>
-                    </button>
                 </div>
             </div>
 
@@ -2826,6 +2806,65 @@ class AuthController {
             document.body.style.overflow = '';
             if (bDriversPollTimer) clearInterval(bDriversPollTimer);
         };
+
+        // ── Draggable floating card ──────────────────────────────────────────
+        (function initDraggableCard() {
+            var card, handle, isDragging = false, startX, startY, origLeft, origTop;
+
+            function getCard() { return document.getElementById('floating-route-card'); }
+            function getHandle() { return document.getElementById('floating-card-handle'); }
+
+            function onStart(clientX, clientY) {
+                card = getCard(); handle = getHandle();
+                if (!card) return;
+                isDragging = true;
+                startX = clientX; startY = clientY;
+                var rect = card.getBoundingClientRect();
+                origLeft = rect.left; origTop = rect.top;
+                card.style.right = 'auto';
+                card.style.left = origLeft + 'px';
+                card.style.top = origTop + 'px';
+                if (handle) handle.style.cursor = 'grabbing';
+            }
+
+            function onMove(clientX, clientY) {
+                if (!isDragging || !card) return;
+                var dx = clientX - startX, dy = clientY - startY;
+                var newLeft = origLeft + dx, newTop = origTop + dy;
+                var maxLeft = window.innerWidth - card.offsetWidth - 4;
+                var maxTop = window.innerHeight - card.offsetHeight - 4;
+                newLeft = Math.max(4, Math.min(newLeft, maxLeft));
+                newTop = Math.max(4, Math.min(newTop, maxTop));
+                card.style.left = newLeft + 'px';
+                card.style.top = newTop + 'px';
+            }
+
+            function onEnd() {
+                isDragging = false;
+                card = null;
+                var h = getHandle();
+                if (h) h.style.cursor = 'grab';
+            }
+
+            // Mouse events
+            document.addEventListener('mousedown', function(e) {
+                var h = getHandle();
+                if (h && h.contains(e.target)) { e.preventDefault(); onStart(e.clientX, e.clientY); }
+            });
+            document.addEventListener('mousemove', function(e) { if (isDragging) onMove(e.clientX, e.clientY); });
+            document.addEventListener('mouseup', onEnd);
+
+            // Touch events
+            document.addEventListener('touchstart', function(e) {
+                var h = getHandle();
+                if (h && h.contains(e.target)) { onStart(e.touches[0].clientX, e.touches[0].clientY); }
+            }, { passive: true });
+            document.addEventListener('touchmove', function(e) {
+                if (isDragging) { e.preventDefault(); onMove(e.touches[0].clientX, e.touches[0].clientY); }
+            }, { passive: false });
+            document.addEventListener('touchend', onEnd);
+        })();
+        // ────────────────────────────────────────────────────────────────────
 
         window.switchRouteTab = function(tab) {
             bActiveTab = tab;
