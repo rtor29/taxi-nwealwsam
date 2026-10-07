@@ -73,6 +73,7 @@ class AdminController {
 
         if (data.fullName !== undefined) driver.fullName = String(data.fullName).trim();
         if (data.phoneNumber !== undefined) driver.phoneNumber = String(data.phoneNumber).trim();
+        if (data.governorate !== undefined) driver.governorate = String(data.governorate).trim();
         if (data.permanentLat !== undefined && data.permanentLat !== null && data.permanentLat !== '') driver.permanentLat = parseFloat(data.permanentLat);
         if (data.permanentLon !== undefined && data.permanentLon !== null && data.permanentLon !== '') driver.permanentLon = parseFloat(data.permanentLon);
         if (data.permanentLocationName !== undefined) driver.permanentLocationName = String(data.permanentLocationName).trim();
@@ -467,6 +468,7 @@ class AdminController {
 
         if (data.fullName !== undefined) customer.fullName = String(data.fullName).trim();
         if (data.phoneNumber !== undefined) customer.phoneNumber = String(data.phoneNumber).trim();
+        if (data.governorate !== undefined) customer.governorate = String(data.governorate).trim();
         if (data.permanentLat !== undefined && data.permanentLat !== null && data.permanentLat !== '') customer.permanentLat = parseFloat(data.permanentLat);
         if (data.permanentLon !== undefined && data.permanentLon !== null && data.permanentLon !== '') customer.permanentLon = parseFloat(data.permanentLon);
         if (data.permanentLocationName !== undefined) customer.permanentLocationName = String(data.permanentLocationName).trim();

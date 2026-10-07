@@ -2324,6 +2324,29 @@
                     <label class="block text-xs font-bold text-slate-700 mb-1">العنوان</label>
                     <input type="text" id="edit-cust-address" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                 </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">المحافظة</label>
+                    <select id="edit-cust-gov" onchange="onEditModalGovChange('customer', this.value)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <option value="najaf">النجف</option>
+                        <option value="baghdad">بغداد</option>
+                        <option value="basra">البصرة</option>
+                        <option value="karbala">كربلاء</option>
+                        <option value="erbil">أربيل</option>
+                        <option value="sulaymaniyah">السليمانية</option>
+                        <option value="duhok">دهوك</option>
+                        <option value="kirkuk">كركوك</option>
+                        <option value="nineveh">نينوى</option>
+                        <option value="diyala">ديالى</option>
+                        <option value="anbar">الأنبار</option>
+                        <option value="babil">بابل</option>
+                        <option value="wasit">واسط</option>
+                        <option value="saladin">صلاح الدين</option>
+                        <option value="dhi_qar">ذي قار</option>
+                        <option value="maysan">ميسان</option>
+                        <option value="muthanna">المثنى</option>
+                        <option value="qadisiyyah">القادسية</option>
+                    </select>
+                </div>
 
                 <!-- Interactive Map for Customer Permanent Route -->
                 <div class="space-y-2 pt-2 border-t border-slate-100">
@@ -2402,6 +2425,29 @@
                 <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">المسار (خط السير المعتمد)</label>
                     <input type="text" id="edit-drv-route" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">المحافظة</label>
+                    <select id="edit-drv-gov" onchange="onEditModalGovChange('driver', this.value)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <option value="najaf">النجف</option>
+                        <option value="baghdad">بغداد</option>
+                        <option value="basra">البصرة</option>
+                        <option value="karbala">كربلاء</option>
+                        <option value="erbil">أربيل</option>
+                        <option value="sulaymaniyah">السليمانية</option>
+                        <option value="duhok">دهوك</option>
+                        <option value="kirkuk">كركوك</option>
+                        <option value="nineveh">نينوى</option>
+                        <option value="diyala">ديالى</option>
+                        <option value="anbar">الأنبار</option>
+                        <option value="babil">بابل</option>
+                        <option value="wasit">واسط</option>
+                        <option value="saladin">صلاح الدين</option>
+                        <option value="dhi_qar">ذي قار</option>
+                        <option value="maysan">ميسان</option>
+                        <option value="muthanna">المثنى</option>
+                        <option value="qadisiyyah">القادسية</option>
+                    </select>
                 </div>
 
                 <!-- Interactive Map for Driver Permanent Route -->

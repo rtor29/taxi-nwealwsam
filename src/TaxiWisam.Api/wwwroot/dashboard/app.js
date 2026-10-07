@@ -3002,6 +3002,49 @@ function createPinElement(color, label) {
     return el;
 }
 
+const DASHBOARD_IRAQ_GOVERNORATES = {
+    najaf:        { name: 'النجف',       center: [44.3168, 31.9961], bbox: '44.05,31.75,44.65,32.35' },
+    baghdad:      { name: 'بغداد',       center: [44.3661, 33.3152], bbox: '44.10,33.10,44.65,33.55' },
+    basra:        { name: 'البصرة',      center: [47.7835, 30.5085], bbox: '47.30,29.90,48.60,31.20' },
+    karbala:      { name: 'كربلاء',      center: [44.0249, 32.6160], bbox: '43.65,32.30,44.45,33.00' },
+    erbil:        { name: 'أربيل',       center: [44.0089, 36.1912], bbox: '43.40,35.70,45.10,37.00' },
+    sulaymaniyah: { name: 'السليمانية',   center: [45.4351, 35.5574], bbox: '44.60,34.90,46.30,36.30' },
+    duhok:        { name: 'دهوك',        center: [42.9884, 36.8670], bbox: '42.30,36.40,44.00,37.40' },
+    kirkuk:       { name: 'كركوك',       center: [44.3958, 35.4681], bbox: '43.50,34.60,45.40,36.10' },
+    nineveh:      { name: 'نينوى',       center: [43.1340, 36.3350], bbox: '41.80,35.40,44.30,37.30' },
+    diyala:       { name: 'ديالى',       center: [44.9500, 33.7487], bbox: '44.30,33.10,46.10,34.80' },
+    anbar:        { name: 'الأنبار',     center: [41.9000, 33.4000], bbox: '38.80,31.50,44.20,35.00' },
+    babil:        { name: 'بابل',        center: [44.4200, 32.4680], bbox: '44.00,32.00,45.00,33.00' },
+    wasit:        { name: 'واسط',        center: [45.8306, 32.6027], bbox: '45.00,32.00,46.80,33.30' },
+    saladin:      { name: 'صلاح الدين',  center: [43.8750, 34.4640], bbox: '43.00,33.50,45.00,35.50' },
+    dhi_qar:      { name: 'ذي قار',      center: [46.2570, 31.0439], bbox: '45.30,30.30,47.30,31.80' },
+    maysan:       { name: 'ميسان',       center: [47.2340, 31.8379], bbox: '46.30,31.00,48.00,33.00' },
+    muthanna:     { name: 'المثنى',      center: [45.2980, 31.3200], bbox: '44.00,29.80,46.40,31.90' },
+    qadisiyyah:   { name: 'القادسية',    center: [44.9330, 31.9845], bbox: '44.40,31.40,45.60,32.60' }
+};
+
+window.onEditModalGovChange = function(type, govKey) {
+    const gov = DASHBOARD_IRAQ_GOVERNORATES[govKey] || DASHBOARD_IRAQ_GOVERNORATES.najaf;
+    const parts = gov.bbox.split(',').map(Number);
+    const bounds = [[parts[0], parts[1]], [parts[2], parts[3]]];
+    const targetMap = type === 'customer' ? editCustMap : editDrvMap;
+    const searchInput = document.getElementById(type === 'customer' ? 'edit-cust-map-search' : 'edit-drv-map-search');
+    if (searchInput) {
+        searchInput.placeholder = `🔍 ابحث عن موقع في ${gov.name}...`;
+        searchInput.value = '';
+    }
+    const resultsContainer = document.getElementById(type === 'customer' ? 'edit-cust-search-results' : 'edit-drv-search-results');
+    if (resultsContainer) {
+        resultsContainer.innerHTML = '';
+        resultsContainer.classList.add('hidden');
+    }
+
+    if (targetMap) {
+        try { targetMap.setMaxBounds(bounds); } catch(_) {}
+        targetMap.flyTo({ center: gov.center, zoom: 13 });
+    }
+};
+
 function initEditCustomerMap(customer) {
     const container = document.getElementById('edit-cust-mapbox-container');
     if (!container || typeof mapboxgl === 'undefined') return;
@@ -3009,8 +3052,13 @@ function initEditCustomerMap(customer) {
     ensureMapboxRTL();
     mapboxgl.accessToken = MAPBOX_PUBLIC_TOKEN;
 
-    const pLat = customer.permanentLat || (customer.routeLat || 31.9961);
-    const pLon = customer.permanentLon || (customer.routeLon || 44.3168);
+    const govKey = (document.getElementById('edit-cust-gov') && document.getElementById('edit-cust-gov').value) || customer.governorate || 'najaf';
+    const gov = DASHBOARD_IRAQ_GOVERNORATES[govKey] || DASHBOARD_IRAQ_GOVERNORATES.najaf;
+    const parts = gov.bbox.split(',').map(Number);
+    const bounds = [[parts[0], parts[1]], [parts[2], parts[3]]];
+
+    const pLat = customer.permanentLat || (customer.routeLat || gov.center[1]);
+    const pLon = customer.permanentLon || (customer.routeLon || gov.center[0]);
 
     document.getElementById('edit-cust-lat').value = customer.permanentLat || '';
     document.getElementById('edit-cust-lon').value = customer.permanentLon || '';
@@ -3028,7 +3076,7 @@ function initEditCustomerMap(customer) {
             style: 'mapbox://styles/mapbox/navigation-night-v1',
             center: [pLon, pLat],
             zoom: 13,
-            maxBounds: [[44.05, 31.75], [44.65, 32.35]]
+            maxBounds: bounds
         });
         editCustMap.addControl(new mapboxgl.NavigationControl(), 'top-left');
 
@@ -3037,6 +3085,7 @@ function initEditCustomerMap(customer) {
             await applyEditModalCoordinate('customer', editCustMode, lat, lng);
         });
     } else {
+        try { editCustMap.setMaxBounds(bounds); } catch(_) {}
         editCustMap.setCenter([pLon, pLat]);
         editCustMap.resize();
     }
@@ -3067,8 +3116,13 @@ function initEditDriverMap(driver) {
     ensureMapboxRTL();
     mapboxgl.accessToken = MAPBOX_PUBLIC_TOKEN;
 
-    const pLat = driver.permanentLat || (driver.latitude || 31.9961);
-    const pLon = driver.permanentLon || (driver.longitude || 44.3168);
+    const govKey = (document.getElementById('edit-drv-gov') && document.getElementById('edit-drv-gov').value) || driver.governorate || 'najaf';
+    const gov = DASHBOARD_IRAQ_GOVERNORATES[govKey] || DASHBOARD_IRAQ_GOVERNORATES.najaf;
+    const parts = gov.bbox.split(',').map(Number);
+    const bounds = [[parts[0], parts[1]], [parts[2], parts[3]]];
+
+    const pLat = driver.permanentLat || (driver.latitude || gov.center[1]);
+    const pLon = driver.permanentLon || (driver.longitude || gov.center[0]);
 
     document.getElementById('edit-drv-lat').value = driver.permanentLat || '';
     document.getElementById('edit-drv-lon').value = driver.permanentLon || '';
@@ -3086,7 +3140,7 @@ function initEditDriverMap(driver) {
             style: 'mapbox://styles/mapbox/navigation-night-v1',
             center: [pLon, pLat],
             zoom: 13,
-            maxBounds: [[44.05, 31.75], [44.65, 32.35]]
+            maxBounds: bounds
         });
         editDrvMap.addControl(new mapboxgl.NavigationControl(), 'top-left');
 
@@ -3095,6 +3149,7 @@ function initEditDriverMap(driver) {
             await applyEditModalCoordinate('driver', editDrvMode, lat, lng);
         });
     } else {
+        try { editDrvMap.setMaxBounds(bounds); } catch(_) {}
         editDrvMap.setCenter([pLon, pLat]);
         editDrvMap.resize();
     }
@@ -3193,11 +3248,14 @@ async function searchEditModalPlace(query, type) {
     clearTimeout(editModalSearchDebounce);
     editModalSearchDebounce = setTimeout(async () => {
         try {
-            const bbox = '44.05,31.75,44.65,32.35';
-            const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query.trim())}.json?access_token=${MAPBOX_PUBLIC_TOKEN}&country=iq&bbox=${bbox}&proximity=44.3168,31.9961&language=ar&limit=5`);
+            const govKey = (document.getElementById(type === 'customer' ? 'edit-cust-gov' : 'edit-drv-gov') || {}).value || 'najaf';
+            const gov = DASHBOARD_IRAQ_GOVERNORATES[govKey] || DASHBOARD_IRAQ_GOVERNORATES.najaf;
+            const bbox = gov.bbox;
+            const prox = gov.center.join(',');
+            const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query.trim())}.json?access_token=${MAPBOX_PUBLIC_TOKEN}&country=iq&bbox=${bbox}&proximity=${prox}&language=ar&limit=5`);
             const data = await res.json();
             if (!data.features || data.features.length === 0) {
-                resultsContainer.innerHTML = '<div class="p-2 text-slate-400 text-center">لا توجد نتائج مطابقة في النجف</div>';
+                resultsContainer.innerHTML = `<div class="p-2 text-slate-400 text-center">لا توجد نتائج مطابقة في ${gov.name}</div>`;
                 resultsContainer.classList.remove('hidden');
                 return;
             }
@@ -3237,6 +3295,16 @@ function openEditCustomerModal(customerId) {
     document.getElementById('edit-cust-address').value = customer.address || customer.area || '';
     document.getElementById('edit-cust-password').value = '';
 
+    const govKey = customer.governorate || 'najaf';
+    const govEl = document.getElementById('edit-cust-gov');
+    if (govEl) govEl.value = govKey;
+    const govObj = DASHBOARD_IRAQ_GOVERNORATES[govKey] || DASHBOARD_IRAQ_GOVERNORATES.najaf;
+    const searchInput = document.getElementById('edit-cust-map-search');
+    if (searchInput) {
+        searchInput.placeholder = `🔍 ابحث عن موقع في ${govObj.name}...`;
+        searchInput.value = '';
+    }
+
     setEditMapMode('customer', 'pickup');
 
     const modal = document.getElementById('modal-edit-customer');
@@ -3272,6 +3340,7 @@ async function submitEditCustomer(event) {
     const route = document.getElementById('edit-cust-route').value.trim();
     const address = document.getElementById('edit-cust-address').value.trim();
     const password = document.getElementById('edit-cust-password').value.trim();
+    const governorate = (document.getElementById('edit-cust-gov') && document.getElementById('edit-cust-gov').value) || 'najaf';
 
     const permanentLat = document.getElementById('edit-cust-lat').value;
     const permanentLon = document.getElementById('edit-cust-lon').value;
@@ -3282,7 +3351,7 @@ async function submitEditCustomer(event) {
 
     try {
         const payload = {
-            fullName, phoneNumber, route, address,
+            fullName, phoneNumber, route, address, governorate,
             permanentLat: permanentLat || null,
             permanentLon: permanentLon || null,
             permanentLocationName: permanentLocationName || address,
@@ -3299,7 +3368,7 @@ async function submitEditCustomer(event) {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-            showToast('تم تحديث بيانات ومسار الراكب بنجاح! ✅');
+            showToast('تم تحديث بيانات ومحافظة ومسار الراكب بنجاح! ✅');
             closeEditCustomerModal();
             loadCustomers();
             if (typeof refreshRoutesAndBookingsOnMap === 'function') refreshRoutesAndBookingsOnMap();
@@ -3319,6 +3388,16 @@ function openEditDriverModal(driverId) {
     document.getElementById('edit-drv-phone').value = driver.phoneNumber || '';
     document.getElementById('edit-drv-route').value = driver.route || '';
     document.getElementById('edit-drv-password').value = '';
+
+    const govKey = driver.governorate || 'najaf';
+    const govEl = document.getElementById('edit-drv-gov');
+    if (govEl) govEl.value = govKey;
+    const govObj = DASHBOARD_IRAQ_GOVERNORATES[govKey] || DASHBOARD_IRAQ_GOVERNORATES.najaf;
+    const searchInput = document.getElementById('edit-drv-map-search');
+    if (searchInput) {
+        searchInput.placeholder = `🔍 ابحث عن موقع في ${govObj.name}...`;
+        searchInput.value = '';
+    }
 
     setEditMapMode('driver', 'pickup');
 
@@ -3354,6 +3433,7 @@ async function submitEditDriver(event) {
     const phoneNumber = document.getElementById('edit-drv-phone').value.trim();
     const route = document.getElementById('edit-drv-route').value.trim();
     const password = document.getElementById('edit-drv-password').value.trim();
+    const governorate = (document.getElementById('edit-drv-gov') && document.getElementById('edit-drv-gov').value) || 'najaf';
 
     const permanentLat = document.getElementById('edit-drv-lat').value;
     const permanentLon = document.getElementById('edit-drv-lon').value;
@@ -3364,7 +3444,7 @@ async function submitEditDriver(event) {
 
     try {
         const payload = {
-            fullName, phoneNumber, route,
+            fullName, phoneNumber, route, governorate,
             permanentLat: permanentLat || null,
             permanentLon: permanentLon || null,
             permanentLocationName: permanentLocationName || route,
@@ -3381,10 +3461,10 @@ async function submitEditDriver(event) {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-            showToast('تم تحديث بيانات ومسار الكابتن بنجاح! ✅');
+            showToast('تم تحديث بيانات ومحافظة ومسار الكابتن بنجاح! ✅');
             closeEditDriverModal();
             loadDrivers();
-            if (typeof refreshFleetLocations === 'function') refreshFleetLocations();
+            if (typeof refreshRoutesAndBookingsOnMap === 'function') refreshRoutesAndBookingsOnMap();
         } else {
             alert(data.error || 'فشل تحديث بيانات الكابتن.');
         }

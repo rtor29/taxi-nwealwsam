@@ -2781,6 +2781,7 @@ class AuthController {
         var bPermDays = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء'];
         var bDriverOnline = false, bDriverWatchId = null, bDriverIncomingTimer = null, bDriverReqTimer = null;
         var bMapPickTarget = 'pickup';
+        var bLiveTrackingTimer = null; // Stage 3: live driver tracking interval
 
         window.openRouteApp = function(tab) {
             window.openBookingApp(tab || 'set-route');
@@ -3567,6 +3568,54 @@ class AuthController {
                     paint: { 'line-color': '#2563eb', 'line-width': 4.5, 'line-opacity': 0.95 }
                 });
 
+                // Live assigned driver tracking source & layer (Stage 3 - Phase 3)
+                bMap.addSource('live-driver-source', {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
+                });
+                bMap.addLayer({
+                    id: 'live-driver-circle',
+                    type: 'circle',
+                    source: 'live-driver-source',
+                    paint: {
+                        'circle-radius': 18,
+                        'circle-color': '#16a34a',
+                        'circle-stroke-width': 3,
+                        'circle-stroke-color': '#ffffff'
+                    }
+                });
+                bMap.addLayer({
+                    id: 'live-driver-symbol',
+                    type: 'symbol',
+                    source: 'live-driver-source',
+                    layout: {
+                        'text-field': '🚗',
+                        'text-size': 22,
+                        'text-allow-overlap': true,
+                        'text-ignore-placement': true
+                    }
+                });
+
+                // Live driver → pickup route line (Stage 3)
+                bMap.addSource('live-driver-route-source', {
+                    type: 'geojson',
+                    data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
+                });
+                bMap.addLayer({
+                    id: 'live-driver-route-casing',
+                    type: 'line',
+                    source: 'live-driver-route-source',
+                    layout: { 'line-join': 'round', 'line-cap': 'round' },
+                    paint: { 'line-color': '#064e3b', 'line-width': 7, 'line-opacity': 0.6 }
+                });
+                bMap.addLayer({
+                    id: 'live-driver-route-line',
+                    type: 'line',
+                    source: 'live-driver-route-source',
+                    layout: { 'line-join': 'round', 'line-cap': 'round' },
+                    paint: { 'line-color': '#22c55e', 'line-width': 4, 'line-opacity': 0.95 }
+                });
+
                 // Map Click handler to set pins based on active target
                 bMap.on('click', function(e) {
                     var lng = e.lngLat.lng, lat = e.lngLat.lat;
@@ -3995,6 +4044,7 @@ class AuthController {
                 act.innerHTML = '<a href="https://wa.me/' + waNum + '" target="_blank" class="btn-primary" style="background:#25d366;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;flex:1;">💬 واتساب</a><a href="tel:' + req.assignedDriverPhone + '" class="btn-primary" style="background:#10b981;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;flex:1;">📞 اتصال</a><button type="button" onclick="cancelRideRequest()" class="btn-secondary" style="flex:1;">إغلاق</button>';
             }
             startPassengerRideMonitor(req.id);
+            startLiveDriverTracking(req); // Stage 3: start live driver tracking on map
         }
 
         function startPassengerRideMonitor(rideId) {
@@ -4010,6 +4060,7 @@ class AuthController {
                         showPassengerArrivedModal(r);
                     } else if (r.status === 'Completed') {
                         clearInterval(bPassengerMonitorTimer);
+                        stopLiveDriverTracking();
                         localStorage.removeItem('active_accepted_ride');
                         var arrModal = document.getElementById('passenger-arrived-modal');
                         if (arrModal) arrModal.style.display = 'none';
@@ -4018,6 +4069,7 @@ class AuthController {
                         alert('🏁 تم إكمال المشوار بنجاح! نتمنى لك يوماً سعيداً.');
                     } else if (r.status === 'Cancelled') {
                         clearInterval(bPassengerMonitorTimer);
+                        stopLiveDriverTracking();
                         localStorage.removeItem('active_accepted_ride');
                         var arrModal = document.getElementById('passenger-arrived-modal');
                         if (arrModal) arrModal.style.display = 'none';
@@ -4027,6 +4079,77 @@ class AuthController {
                     }
                 } catch(_) {}
             }, 2500);
+        }
+
+        // Stage 3: Live driver tracking on passenger map
+        function startLiveDriverTracking(req) {
+            if (!req || !req.assignedDriverId) return;
+            var driverId = req.acceptedDriverId || req.assignedDriverId;
+            var pickupLon = req.pickupLon || bPickupCoords && bPickupCoords[0];
+            var pickupLat = req.pickupLat || bPickupCoords && bPickupCoords[1];
+
+            if (bLiveTrackingTimer) clearInterval(bLiveTrackingTimer);
+
+            async function updateDriverOnMap() {
+                try {
+                    var res = await fetch('/api/driver/' + driverId + '/live');
+                    var d = await res.json();
+                    if (!d || !d.latitude || !d.longitude) return;
+
+                    var dLon = parseFloat(d.longitude);
+                    var dLat = parseFloat(d.latitude);
+
+                    // Update driver icon position on map
+                    if (bMap && bMap.getSource('live-driver-source')) {
+                        bMap.getSource('live-driver-source').setData({
+                            type: 'FeatureCollection',
+                            features: [{
+                                type: 'Feature',
+                                geometry: { type: 'Point', coordinates: [dLon, dLat] },
+                                properties: { name: req.assignedDriverName || 'الكابتن' }
+                            }]
+                        });
+                    }
+
+                    // Draw live straight line from driver to passenger pickup
+                    if (bMap && bMap.getSource('live-driver-route-source') && pickupLon && pickupLat) {
+                        // Try Directions API for realistic route line
+                        try {
+                            var dirRes = await fetch('https://api.mapbox.com/directions/v5/mapbox/driving/' +
+                                dLon + ',' + dLat + ';' + pickupLon + ',' + pickupLat +
+                                '?geometries=geojson&overview=full&access_token=' + BOOKING_MAPBOX_TOKEN);
+                            var dirData = await dirRes.json();
+                            if (dirData && dirData.routes && dirData.routes[0]) {
+                                bMap.getSource('live-driver-route-source').setData({
+                                    type: 'Feature',
+                                    geometry: dirData.routes[0].geometry
+                                });
+                            } else {
+                                throw new Error('no route');
+                            }
+                        } catch(_) {
+                            // Fallback: straight line
+                            bMap.getSource('live-driver-route-source').setData({
+                                type: 'Feature',
+                                geometry: { type: 'LineString', coordinates: [[dLon, dLat], [pickupLon, pickupLat]] }
+                            });
+                        }
+                    }
+                } catch(_) {}
+            }
+
+            updateDriverOnMap();
+            bLiveTrackingTimer = setInterval(updateDriverOnMap, 3000);
+        }
+
+        function stopLiveDriverTracking() {
+            if (bLiveTrackingTimer) { clearInterval(bLiveTrackingTimer); bLiveTrackingTimer = null; }
+            if (bMap && bMap.getSource('live-driver-source')) {
+                bMap.getSource('live-driver-source').setData({ type: 'FeatureCollection', features: [] });
+            }
+            if (bMap && bMap.getSource('live-driver-route-source')) {
+                bMap.getSource('live-driver-route-source').setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } });
+            }
         }
 
         function playArrivalNotificationSound() {
@@ -4676,6 +4799,7 @@ class AuthController {
                 var savedRide = JSON.parse(localStorage.getItem('active_accepted_ride') || 'null');
                 if (savedRide && savedRide.id) {
                     startPassengerRideMonitor(savedRide.id);
+                    startLiveDriverTracking(savedRide);
                 }
             } catch(_) {}
         })();

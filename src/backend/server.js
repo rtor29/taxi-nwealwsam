@@ -1478,6 +1478,29 @@ async function startServer() {
                 r.status = 'Arrived';
                 r.arrivedAt = new Date().toISOString();
                 db.saveStateSnapshot();
+
+                // Send Telegram Notification to Passenger if registered via Telegram (Phase 4)
+                try {
+                    const custPhone = (r.customerPhone || '').replace('+964', '0');
+                    const passenger = (db.memoryState.customers || []).find(c => 
+                        (r.customerId && c.customerId === r.customerId) ||
+                        (custPhone && c.phoneNumber && (c.phoneNumber === custPhone || ('0' + c.phoneNumber) === custPhone || c.phoneNumber === ('0' + custPhone)))
+                    );
+                    const targetChatId = (passenger && passenger.telegramChatId) || r.telegramChatId;
+                    if (targetChatId) {
+                        const drvName = r.assignedDriverName || 'الكابتن';
+                        const drvCar = r.assignedDriverVehicle || 'المركبة';
+                        const drvPhone = r.assignedDriverPhone || '';
+                        const msg = `🚖 <b>وصل الكابتن إلى موقعك الآن!</b>\n\n` +
+                            `الكابتن <b>${drvName}</b> (${drvCar}) في انتظارك عند نقطة الانطلاق 📍.\n` +
+                            (drvPhone ? `📞 للتواصل مع الكابتن: <code>${drvPhone}</code>\n\n` : `\n`) +
+                            `نتمنى لك رحلة آمنة ومريحة مع توصيلة! ✨`;
+                        telegramBot.notifyUser(targetChatId, msg).catch(() => {});
+                    }
+                } catch (tgErr) {
+                    console.error('[RideArrived] Telegram notify error:', tgErr.message);
+                }
+
                 return sendJson({ success: true, message: 'تم إشعار الراكب بوصولك إلى الموقع 📍', request: r });
             } catch (err) {
                 return sendJson({ success: false, error: err.message }, 500);
