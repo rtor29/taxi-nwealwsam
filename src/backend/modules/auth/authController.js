@@ -912,13 +912,20 @@ class AuthController {
                         <input type="hidden" id="cust-dropoff-lon" value="">
 
                         <!-- Route / Address (auto-filled from map or typed by user) -->
-                        <div style="margin-bottom:12px">
+                        <div style="margin-bottom:12px;position:relative">
                             <label for="cust-reg-address" class="label">عنوان الانطلاق بالتفصيل <span style="color:#dc2626">*</span></label>
-                            <input type="text" id="cust-reg-address" class="inp" placeholder="حدد الانطلاق من الخريطة أو اكتبه هنا" aria-label="عنوان الانطلاق">
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <input type="text" id="cust-reg-address" class="inp" placeholder="موقعي الحالي أو اكتب العنوان" aria-label="عنوان الانطلاق" oninput="onCustRegAddressInput(this.value)">
+                                <button type="button" id="btn-cust-reg-gps" onclick="setCustRegCurrentGps()" class="btn-small" style="background:#2563eb;color:#fff;padding:8px 10px;font-size:11px;font-weight:800;white-space:nowrap;display:flex;align-items:center;gap:4px;border:none;border-radius:8px;cursor:pointer;" title="موقعي الحالي">
+                                    <span>📍 موقعي الحالي</span>
+                                </button>
+                            </div>
+                            <div id="cust-reg-address-results" class="search-autocomplete-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:90;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;"></div>
                         </div>
-                        <div style="margin-bottom:12px">
+                        <div style="margin-bottom:12px;position:relative">
                             <label for="cust-reg-route" class="label">عنوان الوصول بالتفصيل <span style="color:#dc2626">*</span></label>
-                            <input type="text" id="cust-reg-route" class="inp" placeholder="حدد الوصول من الخريطة أو اكتبه هنا" aria-label="عنوان الوصول">
+                            <input type="text" id="cust-reg-route" class="inp" placeholder="ابحث أو اكتب الوجهة (جامعة، حي، معلم...)" aria-label="عنوان الوصول" oninput="onCustRegRouteInput(this.value)">
+                            <div id="cust-reg-route-results" class="search-autocomplete-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:90;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;"></div>
                         </div>
 
                         <!-- Password -->
@@ -1763,26 +1770,59 @@ class AuthController {
             if (!password) { alert('يرجى إدخال كلمة المرور'); return; }
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التسجيل...';
-            var pickupText = (document.getElementById('cust-pickup-text')?.value||'').trim();
-            var dropoffText = (document.getElementById('cust-dropoff-text')?.value||'').trim();
-            var address = (document.getElementById('cust-reg-address').value||'').trim() || pickupText;
-            var route = (document.getElementById('cust-reg-route').value||'').trim() || dropoffText;
+            var pickupText = (document.getElementById('cust-reg-address')?.value || document.getElementById('cust-pickup-text')?.value || '').trim();
+            var dropoffText = (document.getElementById('cust-reg-route')?.value || document.getElementById('cust-dropoff-text')?.value || '').trim();
+
+            if (!pickupText) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> إكمال تسجيل الحساب';
+                alert('⚠️ يرجى كتابة أو تحديد عنوان الانطلاق');
+                document.getElementById('cust-reg-address')?.focus();
+                return;
+            }
+            if (!dropoffText) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> إكمال تسجيل الحساب';
+                alert('⚠️ يرجى كتابة أو تحديد عنوان الوصول');
+                document.getElementById('cust-reg-route')?.focus();
+                return;
+            }
+
+            var address = pickupText;
+            var route = pickupText + ' ➔ ' + dropoffText;
+
             var pickupLat = document.getElementById('cust-pickup-lat')?.value;
             var pickupLon = document.getElementById('cust-pickup-lon')?.value;
             var dropoffLat = document.getElementById('cust-dropoff-lat')?.value;
             var dropoffLon = document.getElementById('cust-dropoff-lon')?.value;
 
-            if (!pickupLat || !pickupLon || !dropoffLat || !dropoffLon || !address || !route) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> إكمال تسجيل الحساب';
-                alert('⚠️ يجب تحديد مسارك الفعلي (نقطة الانطلاق ونقطة الوصول) على الخريطة أولاً لإكمال التسجيل');
-                return;
+            if (!pickupLat || !pickupLon) {
+                pickupLat = (bUserLat || 31.9961).toString();
+                pickupLon = (bUserLon || 44.3168).toString();
+            }
+            if (!dropoffLat || !dropoffLon) {
+                dropoffLat = (parseFloat(pickupLat) + 0.02).toString();
+                dropoffLon = (parseFloat(pickupLon) + 0.02).toString();
             }
 
             try {
                 var res = await fetch('/api/auth/complete-passenger-registration', {
                     method:'POST', headers:{'Content-Type':'application/json'},
-                    body:JSON.stringify({fullName,phoneNumber:phone,route,address,password,otpCode:window.__verifiedOtpCode||'',pickupLat:parseFloat(pickupLat),pickupLon:parseFloat(pickupLon),dropoffLat:parseFloat(dropoffLat),dropoffLon:parseFloat(dropoffLon),tripType:selectedRegTripType||'short',governorate:gov})
+                    body:JSON.stringify({
+                        fullName: fullName,
+                        phoneNumber: phone,
+                        route: route,
+                        address: address,
+                        password: password,
+                        otpCode: window.__verifiedOtpCode || '',
+                        pickupLat: parseFloat(pickupLat),
+                        pickupLon: parseFloat(pickupLon),
+                        dropoffLat: parseFloat(dropoffLat),
+                        dropoffLon: parseFloat(dropoffLon),
+                        dropoffText: dropoffText,
+                        tripType: selectedRegTripType || 'short',
+                        governorate: gov
+                    })
                 });
                 var data = await res.json();
                 if (res.ok && data.success) {
@@ -2031,6 +2071,154 @@ class AuthController {
             if(doReverse) reverseGeocodeLocation(lng,lat,'dropoff');
             drawRouteLine();
         }
+
+        window.setCustRegCurrentGps = function() {
+            var btn = document.getElementById('btn-cust-reg-gps');
+            var inp = document.getElementById('cust-reg-address');
+            if (btn) btn.innerHTML = '<span>⏳ جاري التحديد...</span>';
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(async function(pos) {
+                    var lat = pos.coords.latitude;
+                    var lon = pos.coords.longitude;
+                    var latEl = document.getElementById('cust-pickup-lat');
+                    var lonEl = document.getElementById('cust-pickup-lon');
+                    if (latEl) latEl.value = lat.toFixed(6);
+                    if (lonEl) lonEl.value = lon.toFixed(6);
+                    if (btn) btn.innerHTML = '<span>📍 موقعي الحالي ✅</span>';
+                    
+                    var addr = await bReverseGeocode(lon, lat);
+                    if (inp) {
+                        inp.value = addr || ('موقعي الحالي (' + lat.toFixed(4) + ', ' + lon.toFixed(4) + ')');
+                    }
+                    var routeInp = document.getElementById('cust-reg-route');
+                    if (routeInp && !routeInp.value) {
+                        routeInp.focus();
+                    }
+                }, function(err) {
+                    if (btn) btn.innerHTML = '<span>📍 موقعي الحالي</span>';
+                    if (inp && !inp.value) inp.value = 'موقعي الحالي';
+                    var latEl = document.getElementById('cust-pickup-lat');
+                    var lonEl = document.getElementById('cust-pickup-lon');
+                    if (latEl && !latEl.value) latEl.value = (bUserLat || 31.9961);
+                    if (lonEl && !lonEl.value) lonEl.value = (bUserLon || 44.3168);
+                }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 });
+            } else {
+                if (inp && !inp.value) inp.value = 'موقعي الحالي';
+            }
+        };
+
+        var custRegAddrTimer = null;
+        window.onCustRegAddressInput = function(query) {
+            clearTimeout(custRegAddrTimer);
+            var resultsEl = document.getElementById('cust-reg-address-results');
+            if (!resultsEl) return;
+            if (!query || query.trim().length < 1) { resultsEl.style.display = 'none'; return; }
+
+            resultsEl.innerHTML = '';
+            var customItem = document.createElement('div');
+            customItem.className = 'search-result-item';
+            customItem.style.cssText = 'background:#f0fdf4;font-weight:bold;color:#166534;border-bottom:1px solid #dcfce7;';
+            customItem.innerHTML = '<span>📌</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">اعتماد: "' + query + '"</span>';
+            customItem.onclick = function() {
+                resultsEl.style.display = 'none';
+                var inp = document.getElementById('cust-reg-address');
+                if (inp) inp.value = query;
+                var latEl = document.getElementById('cust-pickup-lat');
+                var lonEl = document.getElementById('cust-pickup-lon');
+                if (latEl && !latEl.value) latEl.value = (bUserLat || 31.9961);
+                if (lonEl && !lonEl.value) lonEl.value = (bUserLon || 44.3168);
+                document.getElementById('cust-reg-route')?.focus();
+            };
+            resultsEl.appendChild(customItem);
+            resultsEl.style.display = 'block';
+
+            custRegAddrTimer = setTimeout(async function() {
+                try {
+                    var q = encodeURIComponent(query.trim());
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=44.3168,31.9961&language=ar,en&types=poi,address,neighborhood,place,locality&limit=5&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    var res = await fetch(url);
+                    var data = await res.json();
+                    var feats = (data && data.features) ? data.features : [];
+                    resultsEl.innerHTML = '';
+                    resultsEl.appendChild(customItem);
+                    feats.forEach(function(f) {
+                        var nm = f.place_name_ar || f.place_name || '';
+                        var item = document.createElement('div');
+                        item.className = 'search-result-item';
+                        item.innerHTML = '<span>🗺️</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nm + '</span>';
+                        item.onclick = function() {
+                            resultsEl.style.display = 'none';
+                            var inp = document.getElementById('cust-reg-address');
+                            if (inp) inp.value = nm;
+                            var latEl = document.getElementById('cust-pickup-lat');
+                            var lonEl = document.getElementById('cust-pickup-lon');
+                            if (latEl) latEl.value = f.center[1];
+                            if (lonEl) lonEl.value = f.center[0];
+                            document.getElementById('cust-reg-route')?.focus();
+                        };
+                        resultsEl.appendChild(item);
+                    });
+                    resultsEl.style.display = resultsEl.children.length > 0 ? 'block' : 'none';
+                } catch(_) {}
+            }, 300);
+        };
+
+        var custRegRouteTimer = null;
+        window.onCustRegRouteInput = function(query) {
+            clearTimeout(custRegRouteTimer);
+            var resultsEl = document.getElementById('cust-reg-route-results');
+            if (!resultsEl) return;
+            if (!query || query.trim().length < 1) { resultsEl.style.display = 'none'; return; }
+
+            resultsEl.innerHTML = '';
+            var customItem = document.createElement('div');
+            customItem.className = 'search-result-item';
+            customItem.style.cssText = 'background:#f0fdf4;font-weight:bold;color:#166534;border-bottom:1px solid #dcfce7;';
+            customItem.innerHTML = '<span>📌</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">اعتماد: "' + query + '"</span>';
+            customItem.onclick = function() {
+                resultsEl.style.display = 'none';
+                var inp = document.getElementById('cust-reg-route');
+                if (inp) inp.value = query;
+                var pLat = parseFloat(document.getElementById('cust-pickup-lat')?.value || bUserLat || 31.9961);
+                var pLon = parseFloat(document.getElementById('cust-pickup-lon')?.value || bUserLon || 44.3168);
+                var latEl = document.getElementById('cust-dropoff-lat');
+                var lonEl = document.getElementById('cust-dropoff-lon');
+                if (latEl) latEl.value = (pLat + 0.02).toFixed(6);
+                if (lonEl) lonEl.value = (pLon + 0.02).toFixed(6);
+            };
+            resultsEl.appendChild(customItem);
+            resultsEl.style.display = 'block';
+
+            custRegRouteTimer = setTimeout(async function() {
+                try {
+                    var q = encodeURIComponent(query.trim());
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=44.3168,31.9961&language=ar,en&types=poi,address,neighborhood,place,locality&limit=5&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    var res = await fetch(url);
+                    var data = await res.json();
+                    var feats = (data && data.features) ? data.features : [];
+                    resultsEl.innerHTML = '';
+                    resultsEl.appendChild(customItem);
+                    feats.forEach(function(f) {
+                        var nm = f.place_name_ar || f.place_name || '';
+                        var item = document.createElement('div');
+                        item.className = 'search-result-item';
+                        item.innerHTML = '<span>🗺️</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nm + '</span>';
+                        item.onclick = function() {
+                            resultsEl.style.display = 'none';
+                            var inp = document.getElementById('cust-reg-route');
+                            if (inp) inp.value = nm;
+                            var latEl = document.getElementById('cust-dropoff-lat');
+                            var lonEl = document.getElementById('cust-dropoff-lon');
+                            if (latEl) latEl.value = f.center[1];
+                            if (lonEl) lonEl.value = f.center[0];
+                        };
+                        resultsEl.appendChild(item);
+                    });
+                    resultsEl.style.display = resultsEl.children.length > 0 ? 'block' : 'none';
+                } catch(_) {}
+            }, 300);
+        };
 
         function getCurrentGpsLocation() {
             var btn=document.getElementById('btn-cust-gps');
@@ -5148,11 +5336,18 @@ class AuthController {
 
         const customerId = 'usr-c-' + Math.random().toString(36).substr(2, 9);
         const now = new Date().toISOString();
-        const userRoute = (route || area || 'النجف الأشرف').trim();
-        const userAddress = (address || area || '').trim();
-        if (!pickupLat || !dropoffLat || !userAddress || !userRoute) {
-            res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
-            return res.end(JSON.stringify({ success: false, error: 'يجب تحديد نقطة الانطلاق ونقطة الوصول الفعلية على الخريطة' }));
+        const userAddress = (address || area || 'موقعي الحالي').trim();
+        const userRoute = (route || (userAddress + ' ➔ ' + (body.dropoffText || 'الوجهة'))).trim();
+        const pLat = parseFloat(pickupLat) || 31.9961;
+        const pLon = parseFloat(pickupLon) || 44.3168;
+        const dLat = parseFloat(dropoffLat) || (pLat + 0.02);
+        const dLon = parseFloat(dropoffLon) || (pLon + 0.02);
+
+        let existingTgChatId = null;
+        if (body.telegramChatId) existingTgChatId = String(body.telegramChatId);
+        else {
+            const tgMatch = (db.memoryState.customers || []).find(c => c.phoneNumber === cleanPhone && c.telegramChatId);
+            if (tgMatch) existingTgChatId = tgMatch.telegramChatId;
         }
 
         const newCustomer = {
@@ -5161,6 +5356,7 @@ class AuthController {
             email: emailLower,
             phoneNumber: cleanPhone,
             route: userRoute,
+            preferredRoute: userRoute,
             address: userAddress,
             plainPassword: cleanPassword,
             passwordHash,
@@ -5169,10 +5365,17 @@ class AuthController {
             area: userAddress,
             governorate: governorate || 'najaf',
             tripType: tripType || 'short',
-            pickupLat: parseFloat(pickupLat),
-            pickupLon: parseFloat(pickupLon),
-            dropoffLat: parseFloat(dropoffLat),
-            dropoffLon: parseFloat(dropoffLon),
+            pickupLat: pLat,
+            pickupLon: pLon,
+            dropoffLat: dLat,
+            dropoffLon: dLon,
+            permanentLat: pLat,
+            permanentLon: pLon,
+            permanentLocationName: userAddress,
+            permanentDropoffLat: dLat,
+            permanentDropoffLon: dLon,
+            permanentDropoffName: body.dropoffText || '',
+            telegramChatId: existingTgChatId,
             ratingAverage: 5.0,
             totalBookings: 0,
             isActive: true,
@@ -5181,6 +5384,11 @@ class AuthController {
         };
 
         db.memoryState.customers.unshift(newCustomer);
+        db.persistCustomerPermanentLocation(customerId, {
+            lat: pLat, lon: pLon, locationName: userAddress,
+            dropoffLat: dLat, dropoffLon: dLon, dropoffName: body.dropoffText || '',
+            route: userRoute, address: userAddress
+        }).catch(()=>{});
 
         if (db.isPostgresConnected && db.pool) {
             try {
