@@ -441,15 +441,27 @@ async function handleCallback(chatId, data, user) {
     switch (data) {
         case 'reg_passenger':
             userStates.set(chatId, { step: 'passenger_phone', role: 'Customer' });
-            await sendMessage(chatId, '📱 أرسل رقم هاتفك العراقي (مثال: 07701234567):');
+            await sendKeyboard(chatId,
+                '🚶 <b>تسجيل حساب راكب جديد:</b>\n\n' +
+                '📱 أرسل رقم هاتفك العراقي (مثال: <code>07701234567</code>)، أو يمكنك التحقق والتسجيل مباشرة عبر تطبيق الويب الموثق بواتساب و Truecaller:',
+                [
+                    [{ text: '🌐 التسجيل والتحقق في تطبيق الويب', url: 'https://tawseelaiq.app/?role=Customer' }]
+                ]
+            );
             break;
         case 'reg_driver':
             userStates.set(chatId, { step: 'driver_phone', role: 'Driver' });
-            await sendMessage(chatId, '📱 أرسل رقم هاتفك العراقي (مثال: 07701234567):');
+            await sendKeyboard(chatId,
+                '🚕 <b>تسجيل كابتن (سائق) جديد:</b>\n\n' +
+                '📱 أرسل رقم هاتفك العراقي (مثال: <code>07701234567</code>)، أو يمكنك التحقق والتسجيل مباشرة عبر تطبيق الويب الموثق بواتساب و Truecaller:',
+                [
+                    [{ text: '🌐 التسجيل والتحقق في تطبيق الويب', url: 'https://tawseelaiq.app/?role=Driver' }]
+                ]
+            );
             break;
         case 'login':
             userStates.set(chatId, { step: 'login_phone' });
-            await sendMessage(chatId, '📱 أرسل رقم هاتفك المسجل:');
+            await sendMessage(chatId, '📱 أرسل رقم هاتفك المسجل (مثال: <code>07701234567</code>):');
             break;
         case 'nearby_drivers':
         case 'passenger_trip_short': {
@@ -648,7 +660,7 @@ async function handleMessage(chatId, text, user, location) {
     if (!state) {
         if (!text) return;
         const digits = text.replace(/[^0-9]/g, '');
-        if (digits.length >= 10) {
+        if (digits.length >= 7) {
             const existing = await checkPhoneRegistration(text);
             if (existing) {
                 await sendKeyboard(chatId,
@@ -657,10 +669,16 @@ async function handleMessage(chatId, text, user, location) {
                 );
                 return;
             } else {
+                const cleanPhone = digits.startsWith('964') ? '0' + digits.substring(3) : (digits.startsWith('0') ? digits : '0' + digits);
+                const encodedPhone = encodeURIComponent(cleanPhone);
                 await sendKeyboard(chatId,
-                    `ℹ️ الرقم (${text.trim()}) غير مسجل في النظام. اختر نوع الحساب للتسجيل:`,
+                    `ℹ️ <b>الرقم (${text.trim()}) غير مسجل في النظام.</b>\n\n` +
+                    `💡 <i>لا داعي للتحقق هنا في تيليجرام</i>؛ التحقق مفعّل وآمن في تطبيق الويب عبر واتساب و Truecaller.\n\n` +
+                    `يرجى فتح التطبيق لتأكيد رقمك وإكمال التسجيل:`,
                     [
-                        [{ text: '🚶 تسجيل راكب', callback_data: 'reg_passenger' }, { text: '🚕 تسجيل سائق', callback_data: 'reg_driver' }]
+                        [{ text: '🚶 تسجيل راكب في تطبيق الويب', url: `https://tawseelaiq.app/?role=Customer&phone=${encodedPhone}` }],
+                        [{ text: '🚕 تسجيل سائق في تطبيق الويب', url: `https://tawseelaiq.app/?role=Driver&phone=${encodedPhone}` }],
+                        [{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]
                     ]
                 );
                 return;
@@ -673,22 +691,43 @@ async function handleMessage(chatId, text, user, location) {
     switch (state.step) {
         // --- Passenger Registration ---
         case 'passenger_phone': {
+            const clean = normalizePhoneNumber(text);
             const digits = text.replace(/[^0-9]/g, '');
-            if (digits.length < 10) { await sendMessage(chatId, '❌ رقم غير صالح. أرسل رقم عراقي (مثال: 07701234567):'); return; }
+            if (digits.length < 10 || !clean || clean.length < 9) {
+                userStates.delete(chatId);
+                await sendKeyboard(chatId,
+                    `❌ <b>الرقم المدخل (${text.trim()}) غير صحيح أو غير صالح.</b>\n\n` +
+                    `يرجى التأكد من كتابة الرقم بشكل صحيح (مثال: <code>07701234567</code>)، أو يمكنك التحقق والتسجيل مباشرة عبر تطبيق الويب الموثق بواتساب:`,
+                    [
+                        [{ text: '🌐 فتح تطبيق الويب للتحقق والتسجيل', url: 'https://tawseelaiq.app/?role=Customer' }],
+                        [{ text: '🔄 إعادة المحاولة في البوت', callback_data: 'reg_passenger' }],
+                        [{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]
+                    ]
+                );
+                return;
+            }
             const existing = await checkPhoneRegistration(text);
             if (existing) {
                 userStates.delete(chatId);
                 await sendKeyboard(chatId,
-                    `⚠️ <b>الرقم مسجل ${existing.roleAr}. استخدم تسجيل الدخول.</b>`,
+                    `⚠️ <b>الرقم مسجل مسبقاً ${existing.roleAr}. استخدم تسجيل الدخول.</b>`,
                     [[{ text: '🔑 تسجيل دخول', callback_data: 'login' }], [{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]]
                 );
                 return;
             }
-            state.phone = text.trim();
-            state.step = 'passenger_otp_sent';
-            userStates.set(chatId, state);
-            await sendTelegramOtp(state.phone, chatId);
-            break;
+            userStates.delete(chatId);
+            const cleanPhone = digits.startsWith('964') ? '0' + digits.substring(3) : (digits.startsWith('0') ? digits : '0' + digits);
+            const encodedPhone = encodeURIComponent(cleanPhone);
+            await sendKeyboard(chatId,
+                `✅ <b>الرقم (${text.trim()}) متاح للتسجيل:</b>\n\n` +
+                `🔐 لحماية وأمان حسابك، التحقق مفعّل في تطبيق الويب عبر واتساب و Truecaller.\n` +
+                `اضغط أدناه لفتح التطبيق وتأكيد رقمك بضغطة واحدة وإكمال حسابك:`,
+                [
+                    [{ text: '🚶 فتح تطبيق الويب وتأكيد الرقم بواتساب', url: `https://tawseelaiq.app/?role=Customer&phone=${encodedPhone}` }],
+                    [{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]
+                ]
+            );
+            return;
         }
         case 'passenger_otp_sent': {
             const check = verifyTelegramOtp(chatId, text.trim());
@@ -744,22 +783,43 @@ async function handleMessage(chatId, text, user, location) {
 
         // --- Driver Registration ---
         case 'driver_phone': {
+            const clean = normalizePhoneNumber(text);
             const digits = text.replace(/[^0-9]/g, '');
-            if (digits.length < 10) { await sendMessage(chatId, '❌ رقم غير صالح. أرسل رقم عراقي (مثال: 07701234567):'); return; }
+            if (digits.length < 10 || !clean || clean.length < 9) {
+                userStates.delete(chatId);
+                await sendKeyboard(chatId,
+                    `❌ <b>الرقم المدخل (${text.trim()}) غير صحيح أو غير صالح.</b>\n\n` +
+                    `يرجى التأكد من كتابة الرقم بشكل صحيح (مثال: <code>07701234567</code>)، أو يمكنك التحقق والتسجيل عبر تطبيق الويب:`,
+                    [
+                        [{ text: '🌐 فتح تطبيق الويب للتحقق والتسجيل', url: 'https://tawseelaiq.app/?role=Driver' }],
+                        [{ text: '🔄 إعادة المحاولة في البوت', callback_data: 'reg_driver' }],
+                        [{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]
+                    ]
+                );
+                return;
+            }
             const existing = await checkPhoneRegistration(text);
             if (existing) {
                 userStates.delete(chatId);
                 await sendKeyboard(chatId,
-                    `⚠️ <b>الرقم مسجل ${existing.roleAr}. استخدم تسجيل الدخول.</b>`,
+                    `⚠️ <b>الرقم مسجل مسبقاً ${existing.roleAr}. استخدم تسجيل الدخول.</b>`,
                     [[{ text: '🔑 تسجيل دخول', callback_data: 'login' }], [{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]]
                 );
                 return;
             }
-            state.phone = text.trim();
-            state.step = 'driver_otp_sent';
-            userStates.set(chatId, state);
-            await sendTelegramOtp(state.phone, chatId);
-            break;
+            userStates.delete(chatId);
+            const cleanPhone = digits.startsWith('964') ? '0' + digits.substring(3) : (digits.startsWith('0') ? digits : '0' + digits);
+            const encodedPhone = encodeURIComponent(cleanPhone);
+            await sendKeyboard(chatId,
+                `✅ <b>الرقم (${text.trim()}) متاح لتسجيل الكابتن:</b>\n\n` +
+                `🔐 لحماية وتوثيق حسابات السائقين، التحقق مفعّل في تطبيق الويب عبر واتساب و Truecaller.\n` +
+                `اضغط أدناه لفتح التطبيق وتأكيد رقمك وإكمال بيانات المركبة:`,
+                [
+                    [{ text: '🚕 فتح تطبيق الويب وتأكيد الرقم بواتساب', url: `https://tawseelaiq.app/?role=Driver&phone=${encodedPhone}` }],
+                    [{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]
+                ]
+            );
+            return;
         }
         case 'driver_otp_sent': {
             const check = verifyTelegramOtp(chatId, text.trim());
@@ -829,15 +889,35 @@ async function handleMessage(chatId, text, user, location) {
 
         // --- Login ---
         case 'login_phone': {
+            const clean = normalizePhoneNumber(text);
             const digits = text.replace(/[^0-9]/g, '');
-            if (digits.length < 10) { await sendMessage(chatId, '❌ رقم غير صالح. أرسل رقم عراقي (مثال: 07701234567):'); return; }
+            if (digits.length < 10 || !clean || clean.length < 9) {
+                userStates.delete(chatId);
+                await sendKeyboard(chatId,
+                    `❌ <b>الرقم المدخل (${text.trim()}) غير صحيح أو غير صالح.</b>\n\n` +
+                    `يرجى التأكد من كتابة الرقم بشكل صحيح (مثال: <code>07701234567</code>)، أو يمكنك التحقق والتسجيل عبر تطبيق الويب:`,
+                    [
+                        [{ text: '🌐 فتح تطبيق الويب للتحقق والتسجيل', url: 'https://tawseelaiq.app/?role=Customer' }],
+                        [{ text: '🔄 إعادة المحاولة في البوت', callback_data: 'login' }],
+                        [{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]
+                    ]
+                );
+                return;
+            }
             const existing = await checkPhoneRegistration(text);
             if (!existing) {
                 userStates.delete(chatId);
+                const cleanPhone = digits.startsWith('964') ? '0' + digits.substring(3) : (digits.startsWith('0') ? digits : '0' + digits);
+                const encodedPhone = encodeURIComponent(cleanPhone);
                 await sendKeyboard(chatId,
-                    `❌ <b>هذا الرقم (${text.trim()}) غير مسجل في النظام.</b>\n\nيرجى إنشاء حساب أولاً:`,
+                    `❌ <b>هذا الرقم (${text.trim()}) غير مسجل في النظام.</b>\n\n` +
+                    `💡 <i>لا حاجة للتحقق هنا في تيليجرام</i>؛ التحقق مفعّل وآمن في تطبيق الويب عبر واتساب و Truecaller.\n\n` +
+                    `يرجى فتح تطبيق الويب للتحقق من رقمك وتوثيق حسابك:`,
                     [
-                        [{ text: '🚶 تسجيل راكب', callback_data: 'reg_passenger' }, { text: '🚕 تسجيل سائق', callback_data: 'reg_driver' }]
+                        [{ text: '🚶 تسجيل راكب في تطبيق الويب', url: `https://tawseelaiq.app/?role=Customer&phone=${encodedPhone}` }],
+                        [{ text: '🚕 تسجيل كابتن في تطبيق الويب', url: `https://tawseelaiq.app/?role=Driver&phone=${encodedPhone}` }],
+                        [{ text: '🔄 تجربة رقم آخر', callback_data: 'login' }],
+                        [{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]
                     ]
                 );
                 return;

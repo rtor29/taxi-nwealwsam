@@ -4930,7 +4930,15 @@ class AuthController {
             var urlParams = new URLSearchParams(window.location.search);
             var role = urlParams.get('role');
             if (role === 'Customer' || role === 'customer') window.switchRole('Customer');
-            else window.switchRole('Driver');
+            else if (role === 'Driver' || role === 'driver') window.switchRole('Driver');
+            var phoneParam = urlParams.get('phone');
+            if (phoneParam) {
+                var isDrv = (role === 'Driver' || role === 'driver');
+                var pReg = document.getElementById(isDrv ? 'driver-reg-phone' : 'cust-reg-phone');
+                if (pReg) pReg.value = phoneParam;
+                var pLog = document.getElementById(isDrv ? 'driver-phone' : 'cust-phone');
+                if (pLog) pLog.value = phoneParam;
+            }
             if (urlParams.get('openMap') === '1' || urlParams.get('showMap') === '1') {
                 window.openBookingApp(urlParams.get('tripType') || 'short');
             }
