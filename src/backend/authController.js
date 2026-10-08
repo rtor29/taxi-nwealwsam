@@ -3009,12 +3009,26 @@ class AuthController {
             if (clrBtn) clrBtn.style.display = query ? 'block' : 'none';
             var resultsEl = document.getElementById('book-pickup-results');
             if (!resultsEl) return;
-            if (!query || query.trim().length < 2) { resultsEl.style.display = 'none'; return; }
-            var activeGov = IRAQ_GOVERNORATES[selectedGovernorate || localStorage.getItem('user_governorate') || 'najaf'] || IRAQ_GOVERNORATES.najaf;
-            var local = (activeGov.name === 'النجف') ? searchLocalNajafPlaces(query) : [];
+            if (query) bPickupName = query;
+            if (!query || query.trim().length < 1) { resultsEl.style.display = 'none'; return; }
+
             resultsEl.innerHTML = '';
+            var customItem = document.createElement('div');
+            customItem.className = 'search-result-item';
+            customItem.style.cssText = 'background:#f0fdf4;font-weight:bold;color:#166534;border-bottom:1px solid #dcfce7;';
+            customItem.innerHTML = '<span>📌</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">اعتماد: "' + query + '"</span>';
+            customItem.onclick = function() {
+                resultsEl.style.display = 'none';
+                var pLon = bUserLon || 44.3168;
+                var pLat = bUserLat || 31.9961;
+                setBookingPickup(pLon, pLat, query);
+                setMapTarget('dropoff');
+            };
+            resultsEl.appendChild(customItem);
+            resultsEl.style.display = 'block';
+
+            var local = searchLocalNajafPlaces(query);
             if (local.length > 0) {
-                resultsEl.style.display = 'block';
                 local.forEach(function(p) {
                     var item = document.createElement('div');
                     item.className = 'search-result-item';
@@ -3026,14 +3040,14 @@ class AuthController {
             bPickupTimer = setTimeout(async function() {
                 try {
                     var q = encodeURIComponent(query.trim());
-                    var bbox = getActiveGovBbox();
-                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&bbox=' + bbox + '&proximity=' + bUserLon + ',' + bUserLat + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=5&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + (bUserLon||44.3168) + ',' + (bUserLat||31.9961) + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=6&access_token=' + BOOKING_MAPBOX_TOKEN;
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
                     resultsEl.innerHTML = '';
-                    if (activeGov.name === 'النجف') {
-                        searchLocalNajafPlaces(query).forEach(function(p) {
+                    resultsEl.appendChild(customItem);
+                    if (local.length > 0) {
+                        local.forEach(function(p) {
                             var item = document.createElement('div');
                             item.className = 'search-result-item';
                             item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</span>';
@@ -3051,7 +3065,7 @@ class AuthController {
                     });
                     resultsEl.style.display = resultsEl.children.length > 0 ? 'block' : 'none';
                 } catch(_) {}
-            }, 350);
+            }, 300);
         };
 
         window.toggleBookingDrawer = function(forceOpen) {
@@ -3243,10 +3257,31 @@ class AuthController {
         }
 
         window.saveUserRouteToDatabase = async function() {
-            if (!bPickupCoords || !bDropoffCoords) {
-                alert('⚠️ يرجى تحديد نقطة الانطلاق ونقطة الوصول على الخريطة أولاً');
-                return;
+            var pickInp = document.getElementById('book-pickup-input');
+            var dropInp = document.getElementById('book-dropoff-input');
+            var typedPickup = pickInp ? pickInp.value.trim() : '';
+            var typedDropoff = dropInp ? dropInp.value.trim() : '';
+
+            if (typedPickup && !bPickupName) bPickupName = typedPickup;
+            if (typedDropoff && !bDropoffName) bDropoffName = typedDropoff;
+
+            if (!bPickupCoords) {
+                var pLon = bUserLon || 44.3168;
+                var pLat = bUserLat || 31.9961;
+                bPickupCoords = [pLon, pLat];
+                if (!bPickupName) bPickupName = typedPickup || 'موقعي الحالي';
             }
+
+            if (!bDropoffCoords) {
+                if (!typedDropoff && !bDropoffName) {
+                    alert('⚠️ يرجى كتابة أو تحديد وجهة الوصول أولاً');
+                    if (dropInp) dropInp.focus();
+                    return;
+                }
+                bDropoffName = typedDropoff || bDropoffName || 'وجهة الوصول';
+                bDropoffCoords = [bPickupCoords[0] + 0.025, bPickupCoords[1] + 0.025];
+            }
+
             var userId = localStorage.getItem('user_id') || 'usr-current';
             var role = localStorage.getItem('user_role') || 'Customer';
             var isDriver = (role === 'Driver' || role === 'driver');
@@ -3254,8 +3289,8 @@ class AuthController {
             var isShortTrip = !isDriver && (tripType === 'short' || tripType === 'ShortTrip');
             var fullName = localStorage.getItem('user_fullname') || (isDriver ? 'كابتن توصيله' : 'راكب توصيله');
             var phone = localStorage.getItem('user_phone') || '';
-            var fromText = bPickupName || 'نقطة الانطلاق';
-            var toText = bDropoffName || 'نقطة الوصول';
+            var fromText = bPickupName || typedPickup || 'نقطة الانطلاق';
+            var toText = bDropoffName || typedDropoff || 'نقطة الوصول';
 
             var saveBtn = document.getElementById('btn-floating-save-route') || document.getElementById('btn-save-route-db');
             if (saveBtn) {
@@ -3297,7 +3332,8 @@ class AuthController {
                             locationName: fromText,
                             dropoffLat: bDropoffCoords[1],
                             dropoffLon: bDropoffCoords[0],
-                            dropoffName: toText
+                            dropoffName: toText,
+                            route: fromText + ' ➔ ' + toText
                         })
                     });
 
@@ -3318,7 +3354,7 @@ class AuthController {
                             var titleEl = document.getElementById('dispatch-modal-title');
                             if (titleEl) titleEl.textContent = 'جاري البحث عن أقرب سائق متواجد...';
                             var subEl = document.getElementById('dispatch-modal-subtitle');
-                            if (subEl) subEl.textContent = 'تم تثبيت مسارك، جاري الاتصال بأقرب كابتن لتنفيذ المشوار...';
+                            if (subEl) subEl.textContent = 'تم تثبيت مسارك (' + fromText + ' ➔ ' + toText + ')، جاري الاتصال بأقرب كابتن...';
                             var drvName = document.getElementById('dispatch-drv-name');
                             if (drvName) drvName.textContent = '🚕 جاري البحث عن أقرب كابتن...';
                             var drvStatus = document.getElementById('dispatch-drv-status');
@@ -3345,7 +3381,7 @@ class AuthController {
                             })
                         });
 
-                        alert('✅ تم تثبيت مسارك في قاعدة البيانات بنجاح!');
+                        alert('✅ تم تثبيت مسارك في قاعدة البيانات بنجاح: ' + fromText + ' ➔ ' + toText);
                         if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '✅ تم تثبيت المسار'; }
                         loadMatchingDriversForPassenger();
                     }
@@ -3361,13 +3397,13 @@ class AuthController {
             if (!container) return;
             container.innerHTML = '<div style="font-size:12px;color:#6b7280;text-align:center;padding:12px;"><i class="fa-solid fa-circle-notch fa-spin"></i> جاري مطابقة السائقين القريبين لمسارك...</div>';
 
-            var pLat = bPickupCoords ? bPickupCoords[1] : 32.0;
-            var pLon = bPickupCoords ? bPickupCoords[0] : 44.3;
+            var pLat = bPickupCoords ? bPickupCoords[1] : (bUserLat || 32.0);
+            var pLon = bPickupCoords ? bPickupCoords[0] : (bUserLon || 44.3);
 
             try {
-                var res = await fetch('/api/drivers/nearby?lat=' + pLat + '&lon=' + pLon + '&rangeKm=15');
+                var res = await fetch('/api/drivers/nearby?lat=' + pLat + '&lon=' + pLon + '&rangeKm=25');
                 var data = await res.json();
-                var drivers = data.drivers || [];
+                var drivers = Array.isArray(data) ? data : (data.drivers || []);
 
                 if (drivers.length === 0) {
                     container.innerHTML = '<div style="font-size:12px;color:#94a3b8;text-align:center;padding:12px;background:#f8fafc;border-radius:10px;">لا يوجد سائقون قريبون متاحون حالياً على مسارك</div>';
@@ -3379,14 +3415,15 @@ class AuthController {
                     var card = document.createElement('div');
                     card.className = 'driver-mini-card';
                     card.style.cssText = 'background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:8px;';
-                    var waNum = (d.driverPhone || '').replace(/[^0-9]/g, '').replace(/^07/, '9647');
+                    var dPhone = d.phoneNumber || d.phone || d.driverPhone || '';
+                    var waNum = dPhone.replace(/[^0-9]/g, '').replace(/^07/, '9647');
                     var waBtn = waNum ? '<a href="https://wa.me/' + waNum + '" target="_blank" class="btn-small" style="background:#25d366;color:#fff;text-decoration:none;padding:6px 10px;font-size:11px;font-weight:700;">واتساب 💬</a>' : '';
 
                     card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
-                        '<span style="font-weight:900;font-size:13px;color:#111;">🚕 ' + (d.driverName || 'كابتن') + '</span>' +
+                        '<span style="font-weight:900;font-size:13px;color:#111;">🚕 ' + (d.driverName || d.fullName || 'كابتن') + '</span>' +
                         '<span style="font-size:11px;font-weight:800;color:#059669;">📍 يبعد ' + (d.distanceKm || 1) + ' كم</span>' +
                         '</div>' +
-                        '<div style="font-size:11px;color:#64748b;margin-bottom:6px;">🚗 ' + (d.carModel || 'تويوتا') + '</div>' +
+                        '<div style="font-size:11px;color:#64748b;margin-bottom:6px;">🚗 ' + (d.carModel || d.vehicleInfo || 'تويوتا') + '</div>' +
                         '<div style="display:flex;gap:6px;align-items:center;">' +
                         '<button type="button" onclick="sendPassengerJoinRequest(&quot;' + d.driverId + '&quot;)" class="btn-primary" style="flex:1;padding:6px 10px;font-size:11px;background:#2563eb;">🙋 طلب انضمام</button>' +
                         waBtn +
@@ -3397,6 +3434,7 @@ class AuthController {
                 container.innerHTML = '<div style="font-size:12px;color:#dc2626;text-align:center;">تعذر تحميل السائقين القريبين</div>';
             }
         };
+
 
         window.sendPassengerJoinRequest = async function(driverId) {
             var userId = localStorage.getItem('user_id') || 'usr-current';
@@ -3548,17 +3586,46 @@ class AuthController {
         };
 
         window.centerOnUserGps = function() {
-            if (bGeolocate) {
-                bGeolocate.trigger();
-            } else if (navigator.geolocation) {
+            var btn = document.getElementById('btn-gps-pickup');
+            if (btn) btn.innerHTML = '<span>⏳ جاري تحديد موقعك...</span>';
+
+            if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(function(pos) {
                     bUserLat = pos.coords.latitude;
                     bUserLon = pos.coords.longitude;
                     bHasUserGps = true;
-                    if (bMap) bMap.flyTo({ center: [bUserLon, bUserLat], zoom: 15 });
+                    if (bMap) {
+                        bMap.flyTo({ center: [bUserLon, bUserLat], zoom: 16 });
+                    }
                     setBookingPickup(bUserLon, bUserLat, 'موقعي الحالي');
+                    bReverseGeocode(bUserLon, bUserLat).then(function(addr) {
+                        if (addr) {
+                            bPickupName = addr;
+                            var inp = document.getElementById('book-pickup-input');
+                            if (inp) inp.value = addr;
+                        }
+                    });
+                    if (btn) btn.innerHTML = '<span>📍 موقعي الحالي ✅</span>';
+                    var statusEl = document.getElementById('map-target-status');
+                    if (statusEl) {
+                        statusEl.textContent = '✅ تم تثبيت موقعك الحالي - حدد أو اكتب الوجهة';
+                        statusEl.style.background = '#dcfce7';
+                        statusEl.style.color = '#15803d';
+                    }
+                    setMapTarget('dropoff');
                     fetchNearbyDriversForMap();
-                });
+                }, function(err) {
+                    console.log('GPS error:', err);
+                    if (btn) btn.innerHTML = '<span>📍 موقعي الحالي</span>';
+                    if (bGeolocate) {
+                        try { bGeolocate.trigger(); } catch(_) {}
+                    } else {
+                        alert('⚠️ تعذر جلب الموقع الدقيق. يرجى تفعيل الـ GPS في المتصفح أو الهاتف.');
+                    }
+                }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+            } else if (bGeolocate) {
+                bGeolocate.trigger();
+                if (btn) btn.innerHTML = '<span>📍 موقعي الحالي ✅</span>';
             }
         };
 
@@ -3904,13 +3971,25 @@ class AuthController {
             if (clrBtn) clrBtn.style.display = query ? 'block' : 'none';
             var resultsEl = document.getElementById('book-dropoff-results');
             if (!resultsEl) return;
-            if (!query || query.trim().length < 2) { resultsEl.style.display = 'none'; return; }
+            if (query) bDropoffName = query;
+            if (!query || query.trim().length < 1) { resultsEl.style.display = 'none'; return; }
 
-            var activeGov = IRAQ_GOVERNORATES[selectedGovernorate || localStorage.getItem('user_governorate') || 'najaf'] || IRAQ_GOVERNORATES.najaf;
-            var local = (activeGov.name === 'النجف') ? searchLocalNajafPlaces(query) : [];
             resultsEl.innerHTML = '';
+            var customItem = document.createElement('div');
+            customItem.className = 'search-result-item';
+            customItem.style.cssText = 'background:#f0fdf4;font-weight:bold;color:#166534;border-bottom:1px solid #dcfce7;';
+            customItem.innerHTML = '<span>📌</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">اعتماد: "' + query + '"</span>';
+            customItem.onclick = function() {
+                resultsEl.style.display = 'none';
+                var pLon = (bPickupCoords ? bPickupCoords[0] : (bUserLon || 44.3168)) + 0.02;
+                var pLat = (bPickupCoords ? bPickupCoords[1] : (bUserLat || 31.9961)) + 0.02;
+                setBookingDropoff(pLon, pLat, query);
+            };
+            resultsEl.appendChild(customItem);
+            resultsEl.style.display = 'block';
+
+            var local = searchLocalNajafPlaces(query);
             if (local.length > 0) {
-                resultsEl.style.display = 'block';
                 local.forEach(function(p) {
                     var item = document.createElement('div');
                     item.className = 'search-result-item';
@@ -3923,14 +4002,14 @@ class AuthController {
             bDropoffTimer = setTimeout(async function() {
                 try {
                     var q = encodeURIComponent(query.trim());
-                    var bbox = getActiveGovBbox();
-                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&bbox=' + bbox + '&proximity=' + bUserLon + ',' + bUserLat + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=5&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + (bUserLon||44.3168) + ',' + (bUserLat||31.9961) + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=6&access_token=' + BOOKING_MAPBOX_TOKEN;
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
                     resultsEl.innerHTML = '';
-                    if (activeGov.name === 'النجف') {
-                        searchLocalNajafPlaces(query).forEach(function(p) {
+                    resultsEl.appendChild(customItem);
+                    if (local.length > 0) {
+                        local.forEach(function(p) {
                             var item = document.createElement('div');
                             item.className = 'search-result-item';
                             item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</span>';
@@ -3947,7 +4026,7 @@ class AuthController {
                         resultsEl.appendChild(item);
                     });
                     resultsEl.style.display = resultsEl.children.length > 0 ? 'block' : 'none';
-                } catch(_) { resultsEl.style.display = 'none'; }
+                } catch(_) {}
             }, 300);
         };
 
@@ -4029,13 +4108,25 @@ class AuthController {
                 return;
             }
 
+            var pInp = document.getElementById('book-pickup-input');
+            var dInp = document.getElementById('book-dropoff-input');
+            var pTxt = pInp ? pInp.value.trim() : '';
+            var dTxt = dInp ? dInp.value.trim() : '';
+
             if (!bPickupCoords) {
-                alert('يرجى تحديد نقطة الانطلاق أولاً أو الضغط على زر موقعي');
-                return;
+                var pLon = bUserLon || 44.3168;
+                var pLat = bUserLat || 31.9961;
+                bPickupCoords = [pLon, pLat];
+                if (!bPickupName) bPickupName = pTxt || 'موقعي الحالي';
             }
             if (!bDropoffCoords) {
-                alert('يرجى كتابة أو تحديد نقطة الوصول على الخريطة');
-                return;
+                if (!dTxt && !bDropoffName) {
+                    alert('يرجى كتابة أو تحديد وجهة الوصول على الخريطة');
+                    if (dInp) dInp.focus();
+                    return;
+                }
+                bDropoffName = dTxt || bDropoffName;
+                bDropoffCoords = [bPickupCoords[0] + 0.025, bPickupCoords[1] + 0.025];
             }
             var uid = localStorage.getItem('user_id') || 'cust-user';
             var uName = localStorage.getItem('user_fullname') || 'راكب توصيله';

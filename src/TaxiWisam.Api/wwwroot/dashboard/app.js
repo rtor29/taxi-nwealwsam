@@ -1167,23 +1167,24 @@ async function loadRoutes() {
         const data = await res.json();
         tbody.innerHTML = '';
 
-        if (!data.routes || data.routes.length === 0) {
+        const routesList = Array.isArray(data) ? data : (data.routes || []);
+        if (routesList.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400">لا توجد مسارات مسجلة</td></tr>';
             return;
         }
 
-        data.routes.forEach(r => {
+        routesList.forEach(r => {
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-50 transition';
 
             tr.innerHTML = `
-                <td class="p-4 font-bold text-slate-900">${r.routeName}</td>
-                <td class="p-4 text-slate-700 text-xs">${r.driverName} <span class="text-slate-400 block font-mono">${r.driverPhone}</span></td>
-                <td class="p-4 text-slate-600 text-xs">${r.startName} ➔ ${r.endName}</td>
-                <td class="p-4 font-mono text-xs">${r.departureTime}</td>
-                <td class="p-4 font-bold text-slate-800">${r.availableSeats}</td>
-                <td class="p-4 text-emerald-600 font-bold">${Number(r.pricePerSeat).toLocaleString()} د.ع</td>
-                <td class="p-4"><span class="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 rounded font-bold">${r.status}</span></td>
+                <td class="p-4 font-bold text-slate-900">${r.routeName || r.name || 'مسار معتمد'}</td>
+                <td class="p-4 text-slate-700 text-xs">${r.driverName || 'كابتن'} <span class="text-slate-400 block font-mono">${r.driverPhone || ''}</span></td>
+                <td class="p-4 text-slate-600 text-xs">${r.startName || ''} ➔ ${r.endName || ''}</td>
+                <td class="p-4 font-mono text-xs">${r.departureTime || '08:00 AM'}</td>
+                <td class="p-4 font-bold text-slate-800">${r.availableSeats || 4}</td>
+                <td class="p-4 text-emerald-600 font-bold">${Number(r.pricePerSeat || r.fare || 3000).toLocaleString()} د.ع</td>
+                <td class="p-4"><span class="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 rounded font-bold">${r.status || 'Active'}</span></td>
             `;
             tbody.appendChild(tr);
         });

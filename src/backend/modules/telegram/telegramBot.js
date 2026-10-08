@@ -482,11 +482,14 @@ async function handleCallback(chatId, data, user) {
             const pLat = passenger.permanentLat ? parseFloat(passenger.permanentLat) : (passenger.currentLat ? parseFloat(passenger.currentLat) : 31.9961);
             const pLon = passenger.permanentLon ? parseFloat(passenger.permanentLon) : (passenger.currentLon ? parseFloat(passenger.currentLon) : 44.3168);
 
-            const shortDrivers = (db.memoryState.drivers || []).filter(d =>
+            let shortDrivers = (db.memoryState.drivers || []).filter(d =>
                 !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' &&
                 (d.isVerified === true || d.status === 'Active' || d.status === 'Approved') &&
                 (d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType)
             );
+            if (shortDrivers.length === 0) {
+                shortDrivers = (db.memoryState.drivers || []).filter(d => !d.isBlocked && d.status !== 'Rejected');
+            }
 
             const toRad = (deg) => deg * Math.PI / 180;
             const haversine = (lat1, lon1, lat2, lon2) => {
@@ -501,7 +504,7 @@ async function handleCallback(chatId, data, user) {
                 const dLat = d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : (pLat + (idx % 2 === 0 ? 0.003 * (idx + 1) : -0.003 * (idx + 1))));
                 const dLon = d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : (pLon + (idx % 2 === 0 ? 0.002 * (idx + 1) : -0.002 * (idx + 1))));
                 const dist = haversine(pLat, pLon, dLat, dLon);
-                const routeInfo = d.permanentLocationName || (d.activeRoute ? `${d.activeRoute.fromText} ➔ ${d.activeRoute.toText}` : (d.route || 'مركز النجف الأشرف'));
+                const routeInfo = d.route || d.permanentLocationName || (d.activeRoute ? `${d.activeRoute.fromText} ➔ ${d.activeRoute.toText}` : 'مسار الكابتن المعتمد');
                 return { ...d, _dist: dist, routeInfo };
             }).sort((a, b) => a._dist - b._dist);
 
@@ -517,7 +520,7 @@ async function handleCallback(chatId, data, user) {
                     ]
                 );
             } else {
-                let msg = `⚡ <b>تم اختيار: مشوار قصير</b>\n📍 <b>السائقون المسجلون وقريبون من مسارك في النجف:</b>\n\n`;
+                let msg = `⚡ <b>تم اختيار: مشوار قصير</b>\n📍 <b>السائقون الأقرب لموقعك ومسارك الحالي:</b>\n\n`;
                 driversWithDist.slice(0, 8).forEach((d, i) => {
                     const waNum = (d.phoneNumber || '').replace(/[^0-9]/g, '').replace(/^07/, '9647');
                     const distText = d._dist ? ` (${d._dist.toFixed(1)} كم عنك)` : '';

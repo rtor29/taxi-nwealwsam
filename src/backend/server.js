@@ -1218,7 +1218,7 @@ async function startServer() {
         // Routes & Bookings
         if (pathname === '/api/admin/routes') {
             const result = await adminController.getRoutes();
-            return sendJson(result.routes);
+            return sendJson({ success: true, total: result.total, routes: result.routes });
         }
 
         if (pathname === '/api/admin/bookings') {
@@ -1407,8 +1407,14 @@ async function startServer() {
                 };
 
                 const maxDist = parseFloat(rangeKm) || 5;
-                const candidates = (db.memoryState.drivers || [])
-                    .filter(d => !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' && (d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType))
+                let driverCandidates = (db.memoryState.drivers || [])
+                    .filter(d => !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' && (d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType));
+                if (driverCandidates.length === 0) {
+                    driverCandidates = (db.memoryState.drivers || [])
+                        .filter(d => !d.isBlocked && d.status !== 'Suspended' && d.status !== 'Rejected');
+                }
+
+                const candidates = driverCandidates
                     .map(d => {
                         const dLat = d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : pLat);
                         const dLon = d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : pLon);
@@ -1419,7 +1425,7 @@ async function startServer() {
                     .sort((a, b) => a.dist - b.dist);
 
                 const candidateDriverIds = candidates.map(c => c.driverId);
-                const assignedDriver = candidates[0] || (db.memoryState.drivers || [])[0] || null;
+                const assignedDriver = candidates[0] || (driverCandidates[0] || null);
 
                 const newRequest = {
                     id: 'ride-' + Math.random().toString(36).substr(2, 9),
@@ -1450,6 +1456,28 @@ async function startServer() {
                 db.memoryState.rideRequests = db.memoryState.rideRequests || [];
                 db.memoryState.rideRequests.unshift(newRequest);
                 db.saveStateSnapshot();
+
+                // Notify passenger via Telegram if connected
+                const custObj = (db.memoryState.customers || []).find(c => c.customerId === customerId || (customerPhone && c.phoneNumber === customerPhone));
+                if (custObj && custObj.telegramChatId && assignedDriver) {
+                    const tgMsg = `🚖 <b>تم إرسال طلبك لأقرب كابتن متواجد!</b>\n\n` +
+                        `👤 <b>الكابتن:</b> ${assignedDriver.fullName}\n` +
+                        `🚗 <b>المركبة:</b> ${newRequest.assignedDriverVehicle}\n` +
+                        `📞 <b>الهاتف:</b> ${assignedDriver.phoneNumber}\n` +
+                        `🛣️ <b>المسار:</b> ${newRequest.pickupName} ➔ ${newRequest.dropoffName}\n` +
+                        `💰 <b>الأجرة:</b> ${newRequest.fare} د.ع\n\n` +
+                        `⏳ جاري انتظار قبول السائق.`;
+                    telegramBot.notifyUser(custObj.telegramChatId, tgMsg).catch(() => {});
+                }
+                if (assignedDriver && assignedDriver.telegramChatId) {
+                    const drvMsg = `🚖 <b>طلب مشوار جديد بالقرب منك!</b>\n\n` +
+                        `👤 <b>الراكب:</b> ${newRequest.customerName}\n` +
+                        `🟢 <b>الانطلاق:</b> ${newRequest.pickupName}\n` +
+                        `🔴 <b>الوصول:</b> ${newRequest.dropoffName}\n` +
+                        `💰 <b>الأجرة:</b> ${newRequest.fare} د.ع\n\n` +
+                        `👉 افتح التطبيق للقبول: https://tawseelaiq.app/?role=Driver`;
+                    telegramBot.notifyUser(assignedDriver.telegramChatId, drvMsg).catch(() => {});
+                }
 
                 return sendJson({
                     success: true,
@@ -2528,10 +2556,54 @@ async function startServer() {
                 driver.permanentDropoffLat = parseFloat(toLat);
                 driver.permanentDropoffLon = parseFloat(toLon);
             }
+            const routeStr = `${fromText.trim()} ➔ ${toText.trim()}`;
+            driver.route = routeStr;
+            driver.preferredRoute = routeStr;
             driver.permanentLocationName = fromText.trim();
             driver.permanentDropoffName = toText.trim();
+
+            // Update or add route in memoryState.routes so it displays in Dashboard routes table
+            let r = (db.memoryState.routes || []).find(rt => rt.driverId === driverId);
+            if (r) {
+                r.name = routeStr;
+                r.startName = fromText.trim();
+                r.endName = toText.trim();
+                if (fromLat) r.startLat = parseFloat(fromLat);
+                if (fromLon) r.startLon = parseFloat(fromLon);
+                if (toLat) r.endLat = parseFloat(toLat);
+                if (toLon) r.endLon = parseFloat(toLon);
+            } else {
+                db.memoryState.routes = db.memoryState.routes || [];
+                db.memoryState.routes.unshift({
+                    id: 'route-' + driverId,
+                    routeId: 'route-' + driverId,
+                    driverId: driverId,
+                    driverName: driver.fullName || 'كابتن',
+                    driverPhone: driver.phoneNumber || '',
+                    name: routeStr,
+                    startName: fromText.trim(),
+                    endName: toText.trim(),
+                    startLat: parseFloat(fromLat) || 31.9961,
+                    startLon: parseFloat(fromLon) || 44.3168,
+                    endLat: parseFloat(toLat) || 32.0321,
+                    endLon: parseFloat(toLon) || 44.3725,
+                    fare: 3000,
+                    availableSeats: 4,
+                    totalSeats: 4,
+                    departureTime: '08:00 AM',
+                    status: 'Active',
+                    createdAt: new Date().toISOString()
+                });
+            }
+
             db.saveStateSnapshot();
-            return sendJson({ success: true, route: driver.activeRoute });
+            db.persistDriverPermanentLocation(driverId, {
+                lat: driver.permanentLat, lon: driver.permanentLon, locationName: driver.permanentLocationName,
+                dropoffLat: driver.permanentDropoffLat, dropoffLon: driver.permanentDropoffLon, dropoffName: driver.permanentDropoffName,
+                route: routeStr
+            }).catch(()=>{});
+
+            return sendJson({ success: true, route: driver.activeRoute, routeStr: driver.route });
         }
 
         // ===== Get active driver routes for passenger =====
@@ -2585,25 +2657,41 @@ async function startServer() {
         }
 
 
-        // Passenger: Set permanent location
+        // Passenger: Set permanent location & route
         if (pathname === '/api/passenger/set-permanent-location' && method === 'POST') {
             const body = await parseJsonBody(req);
-            const { passengerId, lat, lon, locationName } = body;
-            if (!passengerId || !lat || !lon) return sendJson({ success: false, error: 'بيانات ناقصة' });
-            const customer = db.memoryState.customers.find(c => c.customerId === passengerId);
-            if (!customer) return sendJson({ success: false, error: 'الراكب غير موجود' });
-            customer.permanentLat = parseFloat(lat);
-            customer.permanentLon = parseFloat(lon);
-            customer.permanentLocationName = locationName || '';
-            if (body.dropoffLat) customer.permanentDropoffLat = parseFloat(body.dropoffLat);
-            if (body.dropoffLon) customer.permanentDropoffLon = parseFloat(body.dropoffLon);
-            if (body.dropoffName !== undefined) customer.permanentDropoffName = body.dropoffName || '';
+            const pid = body.passengerId || body.customerId;
+            const lat = body.lat || body.pickupLat;
+            const lon = body.lon || body.pickupLon;
+            const locationName = body.locationName || body.pickupName || body.pickupText;
+            const dropoffName = body.dropoffName || body.dropoffText;
+            const dropoffLat = body.dropoffLat;
+            const dropoffLon = body.dropoffLon;
+
+            if (!pid) return sendJson({ success: false, error: 'customerId required' }, 400);
+            const customer = db.memoryState.customers.find(c => c.customerId === pid || c.id === pid);
+            if (!customer) return sendJson({ success: false, error: 'الراكب غير موجود' }, 404);
+
+            if (lat) customer.permanentLat = parseFloat(lat);
+            if (lon) customer.permanentLon = parseFloat(lon);
+            if (locationName) customer.permanentLocationName = locationName;
+            if (dropoffLat) customer.permanentDropoffLat = parseFloat(dropoffLat);
+            if (dropoffLon) customer.permanentDropoffLon = parseFloat(dropoffLon);
+            if (dropoffName !== undefined) customer.permanentDropoffName = dropoffName || '';
+
+            const routeStr = body.route || (dropoffName ? `${locationName || 'موقعي'} ➔ ${dropoffName}` : (locationName || 'مسار الراكب'));
+            customer.route = routeStr;
+            customer.preferredRoute = routeStr;
+            if (locationName) customer.address = locationName;
+
             db.saveStateSnapshot();
-            db.persistCustomerPermanentLocation(passengerId, {
+            db.persistCustomerPermanentLocation(pid, {
                 lat: customer.permanentLat, lon: customer.permanentLon, locationName: customer.permanentLocationName,
-                dropoffLat: customer.permanentDropoffLat, dropoffLon: customer.permanentDropoffLon, dropoffName: customer.permanentDropoffName
+                dropoffLat: customer.permanentDropoffLat, dropoffLon: customer.permanentDropoffLon, dropoffName: customer.permanentDropoffName,
+                route: customer.route, address: customer.address
             }).catch(()=>{});
-            return sendJson({ success: true, message: 'تم تثبيت الموقع الدائمي بنجاح' });
+
+            return sendJson({ success: true, message: 'تم تثبيت المسار في قاعدة البيانات بنجاح', route: customer.route });
         }
 
         // Get passenger permanent location
