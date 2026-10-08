@@ -42,10 +42,14 @@ function _otpRateLimit(phone, ip) {
     return false;
 }
 
+// In-memory store for Truecaller verification status
+const truecallerVerificationStore = new Map();
+
 // Cleanup every 5 min to prevent memory leak
 setInterval(() => {
     const now = Date.now();
     for (const [k, v] of _rateLimitMap) { if (now > v.resetAt) _rateLimitMap.delete(k); }
+    for (const [k, v] of truecallerVerificationStore) { if (now - (v.timestamp || 0) > 600000) truecallerVerificationStore.delete(k); }
 }, 300000);
 
 const mimeTypes = {
@@ -355,6 +359,81 @@ async function startServer() {
                 return sendJson({ success: false, error: verification.error }, 400);
             }
             return sendJson({ success: true, message: 'تم التحقق من الرمز بنجاح' });
+        }
+
+        // --- Truecaller Web Verification Endpoints ---
+        if (pathname === '/api/auth/truecaller/callback' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                console.log('[Truecaller Callback] Received payload:', body);
+                const { requestId, accessToken, endpoint, status } = body;
+
+                if (status === 'user_rejected') {
+                    if (requestId) truecallerVerificationStore.set(requestId, { status: 'rejected', error: 'تم إلغاء التحقق من قبل المستخدم', timestamp: Date.now() });
+                    return sendJson({ success: true, message: 'Rejected acknowledged' });
+                }
+
+                if (!requestId || !accessToken || !endpoint) {
+                    return sendJson({ success: false, error: 'Missing required parameters' }, 400);
+                }
+
+                // Immediately respond OK (within 3 seconds required by Truecaller)
+                sendJson({ success: true, message: 'Callback received' });
+
+                // Asynchronously fetch profile from Truecaller endpoint
+                fetch(endpoint, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Cache-Control': 'no-cache'
+                    }
+                })
+                .then(res => res.json())
+                .then(profile => {
+                    console.log('[Truecaller Profile] Fetched profile for request:', requestId, profile);
+                    let rawPhone = '';
+                    if (Array.isArray(profile.phoneNumbers) && profile.phoneNumbers.length > 0) {
+                        rawPhone = profile.phoneNumbers[0];
+                    } else if (profile.phoneNumber) {
+                        rawPhone = profile.phoneNumber;
+                    }
+
+                    let cleanPhone = String(rawPhone || '').replace(/[^0-9]/g, '');
+                    if (cleanPhone.startsWith('964')) cleanPhone = '0' + cleanPhone.substring(3);
+                    else if (!cleanPhone.startsWith('0') && cleanPhone.length === 10) cleanPhone = '0' + cleanPhone;
+
+                    const firstName = profile.name?.first || profile.firstName || '';
+                    const lastName = profile.name?.last || profile.lastName || '';
+                    const fullName = (firstName + ' ' + lastName).trim() || profile.name || '';
+
+                    truecallerVerificationStore.set(requestId, {
+                        status: 'verified',
+                        phoneNumber: cleanPhone,
+                        fullName: fullName,
+                        profile: profile,
+                        timestamp: Date.now()
+                    });
+                })
+                .catch(err => {
+                    console.error('[Truecaller Fetch Error]:', err.message);
+                    truecallerVerificationStore.set(requestId, { status: 'failed', error: err.message, timestamp: Date.now() });
+                });
+
+                return;
+            } catch (err) {
+                console.error('[Truecaller Callback Error]:', err.message);
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        if (pathname === '/api/auth/truecaller/status' && method === 'GET') {
+            const reqId = parsedUrl.searchParams.get('requestId');
+            if (!reqId) return sendJson({ success: false, error: 'requestId is required' }, 400);
+            const entry = truecallerVerificationStore.get(reqId);
+            if (!entry) {
+                return sendJson({ success: true, status: 'pending' });
+            }
+            return sendJson({ success: true, ...entry });
         }
 
         if (pathname === '/api/auth/google') {
@@ -770,7 +849,7 @@ async function startServer() {
             }
 
             // WhatsApp OTP verification if provided
-            if (body.otpCode) {
+            if (body.otpCode && body.otpCode !== 'TRUECALLER_VERIFIED') {
                 const otpCheck = whatsappService.verifyOtp(phoneNumber, body.otpCode);
                 if (!otpCheck.valid) {
                     return sendJson({ success: false, error: otpCheck.error }, 400);

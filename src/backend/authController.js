@@ -843,7 +843,10 @@ class AuthController {
                             </div>
                         </div>
                         <div id="cust-send-otp-wrap">
-                            <button type="button" id="btn-send-whatsapp-otp" onclick="handleSendWhatsappOtp(false)" class="btn-primary" aria-label="إرسال رمز واتساب">
+                            <button type="button" onclick="startTruecallerVerification('customer')" class="btn-primary" style="background:linear-gradient(135deg,#0087ff,#005bb5);margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;border:none;box-shadow:0 3px 10px rgba(0,135,255,0.25)" aria-label="تحقق عبر تراكولر">
+                                <i class="fa-solid fa-bolt" aria-hidden="true"></i> تحقق فوري عبر Truecaller
+                            </button>
+                            <button type="button" id="btn-send-whatsapp-otp" onclick="handleSendWhatsappOtp(false)" class="btn-secondary" style="width:100%;border-color:#16a34a;color:#16a34a;background:#f0fdf4" aria-label="إرسال رمز واتساب">
                                 <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> إرسال رمز التحقق عبر واتساب
                             </button>
                         </div>
@@ -988,8 +991,11 @@ class AuthController {
                             </div>
                         </div>
                         <div id="driver-send-otp-wrap">
-                            <button type="button" id="btn-send-driver-otp" onclick="handleSendDriverWhatsappOtp(false)" class="btn-primary" aria-label="إرسال رمز واتساب">
-                                <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> إرسال رمز التحقق
+                            <button type="button" onclick="startTruecallerVerification('driver')" class="btn-primary" style="background:linear-gradient(135deg,#0087ff,#005bb5);margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;border:none;box-shadow:0 3px 10px rgba(0,135,255,0.25)" aria-label="تحقق عبر تراكولر">
+                                <i class="fa-solid fa-bolt" aria-hidden="true"></i> تحقق فوري عبر Truecaller
+                            </button>
+                            <button type="button" id="btn-send-driver-otp" onclick="handleSendDriverWhatsappOtp(false)" class="btn-secondary" style="width:100%;border-color:#16a34a;color:#16a34a;background:#f0fdf4" aria-label="إرسال رمز واتساب">
+                                <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> إرسال رمز التحقق عبر واتساب
                             </button>
                         </div>
                         <div id="driver-otp-box" style="display:none;margin-top:12px;border-top:1px solid #e5e7eb;padding-top:12px">
@@ -1528,6 +1534,133 @@ class AuthController {
             }
         }
 
+        // ===== Truecaller Verification =====
+        var _truecallerPollTimer = null;
+        function startTruecallerVerification(role) {
+            var partnerKey = 'eicFd6d7759e7941e4527934ffac0102354f7';
+            var nonce = 'req_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10);
+            var isDriver = (role === 'driver');
+            var alertBox = document.getElementById(isDriver ? 'driver-reg-alert' : 'cust-reg-alert');
+            if (alertBox) {
+                alertBox.style.display = 'block';
+                alertBox.className = 'alert-info';
+                alertBox.style.background = '#eff6ff';
+                alertBox.style.color = '#1d4ed8';
+                alertBox.style.border = '1px solid #bfdbfe';
+                alertBox.style.padding = '10px 14px';
+                alertBox.style.borderRadius = '8px';
+                alertBox.style.fontSize = '13px';
+                alertBox.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> جاري فتح تطبيق Truecaller للتحقق الفوري من رقمك...';
+            }
+
+            var deepLink = 'truecallersdk://truesdk/web_verify?type=btmsheet&requestNonce=' + encodeURIComponent(nonce) + '&partnerKey=' + encodeURIComponent(partnerKey) + '&partnerName=' + encodeURIComponent('توصيلة') + '&lang=ar&title=' + encodeURIComponent('تأكيد رقم الهاتف');
+
+            var startTime = Date.now();
+            window.location.href = deepLink;
+
+            setTimeout(function() {
+                if (document.hasFocus() && (Date.now() - startTime < 3500)) {
+                    if (alertBox && alertBox.innerHTML.indexOf('جاري فتح') !== -1) {
+                        alertBox.className = 'alert-warning';
+                        alertBox.style.background = '#fffbeb';
+                        alertBox.style.color = '#b45309';
+                        alertBox.style.border = '1px solid #fde68a';
+                        alertBox.innerHTML = '<i class="fa-solid fa-circle-info"></i> إذا لم يفتح تطبيق Truecaller، يمكنك تأكيد رقمك عبر زر واتساب أدناه.';
+                    }
+                }
+            }, 2500);
+
+            if (_truecallerPollTimer) clearInterval(_truecallerPollTimer);
+            var pollAttempts = 0;
+            var maxAttempts = 60;
+
+            _truecallerPollTimer = setInterval(async function() {
+                pollAttempts++;
+                if (pollAttempts > maxAttempts) {
+                    clearInterval(_truecallerPollTimer);
+                    _truecallerPollTimer = null;
+                    if (alertBox && alertBox.innerHTML.indexOf('جاري فتح') !== -1) {
+                        alertBox.style.display = 'none';
+                    }
+                    return;
+                }
+
+                try {
+                    var res = await fetch('/api/auth/truecaller/status?requestId=' + encodeURIComponent(nonce));
+                    var data = await res.json();
+                    if (data && data.status === 'verified') {
+                        clearInterval(_truecallerPollTimer);
+                        _truecallerPollTimer = null;
+
+                        if (isDriver) {
+                            window.__isDriverPhoneVerified = true;
+                            window.__verifiedDriverOtpCode = 'TRUECALLER_VERIFIED';
+                            var pi = document.getElementById('driver-reg-phone');
+                            if (pi) { pi.value = data.phoneNumber || pi.value; pi.readOnly = true; }
+                            var ni = document.getElementById('driver-reg-name');
+                            if (ni && !ni.value && data.fullName) { ni.value = data.fullName; }
+                            var ob = document.getElementById('driver-otp-box');
+                            if (ob) ob.style.display = 'none';
+                            var sw = document.getElementById('driver-send-otp-wrap');
+                            if (sw) sw.style.display = 'none';
+                            var badge = document.getElementById('driver-verified-badge');
+                            if (badge) badge.style.display = 'flex';
+                            var det = document.getElementById('driver-details-section');
+                            if (det) det.style.display = 'block';
+                            if (alertBox) {
+                                alertBox.className = 'alert-success';
+                                alertBox.style.background = '#f0fdf4';
+                                alertBox.style.color = '#15803d';
+                                alertBox.style.border = '1px solid #bbf7d0';
+                                alertBox.innerHTML = '<i class="fa-solid fa-circle-check"></i> تم التحقق بنجاح من رقمك عبر Truecaller ✅';
+                                setTimeout(function(){ alertBox.style.display = 'none'; }, 4000);
+                            }
+                        } else {
+                            window.__isPhoneVerified = true;
+                            window.__verifiedOtpCode = 'TRUECALLER_VERIFIED';
+                            var pi = document.getElementById('cust-reg-phone');
+                            if (pi) { pi.value = data.phoneNumber || pi.value; pi.readOnly = true; }
+                            if (data.fullName) {
+                                var parts = data.fullName.trim().split(/\s+/);
+                                var fi = document.getElementById('cust-reg-firstname');
+                                var li = document.getElementById('cust-reg-lastname');
+                                if (fi && !fi.value && parts[0]) fi.value = parts[0];
+                                if (li && !li.value && parts.length > 1) li.value = parts.slice(1).join(' ');
+                            }
+                            var ob = document.getElementById('cust-otp-box');
+                            if (ob) ob.style.display = 'none';
+                            var sw = document.getElementById('cust-send-otp-wrap');
+                            if (sw) sw.style.display = 'none';
+                            var badge = document.getElementById('cust-verified-badge');
+                            if (badge) badge.style.display = 'flex';
+                            var det = document.getElementById('cust-details-section');
+                            if (det) { det.style.display = 'block'; if (typeof initPassengerMapbox === 'function') initPassengerMapbox(); }
+                            if (alertBox) {
+                                alertBox.className = 'alert-success';
+                                alertBox.style.background = '#f0fdf4';
+                                alertBox.style.color = '#15803d';
+                                alertBox.style.border = '1px solid #bbf7d0';
+                                alertBox.innerHTML = '<i class="fa-solid fa-circle-check"></i> تم التحقق بنجاح من رقمك عبر Truecaller ✅';
+                                setTimeout(function(){ alertBox.style.display = 'none'; }, 4000);
+                            }
+                        }
+                    } else if (data && data.status === 'rejected') {
+                        clearInterval(_truecallerPollTimer);
+                        _truecallerPollTimer = null;
+                        if (alertBox) {
+                            alertBox.className = 'alert-warning';
+                            alertBox.style.background = '#fffbeb';
+                            alertBox.style.color = '#b45309';
+                            alertBox.style.border = '1px solid #fde68a';
+                            alertBox.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + (data.error || 'تم إلغاء التحقق عبر Truecaller');
+                        }
+                    }
+                } catch(e) {
+                    console.warn('Truecaller status poll error:', e);
+                }
+            }, 2000);
+        }
+
         // ===== Passenger OTP =====
         window.__isPhoneVerified = false;
         window.__verifiedOtpCode = '';
@@ -1598,6 +1731,7 @@ class AuthController {
         function resetPhoneVerification() {
             window.__isPhoneVerified = false;
             window.__verifiedOtpCode = '';
+            if (_truecallerPollTimer) { clearInterval(_truecallerPollTimer); _truecallerPollTimer = null; }
             var phoneInput = document.getElementById('cust-reg-phone');
             if (phoneInput) { phoneInput.readOnly=false; phoneInput.focus(); }
             var otpBox = document.getElementById('cust-otp-box');
@@ -1738,6 +1872,7 @@ class AuthController {
         function resetDriverPhoneVerification() {
             window.__isDriverPhoneVerified=false;
             window.__verifiedDriverOtpCode='';
+            if (_truecallerPollTimer) { clearInterval(_truecallerPollTimer); _truecallerPollTimer = null; }
             var pi=document.getElementById('driver-reg-phone');
             if(pi){pi.readOnly=false;pi.focus();}
             ['driver-otp-box','driver-reg-alert'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});
@@ -4854,7 +4989,7 @@ class AuthController {
         const emailLower = email ? email.trim().toLowerCase() : `${cleanPhone}@tawseelaiq.app`;
 
         // Optional WhatsApp OTP verification if provided
-        if (body.otpCode) {
+        if (body.otpCode && body.otpCode !== 'TRUECALLER_VERIFIED') {
             const whatsappService = require('../whatsapp/whatsappService');
             const otpCheck = whatsappService.verifyOtp(phoneNumber, body.otpCode);
             if (!otpCheck.valid) {
@@ -5026,7 +5161,7 @@ class AuthController {
         const emailLower = email ? email.trim().toLowerCase() : `${cleanPhone}@tawseelaiq.app`;
 
         // Optional WhatsApp OTP verification if provided
-        if (body.otpCode) {
+        if (body.otpCode && body.otpCode !== 'TRUECALLER_VERIFIED') {
             const whatsappService = require('../whatsapp/whatsappService');
             const otpCheck = whatsappService.verifyOtp(phoneNumber, body.otpCode);
             if (!otpCheck.valid) {
