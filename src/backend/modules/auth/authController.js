@@ -791,7 +791,7 @@ class AuthController {
         </div>
 
         <!-- Floating Action Button -->
-        <button type="button" onclick="handleUnifiedPhoneSubmit()" style="position:absolute;bottom:40px;left:30px;background:#f97316;color:#ffffff;border:none;border-radius:50%;width:64px;height:64px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 25px rgba(249,115,22,0.4);cursor:pointer;transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.95)';" onmouseup="this.style.transform='scale(1)';">
+        <button type="button" onclick="handleUnifiedPhoneSubmit()" style="position:absolute;bottom:40px;left:30px;background:#facc15;color:#ffffff;border:none;border-radius:50%;width:64px;height:64px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 25px rgba(250,204,21,0.5);cursor:pointer;transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.95)';" onmouseup="this.style.transform='scale(1)';">
             <i class="fa-solid fa-arrow-left" style="font-size:28px;"></i>
         </button>
     </main>
