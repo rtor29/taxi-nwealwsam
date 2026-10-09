@@ -327,11 +327,12 @@ class AuthController {
             top: 0 !important;
             right: 0 !important;
             bottom: 0 !important;
-            width: 380px !important;
-            max-width: 90vw !important;
+            width: 300px !important;
+            max-width: 85vw !important;
             height: 100% !important;
-            background: #ffffff !important;
-            box-shadow: -4px 0 25px rgba(0,0,0,0.2) !important;
+            background: #f1f5f9 !important;
+            border-radius: 30px 0 0 30px !important;
+            box-shadow: -10px 0 40px rgba(0,0,0,0.15) !important;
             z-index: 40 !important;
             overflow-y: auto !important;
             -webkit-overflow-scrolling: touch !important;
@@ -516,19 +517,54 @@ class AuthController {
         <!-- OFF-CANVAS SIDEBAR DRAWER (FOR REQUESTS & MATCHING DRIVERS) -->
         <div id="booking-sidebar-backdrop" onclick="toggleBookingDrawer(false)"></div>
         <div id="booking-sidebar">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <span style="font-size:14px;font-weight:900;color:#111;">القائمة الرئيسية</span>
-                <button type="button" onclick="toggleBookingDrawer(false)" style="background:#f3f4f6;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-weight:900;color:#6b7280;font-size:14px;">✕</button>
+            <!-- Close button only (invisible, just for safety if needed, we'll let backdrop close it, but let's keep it clean) -->
+            <div style="position:absolute;top:20px;left:20px;">
+                <button type="button" onclick="toggleBookingDrawer(false)" style="background:transparent;border:none;font-size:20px;color:#94a3b8;cursor:pointer;">✕</button>
             </div>
-            <!-- Panel content will be dynamically rendered -->
-            <div id="sidebar-panel-set-route" style="display:none;flex-direction:column;gap:12px;"></div>
-            <div id="sidebar-panel-join-requests" style="display:flex;flex-direction:column;gap:12px;"></div>
-            <div id="sidebar-panel-short" style="display:none;flex-direction:column;gap:12px;"></div>
-            <div id="sidebar-panel-daily" style="display:none;flex-direction:column;gap:12px;"></div>
-            <div id="sidebar-panel-driver" style="display:none;flex-direction:column;gap:12px;"></div>
-            
-            <hr style="margin:20px 0;border:none;border-top:1px solid #e5e7eb;">
-            <button type="button" onclick="handleLogout()" style="width:100%;background:#ef4444;color:#fff;border:none;border-radius:12px;padding:12px;font-weight:900;font-family:'Cairo',sans-serif;font-size:16px;cursor:pointer;">تسجيل خروج</button>
+
+            <div style="margin-top:60px;padding:0 20px;">
+                <!-- Top Avatar Section -->
+                <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:10px;">
+                    <div style="width:110px;height:110px;border-radius:50%;background:linear-gradient(135deg, #e0e7ff, #c7d2fe);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 4px 10px rgba(0,0,0,0.05), 0 10px 20px rgba(99,102,241,0.2);position:relative;">
+                        <span style="font-size:12px;color:#3730a3;text-align:center;font-weight:700;line-height:1.2;">صورة السائق<br>او الراكب</span>
+                        <div style="position:absolute;bottom:-5px;color:#6366f1;font-size:28px;font-weight:300;">+</div>
+                    </div>
+                    <div style="margin-top:16px;font-size:13px;color:#475569;font-weight:800;">اسم السائق او الراكب</div>
+                </div>
+                
+                <hr style="border:none;border-top:1.5px solid #cbd5e1;margin:10px 0 25px 0;">
+
+                <!-- Menu Items -->
+                <div style="display:flex;flex-direction:column;gap:18px;padding-right:10px;">
+                    <button type="button" style="background:none;border:none;text-align:right;font-size:28px;font-weight:900;color:#0f172a;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
+                        الرئيسيه
+                    </button>
+                    <button type="button" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;margin-top:5px;">
+                        معلومات السائق او الراكب
+                    </button>
+                    <button type="button" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
+                        التواصل مع الدعم
+                    </button>
+                    <button type="button" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
+                        محفضتي
+                    </button>
+                    <button type="button" onclick="handleLogout()" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
+                        تسجيل الخروج
+                    </button>
+                    <button type="button" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
+                        الحقوق
+                    </button>
+                </div>
+            </div>
+
+            <!-- Hidden elements to satisfy existing JS logic -->
+            <div style="display:none;">
+                <div id="sidebar-panel-set-route"></div>
+                <div id="sidebar-panel-join-requests"></div>
+                <div id="sidebar-panel-short"></div>
+                <div id="sidebar-panel-daily"></div>
+                <div id="sidebar-panel-driver"></div>
+            </div>
         </div>
     </div>
 
@@ -3041,7 +3077,7 @@ class AuthController {
             var isDriver = (role === 'Driver' || role === 'driver');
 
             var sidebar = document.getElementById('booking-sidebar');
-            if (sidebar) sidebar.classList.add('drawer-collapsed');
+            if (sidebar) sidebar.classList.remove('drawer-open');
             var backdrop = document.getElementById('booking-sidebar-backdrop');
             if (backdrop) backdrop.style.display = 'none';
             bMapPickTarget = 'pickup';
@@ -3242,12 +3278,12 @@ class AuthController {
             var sidebar = document.getElementById('booking-sidebar');
             var backdrop = document.getElementById('booking-sidebar-backdrop');
             if (!sidebar) return;
-            var isOpen = !sidebar.classList.contains('drawer-collapsed');
-            if (forceOpen === false || isOpen) {
-                sidebar.classList.add('drawer-collapsed');
+            var isOpen = sidebar.classList.contains('drawer-open');
+            if (forceOpen === false || (isOpen && forceOpen !== true)) {
+                sidebar.classList.remove('drawer-open');
                 if (backdrop) backdrop.style.display = 'none';
             } else {
-                sidebar.classList.remove('drawer-collapsed');
+                sidebar.classList.add('drawer-open');
                 if (backdrop) backdrop.style.display = 'block';
             }
             if (bMap) setTimeout(function() { bMap.resize(); }, 150);
