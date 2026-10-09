@@ -863,9 +863,9 @@ class AuthController {
     </div>
     
     <!-- ===== NEW UNIFIED AUTH SCREEN ===== -->
-    <main id="new-auth-ui" style="max-width:480px;width:100%;margin:0 auto;height:100vh;background:#ffffff;display:flex;flex-direction:column;padding:40px 20px;position:relative;">
+    <main id="new-auth-ui" style="max-width:480px;width:100%;margin:0 auto;height:100vh;background:#ffffff;display:flex;flex-direction:column;padding:20px 20px;position:relative;">
         <!-- Logo -->
-        <div style="margin-bottom:60px;text-align:center;display:flex;justify-content:center;">
+        <div style="margin-bottom:40px;text-align:center;display:flex;justify-content:center;">
             <img src="${LOGO_BASE64}" style="width:250px;max-width:100%;height:auto;object-fit:contain;" alt="توصيلة">
         </div>
 
@@ -875,7 +875,7 @@ class AuthController {
 
             <!-- Phone Input -->
             <div style="background:#ffffff;border:1.5px solid #f3f4f6;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,0.06);display:flex;align-items:center;padding:16px 20px;margin-bottom:30px;transition:all 0.3s;" id="new-phone-input-container">
-                <input type="tel" id="new-unified-phone" onkeydown="if(event.key === 'Enter') handleUnifiedPhoneSubmit()" placeholder="" dir="ltr" style="flex:1;border:none;outline:none;font-size:20px;font-weight:900;color:#111;text-align:left;background:transparent;letter-spacing:2px;" onfocus="document.getElementById('new-phone-input-container').style.borderColor='#facc15';" onblur="document.getElementById('new-phone-input-container').style.borderColor='#f3f4f6';" oninput="this.value=normalizeArabicDigits(this.value).replace(/[^0-9]/g, '')">
+                <input type="tel" id="new-unified-phone" onkeydown="if(event.key === 'Enter') window.handleUnifiedPhoneSubmit()" placeholder="" dir="ltr" style="flex:1;border:none;outline:none;font-size:20px;font-weight:900;color:#111;text-align:left;background:transparent;letter-spacing:2px;" onfocus="document.getElementById('new-phone-input-container').style.borderColor='#facc15';" onblur="document.getElementById('new-phone-input-container').style.borderColor='#f3f4f6';" >
             </div>
 
             <p style="font-size:13px;color:#6b7280;text-align:center;line-height:1.8;margin-bottom:40px;font-weight:600;">
@@ -884,7 +884,7 @@ class AuthController {
         </div>
 
         <!-- Floating Action Button -->
-        <button type="button" onclick="handleUnifiedPhoneSubmit()" style="position:absolute;bottom:40px;left:30px;background:#facc15;color:#ffffff;border:none;border-radius:50%;width:64px;height:64px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 25px rgba(250,204,21,0.5);cursor:pointer;transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.95)';" onmouseup="this.style.transform='scale(1)';">
+        <button type="button" onclick="window.handleUnifiedPhoneSubmit()" style="position:absolute;bottom:80px;left:30px;background:#facc15;color:#ffffff;border:none;border-radius:50%;width:64px;height:64px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 25px rgba(250,204,21,0.5);cursor:pointer;transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.95)';" onmouseup="this.style.transform='scale(1)';">
             <i class="fa-solid fa-arrow-left" style="font-size:28px;"></i>
         </button>
     </main>
@@ -944,7 +944,7 @@ class AuthController {
     <script>
         window.unifiedAuthRole = '${preselectedRole}';
         
-        async function handleUnifiedPhoneSubmit() {
+        window.handleUnifiedPhoneSubmit = async function() {
             var phone = document.getElementById('new-unified-phone').value;
             if (!phone || phone.length < 10) {
                 alert('الرجاء إدخال رقم هاتف صحيح');
