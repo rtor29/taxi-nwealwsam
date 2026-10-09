@@ -915,7 +915,7 @@ class AuthController {
                         <div style="margin-bottom:12px;position:relative">
                             <label for="cust-reg-address" class="label">عنوان الانطلاق بالتفصيل <span style="color:#dc2626">*</span></label>
                             <div style="display:flex;gap:6px;align-items:center;">
-                                <input type="text" id="cust-reg-address" class="inp" placeholder="موقعي الحالي أو اكتب العنوان" aria-label="عنوان الانطلاق" oninput="onCustRegAddressInput(this.value)">
+                                <input type="text" id="cust-reg-address" class="inp" placeholder="موقعي الحالي أو اكتب العنوان" aria-label="عنوان الانطلاق" onfocus="if(!window.__custRegGpsFetched){ window.__custRegGpsFetched=true; setCustRegCurrentGps(); }" oninput="onCustRegAddressInput(this.value)">
                                 <button type="button" id="btn-cust-reg-gps" onclick="setCustRegCurrentGps()" class="btn-small" style="background:#2563eb;color:#fff;padding:8px 10px;font-size:11px;font-weight:800;white-space:nowrap;display:flex;align-items:center;gap:4px;border:none;border-radius:8px;cursor:pointer;" title="موقعي الحالي">
                                     <span>📍 موقعي الحالي</span>
                                 </button>
@@ -1102,12 +1102,12 @@ class AuthController {
                 <form id="driver-login-form" onsubmit="handleCaptainLogin(event)" style="display:none">
                     <div style="margin-bottom:14px">
                         <label for="login-driver-identifier" class="label">رقم الهاتف <span style="color:#dc2626">*</span></label>
-                        <input type="text" id="login-driver-identifier" required class="inp" placeholder="07706204066" dir="ltr" aria-label="رقم الهاتف" oninput="this.value=normalizeArabicDigits(this.value)">
+                        <input type="text" id="login-driver-identifier" class="inp" placeholder="07706204066" dir="ltr" aria-label="رقم الهاتف" oninput="this.value=normalizeArabicDigits(this.value)">
                     </div>
                     <div style="margin-bottom:16px">
                         <label for="login-driver-password" class="label">كلمة المرور <span style="color:#dc2626">*</span></label>
                         <div style="position:relative">
-                            <input type="password" id="login-driver-password" required class="inp" style="padding-left:44px" placeholder="••••••••" aria-label="كلمة المرور">
+                            <input type="password" id="login-driver-password" class="inp" style="padding-left:44px" placeholder="••••••••" aria-label="كلمة المرور">
                             <button type="button" onclick="togglePasswordVisibility('login-driver-password','eye-login-drv-pwd')" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af" aria-label="إظهار/إخفاء">
                                 <i id="eye-login-drv-pwd" class="fa-solid fa-eye" aria-hidden="true"></i>
                             </button>
@@ -1212,6 +1212,10 @@ class AuthController {
                 if(loginForm) loginForm.style.display = 'none';
                 if(btnReg) {btnReg.className='sub-btn on';}
                 if(btnLogin) {btnLogin.className='sub-btn off';}
+                if (!window.__passengerMapAlertShown) {
+                    alert('يجب تحديد مسارك الفعلي (نقطة الانطلاق ونقطة الوصول) على الخريطة أولاً لإكمال التسجيل');
+                    window.__passengerMapAlertShown = true;
+                }
             } else {
                 if(regForm) regForm.style.display = 'none';
                 if(loginForm) loginForm.style.display = '';
@@ -1373,7 +1377,7 @@ class AuthController {
             }
 
             try {
-                var res = await fetch('/api/drivers/nearby?tripType=short&lat=' + lat + '&lon=' + lon);
+                var res = await fetch('/api/drivers/nearby?tripType=' + (localStorage.getItem('selected_trip_type') || 'short') + '&lat=' + lat + '&lon=' + lon);
                 var drivers = await res.json();
                 if (!Array.isArray(drivers) || drivers.length === 0) {
                     container.innerHTML = '<div style="background:#fff;border:1px dashed #d1d5db;border-radius:10px;padding:12px;text-align:center;font-size:12px;color:#6b7280">🚕 لا يوجد سائقون قريبون للمشاوير القصيرة حالياً في نطاقك.<br><span style="font-size:11px;color:#9ca3af">يمكنك المتابعة وسيتم تنبيه السائقين فور توفرهم.</span></div>';
@@ -1513,7 +1517,13 @@ class AuthController {
             var identifier = document.getElementById('login-driver-identifier').value.trim();
             var password = document.getElementById('login-driver-password').value;
             var submitBtn = document.getElementById('btn-login-driver-submit');
-            if (!identifier || !password) { alert('يرجى إدخال رقم الهاتف وكلمة المرور'); return; }
+            var alertBox = document.getElementById('driver-reg-alert');
+            if (alertBox) alertBox.style.display = 'none';
+            if (!identifier || !password) { 
+                if(alertBox) { alertBox.textContent = 'يرجى إدخال رقم الهاتف وكلمة المرور'; alertBox.style.display = 'block'; }
+                else alert('يرجى إدخال رقم الهاتف وكلمة المرور');
+                return; 
+            }
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التحقق...';
             try {
@@ -1532,12 +1542,14 @@ class AuthController {
                 } else {
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> دخول';
-                    alert(data.error || 'فشل تسجيل الدخول. تحقق من رقم الهاتف وكلمة المرور.');
+                    if(alertBox) { alertBox.textContent = data.error || 'فشل تسجيل الدخول. تحقق من رقم الهاتف وكلمة المرور.'; alertBox.style.display = 'block'; }
+                    else alert(data.error || 'فشل تسجيل الدخول. تحقق من رقم الهاتف وكلمة المرور.');
                 }
             } catch(err) {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> دخول';
-                alert('خطأ في الاتصال بالخادم.');
+                if(alertBox) { alertBox.textContent = 'خطأ في الاتصال بالخادم.'; alertBox.style.display = 'block'; }
+                else alert('خطأ في الاتصال بالخادم.');
             }
         }
 
@@ -1987,7 +1999,13 @@ class AuthController {
             var identifier=document.getElementById('cust-login-identifier').value.trim();
             var password=document.getElementById('cust-login-password').value;
             var submitBtn=document.getElementById('btn-cust-login-submit');
-            if(!identifier||!password){alert('يرجى إدخال رقم الهاتف وكلمة المرور');return;}
+            var alertBox=document.getElementById('cust-reg-alert');
+            if(alertBox) alertBox.style.display='none';
+            if(!identifier||!password){
+                if(alertBox){alertBox.textContent='يرجى إدخال رقم الهاتف وكلمة المرور';alertBox.style.display='block';}
+                else alert('يرجى إدخال رقم الهاتف وكلمة المرور');
+                return;
+            }
             submitBtn.disabled=true;
             submitBtn.innerHTML='<i class="fa-solid fa-circle-notch fa-spin"></i> جاري الدخول...';
             try {
@@ -2000,12 +2018,14 @@ class AuthController {
                 } else {
                     submitBtn.disabled=false;
                     submitBtn.innerHTML='<i class="fa-solid fa-right-to-bracket"></i> دخول';
-                    alert(data.error||'فشل تسجيل الدخول. تحقق من البيانات.');
+                    if(alertBox){alertBox.textContent=data.error||'فشل تسجيل الدخول. تحقق من البيانات.';alertBox.style.display='block';}
+                    else alert(data.error||'فشل تسجيل الدخول. تحقق من البيانات.');
                 }
             } catch(err){
                 submitBtn.disabled=false;
                 submitBtn.innerHTML='<i class="fa-solid fa-right-to-bracket"></i> دخول';
-                alert('خطأ في الاتصال.');
+                if(alertBox){alertBox.textContent='خطأ في الاتصال.';alertBox.style.display='block';}
+                else alert('خطأ في الاتصال.');
             }
         }
 
@@ -3097,6 +3117,23 @@ class AuthController {
             if (typeof mapboxgl === 'undefined' && window.loadMapboxDynamically) {
                 await window.loadMapboxDynamically();
             }
+            var tripType = localStorage.getItem('selected_trip_type') || 'short';
+            if (tripType === 'daily' || isDriver) {
+                try {
+                    var uid = localStorage.getItem('user_id');
+                    var ep = isDriver ? '/api/driver/permanent-location/' : '/api/passenger/permanent-location/';
+                    var locRes = await fetch(ep + uid);
+                    var locData = await locRes.json();
+                    if (locData.success && locData.lat && locData.lon) {
+                        bUserLat = locData.lat;
+                        bUserLon = locData.lon;
+                        setBookingPickup(locData.lon, locData.lat, locData.locationName || 'نقطة الانطلاق');
+                        if (locData.dropoffLat && locData.dropoffLon) {
+                            setBookingDropoff(locData.dropoffLon, locData.dropoffLat, locData.dropoffName || 'نقطة الوصول');
+                        }
+                    }
+                } catch(_) {}
+            }
 
             if (!bMap) {
                 await initBookingMapbox();
@@ -3480,11 +3517,16 @@ class AuthController {
             var fromText = bPickupName || typedPickup || 'نقطة الانطلاق';
             var toText = bDropoffName || typedDropoff || 'نقطة الوصول';
 
-            var saveBtn = document.getElementById('btn-floating-save-route') || document.getElementById('btn-save-route-db');
-            if (saveBtn) {
-                saveBtn.disabled = true;
-                saveBtn.innerHTML = isShortTrip ? '<span>🔍</span> <span>جاري البحث عن أقرب سائق متواجد...</span>' : '⏳ جاري الحفظ في قاعدة البيانات...';
+            var saveBtn1 = document.getElementById('btn-floating-save-route');
+            var saveBtn2 = document.getElementById('btn-save-route-db');
+            var saveBtn = saveBtn1 || saveBtn2; // Fallback for old code logic
+            
+            function setBothBtns(html, disabled) {
+                if (saveBtn1) { saveBtn1.disabled = disabled; saveBtn1.innerHTML = html; }
+                if (saveBtn2) { saveBtn2.disabled = disabled; saveBtn2.innerHTML = html; }
             }
+            
+            setBothBtns(isShortTrip ? '<span>🔍</span> <span>جاري البحث عن أقرب سائق متواجد...</span>' : '⏳ جاري الحفظ في قاعدة البيانات...', true);
 
             try {
                 if (isDriver) {
@@ -3504,10 +3546,10 @@ class AuthController {
                     var data = await res.json();
                     if (data.success) {
                         alert('✅ تم تثبيت مسارك بنجاح في قاعدة البيانات.');
-                        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '✅ تم حفظ وتثبيت المسار'; }
+                        setBothBtns('✅ تم حفظ وتثبيت المسار', false);
                     } else {
                         alert(data.error || 'تعذر حفظ المسار');
-                        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '📌 تأكيد وتثبيت المسار'; }
+                        setBothBtns('📌 تأكيد وتثبيت المسار', false);
                     }
                 } else {
                     await fetch('/api/passenger/set-permanent-location', {
@@ -3532,10 +3574,7 @@ class AuthController {
                             statusEl.style.background = '#fef3c7';
                             statusEl.style.color = '#b45309';
                         }
-                        if (saveBtn) {
-                            saveBtn.disabled = true;
-                            saveBtn.innerHTML = '<span>🔍</span> <span>جاري البحث عن أقرب سائق متواجد...</span>';
-                        }
+                        setBothBtns('<span>🔍</span> <span>جاري البحث عن أقرب سائق متواجد...</span>', true);
                         var modal = document.getElementById('ride-dispatch-modal');
                         if (modal) {
                             modal.style.display = 'flex';
@@ -3570,13 +3609,13 @@ class AuthController {
                         });
 
                         alert('✅ تم تثبيت مسارك في قاعدة البيانات بنجاح: ' + fromText + ' ➔ ' + toText);
-                        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '✅ تم تثبيت المسار'; }
+                        setBothBtns('✅ تم تثبيت المسار', false);
                         loadMatchingDriversForPassenger();
                     }
                 }
             } catch(e) {
                 alert('خطأ في الاتصال بقاعدة البيانات');
-                if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '📌 تأكيد وتثبيت المسار'; }
+                setBothBtns('📌 تأكيد وتثبيت المسار', false);
             }
         };
 
@@ -3877,7 +3916,16 @@ class AuthController {
 
             bMap.on('load', function() {
                 // Auto request geolocation on open (Stage 1)
-                try { bGeolocate.trigger(); } catch(_) {}
+                var tripType = localStorage.getItem('selected_trip_type') || 'short';
+                var workMode = localStorage.getItem('driver_work_mode') || 'مشوار قصير';
+                var role = localStorage.getItem('user_role') || 'Customer';
+                var isDriver = (role === 'Driver' || role === 'driver');
+                
+                if (isDriver) {
+                    if (workMode !== 'خط دائمي') try { bGeolocate.trigger(); } catch(_) {}
+                } else {
+                    if (tripType !== 'daily') try { bGeolocate.trigger(); } catch(_) {}
+                }
 
                 // Drivers GeoJSON source & layers (Stage 1)
                 bMap.addSource('booking-drivers-source', {
@@ -3900,7 +3948,7 @@ class AuthController {
                     type: 'symbol',
                     source: 'booking-drivers-source',
                     layout: {
-                        'text-field': '🚕',
+                        'text-field': ['get', 'icon'],
                         'text-size': 18,
                         'text-allow-overlap': true,
                         'text-ignore-placement': true
@@ -4130,22 +4178,43 @@ class AuthController {
             try {
                 var lat = bPickupCoords ? bPickupCoords[1] : bUserLat;
                 var lon = bPickupCoords ? bPickupCoords[0] : bUserLon;
-                var res = await fetch('/api/drivers/nearby?tripType=short&lat=' + lat + '&lon=' + lon + '&rangeKm=' + bRangeKm);
+                var tripType = localStorage.getItem('selected_trip_type') || 'short';
+                var workMode = localStorage.getItem('driver_work_mode') || 'مشوار قصير';
+                var role = localStorage.getItem('user_role') || 'Customer';
+                var isDriver = (role === 'Driver' || role === 'driver');
+                
+                var activeType = isDriver ? (workMode === 'خط دائمي' ? 'daily' : 'short') : tripType;
+                
+                var res = await fetch('/api/drivers/nearby?tripType=' + activeType + '&lat=' + lat + '&lon=' + lon + '&rangeKm=' + bRangeKm);
                 var drivers = await res.json();
                 bNearbyDrivers = Array.isArray(drivers) ? drivers : [];
+                
+                var features = bNearbyDrivers.map(function(d) {
+                    return {
+                        type: 'Feature',
+                        properties: { id: d.driverId, name: d.driverName, car: d.carModel, distance: d.distanceKm, icon: '🚕' },
+                        geometry: { type: 'Point', coordinates: [d.longitude, d.latitude] }
+                    };
+                });
+
+                if (activeType === 'daily') {
+                    var routeRes = await fetch('/api/routes/permanent');
+                    var routeData = await routeRes.json();
+                    var routes = routeData.routes || [];
+                    routes.forEach(function(r) {
+                        features.push({
+                            type: 'Feature',
+                            properties: { id: r.id, name: r.customerName || 'راكب', icon: '👤' },
+                            geometry: { type: 'Point', coordinates: [r.startLon, r.startLat] }
+                        });
+                    });
+                }
 
                 if (bMap && bMap.getSource('booking-drivers-source')) {
-                    var features = bNearbyDrivers.map(function(d) {
-                        return {
-                            type: 'Feature',
-                            properties: { id: d.driverId, name: d.driverName, car: d.carModel, distance: d.distanceKm },
-                            geometry: { type: 'Point', coordinates: [d.longitude, d.latitude] }
-                        };
-                    });
                     bMap.getSource('booking-drivers-source').setData({ type: 'FeatureCollection', features: features });
                 }
 
-                if (bActiveTab === 'short') {
+                if (activeType === 'short') {
                     renderNearbyDriversList();
                 }
             } catch(_) {}
@@ -4651,15 +4720,23 @@ class AuthController {
         };
 
         window.resetSaveRouteButton = function() {
-            var saveBtn = document.getElementById('btn-floating-save-route') || document.getElementById('btn-save-route-db');
-            if (saveBtn) {
-                saveBtn.disabled = false;
-                var fareHtml = '';
-                if (bRouteFare) {
-                    fareHtml = ' <span id="floating-btn-fare" style="background:#059669;color:#fff;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:800;">' + Number(bRouteFare).toLocaleString() + ' د.ع</span>';
-                }
-                saveBtn.innerHTML = '<span>📌</span> <span id="floating-save-btn-text">تأكيد وتثبيت المسار</span>' + fareHtml;
+            var saveBtn1 = document.getElementById('btn-floating-save-route');
+            var saveBtn2 = document.getElementById('btn-save-route-db');
+            
+            var fareHtml = '';
+            if (bRouteFare) {
+                fareHtml = ' <span id="floating-btn-fare" style="background:#059669;color:#fff;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:800;">' + Number(bRouteFare).toLocaleString() + ' د.ع</span>';
             }
+            
+            if (saveBtn1) {
+                saveBtn1.disabled = false;
+                saveBtn1.innerHTML = '<span>📌</span> <span id="floating-save-btn-text">تأكيد وتثبيت المسار</span>' + fareHtml;
+            }
+            if (saveBtn2) {
+                saveBtn2.disabled = false;
+                saveBtn2.innerHTML = '<span>📌</span> <span>تأكيد وتثبيت المسار</span>' + fareHtml;
+            }
+            
             var statusEl = document.getElementById('map-target-status');
             if (statusEl) {
                 statusEl.textContent = '📍 تم تثبيت المسار - جاهز للطلب';
@@ -4867,6 +4944,10 @@ class AuthController {
                 '</div>';
             }
 
+            var currentMode = localStorage.getItem('driver_work_mode') || 'مشوار قصير';
+            var shortBg = currentMode === 'مشوار قصير' ? '#3b82f6' : '#94a3b8';
+            var longBg = currentMode === 'خط دائمي' ? '#3b82f6' : '#94a3b8';
+
             panel.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px;">🚖 لوحة الكابتن والطلبات الحية</div>' +
                 activeCardHtml +
                 '<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
@@ -4875,6 +4956,13 @@ class AuthController {
                         '<div id="driver-status-text" style="font-size:11px;color:' + statusColor + ';font-weight:700;">' + statusText + '</div>' +
                     '</div>' +
                     '<button type="button" onclick="toggleDriverOnlineState()" id="btn-driver-toggle" class="btn-primary" style="width:auto;padding:8px 14px;font-size:12px;background:' + btnBg + ';">' + btnText + '</button>' +
+                '</div>' +
+                '<div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:10px;">' +
+                    '<div style="font-weight:900;font-size:13px;color:#111;margin-bottom:6px;">نظام العمل</div>' +
+                    '<div style="display:flex;gap:8px;">' +
+                        '<button type="button" onclick="setDriverWorkMode(\'مشوار قصير\')" class="btn-primary" style="flex:1;background:' + shortBg + ';padding:6px;font-size:12px;">مشوار قصير</button>' +
+                        '<button type="button" onclick="setDriverWorkMode(\'خط دائمي\')" class="btn-primary" style="flex:1;background:' + longBg + ';padding:6px;font-size:12px;">خط دائمي</button>' +
+                    '</div>' +
                 '</div>' +
                 '<div>' +
                     '<label class="label" style="font-size:11px;">🛣️ مسار عملك المعتاد (الانطلاق والوصول)</label>' +
@@ -4894,22 +4982,38 @@ class AuthController {
             loadDriverMatchingRoutes();
         }
 
-        window.toggleDriverOnlineState = async function() {
-            var did = localStorage.getItem('user_id') || 'drv-test';
-            bDriverOnline = !bDriverOnline;
+        window.setDriverWorkMode = async function(mode) {
+            var did = localStorage.getItem('user_id');
+            if (!did) return;
             try {
-                await fetch('/api/driver/toggle-online', {
+                var res = await fetch('/api/drivers/' + did + '/work_mode', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ driverId: did, isOnline: bDriverOnline })
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ work_mode: mode })
                 });
-            } catch(_) {}
+                var data = await res.json();
+                if (data.success) {
+                    localStorage.setItem('driver_work_mode', mode);
+                    renderDriverHome(); updateDriverTrackingState();
+                }
+            } catch(e) { console.error(e); }
+        };
 
-            renderDriverSidebar();
-
+        window.updateDriverTrackingState = function() {
+            var did = localStorage.getItem('user_id') || 'drv-test';
+            var workMode = localStorage.getItem('driver_work_mode') || 'مشوار قصير';
+            
+            if (bDriverWatchId && navigator.geolocation) {
+                navigator.geolocation.clearWatch(bDriverWatchId);
+                bDriverWatchId = null;
+            }
+            if (bDriverIncomingTimer) {
+                clearInterval(bDriverIncomingTimer);
+                bDriverIncomingTimer = null;
+            }
+            
             if (bDriverOnline) {
-                // Live location stream
-                if (navigator.geolocation) {
+                if (workMode !== 'خط دائمي' && navigator.geolocation) {
                     bDriverWatchId = navigator.geolocation.watchPosition(function(pos) {
                         fetch('/api/driver/location', {
                             method: 'POST',
@@ -4924,15 +5028,23 @@ class AuthController {
                         }).catch(function(){});
                     }, function(){}, { enableHighAccuracy: true });
                 }
-                // Poll for incoming ride requests every 3s (Stage 4)
-                if (bDriverIncomingTimer) clearInterval(bDriverIncomingTimer);
                 bDriverIncomingTimer = setInterval(checkDriverIncomingPendingRequests, 3000);
-            } else {
-                if (bDriverWatchId && navigator.geolocation) {
-                    navigator.geolocation.clearWatch(bDriverWatchId);
-                }
-                if (bDriverIncomingTimer) clearInterval(bDriverIncomingTimer);
             }
+        };
+
+        window.toggleDriverOnlineState = async function() {
+            var did = localStorage.getItem('user_id') || 'drv-test';
+            bDriverOnline = !bDriverOnline;
+            try {
+                await fetch('/api/driver/toggle-online', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ driverId: did, isOnline: bDriverOnline })
+                });
+            } catch(_) {}
+
+            renderDriverSidebar();
+            updateDriverTrackingState();
         };
 
         window.saveDriverActiveRoute = async function() {
@@ -5228,6 +5340,15 @@ class AuthController {
                     startLiveDriverTracking(savedRide);
                 }
             } catch(_) {}
+            
+            setTimeout(function() {
+                var role = window.currentRole || 'Customer';
+                var custForm = document.getElementById('cust-register-form');
+                if (role === 'Customer' && custForm && custForm.style.display !== 'none' && !window.__passengerMapAlertShown) {
+                    alert('يجب تحديد مسارك الفعلي (نقطة الانطلاق ونقطة الوصول) على الخريطة أولاً لإكمال التسجيل');
+                    window.__passengerMapAlertShown = true;
+                }
+            }, 600);
         })();
     </script>
 </body>
