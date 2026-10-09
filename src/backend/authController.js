@@ -946,7 +946,7 @@ class AuthController {
                 </form>
 
                 <!-- LOGIN FORM -->
-                <form id="cust-login-form" onsubmit="handleCustomerLogin(event)" style="display:none">
+                <form id="cust-login-form" onsubmit="return false;" style="display:none">
                     <div style="margin-bottom:14px">
                         <label for="cust-login-identifier" class="label">رقم الهاتف <span style="color:#dc2626">*</span></label>
                         <input type="text" id="cust-login-identifier" class="inp" placeholder="07701234567" dir="ltr" aria-label="رقم الهاتف" oninput="this.value=normalizeArabicDigits(this.value)">
@@ -960,7 +960,7 @@ class AuthController {
                             </button>
                         </div>
                     </div>
-                    <button type="submit" id="btn-cust-login-submit" class="btn-primary" aria-label="تسجيل الدخول">
+                    <button type="button" id="btn-cust-login-submit" onclick="handleCustomerLogin(event)" class="btn-primary" aria-label="تسجيل الدخول">
                         <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> دخول
                     </button>
                     <div style="text-align:center;margin-top:12px">
@@ -1099,7 +1099,7 @@ class AuthController {
                 </form>
 
                 <!-- DRIVER LOGIN FORM -->
-                <form id="driver-login-form" onsubmit="handleCaptainLogin(event)" style="display:none">
+                <form id="driver-login-form" onsubmit="return false;" style="display:none">
                     <div style="margin-bottom:14px">
                         <label for="login-driver-identifier" class="label">رقم الهاتف <span style="color:#dc2626">*</span></label>
                         <input type="text" id="login-driver-identifier" class="inp" placeholder="07706204066" dir="ltr" aria-label="رقم الهاتف" oninput="this.value=normalizeArabicDigits(this.value)">
@@ -1113,7 +1113,7 @@ class AuthController {
                             </button>
                         </div>
                     </div>
-                    <button type="submit" id="btn-login-driver-submit" class="btn-primary" aria-label="دخول السائق">
+                    <button type="button" id="btn-login-driver-submit" onclick="handleCaptainLogin(event)" class="btn-primary" aria-label="دخول السائق">
                         <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> دخول
                     </button>
                 </form>
@@ -1512,7 +1512,7 @@ class AuthController {
         };
 
         // ===== Captain Login =====
-        async function handleCaptainLogin(event) {
+        window.handleCaptainLogin = async function handleCaptainLogin(event) {
             event.preventDefault();
             var identifier = document.getElementById('login-driver-identifier').value.trim();
             var password = document.getElementById('login-driver-password').value;
@@ -1994,7 +1994,7 @@ class AuthController {
         }
 
         // ===== Passenger Login =====
-        async function handleCustomerLogin(event) {
+        window.handleCustomerLogin = async function handleCustomerLogin(event) {
             event.preventDefault();
             var identifier=document.getElementById('cust-login-identifier').value.trim();
             var password=document.getElementById('cust-login-password').value;
