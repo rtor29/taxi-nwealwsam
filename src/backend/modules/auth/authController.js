@@ -765,379 +765,182 @@ class AuthController {
             <button id="onb-next-btn" onclick="nextOnboardingScreen()" style="background:#111;color:#fff;border:none;border-radius:12px;padding:14px 40px;font-family:'Cairo',sans-serif;font-weight:900;font-size:15px;cursor:pointer">التالي</button>
         </div>
     </div>
-    <main style="max-width:480px;width:100%;margin:0 auto;padding:24px 16px 40px">
-
-        <!-- Logo & Title -->
-        <header style="text-align:center;padding:20px 0 24px">
-            <div id="app-main-logo" style="font-size:40px;margin-bottom:10px">🚕</div>
-            <h1 id="app-main-title" style="font-size:22px;font-weight:900;margin:0 0 6px;color:#111">منصة توصيله</h1>
-            <p id="app-main-subtitle" style="font-size:13px;color:#6b7280;margin:0">النجف الأشرف - سجّل دخولك أو أنشئ حسابك</p>
-        </header>
-
-        <!-- Role Tabs -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px">
-            <button id="tab-btn-customer" type="button" onclick="switchRole('Customer')"
-                    style="padding:13px;border-radius:12px;font-family:'Cairo',sans-serif;font-size:14px;font-weight:900;cursor:pointer;border:2px solid;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px"
-                    class="${preselectedRole === 'Customer' ? 'tab-active' : 'tab-inactive'}" aria-selected="${preselectedRole === 'Customer'}">
-                <i class="fa-solid fa-user" aria-hidden="true"></i> راكب
-            </button>
-            <button id="tab-btn-driver" type="button" onclick="switchRole('Driver')"
-                    style="padding:13px;border-radius:12px;font-family:'Cairo',sans-serif;font-size:14px;font-weight:900;cursor:pointer;border:2px solid;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px"
-                    class="${preselectedRole === 'Driver' ? 'tab-active' : 'tab-inactive'}" aria-selected="${preselectedRole === 'Driver'}">
-                <i class="fa-solid fa-taxi" aria-hidden="true"></i> سائق
-            </button>
-        </div>
-
-        <!-- Logged-in card -->
-        <div id="user-logged-in-box" class="card" style="display:none;padding:20px;margin-bottom:16px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-                <div style="display:flex;align-items:center;gap:10px">
-                    <div id="logged-user-avatar" style="width:44px;height:44px;border-radius:12px;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:22px">🚕</div>
-                    <div>
-                        <div id="logged-user-name" style="font-size:15px;font-weight:900;color:#111"></div>
-                        <div id="logged-user-role" style="font-size:12px;color:#6b7280;font-weight:700"></div>
-                    </div>
-                </div>
-                <button type="button" onclick="handleLogout()" style="background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:700;font-family:'Cairo',sans-serif;cursor:pointer" aria-label="تسجيل الخروج">
-                    خروج <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
-                </button>
-            </div>
-            <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
-                <span style="font-size:12px;font-weight:700;color:#6b7280">الحالة:</span>
-                <span style="font-size:12px;font-weight:900;color:#15803d">✅ نشط ومعتمد</span>
-            </div>
-            <div id="driver-route-btn-wrap" style="display:none;margin-top:12px">
-                <button type="button" id="btn-user-main-app" onclick="openRouteApp('set-route')" class="btn-primary" style="padding:13px 16px;font-size:14px;font-weight:900;background:linear-gradient(135deg,#2563eb,#1d4ed8);display:flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;width:100%;box-shadow:0 4px 14px rgba(37,99,235,0.3);">
-                    <span id="btn-user-main-app-icon">👤</span> <span id="btn-user-main-app-text">واجهة الراكب</span>
-                </button>
+    
+    <!-- ===== NEW UNIFIED AUTH SCREEN ===== -->
+    <main id="new-auth-ui" style="max-width:480px;width:100%;margin:0 auto;height:100vh;background:#ffffff;display:flex;flex-direction:column;padding:40px 20px;position:relative;">
+        <!-- Logo -->
+        <div style="margin-bottom:60px;text-align:center;display:flex;justify-content:center;">
+            <div style="position:relative;display:inline-block;">
+                <div style="font-size:80px;color:#facc15;line-height:1;margin-bottom:-10px;">🚕</div>
+                <div style="font-size:24px;font-weight:900;color:#facc15;font-family:'Cairo',sans-serif;">توصيلة</div>
             </div>
         </div>
 
-        <!-- ===== PASSENGER SECTION ===== -->
-        <section id="customer-section" style="display:${preselectedRole === 'Driver' ? 'none' : 'block'}">
-            <div class="card" style="padding:20px">
+        <div style="width:100%;text-align:right;">
+            <h1 style="font-size:36px;font-weight:900;color:#111;margin:0 0 12px;font-family:'Cairo',sans-serif;">ياهلا</h1>
+            <p style="font-size:18px;color:#374151;margin:0 0 30px;font-weight:700;">قم بادخال رقم هاتفك</p>
 
-                <!-- Sub-mode toggle -->
-                <div class="sub-toggle">
-                    <button id="sub-btn-cust-reg" type="button" class="sub-btn on" onclick="switchPassengerMode('register')">تسجيل جديد</button>
-                    <button id="sub-btn-cust-login" type="button" class="sub-btn off" onclick="switchPassengerMode('login')">لديك حساب؟ دخول</button>
-                </div>
-
-                <!-- Alert -->
-                <div id="cust-reg-alert" class="alert-error" role="alert"></div>
-
-                <!-- REGISTER FORM -->
-                <form id="cust-register-form" onsubmit="handleCustomerRegister(event)">
-
-                    <!-- Step 1: Phone + OTP -->
-                    <div style="border:1.5px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
-                        <div style="font-size:12px;font-weight:700;color:#111;margin-bottom:12px;display:flex;align-items:center;gap:6px">
-                            <span style="background:#111;color:#fff;border-radius:999px;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">1</span>
-                            تأكيد رقم الهاتف عبر واتساب
-                        </div>
-                        <div style="display:flex;gap:8px;margin-bottom:10px">
-                            <div style="background:#f3f4f6;border:1.5px solid #e5e7eb;border-radius:10px;padding:13px 12px;font-size:13px;font-weight:900;color:#374151;white-space:nowrap">🇮🇶 +964</div>
-                            <div style="position:relative;flex:1">
-                                <i class="fa-brands fa-whatsapp" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#16a34a;font-size:16px" aria-hidden="true"></i>
-                                <input type="tel" id="cust-reg-phone" class="inp" style="padding-right:38px" placeholder="07706204066" dir="ltr" aria-label="رقم الهاتف" oninput="this.value=normalizeArabicDigits(this.value)">
-                            </div>
-                        </div>
-                        <div id="cust-send-otp-wrap">
-                            <button type="button" onclick="startTruecallerVerification('customer')" class="btn-primary" style="background:linear-gradient(135deg,#0087ff,#005bb5);margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;border:none;box-shadow:0 3px 10px rgba(0,135,255,0.25)" aria-label="تحقق عبر تراكولر">
-                                <i class="fa-solid fa-bolt" aria-hidden="true"></i> تحقق فوري عبر Truecaller
-                            </button>
-                            <button type="button" id="btn-send-whatsapp-otp" onclick="handleSendWhatsappOtp(false)" class="btn-secondary" style="width:100%;border-color:#16a34a;color:#16a34a;background:#f0fdf4" aria-label="إرسال رمز واتساب">
-                                <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> إرسال رمز التحقق عبر واتساب
-                            </button>
-                        </div>
-                        <div id="cust-otp-box" style="display:none;margin-top:12px;border-top:1px solid #e5e7eb;padding-top:12px">
-                            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700;color:#15803d;margin-bottom:10px;display:flex;align-items:center;gap:8px">
-                                <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> تحقق من واتساب للرمز
-                            </div>
-                            <input type="text" id="cust-reg-otp" class="inp" maxlength="6" placeholder="- - - - - -" dir="ltr" style="text-align:center;letter-spacing:8px;font-size:20px;font-weight:900" oninput="this.value=normalizeArabicDigits(this.value)" aria-label="رمز التحقق">
-                            <div style="display:flex;gap:8px;margin-top:10px">
-                                <button type="button" id="btn-verify-whatsapp-otp" onclick="handleVerifyWhatsappOtp()" class="btn-primary" style="flex:1" aria-label="تأكيد الرمز">تأكيد الرمز ✅</button>
-                                <button type="button" id="btn-resend-whatsapp-otp" onclick="handleSendWhatsappOtp(true)" class="btn-small" aria-label="إعادة إرسال">إعادة إرسال</button>
-                            </div>
-                        </div>
-                        <div id="cust-verified-badge" class="badge-green" style="margin-top:10px;justify-content:space-between">
-                            <span><i class="fa-solid fa-circle-check" aria-hidden="true"></i> تم تأكيد رقم الهاتف ✅</span>
-                            <button type="button" onclick="resetPhoneVerification()" style="background:none;border:none;font-size:12px;color:#6b7280;cursor:pointer;font-family:'Cairo',sans-serif" aria-label="تغيير الرقم">تغيير</button>
-                        </div>
-                    </div>
-
-                    <!-- Step 2: Personal Info (unlocked after OTP) -->
-                    <div id="cust-details-section" style="display:none">
-                        <div style="font-size:12px;font-weight:700;color:#111;margin-bottom:12px;display:flex;align-items:center;gap:6px">
-                            <span style="background:#111;color:#fff;border-radius:999px;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">2</span>
-                            بيانات الحساب
-                        </div>
-
-                        <!-- Governorate Dropdown (Auto-located) -->
-                        <input type="hidden" id="cust-reg-governorate" value="najaf">
-
-                        <!-- First & Last Name -->
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-                            <div>
-                                <label for="cust-reg-firstname" class="label">الاسم <span style="color:#dc2626">*</span></label>
-                                <input type="text" id="cust-reg-firstname" class="inp" placeholder="مثال: حيدر" aria-label="الاسم الأول">
-                            </div>
-                            <div>
-                                <label for="cust-reg-lastname" class="label">اللقب <span style="color:#dc2626">*</span></label>
-                                <input type="text" id="cust-reg-lastname" class="inp" placeholder="مثال: العلي" aria-label="اللقب">
-                            </div>
-                        </div>
-
-                        <!-- Route selection (short trip vs daily) -->
-                        <div style="margin-bottom:12px">
-                            <label class="label" style="margin-bottom:10px">نوع الخدمة المطلوبة <span style="color:#dc2626">*</span></label>
-                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-                                <div class="trip-card" id="reg-trip-short" onclick="selectRegTripType('short')">
-                                    <div style="font-size:22px;margin-bottom:6px">⚡</div>
-                                    <div style="font-size:13px;font-weight:900">مشوار قصير</div>
-                                    <div style="font-size:11px;color:#6b7280;margin-top:2px">رحلة فورية</div>
-                                </div>
-                                <div class="trip-card" id="reg-trip-daily" onclick="selectRegTripType('daily')">
-                                    <div style="font-size:22px;margin-bottom:6px">🔄</div>
-                                    <div style="font-size:13px;font-weight:900">خط دائمي</div>
-                                    <div style="font-size:11px;color:#6b7280;margin-top:2px">اشتراك يومي</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Hidden coords (empty until selected by user on map) -->
-                        <input type="hidden" id="cust-pickup-lat" value="">
-                        <input type="hidden" id="cust-pickup-lon" value="">
-                        <input type="hidden" id="cust-dropoff-lat" value="">
-                        <input type="hidden" id="cust-dropoff-lon" value="">
-
-                        <!-- Route / Address (auto-filled from map or typed by user) -->
-                        <div style="margin-bottom:12px;position:relative">
-                            <label for="cust-reg-address" class="label">عنوان الانطلاق بالتفصيل <span style="color:#dc2626">*</span></label>
-                            <div style="display:flex;gap:6px;align-items:center;">
-                                <input type="text" id="cust-reg-address" class="inp" placeholder="موقعي الحالي أو اكتب العنوان" aria-label="عنوان الانطلاق" oninput="onCustRegAddressInput(this.value)">
-                                <button type="button" id="btn-cust-reg-gps" onclick="setCustRegCurrentGps()" class="btn-small" style="background:#2563eb;color:#fff;padding:8px 10px;font-size:11px;font-weight:800;white-space:nowrap;display:flex;align-items:center;gap:4px;border:none;border-radius:8px;cursor:pointer;" title="موقعي الحالي">
-                                    <span>📍 موقعي الحالي</span>
-                                </button>
-                            </div>
-                            <div id="cust-reg-address-results" class="search-autocomplete-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:90;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;"></div>
-                        </div>
-                        <div style="margin-bottom:12px;position:relative">
-                            <label for="cust-reg-route" class="label">عنوان الوصول بالتفصيل <span style="color:#dc2626">*</span></label>
-                            <input type="text" id="cust-reg-route" class="inp" placeholder="ابحث أو اكتب الوجهة (جامعة، حي، معلم...)" aria-label="عنوان الوصول" oninput="onCustRegRouteInput(this.value)">
-                            <div id="cust-reg-route-results" class="search-autocomplete-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:90;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;"></div>
-                        </div>
-
-                        <!-- Password -->
-                        <div style="margin-bottom:16px">
-                            <label for="cust-reg-password" class="label">كلمة المرور <span style="color:#dc2626">*</span></label>
-                            <div style="position:relative">
-                                <input type="password" id="cust-reg-password" class="inp" style="padding-left:44px" minlength="4" placeholder="••••••••" aria-label="كلمة المرور">
-                                <button type="button" onclick="togglePasswordVisibility('cust-reg-password','eye-cust-reg-pwd')" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af" aria-label="إظهار/إخفاء">
-                                    <i id="eye-cust-reg-pwd" class="fa-solid fa-eye" aria-hidden="true"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <button type="submit" id="btn-cust-reg-submit" class="btn-primary" aria-label="إكمال التسجيل">
-                            <i class="fa-solid fa-user-plus" aria-hidden="true"></i> إكمال تسجيل الحساب
-                        </button>
-                    </div>
-                </form>
-
-                <!-- LOGIN FORM -->
-                <form id="cust-login-form" onsubmit="handleCustomerLogin(event)" style="display:none">
-                    <div style="margin-bottom:14px">
-                        <label for="cust-login-identifier" class="label">رقم الهاتف <span style="color:#dc2626">*</span></label>
-                        <input type="text" id="cust-login-identifier" class="inp" placeholder="07701234567" dir="ltr" aria-label="رقم الهاتف" oninput="this.value=normalizeArabicDigits(this.value)">
-                    </div>
-                    <div style="margin-bottom:16px">
-                        <label for="cust-login-password" class="label">كلمة المرور <span style="color:#dc2626">*</span></label>
-                        <div style="position:relative">
-                            <input type="password" id="cust-login-password" class="inp" style="padding-left:44px" placeholder="••••••••" aria-label="كلمة المرور">
-                            <button type="button" onclick="togglePasswordVisibility('cust-login-password','eye-cust-log-pwd')" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af" aria-label="إظهار/إخفاء">
-                                <i id="eye-cust-log-pwd" class="fa-solid fa-eye" aria-hidden="true"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <button type="submit" id="btn-cust-login-submit" class="btn-primary" aria-label="تسجيل الدخول">
-                        <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> دخول
-                    </button>
-                    <div style="text-align:center;margin-top:12px">
-                        <a href="https://wa.me/9647706204066" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:#6b7280;font-weight:700">نسيت كلمة المرور؟ (واتساب)</a>
-                    </div>
-                </form>
+            <!-- Phone Input -->
+            <div style="background:#ffffff;border:1.5px solid #f3f4f6;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,0.06);display:flex;align-items:center;padding:16px 20px;margin-bottom:30px;transition:all 0.3s;" id="new-phone-input-container">
+                <input type="tel" id="new-unified-phone" placeholder="" dir="ltr" style="flex:1;border:none;outline:none;font-size:20px;font-weight:900;color:#111;text-align:left;background:transparent;letter-spacing:2px;" onfocus="document.getElementById('new-phone-input-container').style.borderColor='#facc15';" onblur="document.getElementById('new-phone-input-container').style.borderColor='#f3f4f6';" oninput="this.value=normalizeArabicDigits(this.value).replace(/[^0-9]/g, '')">
             </div>
-        </section>
 
-        <!-- ===== DRIVER SECTION ===== -->
-        <section id="driver-section" style="display:${preselectedRole === 'Driver' ? 'block' : 'none'}">
-            <div class="card" style="padding:20px">
-
-                <!-- Sub-mode toggle -->
-                <div class="sub-toggle">
-                    <button id="sub-btn-driver-reg" type="button" class="sub-btn on" onclick="switchDriverMode('register')">تسجيل سائق جديد</button>
-                    <button id="sub-btn-driver-login" type="button" class="sub-btn off" onclick="switchDriverMode('login')">لديك حساب؟ دخول</button>
-                </div>
-
-                <div id="driver-reg-alert" class="alert-error" role="alert"></div>
-
-                <!-- DRIVER REGISTER FORM -->
-                <form id="driver-register-form" onsubmit="handleDriverRegister(event)">
-                    <!-- Step 1: OTP -->
-                    <div style="border:1.5px solid #e5e7eb;border-radius:12px;padding:16px;margin-bottom:16px">
-                        <div style="font-size:12px;font-weight:700;color:#111;margin-bottom:12px;display:flex;align-items:center;gap:6px">
-                            <span style="background:#111;color:#fff;border-radius:999px;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">1</span>
-                            تأكيد رقم الهاتف عبر واتساب
-                        </div>
-                        <div style="display:flex;gap:8px;margin-bottom:10px">
-                            <div style="background:#f3f4f6;border:1.5px solid #e5e7eb;border-radius:10px;padding:13px 12px;font-size:13px;font-weight:900;color:#374151;white-space:nowrap">🇮🇶 +964</div>
-                            <div style="position:relative;flex:1">
-                                <i class="fa-brands fa-whatsapp" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:#16a34a;font-size:16px" aria-hidden="true"></i>
-                                <input type="tel" id="driver-reg-phone" class="inp" style="padding-right:38px" placeholder="07706204066" dir="ltr" aria-label="رقم الهاتف" oninput="this.value=normalizeArabicDigits(this.value)">
-                            </div>
-                        </div>
-                        <div id="driver-send-otp-wrap">
-                            <button type="button" onclick="startTruecallerVerification('driver')" class="btn-primary" style="background:linear-gradient(135deg,#0087ff,#005bb5);margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px;border:none;box-shadow:0 3px 10px rgba(0,135,255,0.25)" aria-label="تحقق عبر تراكولر">
-                                <i class="fa-solid fa-bolt" aria-hidden="true"></i> تحقق فوري عبر Truecaller
-                            </button>
-                            <button type="button" id="btn-send-driver-otp" onclick="handleSendDriverWhatsappOtp(false)" class="btn-secondary" style="width:100%;border-color:#16a34a;color:#16a34a;background:#f0fdf4" aria-label="إرسال رمز واتساب">
-                                <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> إرسال رمز التحقق عبر واتساب
-                            </button>
-                        </div>
-                        <div id="driver-otp-box" style="display:none;margin-top:12px;border-top:1px solid #e5e7eb;padding-top:12px">
-                            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:700;color:#15803d;margin-bottom:10px;display:flex;align-items:center;gap:8px">
-                                <i class="fa-brands fa-whatsapp" aria-hidden="true"></i> تحقق من واتساب للرمز
-                            </div>
-                            <input type="text" id="driver-reg-otp" class="inp" maxlength="6" placeholder="- - - - - -" dir="ltr" style="text-align:center;letter-spacing:8px;font-size:20px;font-weight:900" oninput="this.value=normalizeArabicDigits(this.value)" aria-label="رمز التحقق">
-                            <div style="display:flex;gap:8px;margin-top:10px">
-                                <button type="button" id="btn-verify-driver-otp" onclick="handleVerifyDriverWhatsappOtp()" class="btn-primary" style="flex:1" aria-label="تأكيد الرمز">تأكيد الرمز ✅</button>
-                                <button type="button" id="btn-resend-driver-otp" onclick="handleSendDriverWhatsappOtp(true)" class="btn-small" aria-label="إعادة إرسال">إعادة إرسال</button>
-                            </div>
-                        </div>
-                        <div id="driver-verified-badge" class="badge-green" style="margin-top:10px;justify-content:space-between">
-                            <span><i class="fa-solid fa-circle-check" aria-hidden="true"></i> تم تأكيد رقم الهاتف ✅</span>
-                            <button type="button" onclick="resetDriverPhoneVerification()" style="background:none;border:none;font-size:12px;color:#6b7280;cursor:pointer;font-family:'Cairo',sans-serif" aria-label="تغيير الرقم">تغيير</button>
-                        </div>
-                    </div>
-
-                    <!-- Step 2: Driver details (unlocked after OTP) -->
-                    <div id="driver-details-section" style="display:none">
-                        <div style="font-size:12px;font-weight:700;color:#111;margin-bottom:12px;display:flex;align-items:center;gap:6px">
-                            <span style="background:#111;color:#fff;border-radius:999px;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">2</span>
-                            بيانات الكابتن
-                        </div>
-
-                        <!-- Governorate Dropdown (Auto-located) -->
-                        <input type="hidden" id="driver-reg-governorate" value="najaf">
-
-                        <!-- Driver Service Type Selection -->
-                        <div style="margin-bottom:12px">
-                            <label class="label" style="margin-bottom:10px">نوع الخدمة <span style="color:#dc2626">*</span></label>
-                            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
-                                <div class="trip-card" id="drv-reg-short" onclick="selectDriverRegServiceType('ShortTrip')" style="text-align:center;padding:10px 6px">
-                                    <div style="font-size:20px;margin-bottom:4px">⚡</div>
-                                    <div style="font-size:12px;font-weight:900">مشاوير</div>
-                                    <div style="font-size:10px;color:#6b7280;margin-top:2px">رحلات فورية</div>
-                                </div>
-                                <div class="trip-card" id="drv-reg-daily" onclick="selectDriverRegServiceType('PermanentLine')" style="text-align:center;padding:10px 6px">
-                                    <div style="font-size:20px;margin-bottom:4px">🔄</div>
-                                    <div style="font-size:12px;font-weight:900">خطوط دائمة</div>
-                                    <div style="font-size:10px;color:#6b7280;margin-top:2px">اشتراك يومي</div>
-                                </div>
-                                <div class="trip-card" id="drv-reg-both" onclick="selectDriverRegServiceType('Both')" style="text-align:center;padding:10px 6px">
-                                    <div style="font-size:20px;margin-bottom:4px">🚖</div>
-                                    <div style="font-size:12px;font-weight:900">كلاهما</div>
-                                    <div style="font-size:10px;color:#6b7280;margin-top:2px">مشاوير+خطوط</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div style="margin-bottom:12px">
-                            <label for="driver-reg-name" class="label">الاسم الكامل <span style="color:#dc2626">*</span></label>
-                            <input type="text" id="driver-reg-name" required class="inp" placeholder="مثال: علي محمد حسن" aria-label="الاسم الكامل للسائق">
-                        </div>
-                        <div style="margin-bottom:12px">
-                            <label for="driver-reg-license" class="label">رقم إجازة السوق <span style="color:#dc2626">*</span></label>
-                            <input type="text" id="driver-reg-license" required class="inp" placeholder="مثال: IQ-NJF-4819" aria-label="رقم إجازة السوق">
-                        </div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-                            <div>
-                                <label for="driver-reg-vehicle" class="label">نوع المركبة</label>
-                                <input type="text" id="driver-reg-vehicle" class="inp" placeholder="تويوتا كورولا" aria-label="نوع المركبة">
-                            </div>
-                            <div>
-                                <label for="driver-reg-plate" class="label">رقم اللوحة</label>
-                                <input type="text" id="driver-reg-plate" class="inp" placeholder="النجف 12345 أ" aria-label="رقم اللوحة">
-                            </div>
-                        </div>
-                        <div style="margin-bottom:16px">
-                            <label for="driver-reg-password" class="label">كلمة المرور <span style="color:#dc2626">*</span></label>
-                            <div style="position:relative">
-                                <input type="password" id="driver-reg-password" required class="inp" style="padding-left:44px" minlength="4" placeholder="••••••••" aria-label="كلمة المرور">
-                                <button type="button" onclick="togglePasswordVisibility('driver-reg-password','eye-drv-reg-pwd')" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af" aria-label="إظهار/إخفاء">
-                                    <i id="eye-drv-reg-pwd" class="fa-solid fa-eye" aria-hidden="true"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <!-- Driver Route (من/إلى) -->
-                        <div style="border:1.5px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:16px">
-                            <div style="font-size:12px;font-weight:700;color:#111;margin-bottom:8px">🛣️ مسارك الفعلي (إلزامي) <span style="color:#dc2626">*</span></div>
-                            <div style="position:relative;margin-bottom:8px">
-                                <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:#16a34a;display:inline-block"></span>
-                                <input type="text" id="driver-reg-from" required class="inp" style="padding-right:26px;font-size:12px" placeholder="نقطة انطلاقك الفعلية (حي/شارع)" aria-label="نقطة انطلاق السائق">
-                            </div>
-                            <div style="position:relative">
-                                <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:#dc2626;display:inline-block"></span>
-                                <input type="text" id="driver-reg-to" required class="inp" style="padding-right:26px;font-size:12px" placeholder="نقطة وصولك الفعلية (حي/شارع)" aria-label="نقطة وصول السائق">
-                            </div>
-                        </div>
-                        <button type="submit" id="btn-driver-reg-submit" class="btn-primary" aria-label="إكمال تسجيل السائق">
-                            <i class="fa-solid fa-taxi" aria-hidden="true"></i> إكمال تسجيل حساب السائق
-                        </button>
-                    </div>
-                </form>
-
-                <!-- DRIVER LOGIN FORM -->
-                <form id="driver-login-form" onsubmit="handleCaptainLogin(event)" style="display:none">
-                    <div style="margin-bottom:14px">
-                        <label for="login-driver-identifier" class="label">رقم الهاتف <span style="color:#dc2626">*</span></label>
-                        <input type="text" id="login-driver-identifier" required class="inp" placeholder="07706204066" dir="ltr" aria-label="رقم الهاتف" oninput="this.value=normalizeArabicDigits(this.value)">
-                    </div>
-                    <div style="margin-bottom:16px">
-                        <label for="login-driver-password" class="label">كلمة المرور <span style="color:#dc2626">*</span></label>
-                        <div style="position:relative">
-                            <input type="password" id="login-driver-password" required class="inp" style="padding-left:44px" placeholder="••••••••" aria-label="كلمة المرور">
-                            <button type="button" onclick="togglePasswordVisibility('login-driver-password','eye-login-drv-pwd')" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#9ca3af" aria-label="إظهار/إخفاء">
-                                <i id="eye-login-drv-pwd" class="fa-solid fa-eye" aria-hidden="true"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <button type="submit" id="btn-login-driver-submit" class="btn-primary" aria-label="دخول السائق">
-                        <i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> دخول
-                    </button>
-                </form>
-            </div>
-        </section>
-
-        <!-- Loading -->
-        <div id="loading" style="display:none;text-align:center;padding:20px" role="status" aria-live="polite">
-            <div style="width:32px;height:32px;border:3px solid #e5e7eb;border-top-color:#111;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 8px"></div>
-            <p id="loading-text" style="font-size:13px;color:#6b7280;font-weight:700">جاري المعالجة...</p>
+            <p style="font-size:13px;color:#6b7280;text-align:center;line-height:1.8;margin-bottom:40px;font-weight:600;">
+                عند التسجيل انت توافق على <a href="#" style="color:#2563eb;text-decoration:none;">الشروط والقوانين وسياسة الخصوصية</a>
+            </p>
         </div>
 
-        <footer id="app-main-footer" style="text-align:center;margin-top:28px;font-size:12px;color:#9ca3af">
-            © 2026 توصيله (Tawseela IQ) · النجف الأشرف
-        </footer>
-        <div id="custom-buttons-container" style="margin-top:16px"></div>
-        <div id="ads-container" style="margin-top:12px"></div>
+        <!-- Floating Action Button -->
+        <button type="button" onclick="handleUnifiedPhoneSubmit()" style="position:absolute;bottom:40px;left:30px;background:#f97316;color:#ffffff;border:none;border-radius:50%;width:64px;height:64px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 25px rgba(249,115,22,0.4);cursor:pointer;transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.95)';" onmouseup="this.style.transform='scale(1)';">
+            <i class="fa-solid fa-arrow-left" style="font-size:28px;"></i>
+        </button>
     </main>
+
+    <!-- ===== NEW UNIFIED OTP SCREEN ===== -->
+    <main id="new-otp-ui" style="display:none;max-width:480px;width:100%;margin:0 auto;height:100vh;background:#ffffff;flex-direction:column;padding:40px 20px;position:relative;">
+        <div style="text-align:center;margin-bottom:40px;display:flex;justify-content:center;">
+            <div style="width:120px;height:120px;background:#f0fdf4;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(37,211,102,0.2);">
+                <i class="fa-brands fa-whatsapp" style="font-size:72px;color:#25d366;"></i>
+            </div>
+        </div>
+
+        <div style="width:100%;text-align:right;">
+            <h2 style="font-size:26px;font-weight:900;color:#111;margin:0 0 16px;font-family:'Cairo',sans-serif;">ادخل رمز التفعيل</h2>
+            <p style="font-size:15px;color:#374151;margin:0 0 8px;font-weight:600;">
+                لقد تم ارسال رمز التفعيل على الواتساب الرقم <span id="unified-otp-phone-display" dir="ltr" style="font-weight:900;"></span>
+            </p>
+            <p style="font-size:15px;color:#6b7280;margin:0 0 40px;font-weight:600;">الرجاء ادخل الرمز ادناه</p>
+
+            <div style="display:flex;justify-content:center;gap:12px;margin-bottom:40px;direction:ltr;" id="unified-otp-inputs">
+                <input type="tel" id="u-otp-1" maxlength="1" class="otp-digit" style="width:45px;height:55px;border:none;border-bottom:3px solid #111;font-size:32px;font-weight:900;text-align:center;background:transparent;outline:none;" onkeyup="unifiedOtpMove(this, 1)">
+                <input type="tel" id="u-otp-2" maxlength="1" class="otp-digit" style="width:45px;height:55px;border:none;border-bottom:3px solid #111;font-size:32px;font-weight:900;text-align:center;background:transparent;outline:none;" onkeyup="unifiedOtpMove(this, 2)">
+                <input type="tel" id="u-otp-3" maxlength="1" class="otp-digit" style="width:45px;height:55px;border:none;border-bottom:3px solid #111;font-size:32px;font-weight:900;text-align:center;background:transparent;outline:none;" onkeyup="unifiedOtpMove(this, 3)">
+                <input type="tel" id="u-otp-4" maxlength="1" class="otp-digit" style="width:45px;height:55px;border:none;border-bottom:3px solid #111;font-size:32px;font-weight:900;text-align:center;background:transparent;outline:none;" onkeyup="unifiedOtpMove(this, 4)">
+                <input type="tel" id="u-otp-5" maxlength="1" class="otp-digit" style="width:45px;height:55px;border:none;border-bottom:3px solid #111;font-size:32px;font-weight:900;text-align:center;background:transparent;outline:none;" onkeyup="unifiedOtpMove(this, 5)">
+                <input type="tel" id="u-otp-6" maxlength="1" class="otp-digit" style="width:45px;height:55px;border:none;border-bottom:3px solid #111;font-size:32px;font-weight:900;text-align:center;background:transparent;outline:none;" onkeyup="unifiedOtpMove(this, 6)">
+            </div>
+
+            <div style="text-align:left;">
+                <button type="button" onclick="unifiedResendOtp()" style="background:none;border:none;color:#2563eb;font-size:15px;font-weight:700;cursor:pointer;font-family:'Cairo',sans-serif;padding:0;text-decoration:none;">اعادة ارسال</button>
+            </div>
+        </div>
+    </main>
+
 
     <style>
         @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
     </style>
 
     <script>
+        window.unifiedAuthRole = '${preselectedRole}';
+        
+        async function handleUnifiedPhoneSubmit() {
+            var phone = document.getElementById('new-unified-phone').value;
+            if (!phone || phone.length < 10) {
+                alert('الرجاء إدخال رقم هاتف صحيح');
+                return;
+            }
+            window.__unifiedPhone = phone;
+            document.getElementById('new-auth-ui').style.opacity = '0.5';
+            
+            try {
+                var role = window.unifiedAuthRole || 'Customer';
+                var res = await fetch('/api/auth/send-whatsapp-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: phone, role: role })
+                });
+                var data = await res.json();
+                
+                document.getElementById('new-auth-ui').style.opacity = '1';
+                
+                if (res.ok && data.success) {
+                    document.getElementById('new-auth-ui').style.display = 'none';
+                    document.getElementById('new-otp-ui').style.display = 'flex';
+                    document.getElementById('unified-otp-phone-display').innerText = phone;
+                    document.getElementById('u-otp-1').focus();
+                } else {
+                    alert(data.error || 'فشل إرسال رمز التحقق');
+                }
+            } catch (err) {
+                document.getElementById('new-auth-ui').style.opacity = '1';
+                alert('خطأ في الاتصال بالخادم.');
+            }
+        }
+        
+        function unifiedOtpMove(el, idx) {
+            el.value = el.value.replace(/[^0-9]/g, '');
+            if (el.value.length >= 1) {
+                var next = document.getElementById('u-otp-' + (idx + 1));
+                if (next) {
+                    next.focus();
+                } else {
+                    unifiedCheckSubmit();
+                }
+            } else if (event.key === 'Backspace' || event.key === 'Delete') {
+                var prev = document.getElementById('u-otp-' + (idx - 1));
+                if (prev) prev.focus();
+            }
+        }
+
+        function unifiedCheckSubmit() {
+            var code = '';
+            for(var i=1; i<=6; i++) {
+                var val = document.getElementById('u-otp-' + i).value;
+                if (!val) return;
+                code += val;
+            }
+            unifiedVerifyOtp(code);
+        }
+
+        async function unifiedResendOtp() {
+            var phone = window.__unifiedPhone;
+            var role = window.unifiedAuthRole || 'Customer';
+            try {
+                await fetch('/api/auth/send-whatsapp-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: phone, role: role })
+                });
+                alert('تم طلب إعادة إرسال الرمز عبر الواتساب');
+            } catch (err) {
+                alert('خطأ في الاتصال');
+            }
+        }
+
+        async function unifiedVerifyOtp(code) {
+            var phone = window.__unifiedPhone;
+            var role = window.unifiedAuthRole || 'Customer';
+            
+            document.getElementById('unified-otp-inputs').style.opacity = '0.5';
+            
+            try {
+                var res = await fetch('/api/auth/verify-whatsapp-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: phone, code: code, role: role })
+                });
+                var data = await res.json();
+                document.getElementById('unified-otp-inputs').style.opacity = '1';
+                
+                if (res.ok && data.success) {
+                    window.__isPhoneVerified = true;
+                    window.__verifiedOtpCode = code;
+                    
+                    document.getElementById('new-otp-ui').innerHTML = '<div style="text-align:center;padding:40px;font-size:24px;font-weight:bold;color:#16a34a;margin-top:50px;">تم التحقق بنجاح!<br><br><span style="font-size:16px;color:#6b7280;">بانتظار الشاشة الثالثة (التفاصيل)...</span></div>';
+                } else {
+                    alert(data.error || 'الرمز غير صحيح أو منتهي الصلاحية');
+                    for(var i=1; i<=6; i++) {
+                        document.getElementById('u-otp-' + i).value = '';
+                    }
+                    document.getElementById('u-otp-1').focus();
+                }
+            } catch(e) {
+                document.getElementById('unified-otp-inputs').style.opacity = '1';
+                alert('خطأ في الاتصال بالخادم.');
+            }
+        }
+        
         // ===== Mapbox Lazy Loader =====
         window.loadMapboxDynamically = function() {
             return new Promise(function(resolve) {
@@ -1212,6 +1015,10 @@ class AuthController {
                 if(loginForm) loginForm.style.display = 'none';
                 if(btnReg) {btnReg.className='sub-btn on';}
                 if(btnLogin) {btnLogin.className='sub-btn off';}
+                if (!window.__passengerMapAlertShown) {
+                    alert('يجب تحديد مسارك الفعلي (نقطة الانطلاق ونقطة الوصول) على الخريطة أولاً لإكمال التسجيل');
+                    window.__passengerMapAlertShown = true;
+                }
             } else {
                 if(regForm) regForm.style.display = 'none';
                 if(loginForm) loginForm.style.display = '';
@@ -1373,7 +1180,7 @@ class AuthController {
             }
 
             try {
-                var res = await fetch('/api/drivers/nearby?tripType=short&lat=' + lat + '&lon=' + lon);
+                var res = await fetch('/api/drivers/nearby?tripType=' + (localStorage.getItem('selected_trip_type') || 'short') + '&lat=' + lat + '&lon=' + lon);
                 var drivers = await res.json();
                 if (!Array.isArray(drivers) || drivers.length === 0) {
                     container.innerHTML = '<div style="background:#fff;border:1px dashed #d1d5db;border-radius:10px;padding:12px;text-align:center;font-size:12px;color:#6b7280">🚕 لا يوجد سائقون قريبون للمشاوير القصيرة حالياً في نطاقك.<br><span style="font-size:11px;color:#9ca3af">يمكنك المتابعة وسيتم تنبيه السائقين فور توفرهم.</span></div>';
@@ -2097,6 +1904,11 @@ class AuthController {
                     }
                 }, function(err) {
                     if (btn) btn.innerHTML = '<span>📍 موقعي الحالي</span>';
+                    var msg = '⚠️ تعذر جلب الموقع الدقيق. يرجى تفعيل الـ GPS.';
+                    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                        msg += '\n\n💡 ملاحظة للايفون: التلغرام يمنع تحديد الموقع. يرجى الضغط على علامة البوصلة (🧭) في الأسفل أو النقاط الثلاث بالأعلى لفتح التطبيق في متصفح سفاري (Safari) وسيتم التحديد بنجاح.';
+                    }
+                    alert(msg);
                     if (inp && !inp.value) inp.value = 'موقعي الحالي';
                     var latEl = document.getElementById('cust-pickup-lat');
                     var lonEl = document.getElementById('cust-pickup-lon');
@@ -2497,7 +2309,11 @@ class AuthController {
                         document.getElementById('cust-pickup-lon').value = pos.coords.longitude.toFixed(6);
                         fixPermanentLocation();
                     }, function() {
-                        alert('⚠️ يرجى تحديد نقطة الانطلاق على الخريطة أولاً أو تفعيل GPS');
+                        var msg = '⚠️ يرجى تحديد نقطة الانطلاق على الخريطة أولاً أو تفعيل GPS';
+                        if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                            msg += '\n\n💡 ملاحظة للايفون: التلغرام يمنع تحديد الموقع. يرجى الضغط على علامة البوصلة (🧭) لفتح التطبيق في سفاري.';
+                        }
+                        alert(msg);
                     });
                     return;
                 }
@@ -3097,6 +2913,23 @@ class AuthController {
             if (typeof mapboxgl === 'undefined' && window.loadMapboxDynamically) {
                 await window.loadMapboxDynamically();
             }
+            var tripType = localStorage.getItem('selected_trip_type') || 'short';
+            if (tripType === 'daily' || isDriver) {
+                try {
+                    var uid = localStorage.getItem('user_id');
+                    var ep = isDriver ? '/api/driver/permanent-location/' : '/api/passenger/permanent-location/';
+                    var locRes = await fetch(ep + uid);
+                    var locData = await locRes.json();
+                    if (locData.success && locData.lat && locData.lon) {
+                        bUserLat = locData.lat;
+                        bUserLon = locData.lon;
+                        setBookingPickup(locData.lon, locData.lat, locData.locationName || 'نقطة الانطلاق');
+                        if (locData.dropoffLat && locData.dropoffLon) {
+                            setBookingDropoff(locData.dropoffLon, locData.dropoffLat, locData.dropoffName || 'نقطة الوصول');
+                        }
+                    }
+                } catch(_) {}
+            }
 
             if (!bMap) {
                 await initBookingMapbox();
@@ -3480,11 +3313,16 @@ class AuthController {
             var fromText = bPickupName || typedPickup || 'نقطة الانطلاق';
             var toText = bDropoffName || typedDropoff || 'نقطة الوصول';
 
-            var saveBtn = document.getElementById('btn-floating-save-route') || document.getElementById('btn-save-route-db');
-            if (saveBtn) {
-                saveBtn.disabled = true;
-                saveBtn.innerHTML = isShortTrip ? '<span>🔍</span> <span>جاري البحث عن أقرب سائق متواجد...</span>' : '⏳ جاري الحفظ في قاعدة البيانات...';
+            var saveBtn1 = document.getElementById('btn-floating-save-route');
+            var saveBtn2 = document.getElementById('btn-save-route-db');
+            var saveBtn = saveBtn1 || saveBtn2; // Fallback for old code logic
+            
+            function setBothBtns(html, disabled) {
+                if (saveBtn1) { saveBtn1.disabled = disabled; saveBtn1.innerHTML = html; }
+                if (saveBtn2) { saveBtn2.disabled = disabled; saveBtn2.innerHTML = html; }
             }
+            
+            setBothBtns(isShortTrip ? '<span>🔍</span> <span>جاري البحث عن أقرب سائق متواجد...</span>' : '⏳ جاري الحفظ في قاعدة البيانات...', true);
 
             try {
                 if (isDriver) {
@@ -3504,10 +3342,10 @@ class AuthController {
                     var data = await res.json();
                     if (data.success) {
                         alert('✅ تم تثبيت مسارك بنجاح في قاعدة البيانات.');
-                        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '✅ تم حفظ وتثبيت المسار'; }
+                        setBothBtns('✅ تم حفظ وتثبيت المسار', false);
                     } else {
                         alert(data.error || 'تعذر حفظ المسار');
-                        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '📌 تأكيد وتثبيت المسار'; }
+                        setBothBtns('📌 تأكيد وتثبيت المسار', false);
                     }
                 } else {
                     await fetch('/api/passenger/set-permanent-location', {
@@ -3532,10 +3370,7 @@ class AuthController {
                             statusEl.style.background = '#fef3c7';
                             statusEl.style.color = '#b45309';
                         }
-                        if (saveBtn) {
-                            saveBtn.disabled = true;
-                            saveBtn.innerHTML = '<span>🔍</span> <span>جاري البحث عن أقرب سائق متواجد...</span>';
-                        }
+                        setBothBtns('<span>🔍</span> <span>جاري البحث عن أقرب سائق متواجد...</span>', true);
                         var modal = document.getElementById('ride-dispatch-modal');
                         if (modal) {
                             modal.style.display = 'flex';
@@ -3570,13 +3405,13 @@ class AuthController {
                         });
 
                         alert('✅ تم تثبيت مسارك في قاعدة البيانات بنجاح: ' + fromText + ' ➔ ' + toText);
-                        if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '✅ تم تثبيت المسار'; }
+                        setBothBtns('✅ تم تثبيت المسار', false);
                         loadMatchingDriversForPassenger();
                     }
                 }
             } catch(e) {
                 alert('خطأ في الاتصال بقاعدة البيانات');
-                if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '📌 تأكيد وتثبيت المسار'; }
+                setBothBtns('📌 تأكيد وتثبيت المسار', false);
             }
         };
 
@@ -3808,7 +3643,11 @@ class AuthController {
                     if (bGeolocate) {
                         try { bGeolocate.trigger(); } catch(_) {}
                     } else {
-                        alert('⚠️ تعذر جلب الموقع الدقيق. يرجى تفعيل الـ GPS في المتصفح أو الهاتف.');
+                        var msg = '⚠️ تعذر جلب الموقع الدقيق. يرجى تفعيل الـ GPS.';
+                        if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                            msg += '\n\n💡 ملاحظة للايفون: التلغرام يمنع تحديد الموقع. يرجى الضغط على علامة البوصلة (🧭) في الأسفل أو النقاط الثلاث بالأعلى لفتح التطبيق في متصفح سفاري (Safari) وسيتم التحديد بنجاح.';
+                        }
+                        alert(msg);
                     }
                 }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
             } else if (bGeolocate) {
@@ -3877,7 +3716,16 @@ class AuthController {
 
             bMap.on('load', function() {
                 // Auto request geolocation on open (Stage 1)
-                try { bGeolocate.trigger(); } catch(_) {}
+                var tripType = localStorage.getItem('selected_trip_type') || 'short';
+                var workMode = localStorage.getItem('driver_work_mode') || 'مشوار قصير';
+                var role = localStorage.getItem('user_role') || 'Customer';
+                var isDriver = (role === 'Driver' || role === 'driver');
+                
+                if (isDriver) {
+                    if (workMode !== 'خط دائمي') try { bGeolocate.trigger(); } catch(_) {}
+                } else {
+                    if (tripType !== 'daily') try { bGeolocate.trigger(); } catch(_) {}
+                }
 
                 // Drivers GeoJSON source & layers (Stage 1)
                 bMap.addSource('booking-drivers-source', {
@@ -3900,7 +3748,7 @@ class AuthController {
                     type: 'symbol',
                     source: 'booking-drivers-source',
                     layout: {
-                        'text-field': '🚕',
+                        'text-field': ['get', 'icon'],
                         'text-size': 18,
                         'text-allow-overlap': true,
                         'text-ignore-placement': true
@@ -4130,22 +3978,43 @@ class AuthController {
             try {
                 var lat = bPickupCoords ? bPickupCoords[1] : bUserLat;
                 var lon = bPickupCoords ? bPickupCoords[0] : bUserLon;
-                var res = await fetch('/api/drivers/nearby?tripType=short&lat=' + lat + '&lon=' + lon + '&rangeKm=' + bRangeKm);
+                var tripType = localStorage.getItem('selected_trip_type') || 'short';
+                var workMode = localStorage.getItem('driver_work_mode') || 'مشوار قصير';
+                var role = localStorage.getItem('user_role') || 'Customer';
+                var isDriver = (role === 'Driver' || role === 'driver');
+                
+                var activeType = isDriver ? (workMode === 'خط دائمي' ? 'daily' : 'short') : tripType;
+                
+                var res = await fetch('/api/drivers/nearby?tripType=' + activeType + '&lat=' + lat + '&lon=' + lon + '&rangeKm=' + bRangeKm);
                 var drivers = await res.json();
                 bNearbyDrivers = Array.isArray(drivers) ? drivers : [];
+                
+                var features = bNearbyDrivers.map(function(d) {
+                    return {
+                        type: 'Feature',
+                        properties: { id: d.driverId, name: d.driverName, car: d.carModel, distance: d.distanceKm, icon: '🚕' },
+                        geometry: { type: 'Point', coordinates: [d.longitude, d.latitude] }
+                    };
+                });
+
+                if (activeType === 'daily') {
+                    var routeRes = await fetch('/api/routes/permanent');
+                    var routeData = await routeRes.json();
+                    var routes = routeData.routes || [];
+                    routes.forEach(function(r) {
+                        features.push({
+                            type: 'Feature',
+                            properties: { id: r.id, name: r.customerName || 'راكب', icon: '👤' },
+                            geometry: { type: 'Point', coordinates: [r.startLon, r.startLat] }
+                        });
+                    });
+                }
 
                 if (bMap && bMap.getSource('booking-drivers-source')) {
-                    var features = bNearbyDrivers.map(function(d) {
-                        return {
-                            type: 'Feature',
-                            properties: { id: d.driverId, name: d.driverName, car: d.carModel, distance: d.distanceKm },
-                            geometry: { type: 'Point', coordinates: [d.longitude, d.latitude] }
-                        };
-                    });
                     bMap.getSource('booking-drivers-source').setData({ type: 'FeatureCollection', features: features });
                 }
 
-                if (bActiveTab === 'short') {
+                if (activeType === 'short') {
                     renderNearbyDriversList();
                 }
             } catch(_) {}
@@ -4651,15 +4520,23 @@ class AuthController {
         };
 
         window.resetSaveRouteButton = function() {
-            var saveBtn = document.getElementById('btn-floating-save-route') || document.getElementById('btn-save-route-db');
-            if (saveBtn) {
-                saveBtn.disabled = false;
-                var fareHtml = '';
-                if (bRouteFare) {
-                    fareHtml = ' <span id="floating-btn-fare" style="background:#059669;color:#fff;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:800;">' + Number(bRouteFare).toLocaleString() + ' د.ع</span>';
-                }
-                saveBtn.innerHTML = '<span>📌</span> <span id="floating-save-btn-text">تأكيد وتثبيت المسار</span>' + fareHtml;
+            var saveBtn1 = document.getElementById('btn-floating-save-route');
+            var saveBtn2 = document.getElementById('btn-save-route-db');
+            
+            var fareHtml = '';
+            if (bRouteFare) {
+                fareHtml = ' <span id="floating-btn-fare" style="background:#059669;color:#fff;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:800;">' + Number(bRouteFare).toLocaleString() + ' د.ع</span>';
             }
+            
+            if (saveBtn1) {
+                saveBtn1.disabled = false;
+                saveBtn1.innerHTML = '<span>📌</span> <span id="floating-save-btn-text">تأكيد وتثبيت المسار</span>' + fareHtml;
+            }
+            if (saveBtn2) {
+                saveBtn2.disabled = false;
+                saveBtn2.innerHTML = '<span>📌</span> <span>تأكيد وتثبيت المسار</span>' + fareHtml;
+            }
+            
             var statusEl = document.getElementById('map-target-status');
             if (statusEl) {
                 statusEl.textContent = '📍 تم تثبيت المسار - جاهز للطلب';
@@ -4867,6 +4744,10 @@ class AuthController {
                 '</div>';
             }
 
+            var currentMode = localStorage.getItem('driver_work_mode') || 'مشوار قصير';
+            var shortBg = currentMode === 'مشوار قصير' ? '#3b82f6' : '#94a3b8';
+            var longBg = currentMode === 'خط دائمي' ? '#3b82f6' : '#94a3b8';
+
             panel.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px;">🚖 لوحة الكابتن والطلبات الحية</div>' +
                 activeCardHtml +
                 '<div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
@@ -4875,6 +4756,13 @@ class AuthController {
                         '<div id="driver-status-text" style="font-size:11px;color:' + statusColor + ';font-weight:700;">' + statusText + '</div>' +
                     '</div>' +
                     '<button type="button" onclick="toggleDriverOnlineState()" id="btn-driver-toggle" class="btn-primary" style="width:auto;padding:8px 14px;font-size:12px;background:' + btnBg + ';">' + btnText + '</button>' +
+                '</div>' +
+                '<div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:10px;">' +
+                    '<div style="font-weight:900;font-size:13px;color:#111;margin-bottom:6px;">نظام العمل</div>' +
+                    '<div style="display:flex;gap:8px;">' +
+                        '<button type="button" onclick="setDriverWorkMode(\'مشوار قصير\')" class="btn-primary" style="flex:1;background:' + shortBg + ';padding:6px;font-size:12px;">مشوار قصير</button>' +
+                        '<button type="button" onclick="setDriverWorkMode(\'خط دائمي\')" class="btn-primary" style="flex:1;background:' + longBg + ';padding:6px;font-size:12px;">خط دائمي</button>' +
+                    '</div>' +
                 '</div>' +
                 '<div>' +
                     '<label class="label" style="font-size:11px;">🛣️ مسار عملك المعتاد (الانطلاق والوصول)</label>' +
@@ -4894,22 +4782,38 @@ class AuthController {
             loadDriverMatchingRoutes();
         }
 
-        window.toggleDriverOnlineState = async function() {
-            var did = localStorage.getItem('user_id') || 'drv-test';
-            bDriverOnline = !bDriverOnline;
+        window.setDriverWorkMode = async function(mode) {
+            var did = localStorage.getItem('user_id');
+            if (!did) return;
             try {
-                await fetch('/api/driver/toggle-online', {
+                var res = await fetch('/api/drivers/' + did + '/work_mode', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ driverId: did, isOnline: bDriverOnline })
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ work_mode: mode })
                 });
-            } catch(_) {}
+                var data = await res.json();
+                if (data.success) {
+                    localStorage.setItem('driver_work_mode', mode);
+                    renderDriverHome(); updateDriverTrackingState();
+                }
+            } catch(e) { console.error(e); }
+        };
 
-            renderDriverSidebar();
-
+        window.updateDriverTrackingState = function() {
+            var did = localStorage.getItem('user_id') || 'drv-test';
+            var workMode = localStorage.getItem('driver_work_mode') || 'مشوار قصير';
+            
+            if (bDriverWatchId && navigator.geolocation) {
+                navigator.geolocation.clearWatch(bDriverWatchId);
+                bDriverWatchId = null;
+            }
+            if (bDriverIncomingTimer) {
+                clearInterval(bDriverIncomingTimer);
+                bDriverIncomingTimer = null;
+            }
+            
             if (bDriverOnline) {
-                // Live location stream
-                if (navigator.geolocation) {
+                if (workMode !== 'خط دائمي' && navigator.geolocation) {
                     bDriverWatchId = navigator.geolocation.watchPosition(function(pos) {
                         fetch('/api/driver/location', {
                             method: 'POST',
@@ -4924,15 +4828,23 @@ class AuthController {
                         }).catch(function(){});
                     }, function(){}, { enableHighAccuracy: true });
                 }
-                // Poll for incoming ride requests every 3s (Stage 4)
-                if (bDriverIncomingTimer) clearInterval(bDriverIncomingTimer);
                 bDriverIncomingTimer = setInterval(checkDriverIncomingPendingRequests, 3000);
-            } else {
-                if (bDriverWatchId && navigator.geolocation) {
-                    navigator.geolocation.clearWatch(bDriverWatchId);
-                }
-                if (bDriverIncomingTimer) clearInterval(bDriverIncomingTimer);
             }
+        };
+
+        window.toggleDriverOnlineState = async function() {
+            var did = localStorage.getItem('user_id') || 'drv-test';
+            bDriverOnline = !bDriverOnline;
+            try {
+                await fetch('/api/driver/toggle-online', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ driverId: did, isOnline: bDriverOnline })
+                });
+            } catch(_) {}
+
+            renderDriverSidebar();
+            updateDriverTrackingState();
         };
 
         window.saveDriverActiveRoute = async function() {
@@ -5228,6 +5140,15 @@ class AuthController {
                     startLiveDriverTracking(savedRide);
                 }
             } catch(_) {}
+            
+            setTimeout(function() {
+                var role = window.currentRole || 'Customer';
+                var custForm = document.getElementById('cust-register-form');
+                if (role === 'Customer' && custForm && custForm.style.display !== 'none' && !window.__passengerMapAlertShown) {
+                    alert('يجب تحديد مسارك الفعلي (نقطة الانطلاق ونقطة الوصول) على الخريطة أولاً لإكمال التسجيل');
+                    window.__passengerMapAlertShown = true;
+                }
+            }, 600);
         })();
     </script>
 </body>
