@@ -247,6 +247,7 @@ class AuthController {
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
     <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js" defer></script>
     <script src="https://cdn.tailwindcss.com" defer></script>
@@ -874,7 +875,7 @@ class AuthController {
 
             <!-- Phone Input -->
             <div style="background:#ffffff;border:1.5px solid #f3f4f6;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,0.06);display:flex;align-items:center;padding:16px 20px;margin-bottom:30px;transition:all 0.3s;" id="new-phone-input-container">
-                <input type="tel" id="new-unified-phone" placeholder="" dir="ltr" style="flex:1;border:none;outline:none;font-size:20px;font-weight:900;color:#111;text-align:left;background:transparent;letter-spacing:2px;" onfocus="document.getElementById('new-phone-input-container').style.borderColor='#facc15';" onblur="document.getElementById('new-phone-input-container').style.borderColor='#f3f4f6';" oninput="this.value=normalizeArabicDigits(this.value).replace(/[^0-9]/g, '')">
+                <input type="tel" id="new-unified-phone" onkeydown="if(event.key === 'Enter') handleUnifiedPhoneSubmit()" placeholder="" dir="ltr" style="flex:1;border:none;outline:none;font-size:20px;font-weight:900;color:#111;text-align:left;background:transparent;letter-spacing:2px;" onfocus="document.getElementById('new-phone-input-container').style.borderColor='#facc15';" onblur="document.getElementById('new-phone-input-container').style.borderColor='#f3f4f6';" oninput="this.value=normalizeArabicDigits(this.value).replace(/[^0-9]/g, '')">
             </div>
 
             <p style="font-size:13px;color:#6b7280;text-align:center;line-height:1.8;margin-bottom:40px;font-weight:600;">
