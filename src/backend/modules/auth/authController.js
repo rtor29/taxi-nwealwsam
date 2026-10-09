@@ -449,8 +449,8 @@ class AuthController {
         
         <!-- Center Map Pin overlay (Always in center of the screen) -->
         <div style="position:absolute;top:50%;left:50%;transform:translate(-50%, -100%);z-index:15;pointer-events:none;text-align:center;">
-            <div id="clean-map-pin-head" style="width:20px;height:20px;background:#ef4444;border-radius:50%;border:5px solid white;box-shadow:0 3px 6px rgba(0,0,0,0.3);position:relative;margin:0 auto;transition:background 0.3s;">
-                <div style="width:4px;height:4px;background:white;border-radius:50%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);"></div>
+            <div id="clean-map-pin-head" style="width:20px;height:20px;background:#ef4444;border-radius:50%;border:5px solid white;box-shadow:0 3px 6px rgba(0,0,0,0.3);position:relative;margin:0 auto;transition:all 0.3s;">
+                <div id="clean-map-pin-inner" style="width:4px;height:4px;background:white;border-radius:50%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);transition:all 0.3s;"></div>
             </div>
             <div style="width:2px;height:35px;background:#111;margin:0 auto;box-shadow:0 3px 6px rgba(0,0,0,0.3);"></div>
         </div>
@@ -485,8 +485,8 @@ class AuthController {
                 <div style="background:#f1f5f9;border-radius:30px;display:flex;align-items:center;padding:14px 20px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.03);">
                     <i class="fa-solid fa-magnifying-glass" style="font-size:20px;color:#64748b;"></i>
                     <input type="text" id="book-dropoff-input" oninput="onBookingDropoffSearch(this.value)" onfocus="window.setCleanMapTarget('dropoff')" placeholder="نقطة الوصول..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:'Cairo',sans-serif;font-weight:700;color:#0f172a;padding:0 15px;">
-                    <div style="width:26px;height:26px;background:#3b82f6;border-radius:50%;display:flex;align-items:center;justify-content:center;">
-                        <div style="width:8px;height:8px;background:#fff;border-radius:50%;"></div>
+                    <div style="width:26px;height:26px;background:#f97316;border-radius:6px;display:flex;align-items:center;justify-content:center;">
+                        <div style="width:10px;height:10px;background:#fff;border-radius:2px;"></div>
                     </div>
                 </div>
                 <div id="book-dropoff-results" class="search-autocomplete-dropdown" style="display:none;position:absolute;bottom:100%;left:20px;right:20px;z-index:30;background:#fff;border-radius:16px;box-shadow:0 -10px 30px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;margin-bottom:10px;"></div>
@@ -567,17 +567,31 @@ class AuthController {
             var btnText = document.getElementById('floating-save-btn-text');
             var pCont = document.getElementById('clean-pickup-container');
             var dCont = document.getElementById('clean-dropoff-container');
+            var gpsBtn = document.getElementById('btn-gps-pickup');
+            var mapWrap = document.getElementById('btn-gps-pickup') ? document.getElementById('btn-gps-pickup').parentElement : null;
             
             if (target === 'pickup') {
-                if (pinHead) pinHead.style.background = '#ef4444'; // Red for pickup
+                if (pinHead) {
+                    pinHead.style.background = '#ef4444';
+                    pinHead.style.borderRadius = '50%';
+                    var inner = document.getElementById('clean-map-pin-inner');
+                    if (inner) { inner.style.borderRadius = '50%'; inner.style.width = '4px'; inner.style.height = '4px'; }
+                }
                 if (btnText) btnText.innerText = 'تاكيد نقطة الانطلاق';
                 if (pCont) pCont.style.display = 'block';
                 if (dCont) dCont.style.display = 'none';
+                if (mapWrap) mapWrap.style.display = 'block';
             } else {
-                if (pinHead) pinHead.style.background = '#3b82f6'; // Blue for dropoff
+                if (pinHead) {
+                    pinHead.style.background = '#f97316';
+                    pinHead.style.borderRadius = '6px';
+                    var inner = document.getElementById('clean-map-pin-inner');
+                    if (inner) { inner.style.borderRadius = '2px'; inner.style.width = '8px'; inner.style.height = '8px'; }
+                }
                 if (btnText) btnText.innerText = 'تاكيد نقطة الوصول';
                 if (pCont) pCont.style.display = 'none';
                 if (dCont) dCont.style.display = 'block';
+                if (mapWrap) mapWrap.style.display = 'none';
             }
         };
         
