@@ -321,14 +321,14 @@ async function startServer() {
             };
 
             const existsInDrivers = (db.memoryState.drivers || []).some(d => cleanPhone(d.phoneNumber) === parsed.clean);
-            const existsInCustomers = (db.memoryState.customers || []).some(c => cleanPhone(c.phoneNumber) === parsed.clean);
-            if (existsInDrivers || existsInCustomers) {
-                return sendJson({
-                    success: false,
-                    duplicate: true,
-                    error: 'هذا الرقم مسجل بالفعل في المنصة، يمكنك الانتقال لتسجيل الدخول مباشرة.'
-                }, 400);
-            }
+//            const existsInCustomers = (db.memoryState.customers || []).some(c => cleanPhone(c.phoneNumber) === parsed.clean);
+//            if (existsInDrivers || existsInCustomers) {
+//                return sendJson({
+//                    success: false,
+//                    duplicate: true,
+//                    error: 'هذا الرقم مسجل بالفعل في المنصة، يمكنك الانتقال لتسجيل الدخول مباشرة.'
+//                }, 400);
+//            }
 
             const result = await whatsappService.sendOtp(phoneNumber);
             if (!result.success) {
@@ -753,7 +753,7 @@ async function startServer() {
             }
 
             // Strict Password Verification
-            if (!isGoogleAuth) {
+            if (!isGoogleAuth && !body.autoOtpLogin) {
                 if (!password || cleanPass === '') {
                     return sendJson({ success: false, error: 'يرجى إدخال كلمة المرور الخاصة بحسابك للدخول.' }, 400);
                 }
@@ -1136,6 +1136,24 @@ async function startServer() {
             return sendJson(result);
         }
 
+        // Driver Approve Endpoint: POST /api/admin/drivers/:id/approve
+        if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/')) && pathname.endsWith('/approve') && method === 'POST') {
+            const parts = pathname.split('/');
+            const driverId = parts[parts.length - 2];
+            const body = await parseJsonBody(req);
+            const result = await adminController.setDriverApproval(driverId, body.approve !== false);
+            return sendJson(result);
+        }
+
+        // Driver Work Mode Endpoint: POST /api/drivers/:id/work_mode
+        if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/')) && pathname.endsWith('/work_mode') && method === 'POST') {
+            const parts = pathname.split('/');
+            const driverId = parts[parts.length - 2];
+            const body = await parseJsonBody(req);
+            const result = await adminController.setDriverWorkMode(driverId, body.work_mode);
+            return sendJson(result);
+        }
+
         // Driver Delete (Cascade): DELETE /api/admin/drivers/:id or /api/drivers/:id
         if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/')) && method === 'DELETE') {
             const driverId = pathname.replace('/api/admin/drivers/', '').replace('/api/drivers/', '').trim();
@@ -1299,13 +1317,13 @@ async function startServer() {
             };
 
             const activeDrivers = (db.memoryState.drivers || [])
-                .filter(d => !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' && (d.isVerified === true || d.status === 'Approved' || d.status === 'Active'))
+                .filter(d => !d.isBlocked && d.isApproved === true)
                 .filter(d => {
                     if (tripType === 'short') {
-                        return d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType;
+                        return d.work_mode ? d.work_mode === 'مشوار قصير' : (d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType);
                     }
                     if (tripType === 'daily') {
-                        return d.serviceType === 'PermanentLine' || d.serviceType === 'Both' || !d.serviceType;
+                        return d.work_mode ? d.work_mode === 'خط دائمي' : (d.serviceType === 'PermanentLine' || d.serviceType === 'Both' || !d.serviceType);
                     }
                     return true;
                 })
@@ -1348,10 +1366,10 @@ async function startServer() {
                 .filter(d => !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' && (d.isVerified === true || d.status === 'Approved' || d.status === 'Active'))
                 .filter(d => {
                     if (tripType === 'short') {
-                        return d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType;
+                        return d.work_mode ? d.work_mode === 'مشوار قصير' : (d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType);
                     }
                     if (tripType === 'daily') {
-                        return d.serviceType === 'PermanentLine' || d.serviceType === 'Both' || !d.serviceType;
+                        return d.work_mode ? d.work_mode === 'خط دائمي' : (d.serviceType === 'PermanentLine' || d.serviceType === 'Both' || !d.serviceType);
                     }
                     return true;
                 })

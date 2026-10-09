@@ -826,6 +826,26 @@ class AuthController {
         </div>
     </main>
 
+    <!-- ===== NEW UNIFIED SERVICE TYPE SCREEN ===== -->
+    <main id="new-service-ui" style="display:none;max-width:480px;width:100%;margin:0 auto;height:100vh;background:#ffffff;flex-direction:column;padding:40px 20px;align-items:center;justify-content:center;position:relative;">
+        <div style="margin-bottom:80px;text-align:center;">
+            <div style="position:relative;display:inline-block;">
+                <div style="font-size:120px;color:#facc15;line-height:1;margin-bottom:-15px;">🚕</div>
+                <div style="font-size:36px;font-weight:900;color:#facc15;font-family:'Cairo',sans-serif;text-shadow: 2px 2px 4px rgba(0,0,0,0.05);">توصيلة</div>
+            </div>
+        </div>
+
+        <div style="width:100%;display:flex;flex-direction:column;gap:24px;padding: 0 10px;">
+            <button type="button" onclick="handleServiceSelect('short')" style="background:#f97316;color:#ffffff;border:none;border-radius:24px;padding:22px;font-size:26px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer;box-shadow:0 8px 20px rgba(249,115,22,0.35);transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.96)';" onmouseup="this.style.transform='scale(1)';">
+                طلب مشوار سريع
+            </button>
+            
+            <button type="button" onclick="handleServiceSelect('daily')" style="background:#f97316;color:#ffffff;border:none;border-radius:24px;padding:22px;font-size:26px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer;box-shadow:0 8px 20px rgba(249,115,22,0.35);transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.96)';" onmouseup="this.style.transform='scale(1)';">
+                حجز خط دائمي
+            </button>
+        </div>
+    </main>
+
 
     <style>
         @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
@@ -927,7 +947,8 @@ class AuthController {
                     window.__isPhoneVerified = true;
                     window.__verifiedOtpCode = code;
                     
-                    document.getElementById('new-otp-ui').innerHTML = '<div style="text-align:center;padding:40px;font-size:24px;font-weight:bold;color:#16a34a;margin-top:50px;">تم التحقق بنجاح!<br><br><span style="font-size:16px;color:#6b7280;">بانتظار الشاشة الثالثة (التفاصيل)...</span></div>';
+                    document.getElementById('new-otp-ui').style.display = 'none';
+                    document.getElementById('new-service-ui').style.display = 'flex';
                 } else {
                     alert(data.error || 'الرمز غير صحيح أو منتهي الصلاحية');
                     for(var i=1; i<=6; i++) {
@@ -938,6 +959,81 @@ class AuthController {
             } catch(e) {
                 document.getElementById('unified-otp-inputs').style.opacity = '1';
                 alert('خطأ في الاتصال بالخادم.');
+            }
+        }
+        
+        async function handleServiceSelect(type) {
+            var role = window.unifiedAuthRole || 'Customer';
+            var phone = window.__unifiedPhone;
+            
+            // Temporary loading visual on the button container
+            var serviceMain = document.getElementById('new-service-ui');
+            serviceMain.style.opacity = '0.5';
+            
+            // Store selection globally so the map can use it
+            localStorage.setItem('selected_trip_type', type);
+            
+            try {
+                // Attempt to auto-login or register seamlessly
+                var res = await fetch('/api/auth/login', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ identifier: phone, password: 'auto-generated', role: role, autoOtpLogin: true }) 
+                });
+                
+                var data = await res.json();
+                
+                if (res.ok && data.success) {
+                    // Save session exactly like old handleCaptainLogin / handleCustomerLogin
+                    persistSession(data);
+                    serviceMain.style.opacity = '1';
+                    // The Mapbox UI has its own display toggler
+                    setTimeout(function(){ 
+                        openRouteApp('set-route'); 
+                    }, 200);
+                } else {
+                    // Registration needed?
+                    var regRes = await fetch('/api/' + (role === 'Driver' ? 'driver' : 'passenger') + '/register', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            phone: phone,
+                            password: 'auto-generated',
+                            fullName: 'مستخدم جديد',
+                            firstName: 'مستخدم',
+                            lastName: 'جديد',
+                            carName: 'مركبة',
+                            plateNumber: '12345',
+                            serviceType: type === 'daily' ? 'PermanentLine' : 'ShortTrip',
+                            route: 'العراق',
+                            address: 'العراق',
+                            routeFrom: 'العراق',
+                            routeTo: 'العراق'
+                        })
+                    });
+                    
+                    var regData = await regRes.json();
+                    if (regRes.ok && regData.success) {
+                        // After register, auto login
+                        var loginRes = await fetch('/api/auth/login', { 
+                            method: 'POST', 
+                            headers: { 'Content-Type': 'application/json' }, 
+                            body: JSON.stringify({ identifier: phone, password: 'auto-generated', role: role, autoOtpLogin: true }) 
+                        });
+                        var loginData = await loginRes.json();
+                        if (loginData.success) {
+                            persistSession(loginData);
+                            serviceMain.style.opacity = '1';
+                            setTimeout(function(){ openRouteApp('set-route'); }, 200);
+                        }
+                    } else {
+                        serviceMain.style.opacity = '1';
+                        alert('حدث خطأ أثناء إعداد الحساب. المرجو المحاولة مجددا.');
+                    }
+                }
+            } catch (err) {
+                serviceMain.style.opacity = '1';
+                alert('خطأ في الاتصال.');
             }
         }
         
