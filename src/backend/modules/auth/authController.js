@@ -884,8 +884,8 @@ class AuthController {
         </div>
 
         <!-- Floating Action Button -->
-        <button type="button" onclick="window.handleUnifiedPhoneSubmit()" style="position:absolute;bottom:80px;left:30px;background:#facc15;color:#ffffff;border:none;border-radius:50%;width:64px;height:64px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 25px rgba(250,204,21,0.5);cursor:pointer;transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.95)';" onmouseup="this.style.transform='scale(1)';">
-            <i class="fa-solid fa-arrow-left" style="font-size:28px;"></i>
+        <button type="button" onclick="window.handleUnifiedPhoneSubmit()" style="position:absolute;bottom:80px;left:30px;background:#facc15;color:#ffffff;border:none;border-radius:50%;width:64px;height:64px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 25px rgba(250,204,21,0.5);cursor:pointer;transition:transform 0.2s;z-index:9999;" onmousedown="this.style.transform='scale(0.95)';" onmouseup="this.style.transform='scale(1)';">
+            <i class="fa-solid fa-arrow-left" style="font-size:28px;pointer-events:none;"></i>
         </button>
     </main>
 
@@ -945,9 +945,14 @@ class AuthController {
         window.unifiedAuthRole = '${preselectedRole}';
         
         window.handleUnifiedPhoneSubmit = async function() {
-            var phone = document.getElementById('new-unified-phone').value;
+            var rawPhone = document.getElementById('new-unified-phone').value || '';
+            // Convert Arabic to English digits
+            var phone = rawPhone.replace(/[٠-٩]/g, function(d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); })
+                              .replace(/[۰-۹]/g, function(d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); })
+                              .replace(/[^0-9+]/g, '');
+            
             if (!phone || phone.length < 10) {
-                alert('الرجاء إدخال رقم هاتف صحيح');
+                alert('الرجاء إدخال رقم هاتف صحيح (مثال: 07701234567)');
                 return;
             }
             window.__unifiedPhone = phone;
