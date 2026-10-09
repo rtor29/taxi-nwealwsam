@@ -401,19 +401,21 @@ class AuthController {
     </style>
 
     <script>
-        window.forcePurgeAndReload = async function() {
-            try {
-                if ('serviceWorker' in navigator) {
-                    var regs = await navigator.serviceWorker.getRegistrations();
-                    for (var r of regs) await r.unregister();
-                }
-                if ('caches' in window) {
-                    var keys = await caches.keys();
-                    for (var k of keys) await caches.delete(k);
-                }
-            } catch(_) {}
+        window.forcePurgeAndReload = function() {
             try { sessionStorage.clear(); } catch(_) {}
-            window.location.replace(window.location.origin + window.location.pathname);
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistrations().then(function(regs) {
+                    for (var i=0; i<regs.length; i++) regs[i].unregister();
+                }).catch(function(){});
+            }
+            if ('caches' in window) {
+                caches.keys().then(function(keys) {
+                    for (var i=0; i<keys.length; i++) caches.delete(keys[i]);
+                }).catch(function(){});
+            }
+            setTimeout(function() {
+                window.location.replace(window.location.origin + window.location.pathname);
+            }, 500);
         };
         window.normalizeArabicDigits = function(str) {
             if (!str) return '';
@@ -874,8 +876,9 @@ class AuthController {
             <p style="font-size:18px;color:#374151;margin:0 0 30px;font-weight:700;">قم بادخال رقم هاتفك</p>
 
             <!-- Phone Input -->
+            <div id="login-error-msg" class="alert-error" style="margin-bottom:15px;text-align:center;display:none;"></div>
             <div style="background:#ffffff;border:1.5px solid #f3f4f6;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,0.06);display:flex;align-items:center;padding:16px 20px;margin-bottom:30px;transition:all 0.3s;" id="new-phone-input-container">
-                <input type="tel" id="new-unified-phone" onkeydown="if(event.key === 'Enter') window.handleUnifiedPhoneSubmit()" placeholder="" dir="ltr" style="flex:1;border:none;outline:none;font-size:20px;font-weight:900;color:#111;text-align:left;background:transparent;letter-spacing:2px;" onfocus="document.getElementById('new-phone-input-container').style.borderColor='#facc15';" onblur="document.getElementById('new-phone-input-container').style.borderColor='#f3f4f6';" >
+                <input type="tel" id="new-unified-phone" onkeydown="if(event.key === 'Enter') window.handleUnifiedPhoneSubmit()" oninput="this.value = this.value.replace(/[٠-٩]/g, function(d){return '٠١٢٣٤٥٦٧٨٩'.indexOf(d)}).replace(/[۰-۹]/g, function(d){return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)}).replace(/[^0-9+]/g, '')" placeholder="" dir="ltr" style="flex:1;border:none;outline:none;font-size:20px;font-weight:900;color:#111;text-align:left;background:transparent;letter-spacing:2px;" onfocus="document.getElementById('new-phone-input-container').style.borderColor='#facc15';" onblur="document.getElementById('new-phone-input-container').style.borderColor='#f3f4f6';" >
             </div>
 
             <p style="font-size:13px;color:#6b7280;text-align:center;line-height:1.8;margin-bottom:40px;font-weight:600;">
@@ -884,8 +887,8 @@ class AuthController {
         </div>
 
         <!-- Floating Action Button -->
-        <button type="button" onclick="window.handleUnifiedPhoneSubmit()" style="position:absolute;bottom:80px;left:30px;background:#facc15;color:#ffffff;border:none;border-radius:50%;width:64px;height:64px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 25px rgba(250,204,21,0.5);cursor:pointer;transition:transform 0.2s;z-index:9999;" onmousedown="this.style.transform='scale(0.95)';" onmouseup="this.style.transform='scale(1)';">
-            <i class="fa-solid fa-arrow-left" style="font-size:28px;pointer-events:none;"></i>
+        <button type="button" id="login-submit-btn" onclick="window.handleUnifiedPhoneSubmit()" style="position:absolute;bottom:80px;left:30px;background:#facc15;color:#ffffff;border:none;border-radius:50%;width:64px;height:64px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 25px rgba(250,204,21,0.5);cursor:pointer;transition:transform 0.2s;z-index:9999;" onmousedown="this.style.transform='scale(0.95)';" onmouseup="this.style.transform='scale(1)';">
+            <i id="login-submit-icon" class="fa-solid fa-arrow-left" style="font-size:28px;pointer-events:none;"></i>
         </button>
     </main>
 
@@ -904,6 +907,7 @@ class AuthController {
             </p>
             <p style="font-size:15px;color:#6b7280;margin:0 0 40px;font-weight:600;">الرجاء ادخل الرمز ادناه</p>
 
+            <div id="otp-error-msg" class="alert-error" style="margin-bottom:15px;text-align:center;display:none;"></div>
             <div style="display:flex;justify-content:center;gap:12px;margin-bottom:40px;direction:ltr;" id="unified-otp-inputs">
                 <input type="tel" id="u-otp-1" maxlength="1" class="otp-digit" style="width:45px;height:55px;border:none;border-bottom:3px solid #111;font-size:32px;font-weight:900;text-align:center;background:transparent;outline:none;" onkeyup="unifiedOtpMove(this, 1)">
                 <input type="tel" id="u-otp-2" maxlength="1" class="otp-digit" style="width:45px;height:55px;border:none;border-bottom:3px solid #111;font-size:32px;font-weight:900;text-align:center;background:transparent;outline:none;" onkeyup="unifiedOtpMove(this, 2)">
@@ -944,42 +948,77 @@ class AuthController {
     <script>
         window.unifiedAuthRole = '${preselectedRole}';
         
-        window.handleUnifiedPhoneSubmit = async function() {
+        window.showLoginError = function(msg) {
+            var err = document.getElementById('login-error-msg');
+            if (err) { err.innerText = msg; err.style.display = 'block'; }
+            // also fallback to alert if not blocked
+            try { console.error(msg); } catch(e){}
+        };
+
+        window.handleUnifiedPhoneSubmit = function() {
+            if(window._isSubmittingPhone) return;
+            window._isSubmittingPhone = true;
+            
+            var errDiv = document.getElementById('login-error-msg');
+            if (errDiv) errDiv.style.display = 'none';
+            
+            var icon = document.getElementById('login-submit-icon');
+            if (icon) { icon.className = 'fa-solid fa-spinner'; icon.style.animation = 'spin 1s linear infinite'; }
+
+            var resetBtn = function() {
+                window._isSubmittingPhone = false;
+                if (icon) { icon.className = 'fa-solid fa-arrow-left'; icon.style.animation = 'none'; }
+                document.getElementById('new-auth-ui').style.opacity = '1';
+            };
+
             var rawPhone = document.getElementById('new-unified-phone').value || '';
-            // Convert Arabic to English digits
-            var phone = rawPhone.replace(/[٠-٩]/g, function(d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); })
+            var phone = String(rawPhone)
+                              .replace(/[٠-٩]/g, function(d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); })
                               .replace(/[۰-۹]/g, function(d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); })
                               .replace(/[^0-9+]/g, '');
             
             if (!phone || phone.length < 10) {
-                alert('الرجاء إدخال رقم هاتف صحيح (مثال: 07701234567)');
+                window.showLoginError('الرجاء إدخال رقم هاتف صحيح (مثال: 07701234567)');
+                resetBtn();
                 return;
             }
             window.__unifiedPhone = phone;
-            document.getElementById('new-auth-ui').style.opacity = '0.5';
+            document.getElementById('new-auth-ui').style.opacity = '0.8';
+            
+            var role = window.unifiedAuthRole || 'Customer';
             
             try {
-                var role = window.unifiedAuthRole || 'Customer';
-                var res = await fetch('/api/auth/send-whatsapp-otp', {
+                // Ensure fetch is available
+                if (typeof fetch === 'undefined') throw new Error('Browser not supported');
+                
+                fetch('/api/auth/send-whatsapp-otp', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ phone: phone, role: role })
+                })
+                .then(function(res) {
+                    return res.json().then(function(data) {
+                        return { ok: res.ok, data: data };
+                    });
+                })
+                .then(function(result) {
+                    resetBtn();
+                    if (result.ok && result.data.success) {
+                        document.getElementById('new-auth-ui').style.display = 'none';
+                        document.getElementById('new-otp-ui').style.display = 'flex';
+                        document.getElementById('unified-otp-phone-display').innerText = phone;
+                        setTimeout(function() { document.getElementById('u-otp-1').focus(); }, 300);
+                    } else {
+                        window.showLoginError(result.data.error || 'فشل إرسال رمز التحقق');
+                    }
+                })
+                .catch(function(err) {
+                    resetBtn();
+                    window.showLoginError('خطأ في الاتصال بالخادم.');
                 });
-                var data = await res.json();
-                
-                document.getElementById('new-auth-ui').style.opacity = '1';
-                
-                if (res.ok && data.success) {
-                    document.getElementById('new-auth-ui').style.display = 'none';
-                    document.getElementById('new-otp-ui').style.display = 'flex';
-                    document.getElementById('unified-otp-phone-display').innerText = phone;
-                    document.getElementById('u-otp-1').focus();
-                } else {
-                    alert(data.error || 'فشل إرسال رمز التحقق');
-                }
-            } catch (err) {
-                document.getElementById('new-auth-ui').style.opacity = '1';
-                alert('خطأ في الاتصال بالخادم.');
+            } catch(e) {
+                resetBtn();
+                window.showLoginError('خطأ: متصفحك قديم جداً. يرجى التحديث.');
             }
         }
         
