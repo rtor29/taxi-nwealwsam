@@ -620,7 +620,101 @@ class AuthController {
             }
         };
 
-        window.setCleanMapTarget = function(target) {
+        
+        // --- Fullscreen Search Modal Logic ---
+        window._fsSearchTarget = 'pickup';
+        window.openFullscreenSearch = function(target) {
+            window._fsSearchTarget = target;
+            var isPickup = target === 'pickup';
+            document.getElementById('fs-search-title').innerText = isPickup ? 'الانطلاق' : 'نقطة الوصول';
+            document.getElementById('fs-search-input').placeholder = isPickup ? 'البحث عن نقطة الانطلاق...' : 'البحث عن نقطة الوصول...';
+            document.getElementById('fs-search-input').value = '';
+            document.getElementById('fs-suggested-list').innerHTML = '';
+            document.getElementById('fs-recent-section').style.display = 'block';
+            document.getElementById('fs-suggested-section').style.display = 'none';
+            document.getElementById('fullscreen-search-modal').style.display = 'flex';
+            setTimeout(function() { document.getElementById('fs-search-input').focus(); }, 100);
+        };
+
+        window.closeFullscreenSearch = function() {
+            document.getElementById('fullscreen-search-modal').style.display = 'none';
+        };
+
+        var fsSearchTimer = null;
+        window.handleFsSearch = function(query) {
+            clearTimeout(fsSearchTimer);
+            var resultsEl = document.getElementById('fs-suggested-list');
+            var recentSec = document.getElementById('fs-recent-section');
+            var suggSec = document.getElementById('fs-suggested-section');
+            
+            if (!query || query.trim().length === 0) {
+                resultsEl.innerHTML = '';
+                recentSec.style.display = 'block';
+                suggSec.style.display = 'none';
+                return;
+            }
+            recentSec.style.display = 'none';
+            suggSec.style.display = 'block';
+            resultsEl.innerHTML = '<div style="padding:20px;text-align:center;color:#64748b;font-weight:700;"><i class="fa-solid fa-spinner fa-spin"></i> جاري البحث...</div>';
+            
+            fsSearchTimer = setTimeout(async function() {
+                var local = searchLocalNajafPlaces(query);
+                var html = '';
+                
+                if (local.length > 0) {
+                    local.forEach(function(p) {
+                        html += '<div onclick="window.selectFsResult(\''+p.name+'\', '+p.lon+', '+p.lat+')" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">' +
+                            '<div style="font-size:20px;color:#94a3b8;flex-shrink:0;"><i class="fa-solid fa-location-dot"></i></div>' +
+                            '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">' +
+                                '<span style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">'+p.name+'</span>' +
+                                '<span style="font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">النجف الأشرف، العراق</span>' +
+                            '</div>' +
+                            '<div style="font-size:20px;color:#cbd5e1;flex-shrink:0;"><i class="fa-regular fa-star"></i></div>' +
+                        '</div>';
+                    });
+                }
+                
+                try {
+                    var q = encodeURIComponent(query.trim());
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + (bUserLon||44.3168) + ',' + (bUserLat||31.9961) + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=6&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    var res = await fetch(url);
+                    var data = await res.json();
+                    var feats = (data && data.features) ? data.features : [];
+                    feats.forEach(function(f) {
+                        var nm = f.place_name_ar || f.place_name || '';
+                        var title = f.text_ar || f.text || nm.split(',')[0];
+                        html += '<div onclick="window.selectFsResult(\''+title.replace(/'/g, "\\'")+'\', '+f.center[0]+', '+f.center[1]+')" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">' +
+                            '<div style="font-size:20px;color:#94a3b8;flex-shrink:0;"><i class="fa-solid fa-location-dot"></i></div>' +
+                            '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">' +
+                                '<span style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">'+title+'</span>' +
+                                '<span style="font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">'+nm+'</span>' +
+                            '</div>' +
+                            '<div style="font-size:20px;color:#cbd5e1;flex-shrink:0;"><i class="fa-regular fa-star"></i></div>' +
+                        '</div>';
+                    });
+                } catch(e) {}
+                
+                if (html === '') {
+                    html = '<div style="padding:20px;text-align:center;color:#64748b;font-weight:700;">لا توجد نتائج مطابقة</div>';
+                }
+                resultsEl.innerHTML = html;
+            }, 300);
+        };
+
+        window.selectFsResult = function(name, lon, lat) {
+            window.closeFullscreenSearch();
+            if (window._fsSearchTarget === 'pickup') {
+                document.getElementById('book-pickup-input').value = name;
+                if(window.setBookingPickup) setBookingPickup(lon, lat, name);
+                if(window.setCleanMapTarget) setCleanMapTarget('dropoff');
+            } else {
+                document.getElementById('book-dropoff-input').value = name;
+                if(window.setBookingDropoff) setBookingDropoff(lon, lat, name);
+            }
+        };
+        // ------------------------------------------
+
+window.setCleanMapTarget = function(target) {
             window.bMapPickTarget = target;
             var pinHead = document.getElementById('clean-map-pin-head');
             var btnText = document.getElementById('floating-save-btn-text');
