@@ -921,16 +921,29 @@ async function loadDrivers(search = '') {
                 `;
             }
 
+            if (!d.isApproved) {
+                lifecycleButtons = `
+                    <button onclick="approveDriver('${d.driverId}')" title="موافقة ظهور على الخريطة" class="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                        <i class="fa-solid fa-check text-xs"></i>
+                        <span>موافقة</span>
+                    </button>
+                ` + lifecycleButtons;
+            }
+
+            const approveBadge = d.isApproved 
+                ? '<span class="px-2.5 py-1 text-xs bg-emerald-100 text-emerald-800 rounded-full font-bold ml-1">موافق عليه</span>' 
+                : '<span class="px-2.5 py-1 text-xs bg-amber-100 text-amber-800 rounded-full font-bold ml-1">غير موافق عليه</span>';
+
             tr.innerHTML = `
                 <td class="p-4 font-bold text-slate-900 flex items-center gap-1.5">
                     ${escapeHtml(d.fullName)}
                     ${d.isBlocked ? '<span class="px-1.5 py-0.5 text-[10px] bg-rose-600 text-white rounded font-black">معلق</span>' : ''}
                 </td>
                 <td class="p-4 text-slate-600 font-mono text-xs"><a href="tel:${escapeHtml(d.phoneNumber)}" class="hover:text-amber-600 underline">${escapeHtml(d.phoneNumber)}</a></td>
-                <td class="p-4"><span class="px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg text-xs font-bold">${escapeHtml(d.route || 'غير محدد')}</span></td>
+                <td class="p-4"><span class="px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg text-xs font-bold">${escapeHtml(d.workMode || 'مشوار قصير')}</span></td>
                 <td class="p-4"><span class="px-2 py-1 bg-slate-100 text-slate-800 font-mono text-xs rounded border border-slate-200 font-bold select-all" title="كلمة المرور">${escapeHtml(d.password || '••••••••')}</span></td>
                 <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full font-bold ${statusClass}">${statusLabel}</span></td>
-                <td class="p-4">${verifBadge}</td>
+                <td class="p-4">${verifBadge}${approveBadge}</td>
                 <td class="p-4">
                     <div class="flex items-center justify-center gap-1.5 flex-wrap">
                         <button onclick="openEditDriverModal('${d.driverId}')" title="تعديل بيانات الكابتن والمسار وكلمة المرور" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
@@ -2056,7 +2069,7 @@ async function broadcastDrawnRoute() {
     const routeName = titleInput ? titleInput.value.trim() : 'مسار طارئ معتمد';
     const targetDriver = driverSelect ? driverSelect.value : 'all';
 
-    const distText = document.getElementById('drawn-distance-badge')?.innerText || '0';
+    const distText = (document.getElementById('drawn-distance-badge') || {}).innerText || '0';
     const distMeters = parseFloat(distText) * 1000;
 
     const payload = {
@@ -2140,6 +2153,27 @@ function translateDriverStatus(s) {
         case 'Online': return 'متصل';
         case 'Offline': return 'غير متصل';
         default: return s;
+    }
+}
+
+async function approveDriver(driverId) {
+    if (!confirm('هل أنت متأكد من الموافقة على هذا الكابتن لكي يظهر على الخريطة للركاب؟')) return;
+    try {
+        const res = await fetch(`${API_BASE}/drivers/${driverId}/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ approve: true })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(`تم الموافقة على الكابتن بنجاح وأصبح متاحاً للركاب ✅`);
+            loadDrivers();
+            if (fleetMap) refreshFleetLocations();
+        } else {
+            showToast(data.error || 'فشل الموافقة على الكابتن', true);
+        }
+    } catch (err) {
+        showToast('خطأ في الاتصال بالخادم', true);
     }
 }
 

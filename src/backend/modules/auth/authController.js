@@ -1793,45 +1793,45 @@ class AuthController {
             var alertBox = document.getElementById('cust-reg-alert');
             if (alertBox) alertBox.style.display = 'none';
             if (!window.__isPhoneVerified) { alert('يرجى التحقق من رقم الهاتف أولاً'); return; }
-            var gov = (document.getElementById('cust-reg-governorate')?.value||'').trim() || localStorage.getItem('user_governorate') || 'najaf';
+            var gov = ((document.getElementById('cust-reg-governorate')||{}).value||'').trim() || localStorage.getItem('user_governorate') || 'najaf';
             localStorage.setItem('user_governorate', gov);
             var fname = (document.getElementById('cust-reg-firstname').value||'').trim();
             var lname = (document.getElementById('cust-reg-lastname').value||'').trim();
             var fullName = (fname + ' ' + lname).trim();
             var phone = normalizeArabicDigits(document.getElementById('cust-reg-phone').value.trim());
-            var route = (document.getElementById('cust-reg-route').value||'').trim() || (IRAQ_GOVERNORATES[gov]?.name || 'العراق');
-            var address = (document.getElementById('cust-reg-address').value||'').trim() || (IRAQ_GOVERNORATES[gov]?.name || 'العراق');
+            var route = (document.getElementById('cust-reg-route').value||'').trim() || ((IRAQ_GOVERNORATES[gov] ? IRAQ_GOVERNORATES[gov].name : undefined) || 'العراق');
+            var address = (document.getElementById('cust-reg-address').value||'').trim() || ((IRAQ_GOVERNORATES[gov] ? IRAQ_GOVERNORATES[gov].name : undefined) || 'العراق');
             var password = document.getElementById('cust-reg-password').value;
             var submitBtn = document.getElementById('btn-cust-reg-submit');
             if (!fname || !lname) { alert('يرجى إدخال الاسم واللقب'); return; }
             if (!password) { alert('يرجى إدخال كلمة المرور'); return; }
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري التسجيل...';
-            var pickupText = (document.getElementById('cust-reg-address')?.value || document.getElementById('cust-pickup-text')?.value || '').trim();
-            var dropoffText = (document.getElementById('cust-reg-route')?.value || document.getElementById('cust-dropoff-text')?.value || '').trim();
+            var pickupText = ((document.getElementById('cust-reg-address')||{}).value || (document.getElementById('cust-pickup-text')||{}).value || '').trim();
+            var dropoffText = ((document.getElementById('cust-reg-route')||{}).value || (document.getElementById('cust-dropoff-text')||{}).value || '').trim();
 
             if (!pickupText) {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> إكمال تسجيل الحساب';
                 alert('⚠️ يرجى كتابة أو تحديد عنوان الانطلاق');
-                document.getElementById('cust-reg-address')?.focus();
+                (document.getElementById('cust-reg-address') && document.getElementById('cust-reg-address').focus());
                 return;
             }
             if (!dropoffText) {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> إكمال تسجيل الحساب';
                 alert('⚠️ يرجى كتابة أو تحديد عنوان الوصول');
-                document.getElementById('cust-reg-route')?.focus();
+                (document.getElementById('cust-reg-route') && document.getElementById('cust-reg-route').focus());
                 return;
             }
 
             var address = pickupText;
             var route = pickupText + ' ➔ ' + dropoffText;
 
-            var pickupLat = document.getElementById('cust-pickup-lat')?.value;
-            var pickupLon = document.getElementById('cust-pickup-lon')?.value;
-            var dropoffLat = document.getElementById('cust-dropoff-lat')?.value;
-            var dropoffLon = document.getElementById('cust-dropoff-lon')?.value;
+            var pickupLat = (document.getElementById('cust-pickup-lat')||{}).value;
+            var pickupLon = (document.getElementById('cust-pickup-lon')||{}).value;
+            var dropoffLat = (document.getElementById('cust-dropoff-lat')||{}).value;
+            var dropoffLon = (document.getElementById('cust-dropoff-lon')||{}).value;
 
             if (!pickupLat || !pickupLon) {
                 pickupLat = (bUserLat || 31.9961).toString();
@@ -1963,17 +1963,17 @@ class AuthController {
             var alertBox=document.getElementById('driver-reg-alert');
             if(alertBox) alertBox.style.display='none';
             if(!window.__isDriverPhoneVerified){alert('يرجى التحقق من رقم الهاتف أولاً');return;}
-            var gov = (document.getElementById('driver-reg-governorate')?.value||'').trim() || localStorage.getItem('user_governorate') || 'najaf';
+            var gov = ((document.getElementById('driver-reg-governorate')||{}).value||'').trim() || localStorage.getItem('user_governorate') || 'najaf';
             if (!selectedDriverRegService) { alert('يرجى اختيار نوع الخدمة (مشاوير، خطوط دائمة، كلاهما)'); return; }
             localStorage.setItem('user_governorate', gov);
             var name=(document.getElementById('driver-reg-name').value||'').trim();
             var phone=normalizeArabicDigits(document.getElementById('driver-reg-phone').value.trim());
             var license=(document.getElementById('driver-reg-license').value||'').trim();
-            var vehicle=(document.getElementById('driver-reg-vehicle')?.value||'').trim();
-            var plate=(document.getElementById('driver-reg-plate')?.value||'').trim();
+            var vehicle=((document.getElementById('driver-reg-vehicle')||{}).value||'').trim();
+            var plate=((document.getElementById('driver-reg-plate')||{}).value||'').trim();
             var password=document.getElementById('driver-reg-password').value;
-            var fromRoute=(document.getElementById('driver-reg-from')?.value||'').trim();
-            var toRoute=(document.getElementById('driver-reg-to')?.value||'').trim();
+            var fromRoute=((document.getElementById('driver-reg-from')||{}).value||'').trim();
+            var toRoute=((document.getElementById('driver-reg-to')||{}).value||'').trim();
             var submitBtn=document.getElementById('btn-driver-reg-submit');
             if(!name||!phone||!password){alert('يرجى ملء جميع الحقول المطلوبة');return;}
             if(!fromRoute||!toRoute){alert('⚠️ يجب تحديد مسارك الفعلي (نقطة الانطلاق ونقطة الوصول) لإكمال التسجيل');return;}
@@ -2170,7 +2170,7 @@ class AuthController {
                 var lonEl = document.getElementById('cust-pickup-lon');
                 if (latEl && !latEl.value) latEl.value = (bUserLat || 31.9961);
                 if (lonEl && !lonEl.value) lonEl.value = (bUserLon || 44.3168);
-                document.getElementById('cust-reg-route')?.focus();
+                (document.getElementById('cust-reg-route') && document.getElementById('cust-reg-route').focus());
             };
             resultsEl.appendChild(customItem);
             resultsEl.style.display = 'block';
@@ -2197,7 +2197,7 @@ class AuthController {
                             var lonEl = document.getElementById('cust-pickup-lon');
                             if (latEl) latEl.value = f.center[1];
                             if (lonEl) lonEl.value = f.center[0];
-                            document.getElementById('cust-reg-route')?.focus();
+                            (document.getElementById('cust-reg-route') && document.getElementById('cust-reg-route').focus());
                         };
                         resultsEl.appendChild(item);
                     });
@@ -2222,8 +2222,8 @@ class AuthController {
                 resultsEl.style.display = 'none';
                 var inp = document.getElementById('cust-reg-route');
                 if (inp) inp.value = query;
-                var pLat = parseFloat(document.getElementById('cust-pickup-lat')?.value || bUserLat || 31.9961);
-                var pLon = parseFloat(document.getElementById('cust-pickup-lon')?.value || bUserLon || 44.3168);
+                var pLat = parseFloat((document.getElementById('cust-pickup-lat')||{}).value || bUserLat || 31.9961);
+                var pLon = parseFloat((document.getElementById('cust-pickup-lon')||{}).value || bUserLon || 44.3168);
                 var latEl = document.getElementById('cust-dropoff-lat');
                 var lonEl = document.getElementById('cust-dropoff-lon');
                 if (latEl) latEl.value = (pLat + 0.02).toFixed(6);
