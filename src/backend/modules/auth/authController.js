@@ -710,7 +710,7 @@ window.setCleanMapTarget = function(target) {
                 
                 var topBtn = document.getElementById('btn-top-right-action');
                 var topIco = document.getElementById('icon-top-right-action');
-                if (topBtn) topBtn.setAttribute('onclick', 'window.setCleanMapTarget(\'pickup\')');
+                if (topBtn) topBtn.setAttribute('onclick', 'window.setCleanMapTarget("pickup")');
                 if (topIco) topIco.className = 'fa-solid fa-chevron-right';
                 if (mapWrap) mapWrap.style.display = 'none';
             }
