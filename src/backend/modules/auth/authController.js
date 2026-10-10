@@ -3704,9 +3704,6 @@ window.setCleanMapTarget = function(target) {
                 reader.readAsDataURL(input.files[0]);
             }
         };
-                reader.readAsDataURL(input.files[0]);
-            }
-        };
         
         window.toggleBookingDrawer = function(forceOpen) {
             var sidebar = document.getElementById('booking-sidebar');
