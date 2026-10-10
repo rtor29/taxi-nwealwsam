@@ -490,24 +490,24 @@ class AuthController {
             <div id="clean-pickup-container" style="position:relative;">
                 <div style="background:#f1f5f9;border-radius:30px;display:flex;align-items:center;padding:14px 20px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.03);">
                     <i class="fa-solid fa-magnifying-glass" style="font-size:20px;color:#64748b;"></i>
-                    <input type="text" id="book-pickup-input" oninput="onBookingPickupSearch(this.value)" onfocus="window.setCleanMapTarget('pickup'); onBookingPickupSearch(this.value);" placeholder="نقطة الانطلاق..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:'Cairo',sans-serif;font-weight:700;color:#0f172a;padding:0 15px;">
+                    <input type="text" id="book-pickup-input" onfocus="this.blur(); window.openFullscreenSearch('pickup');"  placeholder="نقطة الانطلاق..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:'Cairo',sans-serif;font-weight:700;color:#0f172a;padding:0 15px;">
                     <div style="width:26px;height:26px;background:#ef4444;border-radius:50%;display:flex;align-items:center;justify-content:center;">
                         <div style="width:8px;height:8px;background:#fff;border-radius:50%;"></div>
                     </div>
                 </div>
-                <div id="book-pickup-results" class="search-autocomplete-dropdown" style="display:none;position:absolute;bottom:100%;left:20px;right:20px;z-index:30;background:#fff;border-radius:16px;box-shadow:0 -10px 30px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;margin-bottom:10px;"></div>
+                <div id="book-pickup-results" style="display:none !important;" class="search-autocomplete-dropdown" style="display:none;position:absolute;bottom:100%;left:20px;right:20px;z-index:30;background:#fff;border-radius:16px;box-shadow:0 -10px 30px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;margin-bottom:10px;"></div>
             </div>
 
             <!-- Dropoff Container (Hidden Default) -->
             <div id="clean-dropoff-container" style="position:relative;display:none;">
                 <div style="background:#f1f5f9;border-radius:30px;display:flex;align-items:center;padding:14px 20px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.03);">
                     <i class="fa-solid fa-magnifying-glass" style="font-size:20px;color:#64748b;"></i>
-                    <input type="text" id="book-dropoff-input" oninput="onBookingDropoffSearch(this.value)" onfocus="window.setCleanMapTarget('dropoff'); onBookingDropoffSearch(this.value);" placeholder="نقطة الوصول..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:'Cairo',sans-serif;font-weight:700;color:#0f172a;padding:0 15px;">
+                    <input type="text" id="book-dropoff-input" onfocus="this.blur(); window.openFullscreenSearch('dropoff');"  placeholder="نقطة الوصول..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:'Cairo',sans-serif;font-weight:700;color:#0f172a;padding:0 15px;">
                     <div style="width:26px;height:26px;background:#f97316;border-radius:6px;display:flex;align-items:center;justify-content:center;">
                         <div style="width:10px;height:10px;background:#fff;border-radius:2px;"></div>
                     </div>
                 </div>
-                <div id="book-dropoff-results" class="search-autocomplete-dropdown" style="display:none;position:absolute;bottom:100%;left:20px;right:20px;z-index:30;background:#fff;border-radius:16px;box-shadow:0 -10px 30px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;margin-bottom:10px;"></div>
+                <div id="book-dropoff-results" style="display:none !important;" class="search-autocomplete-dropdown" style="display:none;position:absolute;bottom:100%;left:20px;right:20px;z-index:30;background:#fff;border-radius:16px;box-shadow:0 -10px 30px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;margin-bottom:10px;"></div>
             </div>
 
             <!-- Confirm Button -->
@@ -688,6 +688,91 @@ class AuthController {
     </div>
 
     <!-- Driver Incoming Ride Alert Modal (Stage 4) -->
+    
+    <!-- FULLSCREEN SEARCH MODAL -->
+    <div id="fullscreen-search-modal" style="display:none;position:fixed;inset:0;z-index:9999999;background:#fff;flex-direction:column;font-family:'Cairo',sans-serif;" dir="rtl">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:center;padding:16px;position:relative;border-bottom:1px solid #f1f5f9;">
+            <button type="button" onclick="window.closeFullscreenSearch()" style="position:absolute;left:16px;background:none;border:none;font-size:24px;color:#64748b;cursor:pointer;"><i class="fa-solid fa-xmark"></i></button>
+            <h2 id="fs-search-title" style="margin:0;font-size:22px;font-weight:900;color:#111;">الانطلاق</h2>
+        </div>
+
+        <!-- Search Bar -->
+        <div style="padding:16px;">
+            <div style="background:#f1f5f9;border-radius:12px;display:flex;align-items:center;padding:12px 16px;">
+                <i class="fa-solid fa-microphone" style="color:#64748b;font-size:18px;margin-left:12px;"></i>
+                <input type="text" id="fs-search-input" oninput="window.handleFsSearch(this.value)" placeholder="البحث عن نقطة الانطلاق..." style="flex:1;min-width:0;background:transparent;border:none;outline:none;font-size:16px;font-family:'Cairo',sans-serif;font-weight:700;color:#0f172a;">
+                <div style="width:1px;height:24px;background:#cbd5e1;margin:0 12px;"></div>
+                <div style="display:flex;align-items:center;gap:6px;color:#64748b;font-size:14px;font-weight:700;cursor:pointer;">
+                    المدينة الحالية <i class="fa-solid fa-caret-down"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Favorites Chips -->
+        <div style="padding:0 16px 16px;display:flex;gap:12px;overflow-x:auto;">
+            <div style="background:#ffffff;border-radius:24px;padding:6px 12px 6px 6px;display:flex;align-items:center;gap:10px;cursor:pointer;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.05);" onclick="window.selectFsResult('ساحة مظفر', 44.3170, 31.9955)">
+                <span style="font-size:14px;font-weight:800;color:#334155;">ساحة مظفر</span>
+                <div style="background:#e0e7ff;color:#3730a3;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:12px;"><i class="fa-solid fa-star"></i></div>
+            </div>
+            <div style="background:#ffffff;border-radius:24px;padding:6px 12px 6px 6px;display:flex;align-items:center;gap:10px;cursor:pointer;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.05);" onclick="window.selectFsResult('كراج بغداد', 44.3350, 32.0010)">
+                <span style="font-size:14px;font-weight:800;color:#334155;">كراج بغداد</span>
+                <div style="background:#e0e7ff;color:#3730a3;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:12px;"><i class="fa-solid fa-star"></i></div>
+            </div>
+        </div>
+        <div style="height:6px;background:#f8fafc;width:100%;"></div>
+
+        <!-- Results Area -->
+        <div style="flex:1;overflow-y:auto;padding:16px;">
+            <div id="fs-recent-section">
+                <h3 style="margin:0 0 16px;font-size:14px;color:#64748b;font-weight:800;">الأماكن الأخيرة</h3>
+                
+                <div class="fs-result-item" onclick="window.selectFsResult('سوبر ماركت وفر', 44.3168, 31.9961)" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">
+                    <div style="font-size:20px;color:#94a3b8;flex-shrink:0;"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">
+                        <span style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">سوبر ماركت وفر</span>
+                        <span style="font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">النجف، السلام، قرب شارع الحزام</span>
+                    </div>
+                    <div style="font-size:20px;color:#cbd5e1;flex-shrink:0;"><i class="fa-regular fa-star"></i></div>
+                </div>
+
+                <div class="fs-result-item" onclick="window.selectFsResult('جسر كراج بغداد', 44.3350, 32.0010)" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">
+                    <div style="font-size:20px;color:#94a3b8;flex-shrink:0;"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">
+                        <span style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">جسر كراج بغداد</span>
+                        <span style="font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">النجف، السلام، قرب شارع الخيمة</span>
+                    </div>
+                    <div style="font-size:20px;color:#cbd5e1;flex-shrink:0;"><i class="fa-regular fa-star"></i></div>
+                </div>
+
+                <div class="fs-result-item" onclick="window.selectFsResult('كراج العلاوي', 44.3800, 33.3150)" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">
+                    <div style="font-size:20px;color:#94a3b8;flex-shrink:0;"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">
+                        <span style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">كراج العلاوي</span>
+                        <span style="font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">بغداد، الصالحية، قرب شارع دمشق</span>
+                    </div>
+                    <div style="font-size:20px;color:#cbd5e1;flex-shrink:0;"><i class="fa-regular fa-star"></i></div>
+                </div>
+                
+                <div class="fs-result-item" onclick="window.selectFsResult('مستشفى الالماني', 44.3200, 31.9900)" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">
+                    <div style="font-size:20px;color:#94a3b8;flex-shrink:0;"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">
+                        <span style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">مستشفى الالماني</span>
+                        <span style="font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">النجف، الشهداء، قرب تقاطع مسلم بن عقيل ع</span>
+                    </div>
+                    <div style="font-size:20px;color:#cbd5e1;flex-shrink:0;"><i class="fa-regular fa-star"></i></div>
+                </div>
+            </div>
+
+            <div id="fs-suggested-section" style="margin-top:16px;display:none;">
+                <h3 style="margin:0 0 16px;font-size:14px;color:#64748b;font-weight:800;">الأماكن المقترحة</h3>
+                <div id="fs-suggested-list">
+                    <!-- Dynamic -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="driver-incoming-modal" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
         <div class="card" style="max-width:400px;flex:1; min-width:0;padding:22px 18px;text-align:center;border:2px solid #f59e0b;">
             <div style="font-size:36px;margin-bottom:6px;">🚖</div>
@@ -949,19 +1034,19 @@ class AuthController {
         <img src="${LOGO_BASE64}" style="width:220px;max-flex:1; min-width:0;height:auto;object-fit:contain;margin-bottom:60px;" alt="توصيلة">
 
         <div style="flex:1; min-width:0;display:flex;flex-direction:column;gap:25px;padding: 0 10px;">
-            <div style="display:flex;align-items:center;justify-content:flex-end;gap:15px;">
+            <div style="display:flex;align-items:center;gap:15px;">
                 <input type="text" id="u-fname" dir="rtl" style="flex:1;background:#e2e8f0;border:none;border-radius:12px;padding:12px 16px;font-size:16px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.05);outline:none;text-align:right;" placeholder="">
                 <span style="font-weight:bold;font-size:14px;color:#374151;white-space:nowrap;width:120px;text-align:right;">الاسم الاول</span>
             </div>
-            <div style="display:flex;align-items:center;justify-content:flex-end;gap:15px;">
+            <div style="display:flex;align-items:center;gap:15px;">
                 <input type="text" id="u-sname" dir="rtl" style="flex:1;background:#e2e8f0;border:none;border-radius:12px;padding:12px 16px;font-size:16px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.05);outline:none;text-align:right;" placeholder="">
                 <span style="font-weight:bold;font-size:14px;color:#374151;white-space:nowrap;width:120px;text-align:right;">الاسم الثاني</span>
             </div>
-            <div style="display:flex;align-items:center;justify-content:flex-end;gap:15px;">
+            <div style="display:flex;align-items:center;gap:15px;">
                 <input type="text" id="u-lname" dir="rtl" style="flex:1;background:#e2e8f0;border:none;border-radius:12px;padding:12px 16px;font-size:16px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.05);outline:none;text-align:right;" placeholder="">
                 <span style="font-weight:bold;font-size:14px;color:#374151;white-space:nowrap;width:120px;text-align:right;">اللقب</span>
             </div>
-            <div style="display:flex;align-items:center;justify-content:flex-end;gap:15px;margin-top:20px;">
+            <div style="display:flex;align-items:center;gap:15px;margin-top:20px;">
                 <input type="email" id="u-email" dir="ltr" style="flex:1;background:#e2e8f0;border:none;border-radius:12px;padding:12px 16px;font-size:16px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.05);outline:none;text-align:left;" placeholder="">
                 <span style="font-weight:bold;font-size:14px;color:#374151;white-space:nowrap;width:120px;text-align:right;">البريد الالكتروني</span>
             </div>
@@ -3639,14 +3724,14 @@ class AuthController {
                 '<div style="position:relative;margin-bottom:8px;">' +
                     '<label class="label" style="font-size:11px;">🟢 نقطة الانطلاق</label>' +
                     '<div style="display:flex;gap:6px;">' +
-                        '<input type="text" id="book-pickup-input" class="inp" placeholder="حدد الانطلاق على الخريطة أو عبر GPS" value="' + (bPickupName||'') + '" style="font-size:12px;padding:9px 12px;">' +
+                        '<input type="text" id="book-pickup-input" onfocus="this.blur(); window.openFullscreenSearch(\'pickup\');" class="inp" placeholder="حدد الانطلاق على الخريطة أو عبر GPS" value="' + (bPickupName||'') + '" style="font-size:12px;padding:9px 12px;">' +
                         '<button type="button" onclick="centerOnUserGps()" class="btn-small" style="padding:8px 10px;" title="موقعي الحالي">📍</button>' +
                     '</div>' +
                 '</div>' +
                 '<div style="position:relative;margin-bottom:10px;">' +
                     '<label class="label" style="font-size:11px;">🔴 نقطة الوصول</label>' +
-                    '<input type="text" id="book-dropoff-input" class="inp" placeholder="ابحث: جامعة الكوفة، مركز النجف، شارع الروان..." value="' + (bDropoffName||'') + '" oninput="onBookingDropoffSearch(this.value)" style="font-size:12px;padding:9px 12px;">' +
-                    '<div id="book-dropoff-results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;"></div>' +
+                    '<input type="text" id="book-dropoff-input" onfocus="this.blur(); window.openFullscreenSearch(\'dropoff\');" class="inp" placeholder="ابحث: جامعة الكوفة، مركز النجف، شارع الروان..." value="' + (bDropoffName||'') + '"  style="font-size:12px;padding:9px 12px;">' +
+                    '<div id="book-dropoff-results" style="display:none !important;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;"></div>' +
                 '</div>' +
                 '<div id="side-route-summary" style="display:' + (bRouteDist > 0 ? 'block' : 'none') + ';background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px;margin-bottom:10px;">' +
                     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
@@ -4495,14 +4580,14 @@ class AuthController {
                 '<div style="position:relative;">' +
                     '<label class="label" style="font-size:11px;">🟢 نقطة الانطلاق</label>' +
                     '<div style="display:flex;gap:6px;">' +
-                        '<input type="text" id="book-pickup-input" class="inp" placeholder="حدد على الخريطة أو موقعي الحالي" value="' + (bPickupName||'') + '" style="font-size:12px;padding:9px 12px;">' +
+                        '<input type="text" id="book-pickup-input" onfocus="this.blur(); window.openFullscreenSearch(\'pickup\');" class="inp" placeholder="حدد على الخريطة أو موقعي الحالي" value="' + (bPickupName||'') + '" style="font-size:12px;padding:9px 12px;">' +
                         '<button type="button" onclick="centerOnUserGps()" class="btn-small" style="padding:8px 10px;" title="موقعي الحالي">📍</button>' +
                     '</div>' +
                 '</div>' +
                 '<div style="position:relative;">' +
                     '<label class="label" style="font-size:11px;">🔴 نقطة الوصول (ابحث عن جامعة/حي/معلم)</label>' +
-                    '<input type="text" id="book-dropoff-input" class="inp" placeholder="ابحث: جامعة الكوفة، شارع الروان..." value="' + (bDropoffName||'') + '" oninput="onBookingDropoffSearch(this.value)" style="font-size:12px;padding:9px 12px;">' +
-                    '<div id="book-dropoff-results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;"></div>' +
+                    '<input type="text" id="book-dropoff-input" onfocus="this.blur(); window.openFullscreenSearch(\'dropoff\');" class="inp" placeholder="ابحث: جامعة الكوفة، شارع الروان..." value="' + (bDropoffName||'') + '"  style="font-size:12px;padding:9px 12px;">' +
+                    '<div id="book-dropoff-results" style="display:none !important;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;"></div>' +
                 '</div>' +
                 '<div id="side-route-summary" style="display:' + (bRouteDist > 0 ? 'block' : 'none') + ';background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px;">' +
                     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
@@ -4984,12 +5069,12 @@ class AuthController {
             panel.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px;">🔄 تثبيت خط دائمي (اشتراك يومي)</div>' +
                 '<div style="position:relative;">' +
                     '<label class="label" style="font-size:11px;">🟢 نقطة الانطلاق الدائمية</label>' +
-                    '<input type="text" id="book-pickup-input" class="inp" placeholder="حدد الانطلاق على الخريطة" value="' + (bPickupName || '') + '" style="font-size:12px;padding:9px 12px;">' +
+                    '<input type="text" id="book-pickup-input" onfocus="this.blur(); window.openFullscreenSearch(\'pickup\');" class="inp" placeholder="حدد الانطلاق على الخريطة" value="' + (bPickupName || '') + '" style="font-size:12px;padding:9px 12px;">' +
                 '</div>' +
                 '<div style="position:relative;">' +
                     '<label class="label" style="font-size:11px;">🔴 نقطة الوصول الدائمية (الدوام / الجامعة)</label>' +
-                    '<input type="text" id="book-dropoff-input" class="inp" placeholder="حدد الوصول على الخريطة" value="' + (bDropoffName || '') + '" oninput="onBookingDropoffSearch(this.value)" style="font-size:12px;padding:9px 12px;">' +
-                    '<div id="book-dropoff-results" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;"></div>' +
+                    '<input type="text" id="book-dropoff-input" onfocus="this.blur(); window.openFullscreenSearch(\'dropoff\');" class="inp" placeholder="حدد الوصول على الخريطة" value="' + (bDropoffName || '') + '"  style="font-size:12px;padding:9px 12px;">' +
+                    '<div id="book-dropoff-results" style="display:none !important;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;"></div>' +
                 '</div>' +
                 '<div>' +
                     '<label class="label" style="font-size:11px;">📅 أيام الأسبوع المطلوبة</label>' +
