@@ -193,6 +193,8 @@ class DatabaseManager {
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS plain_password TEXT;
                     ALTER TABLE drivers ADD COLUMN IF NOT EXISTS plain_password TEXT;
                     ALTER TABLE customers ADD COLUMN IF NOT EXISTS plain_password TEXT;
+                    ALTER TABLE drivers ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT false;
+                    ALTER TABLE drivers ADD COLUMN IF NOT EXISTS work_mode VARCHAR(50) DEFAULT 'مشوار قصير';
                 `);
             } catch (_) {}
 
@@ -252,13 +254,13 @@ class DatabaseManager {
                 `, [d.driverId, d.phoneNumber, d.email || null, d.fullName, d.googleId || null, !d.isBlocked, !!d.isBlocked, d.createdAt || new Date().toISOString()]);
 
                 await client.query(`
-                    INSERT INTO drivers (driver_id, full_name, phone_number, email, google_id, license_number, status, is_verified, is_blocked, rating_average, total_trips, created_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                    INSERT INTO drivers (driver_id, full_name, phone_number, email, google_id, license_number, status, is_verified, is_blocked, is_approved, work_mode, rating_average, total_trips, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
                     ON CONFLICT (driver_id) DO NOTHING
                 `, [
                     d.driverId, d.fullName, d.phoneNumber, d.email || null, d.googleId || null,
                     d.licenseNumber || 'IRQ-NJF-1000', d.status || 'Pending', !!d.isVerified,
-                    !!d.isBlocked, d.ratingAverage || 5.0, d.totalTrips || 0, d.createdAt || new Date().toISOString()
+                    !!d.isBlocked, !!d.isApproved, d.workMode || 'مشوار قصير', d.ratingAverage || 5.0, d.totalTrips || 0, d.createdAt || new Date().toISOString()
                 ]);
             }
 
@@ -334,6 +336,8 @@ class DatabaseManager {
                     status: r.status,
                     isVerified: r.is_verified,
                     isBlocked: r.is_blocked,
+                    isApproved: r.is_approved,
+                    workMode: r.work_mode || 'مشوار قصير',
                     serviceType: r.service_type || 'Both',
                     rejectionReason: r.rejection_reason,
                     ratingAverage: parseFloat(r.rating_average || 5.0),
@@ -484,8 +488,8 @@ class DatabaseManager {
             try {
                 await cl.query(`INSERT INTO users (id, phone_number, email, full_name, role, google_id, is_active, is_blocked, created_at) VALUES ($1,$2,$3,$4,'Driver',$5,$6,$7,$8) ON CONFLICT (id) DO NOTHING`,
                     [d.driverId, d.phoneNumber, d.email||null, d.fullName, d.googleId||null, !d.isBlocked, !!d.isBlocked, d.registeredAt||d.createdAt||new Date().toISOString()]);
-                await cl.query(`INSERT INTO drivers (driver_id, full_name, phone_number, email, license_number, status, is_verified, is_blocked, rating_average, total_trips, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (driver_id) DO NOTHING`,
-                    [d.driverId, d.fullName, d.phoneNumber, d.email||null, d.licenseNumber||'PENDING', d.status||'Pending', !!d.isVerified, !!d.isBlocked, d.ratingAverage||5.0, d.totalTrips||0, d.registeredAt||d.createdAt||new Date().toISOString()]);
+                await cl.query(`INSERT INTO drivers (driver_id, full_name, phone_number, email, license_number, status, is_verified, is_blocked, is_approved, work_mode, rating_average, total_trips, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT (driver_id) DO NOTHING`,
+                    [d.driverId, d.fullName, d.phoneNumber, d.email||null, d.licenseNumber||'PENDING', d.status||'Pending', !!d.isVerified, !!d.isBlocked, !!d.isApproved, d.workMode||'مشوار قصير', d.ratingAverage||5.0, d.totalTrips||0, d.registeredAt||d.createdAt||new Date().toISOString()]);
             } finally { cl.release(); }
         } catch (e) { console.warn('[Database] persistNewDriver error:', e.message); }
     }
@@ -697,6 +701,34 @@ class DatabaseManager {
 
         this.saveStateSnapshot();
         return { success: true, driver, stats: this.getComputedStats() };
+    }
+
+    async setDriverApproval(driverId, isApproved) {
+        let driver = this.memoryState.drivers.find(d => d.driverId === driverId);
+        if (driver) driver.isApproved = isApproved;
+        if (this.isPostgresConnected && this.pool) {
+            try {
+                await this.pool.query('UPDATE drivers SET is_approved = $1, updated_at = NOW() WHERE driver_id = $2', [isApproved, driverId]);
+            } catch (err) {
+                console.error('[Database] setDriverApproval error:', err);
+            }
+        }
+        this.saveStateSnapshot();
+        return { success: true, driver };
+    }
+
+    async setDriverWorkMode(driverId, workMode) {
+        let driver = this.memoryState.drivers.find(d => d.driverId === driverId);
+        if (driver) driver.workMode = workMode;
+        if (this.isPostgresConnected && this.pool) {
+            try {
+                await this.pool.query('UPDATE drivers SET work_mode = $1, updated_at = NOW() WHERE driver_id = $2', [workMode, driverId]);
+            } catch (err) {
+                console.error('[Database] setDriverWorkMode error:', err);
+            }
+        }
+        this.saveStateSnapshot();
+        return { success: true, driver };
     }
 
     // -------------------------------------------------------------------------

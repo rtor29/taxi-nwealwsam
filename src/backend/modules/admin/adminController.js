@@ -186,6 +186,14 @@ class AdminController {
         return result;
     }
 
+    async setDriverApproval(driverId, isApproved) {
+        return await db.setDriverApproval(driverId, isApproved);
+    }
+
+    async setDriverWorkMode(driverId, workMode) {
+        return await db.setDriverWorkMode(driverId, workMode);
+    }
+
     async toggleDriverBlock(driverId, isBlocked) {
         let driver = db.memoryState.drivers.find(d => d.driverId === driverId);
         if (!driver && db.isPostgresConnected && db.pool) {

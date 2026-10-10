@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS drivers (
     status VARCHAR(30) NOT NULL DEFAULT 'Pending', -- 'Pending', 'Approved', 'Rejected', 'Suspended', 'Online', 'Offline'
     is_verified BOOLEAN NOT NULL DEFAULT false,
     is_blocked BOOLEAN NOT NULL DEFAULT false,
+    is_approved BOOLEAN NOT NULL DEFAULT false,
+    work_mode VARCHAR(50) DEFAULT 'مشوار قصير',
     rejection_reason TEXT,
     rating_average NUMERIC(3, 2) NOT NULL DEFAULT 5.00,
     total_trips INT NOT NULL DEFAULT 0,
