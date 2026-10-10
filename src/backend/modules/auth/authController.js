@@ -709,15 +709,35 @@ window.setCleanMapTarget = function(target) {
                 if (topIco) topIco.className = 'fa-solid fa-house';
                 if (mapWrap) mapWrap.style.display = 'block';
                 
-                // Clear pickup marker when returning to pickup selection
+                // Clear ALL route data when returning to pickup selection (starting over)
                 if (window.bPickupMarker) {
                     window.bPickupMarker.remove();
                     window.bPickupMarker = null;
-                    window.bPickupCoords = null;
                 }
+                window.bPickupCoords = null;
+                window.bPickupName = '';
+
+                if (window.bDropoffMarker) {
+                    window.bDropoffMarker.remove();
+                    window.bDropoffMarker = null;
+                }
+                window.bDropoffCoords = null;
+                window.bDropoffName = '';
+
                 if (window.bMap && window.bMap.getSource('booking-route-source')) {
                     window.bMap.getSource('booking-route-source').setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } });
                 }
+                
+                // Reset UI elements
+                var pInp = document.getElementById('book-pickup-input');
+                if (pInp) pInp.value = '';
+                var dInp = document.getElementById('book-dropoff-input');
+                if (dInp) dInp.value = '';
+                
+                var vPanel = document.getElementById('vehicle-selection-panel');
+                if (vPanel) vPanel.style.display = 'none';
+                var actPanel = document.getElementById('clean-action-panel');
+                if (actPanel) actPanel.style.display = 'block';
             } else {
                 if (pinHead) {
                     pinHead.style.background = '#f97316';
