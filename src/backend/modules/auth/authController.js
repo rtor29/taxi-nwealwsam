@@ -734,6 +734,10 @@ window.setCleanMapTarget = function(target) {
                 var dInp = document.getElementById('book-dropoff-input');
                 if (dInp) dInp.value = '';
                 
+                window.bRouteFare = 0;
+                var fareSpan = document.getElementById('floating-btn-fare');
+                if (fareSpan) fareSpan.style.display = 'none';
+                
                 var vPanel = document.getElementById('vehicle-selection-panel');
                 if (vPanel) vPanel.style.display = 'none';
                 var actPanel = document.getElementById('clean-action-panel');
