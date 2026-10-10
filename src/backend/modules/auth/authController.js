@@ -852,6 +852,85 @@ window.setCleanMapTarget = function(target) {
         </div>
     </div>
 
+    
+    <!-- User Profile Modal -->
+    <div id="user-profile-modal" style="display:none;position:fixed;inset:0;z-index:9999999;background:#f8fafc;flex-direction:column;font-family:'Cairo',sans-serif;" dir="rtl">
+        <!-- Header -->
+        <div style="padding:20px;display:flex;align-items:center;">
+            <button type="button" onclick="window.closeUserProfile()" style="background:transparent;border:none;font-size:24px;color:#475569;cursor:pointer;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Profile Info -->
+        <div style="padding:0 20px 20px 20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:#fff;border-bottom:1px solid #e2e8f0;margin-bottom:10px;" onclick="document.getElementById('profile-image-upload').click()">
+            <div style="font-size:18px;color:#cbd5e1;"><i class="fa-solid fa-chevron-left"></i></div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;margin-right:16px;flex:1;">
+                <div id="profile-modal-name" style="font-size:20px;font-weight:900;color:#111;">الاسم</div>
+                <div id="profile-modal-phone" style="font-size:14px;color:#64748b;direction:ltr;">+964...</div>
+            </div>
+            <div style="width:70px;height:70px;border-radius:50%;background:#e2e8f0;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+                <i class="fa-solid fa-user" id="profile-modal-icon" style="font-size:30px;color:#94a3b8;"></i>
+                <img id="profile-modal-image" src="" style="display:none;width:100%;height:100%;object-fit:cover;" />
+            </div>
+            <input type="file" id="profile-image-upload" accept="image/*" style="display:none;" onchange="window.uploadUserImage(this)" />
+        </div>
+
+        <!-- Menu Items -->
+        <div style="flex:1;overflow-y:auto;background:#fff;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">
+            <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f1f5f9;cursor:pointer;">
+                <div style="font-size:16px;color:#cbd5e1;"><i class="fa-solid fa-chevron-left"></i></div>
+                <div style="flex:1;text-align:right;margin-right:16px;">
+                    <div style="font-size:16px;font-weight:700;color:#334155;">وسائل الدفع</div>
+                    <div style="font-size:12px;color:#64748b;">الرصيد: 0 دينار</div>
+                </div>
+                <div style="font-size:20px;color:#64748b;width:24px;text-align:center;"><i class="fa-regular fa-credit-card"></i></div>
+            </div>
+            <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f1f5f9;cursor:pointer;">
+                <div style="flex:1;text-align:right;margin-right:16px;"><div style="font-size:16px;font-weight:700;color:#334155;">الرحلات</div></div>
+                <div style="font-size:20px;color:#64748b;width:24px;text-align:center;"><i class="fa-solid fa-clock-rotate-left"></i></div>
+            </div>
+            <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f1f5f9;cursor:pointer;">
+                <div style="flex:1;text-align:right;margin-right:16px;"><div style="font-size:16px;font-weight:700;color:#334155;">العناوين المفضلة</div></div>
+                <div style="font-size:20px;color:#64748b;width:24px;text-align:center;"><i class="fa-regular fa-star"></i></div>
+            </div>
+            <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f1f5f9;cursor:pointer;">
+                <div style="flex:1;text-align:right;margin-right:16px;"><div style="font-size:16px;font-weight:700;color:#334155;">قسائم الخصومات والجوائز</div></div>
+                <div style="font-size:20px;color:#64748b;width:24px;text-align:center;"><i class="fa-solid fa-tags"></i></div>
+            </div>
+            <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f1f5f9;cursor:pointer;">
+                <div style="flex:1;text-align:right;margin-right:16px;"><div style="font-size:16px;font-weight:700;color:#334155;">أرسال دعوة لأصدقائك</div></div>
+                <div style="font-size:20px;color:#64748b;width:24px;text-align:center;"><i class="fa-solid fa-gift"></i></div>
+            </div>
+            <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f1f5f9;cursor:pointer;">
+                <div style="flex:1;text-align:right;margin-right:16px;"><div style="font-size:16px;font-weight:700;color:#334155;">الإعدادات</div></div>
+                <div style="font-size:20px;color:#64748b;width:24px;text-align:center;"><i class="fa-solid fa-gear"></i></div>
+            </div>
+            <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f1f5f9;cursor:pointer;">
+                <div style="flex:1;text-align:right;margin-right:16px;"><div style="font-size:16px;font-weight:700;color:#334155;">حول توصيلة</div></div>
+                <div style="font-size:20px;color:#64748b;width:24px;text-align:center;"><i class="fa-solid fa-circle-info"></i></div>
+            </div>
+            <div onclick="handleLogout()" style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+                <div style="flex:1;text-align:right;margin-right:16px;"><div style="font-size:16px;font-weight:700;color:#ef4444;">تسجيل الخروج</div></div>
+                <div style="font-size:20px;color:#ef4444;width:24px;text-align:center;"><i class="fa-solid fa-right-from-bracket"></i></div>
+            </div>
+            <div style="text-align:center;font-size:12px;color:#94a3b8;font-family:'Cairo',sans-serif;line-height:1.6;margin-top:20px;margin-bottom:20px;">
+                توصيله جميع الحقوق محفوظه<br>المهندس وسام شاكر
+            </div>
+        </div>
+
+        <!-- Contact Support -->
+        <div style="background:#e0e7ff;padding:20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="window.contactSupport()">
+            <div style="flex:1;text-align:right;margin-right:16px;">
+                <div style="font-size:16px;font-weight:800;color:#3730a3;">التواصل مع الدعم</div>
+                <div style="font-size:13px;color:#4f46e5;">لأي مشاكل، يرجى التواصل معنا.</div>
+            </div>
+            <div style="width:40px;height:40px;border-radius:50%;background:#c7d2fe;display:flex;align-items:center;justify-content:center;color:#3730a3;font-size:20px;">
+                <i class="fa-solid fa-headset"></i>
+            </div>
+        </div>
+    </div>
+
     <!-- Driver Active Ride Modal (Waze Navigation & Arrival Status) -->
     <div id="driver-active-ride-modal" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
         <div class="card" style="max-width:420px;flex:1; min-width:0;padding:22px 18px;text-align:center;border:2px solid #10b981;">
@@ -3608,18 +3687,23 @@ window.setCleanMapTarget = function(target) {
         };
 
         
-        window.uploadUserImage = function(input) {
+                window.uploadUserImage = function(input) {
             if (input.files && input.files[0]) {
                 var reader = new FileReader();
                 reader.onload = function(e) {
                     var imgData = e.target.result;
                     localStorage.setItem('user_image', imgData);
-                    document.getElementById('drawer-user-icon').style.display = 'none';
-                    document.getElementById('drawer-user-plus').style.display = 'none';
-                    var imgEl = document.getElementById('drawer-user-image');
-                    imgEl.src = imgData;
-                    imgEl.style.display = 'block';
+                    var iconEl = document.getElementById('profile-modal-icon');
+                    if (iconEl) iconEl.style.display = 'none';
+                    var imgEl = document.getElementById('profile-modal-image');
+                    if (imgEl) {
+                        imgEl.src = imgData;
+                        imgEl.style.display = 'block';
+                    }
                 };
+                reader.readAsDataURL(input.files[0]);
+            }
+        };
                 reader.readAsDataURL(input.files[0]);
             }
         };
@@ -3647,7 +3731,29 @@ window.setCleanMapTarget = function(target) {
         };
 
         window.openUserProfile = function() {
-            alert('الرجاء الانتظار، سيتم تفعيل هذه الميزة في الخطوة القادمة.');
+            var modal = document.getElementById('user-profile-modal');
+            if (modal) {
+                var dName = document.getElementById('profile-modal-name');
+                var dPhone = document.getElementById('profile-modal-phone');
+                var dImg = document.getElementById('profile-modal-image');
+                var dIco = document.getElementById('profile-modal-icon');
+                
+                if (dName) dName.innerText = localStorage.getItem('user_fullName') || 'مستخدم';
+                if (dPhone) dPhone.innerText = localStorage.getItem('user_phone') || '';
+                
+                var savedImg = localStorage.getItem('user_image');
+                if (savedImg && dImg && dIco) {
+                    dIco.style.display = 'none';
+                    dImg.src = savedImg;
+                    dImg.style.display = 'block';
+                }
+                modal.style.display = 'flex';
+            }
+        };
+
+        window.closeUserProfile = function() {
+            var modal = document.getElementById('user-profile-modal');
+            if (modal) modal.style.display = 'none';
         };
 
 
