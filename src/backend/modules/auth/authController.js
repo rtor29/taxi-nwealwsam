@@ -1022,11 +1022,30 @@ class AuthController {
                 var checkData = await checkRes.json();
                 
                 if (checkData.exists) {
-                    window.showLoginError('الرقم مسجل بالفعل.');
+                    if (checkData.role !== role) {
+                        var myRole = role === 'Driver' ? 'سائق' : 'راكب';
+                        window.showLoginError('الرقم مسجل مسبقاً كـ ' + checkData.roleAr + ' ولا يمكن الدخول كـ ' + myRole);
+                        resetBtn();
+                        return;
+                    }
+                    
+                    var loginRes = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ identifier: phone, password: 'auto-generated', role: role, autoOtpLogin: true })
+                    });
+                    var loginData = await loginRes.json();
+                    
                     resetBtn();
-                    return;
-                } else {
-                    // alert('الرقم غير مسجل في النظام. سيتم إرسال رمز التحقق لإنشاء حساب جديد.');
+                    if (loginRes.ok && loginData.success) {
+                        persistSession(loginData);
+                        document.getElementById('new-auth-ui').style.display = 'none';
+                        document.getElementById('new-service-ui').style.display = 'flex';
+                        return;
+                    } else {
+                        window.showLoginError(loginData.error || 'حدث خطأ أثناء تسجيل الدخول.');
+                        return;
+                    }
                 }
                 
                 var res = await fetch('/api/auth/send-whatsapp-otp', {
