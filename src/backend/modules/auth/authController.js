@@ -611,24 +611,24 @@ class AuthController {
 
         var fsSearchTimer = null;
         window.iraqCities = [
-            { name: "بغداد", lon: 44.3615, lat: 33.3128 },
-            { name: "البصرة", lon: 47.7836, lat: 30.5081 },
-            { name: "نينوى", lon: 43.1300, lat: 36.3400 },
-            { name: "أربيل", lon: 44.0110, lat: 36.1911 },
-            { name: "النجف", lon: 44.3168, lat: 31.9961 },
-            { name: "ذي قار", lon: 46.2500, lat: 31.0500 },
-            { name: "كركوك", lon: 44.3900, lat: 35.4700 },
-            { name: "الأنبار", lon: 43.2700, lat: 33.4200 },
-            { name: "ديالى", lon: 44.6000, lat: 33.7500 },
-            { name: "المثنى", lon: 45.2800, lat: 31.3200 },
-            { name: "القادسية", lon: 44.9300, lat: 31.9900 },
-            { name: "ميسان", lon: 47.1600, lat: 31.8400 },
-            { name: "واسط", lon: 45.8200, lat: 32.5100 },
-            { name: "صلاح الدين", lon: 43.6800, lat: 34.6100 },
-            { name: "دهوك", lon: 42.9900, lat: 36.8600 },
-            { name: "السليمانية", lon: 45.4300, lat: 35.5500 },
-            { name: "بابل", lon: 44.4400, lat: 32.4800 },
-            { name: "كربلاء", lon: 44.0200, lat: 32.6100 }
+            { name: "بغداد", lon: 44.3615, lat: 33.3128, bbox: "44.0,33.1,44.7,33.6" },
+            { name: "البصرة", lon: 47.7836, lat: 30.5081, bbox: "46.5,29.8,48.6,31.3" },
+            { name: "نينوى", lon: 43.1300, lat: 36.3400, bbox: "41.2,35.0,44.2,37.0" },
+            { name: "أربيل", lon: 44.0110, lat: 36.1911, bbox: "43.2,35.5,45.1,37.1" },
+            { name: "النجف", lon: 44.3168, lat: 31.9961, bbox: "42.6,29.9,44.5,32.3" },
+            { name: "ذي قار", lon: 46.2500, lat: 31.0500, bbox: "45.5,30.6,47.1,32.0" },
+            { name: "كركوك", lon: 44.3900, lat: 35.4700, bbox: "43.4,34.8,44.7,35.9" },
+            { name: "الأنبار", lon: 43.2700, lat: 33.4200, bbox: "38.8,31.0,43.8,35.0" },
+            { name: "ديالى", lon: 44.6000, lat: 33.7500, bbox: "44.3,33.2,45.7,34.8" },
+            { name: "المثنى", lon: 45.2800, lat: 31.3200, bbox: "43.5,29.0,46.5,31.8" },
+            { name: "القادسية", lon: 44.9300, lat: 31.9900, bbox: "44.4,31.2,45.5,32.3" },
+            { name: "ميسان", lon: 47.1600, lat: 31.8400, bbox: "46.6,31.2,47.7,32.5" },
+            { name: "واسط", lon: 45.8200, lat: 32.5100, bbox: "45.1,32.0,46.5,33.4" },
+            { name: "صلاح الدين", lon: 43.6800, lat: 34.6100, bbox: "42.9,33.5,44.8,35.2" },
+            { name: "دهوك", lon: 42.9900, lat: 36.8600, bbox: "42.3,36.6,44.0,37.3" },
+            { name: "السليمانية", lon: 45.4300, lat: 35.5500, bbox: "44.5,34.8,46.3,36.2" },
+            { name: "بابل", lon: 44.4400, lat: 32.4800, bbox: "43.9,32.2,45.0,33.0" },
+            { name: "كربلاء", lon: 44.0200, lat: 32.6100, bbox: "43.2,32.1,44.3,32.9" }
         ];
         window.selectedSearchCity = window.iraqCities[4]; // Default Najaf
 
@@ -665,6 +665,7 @@ class AuthController {
             });
         };
 
+        var fsSearchTimer = null;
         window.handleFsSearch = function(query) {
             clearTimeout(fsSearchTimer);
             var resultsEl = document.getElementById('fs-suggested-list');
@@ -701,9 +702,12 @@ class AuthController {
                 }
                 
                 try {
-                    var qStr = query.trim() + ' محافظة ' + window.selectedSearchCity.name;
-                    var q = encodeURIComponent(qStr);
-                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + window.selectedSearchCity.lon + ',' + window.selectedSearchCity.lat + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=6&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    // Do NOT append governorate name as text, it confuses Mapbox exact match. Use pure query + bbox
+                    var q = encodeURIComponent(query.trim());
+                    var bbox = window.selectedSearchCity.bbox;
+                    var prox = window.selectedSearchCity.lon + ',' + window.selectedSearchCity.lat;
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + prox + '&bbox=' + bbox + '&language=ar,en&limit=12&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
@@ -726,7 +730,7 @@ class AuthController {
                 }
                 resultsEl.innerHTML = html;
             }, 500);
-        };\n
+        };
         window.selectFsResult = function(name, lon, lat) {
             window.closeFullscreenSearch();
             if (window._fsSearchTarget === 'pickup') {
@@ -2757,7 +2761,7 @@ window.setCleanMapTarget = function(target) {
             custRegAddrTimer = setTimeout(async function() {
                 try {
                     var q = encodeURIComponent(query.trim());
-                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=44.3168,31.9961&language=ar,en&types=poi,address,neighborhood,place,locality&limit=5&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=44.3168,31.9961&language=ar,en&limit=15&access_token=' + BOOKING_MAPBOX_TOKEN;
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
@@ -2815,7 +2819,7 @@ window.setCleanMapTarget = function(target) {
             custRegRouteTimer = setTimeout(async function() {
                 try {
                     var q = encodeURIComponent(query.trim());
-                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=44.3168,31.9961&language=ar,en&types=poi,address,neighborhood,place,locality&limit=5&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=44.3168,31.9961&language=ar,en&limit=15&access_token=' + BOOKING_MAPBOX_TOKEN;
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
@@ -2958,7 +2962,7 @@ window.setCleanMapTarget = function(target) {
                     var token = ('pk.'+'eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9'+'._J6DYjYBDhsdcidErQrblA');
                     var activeGov = IRAQ_GOVERNORATES[selectedGovernorate || localStorage.getItem('user_governorate') || 'najaf'] || IRAQ_GOVERNORATES.najaf;
                     var bbox = getActiveGovBbox();
-                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'+encodeURIComponent(q)+'.json?proximity='+activeGov.center[0]+','+activeGov.center[1]+'&bbox='+bbox+'&country=iq&language=ar&types=poi,address,neighborhood,place,locality&limit=5&access_token='+token;
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'+encodeURIComponent(q)+'.json?proximity='+activeGov.center[0]+','+activeGov.center[1]+'&bbox='+bbox+'&country=iq&language=ar&limit=15&access_token='+token;
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
@@ -3903,7 +3907,7 @@ window.setCleanMapTarget = function(target) {
                 try {
                     var q = encodeURIComponent(query.trim());
                     if (q.length === 0) return;
-                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + (bUserLon||44.3168) + ',' + (bUserLat||31.9961) + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=6&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + (bUserLon||44.3168) + ',' + (bUserLat||31.9961) + '&language=ar,en&limit=15&access_token=' + BOOKING_MAPBOX_TOKEN;
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
@@ -4990,7 +4994,7 @@ window.setCleanMapTarget = function(target) {
                 try {
                     var q = encodeURIComponent(query.trim());
                     if (q.length === 0) return;
-                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + (bUserLon||44.3168) + ',' + (bUserLat||31.9961) + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=6&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + (bUserLon||44.3168) + ',' + (bUserLat||31.9961) + '&language=ar,en&limit=15&access_token=' + BOOKING_MAPBOX_TOKEN;
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
@@ -5478,6 +5482,16 @@ window.setCleanMapTarget = function(target) {
         };
 
         window.cancelRideRequest = function() {
+            var crModal = document.getElementById('cancel-reason-modal');
+            if (crModal) {
+                crModal.style.display = 'flex';
+            }
+        };
+
+        window.submitCancelReason = function(reason) {
+            var crModal = document.getElementById('cancel-reason-modal');
+            if (crModal) crModal.style.display = 'none';
+
             var existing = null;
             try { existing = JSON.parse(localStorage.getItem('active_accepted_ride') || 'null'); } catch(_) {}
             if (existing && existing.id) {
@@ -5491,16 +5505,20 @@ window.setCleanMapTarget = function(target) {
                     fetch('/api/ride/cancel', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ requestId: bActiveRideId, reason: 'إلغاء من قبل الراكب' })
+                        body: JSON.stringify({ requestId: bActiveRideId, reason: reason })
                     }).catch(function() {});
                 } catch(_) {}
             }
             if (bRidePollTimer) clearInterval(bRidePollTimer);
             if (bDispatchTimer) clearInterval(bDispatchTimer);
             bActiveRideId = null;
+
             var modal = document.getElementById('ride-dispatch-modal');
             if (modal) modal.style.display = 'none';
             resetSaveRouteButton();
+            
+            var vPanel = document.getElementById('vehicle-selection-panel');
+            if (vPanel) vPanel.style.display = 'block';
         };
 
         // Render Permanent Line Sidebar (Stage 3)
