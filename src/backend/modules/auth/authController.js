@@ -736,7 +736,14 @@ window.setCleanMapTarget = function(target) {
                 
                 window.bRouteFare = 0;
                 var fareSpan = document.getElementById('floating-btn-fare');
-                if (fareSpan) fareSpan.style.display = 'none';
+                if (fareSpan) {
+                    fareSpan.style.display = 'none';
+                    fareSpan.textContent = '';
+                }
+                var btnText = document.getElementById('floating-save-btn-text');
+                if (btnText) {
+                    btnText.innerText = 'تاكيد نقطة الانطلاق';
+                }
                 
                 var vPanel = document.getElementById('vehicle-selection-panel');
                 if (vPanel) vPanel.style.display = 'none';
@@ -1006,7 +1013,7 @@ window.setCleanMapTarget = function(target) {
             </div>
         </div>
         <div style="padding:16px 20px 24px 20px;">
-            <button id="btn-request-vehicle" type="button" onclick="window.saveUserRouteToDatabase()" style="width:100%;background:#0000ff;color:#ffffff;border:none;border-radius:12px;padding:18px;font-size:20px;font-weight:900;font-family:Cairo,sans-serif;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,255,0.2);">
+            <button id="btn-request-vehicle" type="button" onclick="window.confirmVehicleRequest()" style="width:100%;background:#0000ff;color:#ffffff;border:none;border-radius:12px;padding:18px;font-size:20px;font-weight:900;font-family:Cairo,sans-serif;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,255,0.2);">
                 طلب سوبر
             </button>
         </div>
@@ -4078,6 +4085,47 @@ window.setCleanMapTarget = function(target) {
                 loadMatchingDriversForPassenger();
             }
         }
+
+        
+        window.confirmVehicleRequest = async function() {
+            var userId = localStorage.getItem('user_id') || 'usr-current';
+            var role = localStorage.getItem('user_role') || 'Customer';
+            var isDriver = (role === 'Driver' || role === 'driver');
+            
+            if (isDriver) {
+                alert('عذراً، هذا الحساب مسجل كسائق.');
+                return;
+            }
+
+            var fromText = window.bPickupName || 'موقعي الحالي';
+            var toText = window.bDropoffName || 'وجهة الوصول';
+
+            // Show dispatch modal immediately
+            var modal = document.getElementById('ride-dispatch-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+                var titleEl = document.getElementById('dispatch-modal-title');
+                if (titleEl) titleEl.textContent = 'جاري البحث عن أقرب كابتن ' + (window.bSelectedVehicle === 'super' ? 'سوبر' : (window.bSelectedVehicle === 'eco' ? 'توفير' : 'بلس')) + '...';
+                
+                var subEl = document.getElementById('dispatch-modal-subtitle');
+                if (subEl) subEl.textContent = 'تم تثبيت مسارك (' + fromText + ' ➔ ' + toText + ')';
+                
+                var drvName = document.getElementById('dispatch-drv-name');
+                if (drvName) drvName.textContent = '🚕 جاري البحث...';
+                
+                var drvStatus = document.getElementById('dispatch-drv-status');
+                if (drvStatus) { drvStatus.textContent = 'الحالة: إرسال الطلب للسائقين القريبين...'; drvStatus.style.color = '#2563eb'; }
+            }
+            
+            // Hide vehicle selection
+            var vPanel = document.getElementById('vehicle-selection-panel');
+            if (vPanel) vPanel.style.display = 'none';
+
+            // Now request the driver
+            if (window.requestNearestDriver) {
+                await window.requestNearestDriver();
+            }
+        };
 
         window.saveUserRouteToDatabase = async function() {
             var pickInp = document.getElementById('book-pickup-input');
