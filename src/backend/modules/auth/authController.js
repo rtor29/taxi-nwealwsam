@@ -837,6 +837,25 @@ window.setCleanMapTarget = function(target) {
         </div>
     </div>
 
+    
+        <style>@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }</style>
+    <!-- Cancel Reason Modal -->
+    <div id="cancel-reason-modal" style="display:none;position:fixed;inset:0;z-index:10000000;background:rgba(0,0,0,0.65);align-items:flex-end;justify-content:center;font-family:Cairo,sans-serif;" dir="rtl">
+        <div style="width:100%;max-width:400px;background:#ffffff;border-top-left-radius:24px;border-top-right-radius:24px;padding:24px;box-shadow:0 -4px 20px rgba(0,0,0,0.1);">
+            <h3 style="margin:0 0 8px;font-size:18px;font-weight:900;color:#111;text-align:right;">سبب الإلغاء</h3>
+            <p style="font-size:13px;color:#64748b;margin:0 0 20px;text-align:right;">يرجى إخبارنا بسبب رغبتك في إلغاء الطلب لمساعدتنا في تحسين الخدمة.</p>
+            
+            <div style="display:flex;flex-direction:column;gap:12px;">
+                <button type="button" onclick="window.submitCancelReason('انا مستعجل')" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:right;font-size:15px;font-weight:700;color:#1e293b;cursor:pointer;">أنا مستعجل</button>
+                <button type="button" onclick="window.submitCancelReason('السائق تاخر')" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:right;font-size:15px;font-weight:700;color:#1e293b;cursor:pointer;">السائق تأخر</button>
+                <button type="button" onclick="window.submitCancelReason('طلبت بالغلط')" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:right;font-size:15px;font-weight:700;color:#1e293b;cursor:pointer;">طلبت بالغلط</button>
+                <button type="button" onclick="window.submitCancelReason('اخرى')" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;text-align:right;font-size:15px;font-weight:700;color:#1e293b;cursor:pointer;">أخرى</button>
+            </div>
+            
+            <button type="button" onclick="document.getElementById('cancel-reason-modal').style.display='none'" style="width:100%;margin-top:20px;padding:14px;background:none;border:none;font-size:16px;font-weight:800;color:#64748b;cursor:pointer;">تراجع عن الإلغاء</button>
+        </div>
+    </div>
+
     <!-- Driver Incoming Ride Alert Modal (Stage 4) -->
     
     <!-- FULLSCREEN SEARCH MODAL -->
@@ -960,43 +979,46 @@ window.setCleanMapTarget = function(target) {
         </div>
         <div style="padding:10px 0;">
             <!-- Super -->
-            <div onclick="window.selectVehicleType('super')" id="veh-opt-super" style="display:flex;align-items:center;padding:12px 20px;background:#f8fafc;cursor:pointer;border-bottom:1px solid #f1f5f9;">
-                <div style="flex:1;">
-                    <div style="font-size:18px;font-weight:900;color:#111;">سوبر</div>
-                    <div style="font-size:13px;color:#94a3b8;">الخيار الأفضل</div>
-                </div>
-                <div style="display:flex;align-items:center;">
-                    <div style="font-size:16px;font-weight:800;color:#111;margin-left:16px;" id="fare-super">5,500 دينار</div>
+            <div onclick="window.selectVehicleType('super')" id="veh-opt-super" style="display:flex;align-items:center;padding:14px 20px;background:#f8fafc;cursor:pointer;border-bottom:1px solid #f1f5f9;">
+                <div style="font-size:15px;font-weight:800;color:#111;" id="fare-super">5,500 دينار</div>
+                <div style="flex:1;"></div>
+                <div style="display:flex;align-items:center;justify-content:flex-end;">
+                    <div style="text-align:right;margin-left:12px;">
+                        <div style="font-size:16px;font-weight:900;color:#111;">سوبر</div>
+                        <div style="font-size:12px;color:#94a3b8;">الخيار الأفضل</div>
+                    </div>
                     <div style="position:relative;">
-                        <span style="font-size:32px;">🚗</span>
+                        <span style="font-size:36px;">🚗</span>
                         <span style="position:absolute;top:-5px;right:-5px;font-size:14px;background:#fef08a;border-radius:50%;padding:2px;">⚡</span>
                     </div>
                 </div>
             </div>
             <!-- Economy -->
-            <div onclick="window.selectVehicleType('eco')" id="veh-opt-eco" style="display:flex;align-items:center;padding:12px 20px;background:#ffffff;cursor:pointer;border-bottom:1px solid #f1f5f9;">
-                <div style="flex:1;">
-                    <div style="font-size:18px;font-weight:800;color:#334155;">توفير</div>
-                    <div style="font-size:13px;color:#94a3b8;">التكسي الأوفر</div>
-                </div>
-                <div style="display:flex;align-items:center;">
-                    <div style="font-size:16px;font-weight:800;color:#334155;margin-left:16px;" id="fare-eco">4,750 دينار</div>
+            <div onclick="window.selectVehicleType('eco')" id="veh-opt-eco" style="display:flex;align-items:center;padding:14px 20px;background:#ffffff;cursor:pointer;border-bottom:1px solid #f1f5f9;">
+                <div style="font-size:15px;font-weight:800;color:#334155;" id="fare-eco">4,750 دينار</div>
+                <div style="flex:1;"></div>
+                <div style="display:flex;align-items:center;justify-content:flex-end;">
+                    <div style="text-align:right;margin-left:12px;">
+                        <div style="font-size:16px;font-weight:900;color:#334155;">توفير</div>
+                        <div style="font-size:12px;color:#94a3b8;">التكسي الأوفر</div>
+                    </div>
                     <div style="position:relative;">
-                        <span style="font-size:32px;">🚙</span>
+                        <span style="font-size:36px;">🚙</span>
                         <span style="position:absolute;top:-5px;right:-5px;font-size:14px;background:#fef08a;border-radius:50%;padding:2px;">💲</span>
                     </div>
                 </div>
             </div>
             <!-- Plus -->
-            <div onclick="window.selectVehicleType('plus')" id="veh-opt-plus" style="display:flex;align-items:center;padding:12px 20px;background:#ffffff;cursor:pointer;">
-                <div style="flex:1;">
-                    <div style="font-size:18px;font-weight:800;color:#334155;">بلس</div>
-                    <div style="font-size:13px;color:#94a3b8;">رحلة أكثر راحة</div>
-                </div>
-                <div style="display:flex;align-items:center;">
-                    <div style="font-size:16px;font-weight:800;color:#334155;margin-left:16px;" id="fare-plus">6,000 دينار</div>
+            <div onclick="window.selectVehicleType('plus')" id="veh-opt-plus" style="display:flex;align-items:center;padding:14px 20px;background:#ffffff;cursor:pointer;">
+                <div style="font-size:15px;font-weight:800;color:#334155;" id="fare-plus">6,000 دينار</div>
+                <div style="flex:1;"></div>
+                <div style="display:flex;align-items:center;justify-content:flex-end;">
+                    <div style="text-align:right;margin-left:12px;">
+                        <div style="font-size:16px;font-weight:900;color:#334155;">بلس</div>
+                        <div style="font-size:12px;color:#94a3b8;">رحلة أكثر راحة</div>
+                    </div>
                     <div style="position:relative;">
-                        <span style="font-size:32px;">🚘</span>
+                        <span style="font-size:36px;">🚘</span>
                         <span style="position:absolute;top:-5px;right:-5px;font-size:14px;background:#fef08a;border-radius:50%;padding:2px;">⭐</span>
                     </div>
                 </div>
