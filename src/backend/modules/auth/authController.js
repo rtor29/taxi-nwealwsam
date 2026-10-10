@@ -249,7 +249,6 @@ class AuthController {
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
-    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js" defer></script>
     <script src="https://cdn.tailwindcss.com" defer></script>
     <style>
         *{box-sizing:border-box}
@@ -1181,12 +1180,7 @@ class AuthController {
                 document.head.appendChild(css);
                 var s = document.createElement('script');
                 s.src = 'https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js';
-                s.onload = function() {
-                    var r = document.createElement('script');
-                    r.src = 'https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-rtl-text/v0.2.3/mapbox-gl-rtl-text.js';
-                    r.onload = r.onerror = function(){ resolve(); };
-                    document.head.appendChild(r);
-                };
+                s.onload = function() { resolve(); };
                 s.onerror = function(){ resolve(); };
                 document.head.appendChild(s);
             });
@@ -2136,7 +2130,7 @@ class AuthController {
                     if (btn) btn.innerHTML = '<span>📍 موقعي الحالي</span>';
                     var msg = '⚠️ تعذر جلب الموقع الدقيق. يرجى تفعيل الـ GPS.';
                     if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-                        msg += '\n\n💡 ملاحظة للايفون: التلغرام يمنع تحديد الموقع. يرجى الضغط على علامة البوصلة (🧭) في الأسفل أو النقاط الثلاث بالأعلى لفتح التطبيق في متصفح سفاري (Safari) وسيتم التحديد بنجاح.';
+                        msg += '\\n\\n💡 ملاحظة للايفون: التلغرام يمنع تحديد الموقع. يرجى الضغط على علامة البوصلة (🧭) في الأسفل أو النقاط الثلاث بالأعلى لفتح التطبيق في متصفح سفاري (Safari) وسيتم التحديد بنجاح.';
                     }
                     alert(msg);
                     if (inp && !inp.value) inp.value = 'موقعي الحالي';
@@ -2541,7 +2535,7 @@ class AuthController {
                     }, function() {
                         var msg = '⚠️ يرجى تحديد نقطة الانطلاق على الخريطة أولاً أو تفعيل GPS';
                         if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-                            msg += '\n\n💡 ملاحظة للايفون: التلغرام يمنع تحديد الموقع. يرجى الضغط على علامة البوصلة (🧭) لفتح التطبيق في سفاري.';
+                            msg += '\\n\\n💡 ملاحظة للايفون: التلغرام يمنع تحديد الموقع. يرجى الضغط على علامة البوصلة (🧭) لفتح التطبيق في سفاري.';
                         }
                         alert(msg);
                     });
@@ -3875,7 +3869,7 @@ class AuthController {
                     } else {
                         var msg = '⚠️ تعذر جلب الموقع الدقيق. يرجى تفعيل الـ GPS.';
                         if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-                            msg += '\n\n💡 ملاحظة للايفون: التلغرام يمنع تحديد الموقع. يرجى الضغط على علامة البوصلة (🧭) في الأسفل أو النقاط الثلاث بالأعلى لفتح التطبيق في متصفح سفاري (Safari) وسيتم التحديد بنجاح.';
+                            msg += '\\n\\n💡 ملاحظة للايفون: التلغرام يمنع تحديد الموقع. يرجى الضغط على علامة البوصلة (🧭) في الأسفل أو النقاط الثلاث بالأعلى لفتح التطبيق في متصفح سفاري (Safari) وسيتم التحديد بنجاح.';
                         }
                         alert(msg);
                     }
