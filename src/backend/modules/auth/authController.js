@@ -610,6 +610,61 @@ class AuthController {
         };
 
         var fsSearchTimer = null;
+        window.iraqCities = [
+            { name: "بغداد", lon: 44.3615, lat: 33.3128 },
+            { name: "البصرة", lon: 47.7836, lat: 30.5081 },
+            { name: "نينوى", lon: 43.1300, lat: 36.3400 },
+            { name: "أربيل", lon: 44.0110, lat: 36.1911 },
+            { name: "النجف", lon: 44.3168, lat: 31.9961 },
+            { name: "ذي قار", lon: 46.2500, lat: 31.0500 },
+            { name: "كركوك", lon: 44.3900, lat: 35.4700 },
+            { name: "الأنبار", lon: 43.2700, lat: 33.4200 },
+            { name: "ديالى", lon: 44.6000, lat: 33.7500 },
+            { name: "المثنى", lon: 45.2800, lat: 31.3200 },
+            { name: "القادسية", lon: 44.9300, lat: 31.9900 },
+            { name: "ميسان", lon: 47.1600, lat: 31.8400 },
+            { name: "واسط", lon: 45.8200, lat: 32.5100 },
+            { name: "صلاح الدين", lon: 43.6800, lat: 34.6100 },
+            { name: "دهوك", lon: 42.9900, lat: 36.8600 },
+            { name: "السليمانية", lon: 45.4300, lat: 35.5500 },
+            { name: "بابل", lon: 44.4400, lat: 32.4800 },
+            { name: "كربلاء", lon: 44.0200, lat: 32.6100 }
+        ];
+        window.selectedSearchCity = window.iraqCities[4]; // Default Najaf
+
+        window.toggleCityDropdown = function() {
+            var menu = document.getElementById('city-dropdown-menu');
+            if (menu.style.display === 'flex') {
+                menu.style.display = 'none';
+                return;
+            }
+            menu.style.display = 'flex';
+            menu.innerHTML = '';
+            window.iraqCities.forEach(function(city) {
+                var el = document.createElement('div');
+                el.style.padding = '10px 12px';
+                el.style.borderBottom = '1px solid #f8fafc';
+                el.style.color = city.name === window.selectedSearchCity.name ? '#f97316' : '#334155';
+                el.style.fontWeight = city.name === window.selectedSearchCity.name ? '900' : '700';
+                el.style.cursor = 'pointer';
+                el.textContent = city.name;
+                el.onclick = function(e) {
+                    e.stopPropagation();
+                    window.selectedSearchCity = city;
+                    document.getElementById('current-search-city').textContent = city.name;
+                    menu.style.display = 'none';
+                    
+                    var inp = document.getElementById('fs-search-input');
+                    if (inp && inp.value) window.handleFsSearch(inp.value);
+                    
+                    if (window.bMap) {
+                        window.bMap.flyTo({ center: [city.lon, city.lat], zoom: 12 });
+                    }
+                };
+                menu.appendChild(el);
+            });
+        };
+
         window.handleFsSearch = function(query) {
             clearTimeout(fsSearchTimer);
             var resultsEl = document.getElementById('fs-suggested-list');
@@ -627,25 +682,28 @@ class AuthController {
             resultsEl.innerHTML = '<div style="padding:20px;text-align:center;color:#64748b;font-weight:700;"><i class="fa-solid fa-spinner fa-spin"></i> جاري البحث...</div>';
             
             fsSearchTimer = setTimeout(async function() {
-                var local = searchLocalNajafPlaces(query);
                 var html = '';
                 
-                if (local.length > 0) {
-                    local.forEach(function(p) {
-                        html += '<div onclick="window.selectFsResult(\\\''+p.name+'\\\', '+p.lon+', '+p.lat+')" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">' +
-                            '<div style="font-size:20px;color:#94a3b8;flex-shrink:0;"><i class="fa-solid fa-location-dot"></i></div>' +
-                            '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">' +
-                                '<span style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">'+p.name+'</span>' +
-                                '<span style="font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">النجف الأشرف، العراق</span>' +
-                            '</div>' +
-                            '<div style="font-size:20px;color:#cbd5e1;flex-shrink:0;"><i class="fa-regular fa-star"></i></div>' +
-                        '</div>';
-                    });
+                if (window.selectedSearchCity.name === 'النجف') {
+                    var local = searchLocalNajafPlaces(query);
+                    if (local.length > 0) {
+                        local.forEach(function(p) {
+                            html += '<div onclick="window.selectFsResult(\\\''+p.name+'\\\', '+p.lon+', '+p.lat+')" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">' +
+                                '<div style="font-size:20px;color:#94a3b8;flex-shrink:0;"><i class="fa-solid fa-location-dot"></i></div>' +
+                                '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">' +
+                                    '<span style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">'+p.name+'</span>' +
+                                    '<span style="font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">النجف الأشرف، العراق</span>' +
+                                '</div>' +
+                                '<div style="font-size:20px;color:#cbd5e1;flex-shrink:0;"><i class="fa-regular fa-star"></i></div>' +
+                            '</div>';
+                        });
+                    }
                 }
                 
                 try {
-                    var q = encodeURIComponent(query.trim());
-                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + (bUserLon||44.3168) + ',' + (bUserLat||31.9961) + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=6&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    var qStr = query.trim() + ' محافظة ' + window.selectedSearchCity.name;
+                    var q = encodeURIComponent(qStr);
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + window.selectedSearchCity.lon + ',' + window.selectedSearchCity.lat + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=6&access_token=' + BOOKING_MAPBOX_TOKEN;
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
@@ -658,7 +716,7 @@ class AuthController {
                                 '<span style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">'+title+'</span>' +
                                 '<span style="font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">'+nm+'</span>' +
                             '</div>' +
-                            '<div style="font-size:20px;color:#cbd5e1;flex-shrink:0;"><i class="fa-regular fa-star"></i></div>' +
+                            '<div style="font-size:20px;color:#cbd5e1;flex-shrink:0;"><i class="fa-solid fa-chevron-left"></i></div>' +
                         '</div>';
                     });
                 } catch(e) {}
@@ -667,9 +725,8 @@ class AuthController {
                     html = '<div style="padding:20px;text-align:center;color:#64748b;font-weight:700;">لا توجد نتائج مطابقة</div>';
                 }
                 resultsEl.innerHTML = html;
-            }, 300);
-        };
-
+            }, 500);
+        };\n
         window.selectFsResult = function(name, lon, lat) {
             window.closeFullscreenSearch();
             if (window._fsSearchTarget === 'pickup') {
