@@ -542,11 +542,13 @@ class AuthController {
             <div style="margin-top:60px;padding:0 20px;">
                 <!-- Top Avatar Section -->
                 <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:10px;">
-                    <div style="width:110px;height:110px;border-radius:50%;background:linear-gradient(135deg, #e0e7ff, #c7d2fe);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 4px 10px rgba(0,0,0,0.05), 0 10px 20px rgba(99,102,241,0.2);position:relative;">
-                        <span style="font-size:12px;color:#3730a3;text-align:center;font-weight:700;line-height:1.2;">صورة السائق<br>او الراكب</span>
-                        <div style="position:absolute;bottom:-5px;color:#6366f1;font-size:28px;font-weight:300;">+</div>
+                    <div onclick="document.getElementById('drawer-image-upload').click()" style="width:110px;height:110px;border-radius:50%;background:linear-gradient(135deg, #e0e7ff, #c7d2fe);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 4px 10px rgba(0,0,0,0.05), 0 10px 20px rgba(99,102,241,0.2);position:relative;cursor:pointer;overflow:hidden;">
+                        <span id="drawer-user-icon" style="font-size:12px;color:#3730a3;text-align:center;font-weight:700;line-height:1.2;">صورة السائق<br>او الراكب</span>
+                        <img id="drawer-user-image" src="" style="display:none;width:100%;height:100%;object-fit:cover;" />
+                        <div id="drawer-user-plus" style="position:absolute;bottom:-5px;color:#6366f1;font-size:28px;font-weight:300;">+</div>
                     </div>
-                    <div style="margin-top:16px;font-size:13px;color:#475569;font-weight:800;">اسم السائق او الراكب</div>
+                    <input type="file" id="drawer-image-upload" accept="image/*" style="display:none;" onchange="window.uploadUserImage(this)" />
+                    <div id="drawer-user-name" style="margin-top:16px;font-size:13px;color:#475569;font-weight:800;">اسم السائق او الراكب</div>
                 </div>
                 
                 <hr style="border:none;border-top:1.5px solid #cbd5e1;margin:10px 0 25px 0;">
@@ -558,7 +560,7 @@ class AuthController {
                             الرئيسيه
                         </button>
                         <button type="button" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;margin-top:5px;">
-                            معلومات السائق او الراكب
+                            الحساب
                         </button>
                         <button type="button" onclick="window.contactSupport()" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
                             التواصل مع الدعم
@@ -1231,7 +1233,7 @@ class AuthController {
             
             try {
                 // If they have __unifiedProfile, it means they are new and submitted the profile
-                if (window.__unifiedProfile) {
+                if (window.__unifiedProfile && window.__unifiedPhone) {
                     var regRes = await fetch('/api/auth/complete-' + (role === 'Driver' ? 'driver' : 'passenger') + '-registration', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -2838,13 +2840,7 @@ class AuthController {
                         } else {
                             setTimeout(function(){ window.openRouteApp('set-route'); }, 200);
                         }
-                        // Also restore unified profile memory
-                        window.__unifiedProfile = {
-                            fullName: fullName,
-                            firstName: fullName.split(' ')[0] || '',
-                            lastName: fullName.split(' ').slice(1).join(' ') || '',
-                            email: ''
-                        };
+
                     }
                     
                     var box = document.getElementById('user-logged-in-box');
@@ -3262,6 +3258,21 @@ class AuthController {
             var backdrop = document.getElementById('booking-sidebar-backdrop');
             if (backdrop) backdrop.style.display = 'none';
             bMapPickTarget = 'pickup';
+            
+            var dName = document.getElementById('drawer-user-name');
+            if (dName) dName.textContent = localStorage.getItem('user_fullName') || 'مستخدم';
+            var savedImg = localStorage.getItem('user_image');
+            if (savedImg) {
+                var imgEl = document.getElementById('drawer-user-image');
+                if (imgEl) {
+                    imgEl.src = savedImg;
+                    imgEl.style.display = 'block';
+                    var ic = document.getElementById('drawer-user-icon');
+                    var pl = document.getElementById('drawer-user-plus');
+                    if(ic) ic.style.display = 'none';
+                    if(pl) pl.style.display = 'none';
+                }
+            }
 
             var tabSet = document.getElementById('book-tab-set-route');
             if (tabSet) {
@@ -3456,6 +3467,23 @@ class AuthController {
             }, 300);
         };
 
+        
+        window.uploadUserImage = function(input) {
+            if (input.files && input.files[0]) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    var imgData = e.target.result;
+                    localStorage.setItem('user_image', imgData);
+                    document.getElementById('drawer-user-icon').style.display = 'none';
+                    document.getElementById('drawer-user-plus').style.display = 'none';
+                    var imgEl = document.getElementById('drawer-user-image');
+                    imgEl.src = imgData;
+                    imgEl.style.display = 'block';
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        };
+        
         window.toggleBookingDrawer = function(forceOpen) {
             var sidebar = document.getElementById('booking-sidebar');
             var backdrop = document.getElementById('booking-sidebar-backdrop');
