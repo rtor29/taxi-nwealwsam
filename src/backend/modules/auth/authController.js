@@ -232,6 +232,8 @@ class AuthController {
      * Renders the main portal - clean white/black design
      */
     renderMainPortalHtml(res, preselectedRole = 'Driver', reqHost) {
+        let supportWa = '9647800000000';
+        try { const setObj = db.memoryState.settings.find(s => s.key === 'support_whatsapp'); if (setObj) supportWa = setObj.valueJson.replace(/"/g, ''); } catch(e) {}
         const html = `<!DOCTYPE html>
 <html dir="rtl" lang="ar">
 <head>
@@ -354,6 +356,7 @@ class AuthController {
             display: block;
         }
         .search-autocomplete-dropdown {
+            z-index: 9999999 !important;
             display: none;
             position: absolute;
             top: 100%;
@@ -400,6 +403,18 @@ class AuthController {
     </style>
 
     <script>
+        window.goToHome = function() {
+            var modal = document.getElementById('booking-modal-view');
+            var serviceUI = document.getElementById('new-service-ui');
+            if (modal) modal.style.display = 'none';
+            if (serviceUI) serviceUI.style.display = 'flex';
+            toggleBookingDrawer(false);
+        };
+        window.contactSupport = function() {
+            var wa = '${supportWa}';
+            window.open('https://wa.me/' + wa, '_blank');
+        };
+
         window.forcePurgeAndReload = function() {
             try { sessionStorage.clear(); } catch(_) {}
             if ('serviceWorker' in navigator) {
@@ -475,7 +490,7 @@ class AuthController {
             <div id="clean-pickup-container" style="position:relative;">
                 <div style="background:#f1f5f9;border-radius:30px;display:flex;align-items:center;padding:14px 20px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.03);">
                     <i class="fa-solid fa-magnifying-glass" style="font-size:20px;color:#64748b;"></i>
-                    <input type="text" id="book-pickup-input" oninput="onBookingPickupSearch(this.value)" onfocus="window.setCleanMapTarget('pickup')" placeholder="نقطة الانطلاق..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:'Cairo',sans-serif;font-weight:700;color:#0f172a;padding:0 15px;">
+                    <input type="text" id="book-pickup-input" oninput="onBookingPickupSearch(this.value)" onfocus="window.setCleanMapTarget('pickup'); onBookingPickupSearch(this.value);" placeholder="نقطة الانطلاق..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:'Cairo',sans-serif;font-weight:700;color:#0f172a;padding:0 15px;">
                     <div style="width:26px;height:26px;background:#ef4444;border-radius:50%;display:flex;align-items:center;justify-content:center;">
                         <div style="width:8px;height:8px;background:#fff;border-radius:50%;"></div>
                     </div>
@@ -487,7 +502,7 @@ class AuthController {
             <div id="clean-dropoff-container" style="position:relative;display:none;">
                 <div style="background:#f1f5f9;border-radius:30px;display:flex;align-items:center;padding:14px 20px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.03);">
                     <i class="fa-solid fa-magnifying-glass" style="font-size:20px;color:#64748b;"></i>
-                    <input type="text" id="book-dropoff-input" oninput="onBookingDropoffSearch(this.value)" onfocus="window.setCleanMapTarget('dropoff')" placeholder="نقطة الوصول..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:'Cairo',sans-serif;font-weight:700;color:#0f172a;padding:0 15px;">
+                    <input type="text" id="book-dropoff-input" oninput="onBookingDropoffSearch(this.value)" onfocus="window.setCleanMapTarget('dropoff'); onBookingDropoffSearch(this.value);" placeholder="نقطة الوصول..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:'Cairo',sans-serif;font-weight:700;color:#0f172a;padding:0 15px;">
                     <div style="width:26px;height:26px;background:#f97316;border-radius:6px;display:flex;align-items:center;justify-content:center;">
                         <div style="width:10px;height:10px;background:#fff;border-radius:2px;"></div>
                     </div>
@@ -537,25 +552,29 @@ class AuthController {
                 <hr style="border:none;border-top:1.5px solid #cbd5e1;margin:10px 0 25px 0;">
 
                 <!-- Menu Items -->
-                <div style="display:flex;flex-direction:column;gap:18px;padding-right:10px;">
-                    <button type="button" style="background:none;border:none;text-align:right;font-size:28px;font-weight:900;color:#0f172a;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
-                        الرئيسيه
-                    </button>
-                    <button type="button" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;margin-top:5px;">
-                        معلومات السائق او الراكب
-                    </button>
-                    <button type="button" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
-                        التواصل مع الدعم
-                    </button>
-                    <button type="button" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
-                        محفضتي
-                    </button>
-                    <button type="button" onclick="handleLogout()" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
-                        تسجيل الخروج
-                    </button>
-                    <button type="button" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
-                        الحقوق
-                    </button>
+                <div style="display:flex;flex-direction:column;gap:18px;padding-right:10px;height:calc(100vh - 230px);position:relative;">
+                    <div style="display:flex;flex-direction:column;gap:18px;">
+                        <button type="button" onclick="window.goToHome()" style="background:none;border:none;text-align:right;font-size:28px;font-weight:900;color:#0f172a;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
+                            الرئيسيه
+                        </button>
+                        <button type="button" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;margin-top:5px;">
+                            معلومات السائق او الراكب
+                        </button>
+                        <button type="button" onclick="window.contactSupport()" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
+                            التواصل مع الدعم
+                        </button>
+                        <button type="button" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
+                            محفضتي
+                        </button>
+                        <button type="button" onclick="handleLogout()" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
+                            تسجيل الخروج
+                        </button>
+                    </div>
+                    
+                    <div style="position:absolute;bottom:20px;left:0;right:0;text-align:center;font-size:12px;color:#94a3b8;font-family:'Cairo',sans-serif;line-height:1.6;">
+                        توصيله جميع الحقوق محفوظه<br>
+                        المهندس وسام شاكر
+                    </div>
                 </div>
             </div>
 
@@ -2251,7 +2270,7 @@ class AuthController {
             clearTimeout(custRegAddrTimer);
             var resultsEl = document.getElementById('cust-reg-address-results');
             if (!resultsEl) return;
-            if (!query || query.trim().length < 1) { resultsEl.style.display = 'none'; return; }
+            if (!query || query.trim().length < 1) { query = ''; }
 
             resultsEl.innerHTML = '';
             var customItem = document.createElement('div');
@@ -2268,7 +2287,7 @@ class AuthController {
                 if (lonEl && !lonEl.value) lonEl.value = (bUserLon || 44.3168);
                 (document.getElementById('cust-reg-route') && document.getElementById('cust-reg-route').focus());
             };
-            resultsEl.appendChild(customItem);
+            if (query.trim().length > 0) resultsEl.appendChild(customItem);
             resultsEl.style.display = 'block';
 
             custRegAddrTimer = setTimeout(async function() {
@@ -2279,7 +2298,7 @@ class AuthController {
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
                     resultsEl.innerHTML = '';
-                    resultsEl.appendChild(customItem);
+                    if (query.trim().length > 0) resultsEl.appendChild(customItem);
                     feats.forEach(function(f) {
                         var nm = f.place_name_ar || f.place_name || '';
                         var item = document.createElement('div');
@@ -2307,7 +2326,7 @@ class AuthController {
             clearTimeout(custRegRouteTimer);
             var resultsEl = document.getElementById('cust-reg-route-results');
             if (!resultsEl) return;
-            if (!query || query.trim().length < 1) { resultsEl.style.display = 'none'; return; }
+            if (!query || query.trim().length < 1) { query = ''; }
 
             resultsEl.innerHTML = '';
             var customItem = document.createElement('div');
@@ -2325,7 +2344,7 @@ class AuthController {
                 if (latEl) latEl.value = (pLat + 0.02).toFixed(6);
                 if (lonEl) lonEl.value = (pLon + 0.02).toFixed(6);
             };
-            resultsEl.appendChild(customItem);
+            if (query.trim().length > 0) resultsEl.appendChild(customItem);
             resultsEl.style.display = 'block';
 
             custRegRouteTimer = setTimeout(async function() {
@@ -2336,7 +2355,7 @@ class AuthController {
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
                     resultsEl.innerHTML = '';
-                    resultsEl.appendChild(customItem);
+                    if (query.trim().length > 0) resultsEl.appendChild(customItem);
                     feats.forEach(function(f) {
                         var nm = f.place_name_ar || f.place_name || '';
                         var item = document.createElement('div');
@@ -3330,7 +3349,7 @@ class AuthController {
 
         function searchLocalNajafPlaces(query) {
             var q = normalizeArabicText(query);
-            if (q.length < 1) return [];
+            // allow empty to show all local places
             return NAJAF_PLACES.filter(function(p) {
                 return normalizeArabicText(p.name).indexOf(q) !== -1;
             }).slice(0, 30);
@@ -3378,7 +3397,7 @@ class AuthController {
             var resultsEl = document.getElementById('book-pickup-results');
             if (!resultsEl) return;
             if (query) bPickupName = query;
-            if (!query || query.trim().length < 1) { resultsEl.style.display = 'none'; return; }
+            if (!query || query.trim().length < 1) { query = ''; }
 
             resultsEl.innerHTML = '';
             var customItem = document.createElement('div');
@@ -3392,7 +3411,7 @@ class AuthController {
                 setBookingPickup(pLon, pLat, query);
                 setMapTarget('dropoff');
             };
-            resultsEl.appendChild(customItem);
+            if (query.trim().length > 0) resultsEl.appendChild(customItem);
             resultsEl.style.display = 'block';
 
             var local = searchLocalNajafPlaces(query);
@@ -3408,12 +3427,13 @@ class AuthController {
             bPickupTimer = setTimeout(async function() {
                 try {
                     var q = encodeURIComponent(query.trim());
+                    if (q.length === 0) return;
                     var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + (bUserLon||44.3168) + ',' + (bUserLat||31.9961) + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=6&access_token=' + BOOKING_MAPBOX_TOKEN;
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
                     resultsEl.innerHTML = '';
-                    resultsEl.appendChild(customItem);
+                    if (query.trim().length > 0) resultsEl.appendChild(customItem);
                     if (local.length > 0) {
                         local.forEach(function(p) {
                             var item = document.createElement('div');
@@ -4376,7 +4396,7 @@ class AuthController {
             var resultsEl = document.getElementById('book-dropoff-results');
             if (!resultsEl) return;
             if (query) bDropoffName = query;
-            if (!query || query.trim().length < 1) { resultsEl.style.display = 'none'; return; }
+            if (!query || query.trim().length < 1) { query = ''; }
 
             resultsEl.innerHTML = '';
             var customItem = document.createElement('div');
@@ -4389,7 +4409,7 @@ class AuthController {
                 var pLat = (bPickupCoords ? bPickupCoords[1] : (bUserLat || 31.9961)) + 0.02;
                 setBookingDropoff(pLon, pLat, query);
             };
-            resultsEl.appendChild(customItem);
+            if (query.trim().length > 0) resultsEl.appendChild(customItem);
             resultsEl.style.display = 'block';
 
             var local = searchLocalNajafPlaces(query);
@@ -4406,12 +4426,13 @@ class AuthController {
             bDropoffTimer = setTimeout(async function() {
                 try {
                     var q = encodeURIComponent(query.trim());
+                    if (q.length === 0) return;
                     var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + (bUserLon||44.3168) + ',' + (bUserLat||31.9961) + '&language=ar,en&types=poi,address,neighborhood,place,locality&limit=6&access_token=' + BOOKING_MAPBOX_TOKEN;
                     var res = await fetch(url);
                     var data = await res.json();
                     var feats = (data && data.features) ? data.features : [];
                     resultsEl.innerHTML = '';
-                    resultsEl.appendChild(customItem);
+                    if (query.trim().length > 0) resultsEl.appendChild(customItem);
                     if (local.length > 0) {
                         local.forEach(function(p) {
                             var item = document.createElement('div');
