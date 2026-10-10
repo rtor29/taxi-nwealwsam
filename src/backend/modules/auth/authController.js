@@ -2303,9 +2303,10 @@ class AuthController {
                     if (query.trim().length > 0) resultsEl.appendChild(customItem);
                     feats.forEach(function(f) {
                         var nm = f.place_name_ar || f.place_name || '';
+                        var title = f.text_ar || f.text || nm.split(',')[0];
                         var item = document.createElement('div');
                         item.className = 'search-result-item';
-                        item.innerHTML = '<span>🗺️</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nm + '</span>';
+                        item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">🗺️</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + title + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + nm + '</span></div>';
                         item.onclick = function() {
                             resultsEl.style.display = 'none';
                             var inp = document.getElementById('cust-reg-address');
@@ -2360,9 +2361,10 @@ class AuthController {
                     if (query.trim().length > 0) resultsEl.appendChild(customItem);
                     feats.forEach(function(f) {
                         var nm = f.place_name_ar || f.place_name || '';
+                        var title = f.text_ar || f.text || nm.split(',')[0];
                         var item = document.createElement('div');
                         item.className = 'search-result-item';
-                        item.innerHTML = '<span>🗺️</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nm + '</span>';
+                        item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">🗺️</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + title + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + nm + '</span></div>';
                         item.onclick = function() {
                             resultsEl.style.display = 'none';
                             var inp = document.getElementById('cust-reg-route');
@@ -3430,7 +3432,7 @@ class AuthController {
                 local.forEach(function(p) {
                     var item = document.createElement('div');
                     item.className = 'search-result-item';
-                    item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</span>';
+                    item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">📍</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + p.name + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">النجف الأشرف، العراق</span></div>';
                     item.onclick = function() { resultsEl.style.display = 'none'; setBookingPickup(p.lon, p.lat, p.name); setMapTarget('dropoff'); };
                     resultsEl.appendChild(item);
                 });
@@ -3449,17 +3451,18 @@ class AuthController {
                         local.forEach(function(p) {
                             var item = document.createElement('div');
                             item.className = 'search-result-item';
-                            item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</span>';
+                            item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">📍</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + p.name + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">النجف الأشرف، العراق</span></div>';
                             item.onclick = function() { resultsEl.style.display = 'none'; setBookingPickup(p.lon, p.lat, p.name); setMapTarget('dropoff'); };
                             resultsEl.appendChild(item);
                         });
                     }
                     feats.forEach(function(f) {
                         var nm = f.place_name_ar || f.place_name || '';
+                        var title = f.text_ar || f.text || nm.split(',')[0];
                         var item = document.createElement('div');
                         item.className = 'search-result-item';
-                        item.innerHTML = '<span>🗺️</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nm + '</span>';
-                        item.onclick = function() { resultsEl.style.display = 'none'; setBookingPickup(f.center[0], f.center[1], nm); setMapTarget('dropoff'); };
+                        item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">🗺️</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + title + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + nm + '</span></div>';
+                        item.onclick = function() { resultsEl.style.display = 'none'; setBookingPickup(f.center[0], f.center[1], title); setMapTarget('dropoff'); };
                         resultsEl.appendChild(item);
                     });
                     resultsEl.style.display = resultsEl.children.length > 0 ? 'block' : 'none';
@@ -4445,7 +4448,7 @@ class AuthController {
                 local.forEach(function(p) {
                     var item = document.createElement('div');
                     item.className = 'search-result-item';
-                    item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</span>';
+                    item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">📍</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + p.name + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">النجف الأشرف، العراق</span></div>';
                     item.onclick = function() { resultsEl.style.display = 'none'; setBookingDropoff(p.lon, p.lat, p.name); };
                     resultsEl.appendChild(item);
                 });
@@ -4465,17 +4468,18 @@ class AuthController {
                         local.forEach(function(p) {
                             var item = document.createElement('div');
                             item.className = 'search-result-item';
-                            item.innerHTML = '<span>📍</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.name + '</span>';
+                            item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">📍</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + p.name + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">النجف الأشرف، العراق</span></div>';
                             item.onclick = function() { resultsEl.style.display = 'none'; setBookingDropoff(p.lon, p.lat, p.name); };
                             resultsEl.appendChild(item);
                         });
                     }
                     feats.forEach(function(f) {
                         var nm = f.place_name_ar || f.place_name || '';
+                        var title = f.text_ar || f.text || nm.split(',')[0];
                         var item = document.createElement('div');
                         item.className = 'search-result-item';
-                        item.innerHTML = '<span>🗺️</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nm + '</span>';
-                        item.onclick = function() { resultsEl.style.display = 'none'; setBookingDropoff(f.center[0], f.center[1], nm); };
+                        item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">🗺️</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + title + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + nm + '</span></div>';
+                        item.onclick = function() { resultsEl.style.display = 'none'; setBookingDropoff(f.center[0], f.center[1], title); };
                         resultsEl.appendChild(item);
                     });
                     resultsEl.style.display = resultsEl.children.length > 0 ? 'block' : 'none';
