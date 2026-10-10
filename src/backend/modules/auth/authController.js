@@ -3321,10 +3321,10 @@ class AuthController {
 
         function searchLocalNajafPlaces(query) {
             var q = normalizeArabicText(query);
-            if (q.length < 2) return [];
+            if (q.length < 1) return [];
             return NAJAF_PLACES.filter(function(p) {
                 return normalizeArabicText(p.name).indexOf(q) !== -1;
-            }).slice(0, 5);
+            }).slice(0, 30);
         }
 
         window.setMapTarget = function(target) {
