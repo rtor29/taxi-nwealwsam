@@ -1288,6 +1288,7 @@ class AuthController {
                 localStorage.setItem('flutter.auth_token', JSON.stringify(data.token));
                 localStorage.setItem('flutter.user_id', JSON.stringify(data.userId));
                 localStorage.setItem('flutter.user_role', JSON.stringify(data.role));
+                setTimeout(checkUserSession, 100);
                 localStorage.setItem('flutter.user_fullname', JSON.stringify(data.fullName || 'مستخدم توصيله'));
                 localStorage.setItem('flutter.driver_status', JSON.stringify((data.user && data.user.status) || data.status || 'Active'));
             } catch (_) {}
@@ -2686,8 +2687,9 @@ class AuthController {
                 try { localStorage.setItem('flutter.trip_type', JSON.stringify(tripType)); } catch(_) {}
             }
 
-            if (token || params.get('showMap') === '1' || params.get('openMap') === '1') {
-                var tokenToUse = token || localStorage.getItem('auth_token') || '';
+            var existingToken = localStorage.getItem('auth_token');
+            if (token || existingToken || params.get('showMap') === '1' || params.get('openMap') === '1') {
+                var tokenToUse = token || existingToken || '';
                 var userId = params.get('userId') || localStorage.getItem('user_id') || '';
                 var role = params.get('role') || localStorage.getItem('user_role') || 'Customer';
                 var fullName = params.get('fullName') || localStorage.getItem('user_fullname') || '';
@@ -2797,6 +2799,26 @@ class AuthController {
                     if (role === 'Driver' && (status === 'Pending' || status === 'Rejected')) {
                         return;
                     }
+                    
+                    // NEW UNIFIED UI AUTO-RESTORE
+                    var newAuthUi = document.getElementById('new-auth-ui');
+                    if (newAuthUi) {
+                        newAuthUi.style.display = 'none';
+                        if (role === 'Customer') {
+                            var newServiceUi = document.getElementById('new-service-ui');
+                            if (newServiceUi) newServiceUi.style.display = 'flex';
+                        } else {
+                            setTimeout(function(){ window.openRouteApp('set-route'); }, 200);
+                        }
+                        // Also restore unified profile memory
+                        window.__unifiedProfile = {
+                            fullName: fullName,
+                            firstName: fullName.split(' ')[0] || '',
+                            lastName: fullName.split(' ').slice(1).join(' ') || '',
+                            email: ''
+                        };
+                    }
+                    
                     var box = document.getElementById('user-logged-in-box');
                     if (box) {
                         box.style.display = 'block';
