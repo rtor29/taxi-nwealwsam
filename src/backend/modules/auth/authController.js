@@ -663,7 +663,7 @@ class AuthController {
                 
                 if (local.length > 0) {
                     local.forEach(function(p) {
-                        html += '<div onclick="window.selectFsResult(\''+p.name+'\', '+p.lon+', '+p.lat+')" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">' +
+                        html += '<div onclick="window.selectFsResult(\\\''+p.name+'\\\', '+p.lon+', '+p.lat+')" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">' +
                             '<div style="font-size:20px;color:#94a3b8;flex-shrink:0;"><i class="fa-solid fa-location-dot"></i></div>' +
                             '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">' +
                                 '<span style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">'+p.name+'</span>' +
@@ -683,7 +683,7 @@ class AuthController {
                     feats.forEach(function(f) {
                         var nm = f.place_name_ar || f.place_name || '';
                         var title = f.text_ar || f.text || nm.split(',')[0];
-                        html += '<div onclick="window.selectFsResult(\''+title.replace(/'/g, "\\'")+'\', '+f.center[0]+', '+f.center[1]+')" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">' +
+                        html += '<div onclick="window.selectFsResult(\\\''+title.replace(/'/g, "\\\\'")+'\\\', '+f.center[0]+', '+f.center[1]+')" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">' +
                             '<div style="font-size:20px;color:#94a3b8;flex-shrink:0;"><i class="fa-solid fa-location-dot"></i></div>' +
                             '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">' +
                                 '<span style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">'+title+'</span>' +
