@@ -983,7 +983,7 @@ class AuthController {
             try { console.error(msg); } catch(e){}
         };
 
-        window.handleUnifiedPhoneSubmit = function() {
+        window.handleUnifiedPhoneSubmit = async function() {
             if(window._isSubmittingPhone) return;
             window._isSubmittingPhone = true;
             
@@ -999,7 +999,7 @@ class AuthController {
                 document.getElementById('new-auth-ui').style.opacity = '1';
             };
 
-            var rawPhone = document.getElementById('new-unified-phone').value || '';
+            var rawPhone = (document.getElementById('new-unified-phone') || {}).value || '';
             var phone = String(rawPhone)
                               .replace(/[٠-٩]/g, function(d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); })
                               .replace(/[۰-۹]/g, function(d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); })
@@ -1016,37 +1016,43 @@ class AuthController {
             var role = window.unifiedAuthRole || 'Customer';
             
             try {
-                // Ensure fetch is available
                 if (typeof fetch === 'undefined') throw new Error('Browser not supported');
                 
-                fetch('/api/auth/send-whatsapp-otp', {
+                var checkRes = await fetch('/api/auth/check-phone?phone=' + encodeURIComponent(phone));
+                var checkData = await checkRes.json();
+                
+                if (checkData.exists) {
+                    if (checkData.role !== role) {
+                        var myRole = role === 'Driver' ? 'سائق' : 'راكب';
+                        window.showLoginError('الرقم مسجل مسبقاً كـ ' + checkData.roleAr + ' ولا يمكن الدخول كـ ' + myRole);
+                        resetBtn();
+                        return;
+                    }
+                    alert('الرقم مسجل في النظام كـ ' + checkData.roleAr + '. سيتم إرسال رمز الدخول عبر الواتساب.');
+                } else {
+                    alert('الرقم غير مسجل في النظام. سيتم إرسال رمز التحقق لإنشاء حساب جديد.');
+                }
+                
+                var res = await fetch('/api/auth/send-whatsapp-otp', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ phone: phone, role: role })
-                })
-                .then(function(res) {
-                    return res.json().then(function(data) {
-                        return { ok: res.ok, data: data };
-                    });
-                })
-                .then(function(result) {
-                    resetBtn();
-                    if (result.ok && result.data.success) {
-                        document.getElementById('new-auth-ui').style.display = 'none';
-                        document.getElementById('new-otp-ui').style.display = 'flex';
-                        document.getElementById('unified-otp-phone-display').innerText = phone;
-                        setTimeout(function() { document.getElementById('u-otp-1').focus(); }, 300);
-                    } else {
-                        window.showLoginError(result.data.error || 'فشل إرسال رمز التحقق');
-                    }
-                })
-                .catch(function(err) {
-                    resetBtn();
-                    window.showLoginError('خطأ في الاتصال بالخادم.');
                 });
+                
+                var data = await res.json();
+                resetBtn();
+                
+                if (res.ok && data.success) {
+                    document.getElementById('new-auth-ui').style.display = 'none';
+                    document.getElementById('new-otp-ui').style.display = 'flex';
+                    document.getElementById('unified-otp-phone-display').innerText = phone;
+                    setTimeout(function() { var el = document.getElementById('u-otp-1'); if(el) el.focus(); }, 300);
+                } else {
+                    window.showLoginError(data.error || 'فشل إرسال رمز التحقق');
+                }
             } catch(e) {
                 resetBtn();
-                window.showLoginError('خطأ: متصفحك قديم جداً. يرجى التحديث.');
+                window.showLoginError('خطأ في الاتصال بالخادم.');
             }
         }
         
