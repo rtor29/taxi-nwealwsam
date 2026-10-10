@@ -260,14 +260,14 @@ class AuthController {
         .tab-active{background:#111111;color:#ffffff;border-color:#111111}
         .tab-inactive{background:#f3f4f6;color:#6b7280;border-color:#e5e7eb}
         .tab-inactive:hover{background:#e5e7eb;color:#111111}
-        .btn-primary{background:#111111;color:#ffffff;border:none;border-radius:12px;padding:14px;font-family:'Cairo',sans-serif;font-weight:900;font-size:15px;cursor:pointer;width:100%;transition:background .2s}
+        .btn-primary{background:#111111;color:#ffffff;border:none;border-radius:12px;padding:14px;font-family:'Cairo',sans-serif;font-weight:900;font-size:15px;cursor:pointer;flex:1; min-width:0;transition:background .2s}
         .btn-primary:hover{background:#333333}
         .btn-primary:disabled{background:#9ca3af;cursor:not-allowed}
-        .btn-secondary{background:#f3f4f6;color:#111111;border:1.5px solid #e5e7eb;border-radius:12px;padding:12px;font-family:'Cairo',sans-serif;font-weight:700;font-size:13px;cursor:pointer;width:100%;transition:background .2s}
+        .btn-secondary{background:#f3f4f6;color:#111111;border:1.5px solid #e5e7eb;border-radius:12px;padding:12px;font-family:'Cairo',sans-serif;font-weight:700;font-size:13px;cursor:pointer;flex:1; min-width:0;transition:background .2s}
         .btn-secondary:hover{background:#e5e7eb}
         .btn-small{background:#f3f4f6;color:#374151;border:1.5px solid #d1d5db;border-radius:10px;padding:8px 14px;font-family:'Cairo',sans-serif;font-weight:700;font-size:12px;cursor:pointer;transition:background .2s;white-space:nowrap}
         .btn-small:hover{background:#e5e7eb}
-        .inp{width:100%;border:1.5px solid #d1d5db;border-radius:12px;padding:13px 14px;font-family:'Cairo',sans-serif;font-size:14px;color:#111111;background:#fafafa;outline:none;transition:border .2s}
+        .inp{flex:1; min-width:0;border:1.5px solid #d1d5db;border-radius:12px;padding:13px 14px;font-family:'Cairo',sans-serif;font-size:14px;color:#111111;background:#fafafa;outline:none;transition:border .2s}
         .inp:focus{border-color:#111111;background:#ffffff}
         .inp::placeholder{color:#9ca3af}
         .label{display:block;font-size:13px;font-weight:700;color:#374151;margin-bottom:6px}
@@ -443,7 +443,7 @@ class AuthController {
 
     <!-- App view iframe (shown after login) -->
     <div id="app-view-container" style="display:none;position:fixed;inset:0;width:100vw;height:100vh;z-index:999999;background:#1a1a2e">
-        <iframe id="app-frame" style="width:100%;height:100%;border:none" allow="geolocation *; microphone *; camera *" title="تطبيق توصيلة"></iframe>
+        <iframe id="app-frame" style="flex:1; min-width:0;height:100%;border:none" allow="geolocation *; microphone *; camera *" title="تطبيق توصيلة"></iframe>
     </div>
 
     <!-- ========================================================================= -->
@@ -456,7 +456,7 @@ class AuthController {
     <div id="booking-modal-view" style="display:none;position:fixed;inset:0;width:100vw;height:100vh;z-index:999999;background:#e5e7eb;flex-direction:column;font-family:'Cairo',sans-serif;" dir="rtl">
         
         <!-- The Map Viewport -->
-        <div id="booking-mapbox-map" style="position:absolute;inset:0;width:100%;height:100%;z-index:10;"></div>
+        <div id="booking-mapbox-map" style="position:absolute;inset:0;flex:1; min-width:0;height:100%;z-index:10;"></div>
         
         <!-- Hamburger Menu (Top Right) -->
         <div style="position:absolute;top:30px;right:20px;z-index:20;">
@@ -544,7 +544,7 @@ class AuthController {
                 <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:10px;">
                     <div onclick="document.getElementById('drawer-image-upload').click()" style="width:110px;height:110px;border-radius:50%;background:linear-gradient(135deg, #e0e7ff, #c7d2fe);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 4px 10px rgba(0,0,0,0.05), 0 10px 20px rgba(99,102,241,0.2);position:relative;cursor:pointer;overflow:hidden;">
                         <span id="drawer-user-icon" style="font-size:12px;color:#3730a3;text-align:center;font-weight:700;line-height:1.2;">صورة السائق<br>او الراكب</span>
-                        <img id="drawer-user-image" src="" style="display:none;width:100%;height:100%;object-fit:cover;" />
+                        <img id="drawer-user-image" src="" style="display:none;flex:1; min-width:0;height:100%;object-fit:cover;" />
                         <div id="drawer-user-plus" style="position:absolute;bottom:-5px;color:#6366f1;font-size:28px;font-weight:300;">+</div>
                     </div>
                     <input type="file" id="drawer-image-upload" accept="image/*" style="display:none;" onchange="window.uploadUserImage(this)" />
@@ -663,7 +663,7 @@ class AuthController {
 
     <!-- 30-Second Auto-Escalation Dispatch Modal (Stage 1) -->
     <div id="ride-dispatch-modal" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
-        <div class="card" style="max-width:400px;width:100%;padding:24px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.3);">
+        <div class="card" style="max-width:400px;flex:1; min-width:0;padding:24px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.3);">
             <div style="font-size:36px;margin-bottom:8px;" id="dispatch-modal-icon">⏳</div>
             <h3 id="dispatch-modal-title" style="font-size:17px;font-weight:900;margin:0 0 6px;color:#111;">جاري البحث عن أقرب سائق متواجد...</h3>
             <p id="dispatch-modal-subtitle" style="font-size:12px;color:#6b7280;margin:0 0 16px;">يتم الآن فحص وتحديد أقرب كابتن لتنفيذ مشوارك السريع</p>
@@ -689,7 +689,7 @@ class AuthController {
 
     <!-- Driver Incoming Ride Alert Modal (Stage 4) -->
     <div id="driver-incoming-modal" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
-        <div class="card" style="max-width:400px;width:100%;padding:22px 18px;text-align:center;border:2px solid #f59e0b;">
+        <div class="card" style="max-width:400px;flex:1; min-width:0;padding:22px 18px;text-align:center;border:2px solid #f59e0b;">
             <div style="font-size:36px;margin-bottom:6px;">🚖</div>
             <h3 style="font-size:17px;font-weight:900;margin:0 0 4px;color:#111;">طلب مشوار قصير جديد!</h3>
             <p style="font-size:12px;color:#6b7280;margin:0 0 12px;">لديك 30 ثانية للموافقة قبل انتقال الطلب لسائق آخر</p>
@@ -717,7 +717,7 @@ class AuthController {
 
     <!-- Driver Active Ride Modal (Waze Navigation & Arrival Status) -->
     <div id="driver-active-ride-modal" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
-        <div class="card" style="max-width:420px;width:100%;padding:22px 18px;text-align:center;border:2px solid #10b981;">
+        <div class="card" style="max-width:420px;flex:1; min-width:0;padding:22px 18px;text-align:center;border:2px solid #10b981;">
             <div style="font-size:36px;margin-bottom:6px;">🚗</div>
             <h3 style="font-size:17px;font-weight:900;margin:0 0 4px;color:#111;">الرحلة الجارية الحالية</h3>
             <p style="font-size:12px;color:#6b7280;margin:0 0 12px;" id="driver-active-ride-status">أنت الآن في طريقك إلى موقع الراكب</p>
@@ -762,7 +762,7 @@ class AuthController {
 
     <!-- Passenger Driver Arrived Notification Modal -->
     <div id="passenger-arrived-modal" style="display:none;position:fixed;inset:0;z-index:1000001;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
-        <div class="card" style="max-width:380px;width:100%;padding:26px 20px;text-align:center;border:2.5px solid #16a34a;box-shadow:0 12px 35px rgba(0,0,0,0.35);animation:pulseGreen 2s infinite;">
+        <div class="card" style="max-width:380px;flex:1; min-width:0;padding:26px 20px;text-align:center;border:2.5px solid #16a34a;box-shadow:0 12px 35px rgba(0,0,0,0.35);animation:pulseGreen 2s infinite;">
             <div style="font-size:48px;margin-bottom:10px;">🚖</div>
             <h3 style="font-size:19px;font-weight:900;margin:0 0 6px;color:#15803d;">وصل الكابتن إلى موقعك!</h3>
             <p style="font-size:13px;color:#374151;margin:0 0 14px;line-height:1.5;" id="passenger-arrived-msg">الكابتن في انتظارك الآن عند نقطة الانطلاق.</p>
@@ -777,7 +777,7 @@ class AuthController {
 
     <!-- Passenger Active Ride Exists Alert Modal -->
     <div id="passenger-active-blocked-modal" style="display:none;position:fixed;inset:0;z-index:1000001;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
-        <div class="card" style="max-width:390px;width:100%;padding:22px 18px;text-align:center;border:2px solid #f59e0b;">
+        <div class="card" style="max-width:390px;flex:1; min-width:0;padding:22px 18px;text-align:center;border:2px solid #f59e0b;">
             <div style="font-size:40px;margin-bottom:8px;">⚠️</div>
             <h3 style="font-size:17px;font-weight:900;margin:0 0 6px;color:#92400e;">لديك مشوار جاري ومقبول بالفعل!</h3>
             <p style="font-size:12px;color:#6b7280;margin:0 0 14px;line-height:1.5;" id="active-blocked-msg">
@@ -801,7 +801,7 @@ class AuthController {
 
     <!-- Trip type selection (shown after login, before opening app) -->
     <div id="trip-type-modal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.5);align-items:center;justify-content:center;padding:16px">
-        <div class="card" style="max-width:420px;width:100%;margin:0 auto;padding:24px 20px;max-height:90vh;overflow-y:auto;box-sizing:border-box">
+        <div class="card" style="max-width:420px;flex:1; min-width:0;margin:0 auto;padding:24px 20px;max-height:90vh;overflow-y:auto;box-sizing:border-box">
             <div style="text-align:center;margin-bottom:18px">
                 <div id="trip-modal-icon" style="font-size:32px;margin-bottom:6px">🚕</div>
                 <h2 id="trip-modal-title" style="font-size:18px;font-weight:900;margin:0 0 4px;color:#111">اختر نوع الرحلة</h2>
@@ -885,13 +885,13 @@ class AuthController {
     </div>
     
     <!-- ===== NEW UNIFIED AUTH SCREEN ===== -->
-    <main id="new-auth-ui" style="max-width:480px;width:100%;margin:0 auto;height:100vh;background:#ffffff;display:flex;flex-direction:column;padding:20px 20px;position:relative;">
+    <main id="new-auth-ui" style="max-width:480px;flex:1; min-width:0;margin:0 auto;height:100vh;background:#ffffff;display:flex;flex-direction:column;padding:20px 20px;position:relative;">
         <!-- Logo -->
         <div style="margin-bottom:40px;text-align:center;display:flex;justify-content:center;">
-            <img src="${LOGO_BASE64}" style="width:250px;max-width:100%;height:auto;object-fit:contain;" alt="توصيلة">
+            <img src="${LOGO_BASE64}" style="width:250px;max-flex:1; min-width:0;height:auto;object-fit:contain;" alt="توصيلة">
         </div>
 
-        <div style="width:100%;text-align:right;">
+        <div style="flex:1; min-width:0;text-align:right;">
             <h1 style="font-size:36px;font-weight:900;color:#111;margin:0 0 12px;font-family:'Cairo',sans-serif;">ياهلا</h1>
             <p style="font-size:18px;color:#374151;margin:0 0 30px;font-weight:700;">قم بادخال رقم هاتفك</p>
 
@@ -913,14 +913,14 @@ class AuthController {
     </main>
 
     <!-- ===== NEW UNIFIED OTP SCREEN ===== -->
-    <main id="new-otp-ui" style="display:none;max-width:480px;width:100%;margin:0 auto;height:100vh;background:#ffffff;flex-direction:column;padding:40px 20px;position:relative;">
+    <main id="new-otp-ui" style="display:none;max-width:480px;flex:1; min-width:0;margin:0 auto;height:100vh;background:#ffffff;flex-direction:column;padding:40px 20px;position:relative;">
         <div style="text-align:center;margin-bottom:40px;display:flex;justify-content:center;">
             <div style="width:120px;height:120px;background:#f0fdf4;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 30px rgba(37,211,102,0.2);">
                 <i class="fa-brands fa-whatsapp" style="font-size:72px;color:#25d366;"></i>
             </div>
         </div>
 
-        <div style="width:100%;text-align:right;">
+        <div style="flex:1; min-width:0;text-align:right;">
             <h2 style="font-size:26px;font-weight:900;color:#111;margin:0 0 16px;font-family:'Cairo',sans-serif;">ادخل رمز التفعيل</h2>
             <p style="font-size:15px;color:#374151;margin:0 0 8px;font-weight:600;">
                 لقد تم ارسال رمز التفعيل على الواتساب الرقم <span id="unified-otp-phone-display" dir="ltr" style="font-weight:900;"></span>
@@ -945,10 +945,10 @@ class AuthController {
 
     
     <!-- ===== NEW UNIFIED PROFILE SCREEN ===== -->
-    <main id="new-profile-ui" style="display:none;max-width:480px;width:100%;margin:0 auto;height:100vh;background:#ffffff;flex-direction:column;padding:40px 20px;position:relative;align-items:center;">
-        <img src="${LOGO_BASE64}" style="width:220px;max-width:100%;height:auto;object-fit:contain;margin-bottom:60px;" alt="توصيلة">
+    <main id="new-profile-ui" style="display:none;max-width:480px;flex:1; min-width:0;margin:0 auto;height:100vh;background:#ffffff;flex-direction:column;padding:40px 20px;position:relative;align-items:center;">
+        <img src="${LOGO_BASE64}" style="width:220px;max-flex:1; min-width:0;height:auto;object-fit:contain;margin-bottom:60px;" alt="توصيلة">
 
-        <div style="width:100%;display:flex;flex-direction:column;gap:25px;padding: 0 10px;">
+        <div style="flex:1; min-width:0;display:flex;flex-direction:column;gap:25px;padding: 0 10px;">
             <div style="display:flex;align-items:center;justify-content:flex-end;gap:15px;">
                 <input type="text" id="u-fname" dir="rtl" style="flex:1;background:#e2e8f0;border:none;border-radius:12px;padding:12px 16px;font-size:16px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.05);outline:none;text-align:right;" placeholder="">
                 <span style="font-weight:bold;font-size:14px;color:#374151;white-space:nowrap;width:120px;text-align:right;">الاسم الاول</span>
@@ -973,12 +973,12 @@ class AuthController {
     </main>
 
     <!-- ===== NEW UNIFIED SERVICE TYPE SCREEN ===== -->
-    <main id="new-service-ui" style="display:none;max-width:480px;width:100%;margin:0 auto;height:100vh;background:#ffffff;flex-direction:column;padding:40px 20px;align-items:center;justify-content:center;position:relative;">
+    <main id="new-service-ui" style="display:none;max-width:480px;flex:1; min-width:0;margin:0 auto;height:100vh;background:#ffffff;flex-direction:column;padding:40px 20px;align-items:center;justify-content:center;position:relative;">
         <div style="margin-bottom:80px;text-align:center;">
-            <img src="${LOGO_BASE64}" style="width:280px;max-width:100%;height:auto;object-fit:contain;margin-top:-20px;" alt="توصيلة">
+            <img src="${LOGO_BASE64}" style="width:280px;max-flex:1; min-width:0;height:auto;object-fit:contain;margin-top:-20px;" alt="توصيلة">
         </div>
 
-        <div style="width:100%;display:flex;flex-direction:column;gap:24px;padding: 0 10px;">
+        <div style="flex:1; min-width:0;display:flex;flex-direction:column;gap:24px;padding: 0 10px;">
             <button type="button" onclick="handleServiceSelect('short')" style="background:#f97316;color:#ffffff;border:none;border-radius:24px;padding:22px;font-size:26px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer;box-shadow:0 8px 20px rgba(249,115,22,0.35);transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.96)';" onmouseup="this.style.transform='scale(1)';">
                 طلب مشوار سريع
             </button>
@@ -2306,7 +2306,7 @@ class AuthController {
                         var title = f.text_ar || f.text || nm.split(',')[0];
                         var item = document.createElement('div');
                         item.className = 'search-result-item';
-                        item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">🗺️</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + title + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + nm + '</span></div>';
+                        item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">🗺️</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;flex:1; min-width:0;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + title + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + nm + '</span></div>';
                         item.onclick = function() {
                             resultsEl.style.display = 'none';
                             var inp = document.getElementById('cust-reg-address');
@@ -2364,7 +2364,7 @@ class AuthController {
                         var title = f.text_ar || f.text || nm.split(',')[0];
                         var item = document.createElement('div');
                         item.className = 'search-result-item';
-                        item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">🗺️</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + title + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + nm + '</span></div>';
+                        item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">🗺️</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;flex:1; min-width:0;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + title + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + nm + '</span></div>';
                         item.onclick = function() {
                             resultsEl.style.display = 'none';
                             var inp = document.getElementById('cust-reg-route');
@@ -3432,7 +3432,7 @@ class AuthController {
                 local.forEach(function(p) {
                     var item = document.createElement('div');
                     item.className = 'search-result-item';
-                    item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">📍</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + p.name + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">النجف الأشرف، العراق</span></div>';
+                    item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">📍</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;flex:1; min-width:0;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + p.name + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">النجف الأشرف، العراق</span></div>';
                     item.onclick = function() { resultsEl.style.display = 'none'; setBookingPickup(p.lon, p.lat, p.name); setMapTarget('dropoff'); };
                     resultsEl.appendChild(item);
                 });
@@ -3451,7 +3451,7 @@ class AuthController {
                         local.forEach(function(p) {
                             var item = document.createElement('div');
                             item.className = 'search-result-item';
-                            item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">📍</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + p.name + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">النجف الأشرف، العراق</span></div>';
+                            item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">📍</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;flex:1; min-width:0;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + p.name + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">النجف الأشرف، العراق</span></div>';
                             item.onclick = function() { resultsEl.style.display = 'none'; setBookingPickup(p.lon, p.lat, p.name); setMapTarget('dropoff'); };
                             resultsEl.appendChild(item);
                         });
@@ -3461,7 +3461,7 @@ class AuthController {
                         var title = f.text_ar || f.text || nm.split(',')[0];
                         var item = document.createElement('div');
                         item.className = 'search-result-item';
-                        item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">🗺️</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + title + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + nm + '</span></div>';
+                        item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">🗺️</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;flex:1; min-width:0;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + title + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + nm + '</span></div>';
                         item.onclick = function() { resultsEl.style.display = 'none'; setBookingPickup(f.center[0], f.center[1], title); setMapTarget('dropoff'); };
                         resultsEl.appendChild(item);
                     });
@@ -4448,7 +4448,7 @@ class AuthController {
                 local.forEach(function(p) {
                     var item = document.createElement('div');
                     item.className = 'search-result-item';
-                    item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">📍</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + p.name + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">النجف الأشرف، العراق</span></div>';
+                    item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">📍</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;flex:1; min-width:0;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + p.name + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">النجف الأشرف، العراق</span></div>';
                     item.onclick = function() { resultsEl.style.display = 'none'; setBookingDropoff(p.lon, p.lat, p.name); };
                     resultsEl.appendChild(item);
                 });
@@ -4468,7 +4468,7 @@ class AuthController {
                         local.forEach(function(p) {
                             var item = document.createElement('div');
                             item.className = 'search-result-item';
-                            item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">📍</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + p.name + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">النجف الأشرف، العراق</span></div>';
+                            item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">📍</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;flex:1; min-width:0;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + p.name + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">النجف الأشرف، العراق</span></div>';
                             item.onclick = function() { resultsEl.style.display = 'none'; setBookingDropoff(p.lon, p.lat, p.name); };
                             resultsEl.appendChild(item);
                         });
@@ -4478,7 +4478,7 @@ class AuthController {
                         var title = f.text_ar || f.text || nm.split(',')[0];
                         var item = document.createElement('div');
                         item.className = 'search-result-item';
-                        item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">🗺️</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;width:100%;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + title + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;display:block;">' + nm + '</span></div>';
+                        item.innerHTML = '<div style="font-size:18px;flex-shrink:0;">🗺️</div><div style="display:flex;flex-direction:column;overflow:hidden;gap:2px;flex:1; min-width:0;"><span style="font-weight:700;color:#111;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + title + '</span><span style="color:#64748b;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + nm + '</span></div>';
                         item.onclick = function() { resultsEl.style.display = 'none'; setBookingDropoff(f.center[0], f.center[1], title); };
                         resultsEl.appendChild(item);
                     });
