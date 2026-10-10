@@ -1183,18 +1183,19 @@ class AuthController {
             try {
                 // If they have __unifiedProfile, it means they are new and submitted the profile
                 if (window.__unifiedProfile) {
-                    var regRes = await fetch('/api/' + (role === 'Driver' ? 'driver' : 'passenger') + '/register', {
+                    var regRes = await fetch('/api/auth/complete-' + (role === 'Driver' ? 'driver' : 'passenger') + '-registration', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            phone: phone,
+                            phoneNumber: phone,
                             password: 'auto-generated',
                             fullName: window.__unifiedProfile.fullName,
                             firstName: window.__unifiedProfile.firstName,
                             lastName: window.__unifiedProfile.lastName,
                             email: window.__unifiedProfile.email,
-                            carName: 'مركبة',
-                            plateNumber: '12345',
+                            vehicleMake: 'مركبة',
+                            vehiclePlate: '12345',
+                            tripType: type === 'daily' ? 'PermanentLine' : 'ShortTrip',
                             serviceType: type === 'daily' ? 'PermanentLine' : 'ShortTrip',
                             route: 'العراق',
                             address: 'العراق',
@@ -1216,6 +1217,9 @@ class AuthController {
                             persistSession(loginData);
                             serviceMain.style.opacity = '1';
                             setTimeout(function(){ openRouteApp('set-route'); }, 200);
+                        } else {
+                            serviceMain.style.opacity = '1';
+                            alert(loginData.error || 'تم التسجيل ولكن حدث خطأ أثناء تسجيل الدخول التلقائي.');
                         }
                     } else {
                         serviceMain.style.opacity = '1';
