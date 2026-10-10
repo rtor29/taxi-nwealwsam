@@ -922,6 +922,35 @@ class AuthController {
         </div>
     </main>
 
+    
+    <!-- ===== NEW UNIFIED PROFILE SCREEN ===== -->
+    <main id="new-profile-ui" style="display:none;max-width:480px;width:100%;margin:0 auto;height:100vh;background:#ffffff;flex-direction:column;padding:40px 20px;position:relative;align-items:center;">
+        <img src="${LOGO_BASE64}" style="width:220px;max-width:100%;height:auto;object-fit:contain;margin-bottom:60px;" alt="توصيلة">
+
+        <div style="width:100%;display:flex;flex-direction:column;gap:25px;padding: 0 10px;">
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:15px;">
+                <input type="text" id="u-fname" dir="rtl" style="flex:1;background:#e2e8f0;border:none;border-radius:12px;padding:12px 16px;font-size:16px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.05);outline:none;text-align:right;" placeholder="">
+                <span style="font-weight:bold;font-size:14px;color:#374151;white-space:nowrap;width:120px;text-align:right;">الاسم الاول</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:15px;">
+                <input type="text" id="u-sname" dir="rtl" style="flex:1;background:#e2e8f0;border:none;border-radius:12px;padding:12px 16px;font-size:16px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.05);outline:none;text-align:right;" placeholder="">
+                <span style="font-weight:bold;font-size:14px;color:#374151;white-space:nowrap;width:120px;text-align:right;">الاسم الثاني</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:15px;">
+                <input type="text" id="u-lname" dir="rtl" style="flex:1;background:#e2e8f0;border:none;border-radius:12px;padding:12px 16px;font-size:16px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.05);outline:none;text-align:right;" placeholder="">
+                <span style="font-weight:bold;font-size:14px;color:#374151;white-space:nowrap;width:120px;text-align:right;">اللقب</span>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:flex-end;gap:15px;margin-top:20px;">
+                <input type="email" id="u-email" dir="ltr" style="flex:1;background:#e2e8f0;border:none;border-radius:12px;padding:12px 16px;font-size:16px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.05);outline:none;text-align:left;" placeholder="">
+                <span style="font-weight:bold;font-size:14px;color:#374151;white-space:nowrap;width:120px;text-align:right;">البريد الالكتروني</span>
+            </div>
+        </div>
+
+        <button type="button" onclick="submitUnifiedProfile()" style="position:absolute;bottom:80px;left:30px;background:#f97316;color:#ffffff;border:none;border-radius:50%;width:64px;height:64px;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 25px rgba(249,115,22,0.5);cursor:pointer;transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.95)';" onmouseup="this.style.transform='scale(1)';">
+            <i class="fa-solid fa-arrow-left" style="font-size:28px;"></i>
+        </button>
+    </main>
+
     <!-- ===== NEW UNIFIED SERVICE TYPE SCREEN ===== -->
     <main id="new-service-ui" style="display:none;max-width:480px;width:100%;margin:0 auto;height:100vh;background:#ffffff;flex-direction:column;padding:40px 20px;align-items:center;justify-content:center;position:relative;">
         <div style="margin-bottom:80px;text-align:center;">
@@ -1081,7 +1110,25 @@ class AuthController {
                     window.__verifiedOtpCode = code;
                     
                     document.getElementById('new-otp-ui').style.display = 'none';
-                    document.getElementById('new-service-ui').style.display = 'flex';
+                    document.getElementById('unified-otp-inputs').style.opacity = '0.5';
+
+                    try {
+                        var loginRes = await fetch('/api/auth/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ identifier: phone, password: 'auto-generated', role: role, autoOtpLogin: true })
+                        });
+                        var loginData = await loginRes.json();
+                        
+                        if (loginRes.ok && loginData.success) {
+                            persistSession(loginData);
+                            document.getElementById('new-service-ui').style.display = 'flex';
+                        } else {
+                            document.getElementById('new-profile-ui').style.display = 'flex';
+                        }
+                    } catch(e) {
+                        document.getElementById('new-profile-ui').style.display = 'flex';
+                    }
                 } else {
                     alert(data.error || 'الرمز غير صحيح أو منتهي الصلاحية');
                     for(var i=1; i<=6; i++) {
@@ -1095,6 +1142,33 @@ class AuthController {
             }
         }
         
+        
+        window.submitUnifiedProfile = function() {
+            var fName = (document.getElementById('u-fname') || {}).value || '';
+            var sName = (document.getElementById('u-sname') || {}).value || '';
+            var lName = (document.getElementById('u-lname') || {}).value || '';
+            var email = (document.getElementById('u-email') || {}).value || '';
+            
+            fName = fName.trim();
+            sName = sName.trim();
+            lName = lName.trim();
+            
+            if(!fName || !sName || !lName) {
+                alert('الرجاء إدخال الاسم الأول والثاني واللقب'); return;
+            }
+            
+            window.__unifiedProfile = {
+                firstName: fName,
+                lastName: sName,
+                surname: lName,
+                fullName: fName + ' ' + sName + ' ' + lName,
+                email: email.trim()
+            };
+            
+            document.getElementById('new-profile-ui').style.display = 'none';
+            document.getElementById('new-service-ui').style.display = 'flex';
+        };
+
         async function handleServiceSelect(type) {
             var role = window.unifiedAuthRole || 'Customer';
             var phone = window.__unifiedPhone;
@@ -1107,34 +1181,18 @@ class AuthController {
             localStorage.setItem('selected_trip_type', type);
             
             try {
-                // Attempt to auto-login or register seamlessly
-                var res = await fetch('/api/auth/login', { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ identifier: phone, password: 'auto-generated', role: role, autoOtpLogin: true }) 
-                });
-                
-                var data = await res.json();
-                
-                if (res.ok && data.success) {
-                    // Save session exactly like old handleCaptainLogin / handleCustomerLogin
-                    persistSession(data);
-                    serviceMain.style.opacity = '1';
-                    // The Mapbox UI has its own display toggler
-                    setTimeout(function(){ 
-                        openRouteApp('set-route'); 
-                    }, 200);
-                } else {
-                    // Registration needed?
+                // If they have __unifiedProfile, it means they are new and submitted the profile
+                if (window.__unifiedProfile) {
                     var regRes = await fetch('/api/' + (role === 'Driver' ? 'driver' : 'passenger') + '/register', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             phone: phone,
                             password: 'auto-generated',
-                            fullName: 'مستخدم جديد',
-                            firstName: 'مستخدم',
-                            lastName: 'جديد',
+                            fullName: window.__unifiedProfile.fullName,
+                            firstName: window.__unifiedProfile.firstName,
+                            lastName: window.__unifiedProfile.lastName,
+                            email: window.__unifiedProfile.email,
                             carName: 'مركبة',
                             plateNumber: '12345',
                             serviceType: type === 'daily' ? 'PermanentLine' : 'ShortTrip',
@@ -1163,6 +1221,10 @@ class AuthController {
                         serviceMain.style.opacity = '1';
                         alert('حدث خطأ أثناء إعداد الحساب. المرجو المحاولة مجددا.');
                     }
+                } else {
+                    // Already logged in!
+                    serviceMain.style.opacity = '1';
+                    setTimeout(function(){ openRouteApp('set-route'); }, 200);
                 }
             } catch (err) {
                 serviceMain.style.opacity = '1';
