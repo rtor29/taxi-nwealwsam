@@ -254,20 +254,20 @@ class AuthController {
     <script src="https://cdn.tailwindcss.com" defer></script>
     <style>
         *{box-sizing:border-box}
-        body{font-family:'Cairo',sans-serif;background:#ffffff;color:#111111;margin:0;padding:0;min-height:100vh;overflow-x:hidden}
+        body{font-family:Cairo,sans-serif;background:#ffffff;color:#111111;margin:0;padding:0;min-height:100vh;overflow-x:hidden}
         @keyframes pulseGreen{0%,100%{box-shadow:0 6px 25px rgba(22,163,106,0.4)}50%{box-shadow:0 6px 35px rgba(22,163,106,0.7)}}
         .card{background:#ffffff;border:1.5px solid #e5e7eb;border-radius:16px;box-shadow:0 2px 16px rgba(0,0,0,0.07)}
         .tab-active{background:#111111;color:#ffffff;border-color:#111111}
         .tab-inactive{background:#f3f4f6;color:#6b7280;border-color:#e5e7eb}
         .tab-inactive:hover{background:#e5e7eb;color:#111111}
-        .btn-primary{background:#111111;color:#ffffff;border:none;border-radius:12px;padding:14px;font-family:'Cairo',sans-serif;font-weight:900;font-size:15px;cursor:pointer;flex:1; min-width:0;transition:background .2s}
+        .btn-primary{background:#111111;color:#ffffff;border:none;border-radius:12px;padding:14px;font-family:Cairo,sans-serif;font-weight:900;font-size:15px;cursor:pointer;flex:1; min-width:0;transition:background .2s}
         .btn-primary:hover{background:#333333}
         .btn-primary:disabled{background:#9ca3af;cursor:not-allowed}
-        .btn-secondary{background:#f3f4f6;color:#111111;border:1.5px solid #e5e7eb;border-radius:12px;padding:12px;font-family:'Cairo',sans-serif;font-weight:700;font-size:13px;cursor:pointer;flex:1; min-width:0;transition:background .2s}
+        .btn-secondary{background:#f3f4f6;color:#111111;border:1.5px solid #e5e7eb;border-radius:12px;padding:12px;font-family:Cairo,sans-serif;font-weight:700;font-size:13px;cursor:pointer;flex:1; min-width:0;transition:background .2s}
         .btn-secondary:hover{background:#e5e7eb}
-        .btn-small{background:#f3f4f6;color:#374151;border:1.5px solid #d1d5db;border-radius:10px;padding:8px 14px;font-family:'Cairo',sans-serif;font-weight:700;font-size:12px;cursor:pointer;transition:background .2s;white-space:nowrap}
+        .btn-small{background:#f3f4f6;color:#374151;border:1.5px solid #d1d5db;border-radius:10px;padding:8px 14px;font-family:Cairo,sans-serif;font-weight:700;font-size:12px;cursor:pointer;transition:background .2s;white-space:nowrap}
         .btn-small:hover{background:#e5e7eb}
-        .inp{flex:1; min-width:0;border:1.5px solid #d1d5db;border-radius:12px;padding:13px 14px;font-family:'Cairo',sans-serif;font-size:14px;color:#111111;background:#fafafa;outline:none;transition:border .2s}
+        .inp{flex:1; min-width:0;border:1.5px solid #d1d5db;border-radius:12px;padding:13px 14px;font-family:Cairo,sans-serif;font-size:14px;color:#111111;background:#fafafa;outline:none;transition:border .2s}
         .inp:focus{border-color:#111111;background:#ffffff}
         .inp::placeholder{color:#9ca3af}
         .label{display:block;font-size:13px;font-weight:700;color:#374151;margin-bottom:6px}
@@ -277,18 +277,18 @@ class AuthController {
         .trip-card:hover{border-color:#111111;background:#f9f9f9}
         .trip-card.selected{border-color:#111111;background:#111111;color:#ffffff}
         .trip-card.selected .trip-icon{filter:invert(1)}
-        .map-mode-btn{border:1.5px solid #d1d5db;border-radius:10px;padding:9px 12px;font-size:12px;font-weight:700;font-family:'Cairo',sans-serif;cursor:pointer;display:flex;align-items:center;gap:6px;background:#f9fafb;color:#374151;transition:all .2s;flex:1;justify-content:center}
+        .map-mode-btn{border:1.5px solid #d1d5db;border-radius:10px;padding:9px 12px;font-size:12px;font-weight:700;font-family:Cairo,sans-serif;cursor:pointer;display:flex;align-items:center;gap:6px;background:#f9fafb;color:#374151;transition:all .2s;flex:1;justify-content:center}
         .map-mode-btn.active-pickup{background:#f0fdf4;border-color:#16a34a;color:#15803d}
         .map-mode-btn.active-dropoff{background:#fef2f2;border-color:#dc2626;color:#b91c1c}
         .search-result-item{padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f3f4f6;color:#111111;display:flex;align-items:center;gap:8px}
         .search-result-item:hover{background:#f3f4f6}
         .sub-toggle{display:flex;background:#f3f4f6;border-radius:10px;padding:3px;gap:3px;margin-bottom:16px}
-        .sub-btn{flex:1;padding:9px;font-size:13px;font-weight:700;font-family:'Cairo',sans-serif;border:none;border-radius:8px;cursor:pointer;transition:all .2s}
+        .sub-btn{flex:1;padding:9px;font-size:13px;font-weight:700;font-family:Cairo,sans-serif;border:none;border-radius:8px;cursor:pointer;transition:all .2s}
         .sub-btn.on{background:#111111;color:#ffffff}
         .sub-btn.off{background:transparent;color:#6b7280}
         .sub-btn.off:hover{color:#111111}
         ::placeholder{color:#9ca3af;opacity:1}
-        .range-chip{background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;font-family:'Cairo',sans-serif;cursor:pointer;transition:all .15s}
+        .range-chip{background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;font-family:Cairo,sans-serif;cursor:pointer;transition:all .15s}
         .range-chip.active{background:#111827;color:#fff;border-color:#111827}
         .day-chip{background:#f3f4f6;color:#4b5563;border:1.5px solid #e5e7eb;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;text-align:center}
         .day-chip.active{background:#10b981;color:#fff;border-color:#059669}
@@ -453,7 +453,7 @@ class AuthController {
     <!-- ========================================================================= -->
     <!-- CLEAN MAPBOX BOOKING APP (STATE 1: PICKUP, STATE 2: DROPOFF) -->
     <!-- ========================================================================= -->
-    <div id="booking-modal-view" style="display:none;position:fixed;inset:0;width:100vw;height:100vh;z-index:999999;background:#e5e7eb;flex-direction:column;font-family:'Cairo',sans-serif;" dir="rtl">
+    <div id="booking-modal-view" style="display:none;position:fixed;inset:0;width:100vw;height:100vh;z-index:999999;background:#e5e7eb;flex-direction:column;font-family:Cairo,sans-serif;" dir="rtl">
         
         <!-- The Map Viewport -->
         <div id="booking-mapbox-map" style="position:absolute;inset:0;flex:1; min-width:0;height:100%;z-index:10;"></div>
@@ -498,7 +498,7 @@ class AuthController {
             <div id="clean-pickup-container" style="position:relative;">
                 <div style="background:#f1f5f9;border-radius:30px;display:flex;align-items:center;padding:14px 20px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.03);">
                     <i class="fa-solid fa-magnifying-glass" style="font-size:20px;color:#64748b;"></i>
-                    <input type="text" id="book-pickup-input" onfocus="this.blur(); window.openFullscreenSearch('pickup');"  placeholder="نقطة الانطلاق..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:'Cairo',sans-serif;font-weight:700;color:#0f172a;padding:0 15px;">
+                    <input type="text" id="book-pickup-input" onfocus="this.blur(); window.openFullscreenSearch('pickup');"  placeholder="نقطة الانطلاق..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:Cairo,sans-serif;font-weight:700;color:#0f172a;padding:0 15px;">
                     <div style="width:26px;height:26px;background:#ef4444;border-radius:50%;display:flex;align-items:center;justify-content:center;">
                         <div style="width:8px;height:8px;background:#fff;border-radius:50%;"></div>
                     </div>
@@ -510,7 +510,7 @@ class AuthController {
             <div id="clean-dropoff-container" style="position:relative;display:none;">
                 <div style="background:#f1f5f9;border-radius:30px;display:flex;align-items:center;padding:14px 20px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.03);">
                     <i class="fa-solid fa-magnifying-glass" style="font-size:20px;color:#64748b;"></i>
-                    <input type="text" id="book-dropoff-input" onfocus="this.blur(); window.openFullscreenSearch('dropoff');"  placeholder="نقطة الوصول..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:'Cairo',sans-serif;font-weight:700;color:#0f172a;padding:0 15px;">
+                    <input type="text" id="book-dropoff-input" onfocus="this.blur(); window.openFullscreenSearch('dropoff');"  placeholder="نقطة الوصول..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:Cairo,sans-serif;font-weight:700;color:#0f172a;padding:0 15px;">
                     <div style="width:26px;height:26px;background:#f97316;border-radius:6px;display:flex;align-items:center;justify-content:center;">
                         <div style="width:10px;height:10px;background:#fff;border-radius:2px;"></div>
                     </div>
@@ -519,7 +519,7 @@ class AuthController {
             </div>
 
             <!-- Confirm Button -->
-            <button type="button" id="btn-floating-save-route" onclick="handleCleanMapConfirm()" style="background:#f97316;color:#ffffff;border:none;border-radius:20px;padding:22px;font-size:24px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer;box-shadow:0 8px 20px rgba(249,115,22,0.3);transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.97)';" onmouseup="this.style.transform='scale(1)';">
+            <button type="button" id="btn-floating-save-route" onclick="handleCleanMapConfirm()" style="background:#f97316;color:#ffffff;border:none;border-radius:20px;padding:22px;font-size:24px;font-weight:900;font-family:Cairo,sans-serif;cursor:pointer;box-shadow:0 8px 20px rgba(249,115,22,0.3);transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.97)';" onmouseup="this.style.transform='scale(1)';">
                 <span id="floating-save-btn-text">تاكيد نقطة الانطلاق</span>
                 <span id="floating-btn-fare" style="display:none;"></span>
             </button>
@@ -781,7 +781,7 @@ window.setCleanMapTarget = function(target) {
     
 
     <!-- 30-Second Auto-Escalation Dispatch Modal (Stage 1) -->
-    <div id="ride-dispatch-modal" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
+    <div id="ride-dispatch-modal" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:Cairo,sans-serif;" dir="rtl">
         <div class="card" style="max-width:400px;flex:1; min-width:0;padding:24px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.3);">
             <div style="font-size:36px;margin-bottom:8px;" id="dispatch-modal-icon">⏳</div>
             <h3 id="dispatch-modal-title" style="font-size:17px;font-weight:900;margin:0 0 6px;color:#111;">جاري البحث عن أقرب سائق متواجد...</h3>
@@ -809,7 +809,7 @@ window.setCleanMapTarget = function(target) {
     <!-- Driver Incoming Ride Alert Modal (Stage 4) -->
     
     <!-- FULLSCREEN SEARCH MODAL -->
-    <div id="fullscreen-search-modal" style="display:none;position:fixed;inset:0;z-index:9999999;background:#fff;flex-direction:column;font-family:'Cairo',sans-serif;" dir="rtl">
+    <div id="fullscreen-search-modal" style="display:none;position:fixed;inset:0;z-index:9999999;background:#fff;flex-direction:column;font-family:Cairo,sans-serif;" dir="rtl">
         <!-- Header -->
         <div style="display:flex;align-items:center;justify-content:center;padding:16px;position:relative;border-bottom:1px solid #f1f5f9;">
             <button type="button" onclick="window.closeFullscreenSearch()" style="position:absolute;left:16px;background:none;border:none;font-size:24px;color:#64748b;cursor:pointer;"><i class="fa-solid fa-xmark"></i></button>
@@ -820,7 +820,7 @@ window.setCleanMapTarget = function(target) {
         <div style="padding:16px;">
             <div style="background:#f1f5f9;border-radius:12px;display:flex;align-items:center;padding:12px 16px;">
                 <i class="fa-solid fa-microphone" style="color:#64748b;font-size:18px;margin-left:12px;"></i>
-                <input type="text" id="fs-search-input" oninput="window.handleFsSearch(this.value)" placeholder="البحث عن نقطة الانطلاق..." style="flex:1;min-width:0;background:transparent;border:none;outline:none;font-size:16px;font-family:'Cairo',sans-serif;font-weight:700;color:#0f172a;">
+                <input type="text" id="fs-search-input" oninput="window.handleFsSearch(this.value)" placeholder="البحث عن نقطة الانطلاق..." style="flex:1;min-width:0;background:transparent;border:none;outline:none;font-size:16px;font-family:Cairo,sans-serif;font-weight:700;color:#0f172a;">
                 <div style="width:1px;height:24px;background:#cbd5e1;margin:0 12px;"></div>
                 <div style="display:flex;align-items:center;gap:6px;color:#64748b;font-size:14px;font-weight:700;cursor:pointer;">
                     المدينة الحالية <i class="fa-solid fa-caret-down"></i>
@@ -892,7 +892,7 @@ window.setCleanMapTarget = function(target) {
         </div>
     </div>
 
-    <div id="driver-incoming-modal" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
+    <div id="driver-incoming-modal" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:Cairo,sans-serif;" dir="rtl">
         <div class="card" style="max-width:400px;flex:1; min-width:0;padding:22px 18px;text-align:center;border:2px solid #f59e0b;">
             <div style="font-size:36px;margin-bottom:6px;">🚖</div>
             <h3 style="font-size:17px;font-weight:900;margin:0 0 4px;color:#111;">طلب مشوار قصير جديد!</h3>
@@ -922,7 +922,7 @@ window.setCleanMapTarget = function(target) {
     
     
     <!-- Vehicle Selection Panel -->
-    <div id="vehicle-selection-panel" style="display:none;position:absolute;bottom:0;left:0;right:0;background:#ffffff;border-top-left-radius:24px;border-top-right-radius:24px;box-shadow:0 -4px 20px rgba(0,0,0,0.1);z-index:30;font-family:'Cairo',sans-serif;" dir="rtl">
+    <div id="vehicle-selection-panel" style="display:none;position:absolute;bottom:0;left:0;right:0;background:#ffffff;border-top-left-radius:24px;border-top-right-radius:24px;box-shadow:0 -4px 20px rgba(0,0,0,0.1);z-index:30;font-family:Cairo,sans-serif;" dir="rtl">
         <div style="display:flex;border-bottom:1px solid #e2e8f0;padding:16px 0 0 0;">
             <div style="flex:1;text-align:center;padding-bottom:12px;font-size:16px;font-weight:800;color:#111;border-bottom:3px solid #111;cursor:pointer;">تكسي</div>
             <div style="flex:1;text-align:center;padding-bottom:12px;font-size:16px;font-weight:700;color:#94a3b8;cursor:pointer;">بوكس</div>
@@ -982,14 +982,14 @@ window.setCleanMapTarget = function(target) {
             </div>
         </div>
         <div style="padding:16px 20px 24px 20px;">
-            <button id="btn-request-vehicle" type="button" onclick="window.saveUserRouteToDatabase()" style="width:100%;background:#0000ff;color:#ffffff;border:none;border-radius:12px;padding:18px;font-size:20px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,255,0.2);">
+            <button id="btn-request-vehicle" type="button" onclick="window.saveUserRouteToDatabase()" style="width:100%;background:#0000ff;color:#ffffff;border:none;border-radius:12px;padding:18px;font-size:20px;font-weight:900;font-family:Cairo,sans-serif;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,255,0.2);">
                 طلب سوبر
             </button>
         </div>
     </div>
     
     <!-- User Profile Modal -->
-    <div id="user-profile-modal" style="display:none;position:fixed;inset:0;z-index:9999999;background:#f8fafc;flex-direction:column;font-family:'Cairo',sans-serif;" dir="rtl">
+    <div id="user-profile-modal" style="display:none;position:fixed;inset:0;z-index:9999999;background:#f8fafc;flex-direction:column;font-family:Cairo,sans-serif;" dir="rtl">
         <!-- Header -->
         <div style="padding:20px;display:flex;align-items:center;">
             <button type="button" onclick="window.closeUserProfile()" style="background:transparent;border:none;font-size:24px;color:#475569;cursor:pointer;">
@@ -1049,7 +1049,7 @@ window.setCleanMapTarget = function(target) {
                 <div style="flex:1;text-align:right;margin-right:16px;"><div style="font-size:16px;font-weight:700;color:#ef4444;">تسجيل الخروج</div></div>
                 <div style="font-size:20px;color:#ef4444;width:24px;text-align:center;"><i class="fa-solid fa-right-from-bracket"></i></div>
             </div>
-            <div style="text-align:center;font-size:12px;color:#94a3b8;font-family:'Cairo',sans-serif;line-height:1.6;margin-top:20px;margin-bottom:20px;">
+            <div style="text-align:center;font-size:12px;color:#94a3b8;font-family:Cairo,sans-serif;line-height:1.6;margin-top:20px;margin-bottom:20px;">
                 توصيله جميع الحقوق محفوظه<br>المهندس وسام شاكر
             </div>
         </div>
@@ -1067,7 +1067,7 @@ window.setCleanMapTarget = function(target) {
     </div>
 
     <!-- Driver Active Ride Modal (Waze Navigation & Arrival Status) -->
-    <div id="driver-active-ride-modal" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
+    <div id="driver-active-ride-modal" style="display:none;position:fixed;inset:0;z-index:1000000;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:Cairo,sans-serif;" dir="rtl">
         <div class="card" style="max-width:420px;flex:1; min-width:0;padding:22px 18px;text-align:center;border:2px solid #10b981;">
             <div style="font-size:36px;margin-bottom:6px;">🚗</div>
             <h3 style="font-size:17px;font-weight:900;margin:0 0 4px;color:#111;">الرحلة الجارية الحالية</h3>
@@ -1112,7 +1112,7 @@ window.setCleanMapTarget = function(target) {
     </div>
 
     <!-- Passenger Driver Arrived Notification Modal -->
-    <div id="passenger-arrived-modal" style="display:none;position:fixed;inset:0;z-index:1000001;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
+    <div id="passenger-arrived-modal" style="display:none;position:fixed;inset:0;z-index:1000001;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;padding:16px;font-family:Cairo,sans-serif;" dir="rtl">
         <div class="card" style="max-width:380px;flex:1; min-width:0;padding:26px 20px;text-align:center;border:2.5px solid #16a34a;box-shadow:0 12px 35px rgba(0,0,0,0.35);animation:pulseGreen 2s infinite;">
             <div style="font-size:48px;margin-bottom:10px;">🚖</div>
             <h3 style="font-size:19px;font-weight:900;margin:0 0 6px;color:#15803d;">وصل الكابتن إلى موقعك!</h3>
@@ -1127,7 +1127,7 @@ window.setCleanMapTarget = function(target) {
     </div>
 
     <!-- Passenger Active Ride Exists Alert Modal -->
-    <div id="passenger-active-blocked-modal" style="display:none;position:fixed;inset:0;z-index:1000001;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:'Cairo',sans-serif;" dir="rtl">
+    <div id="passenger-active-blocked-modal" style="display:none;position:fixed;inset:0;z-index:1000001;background:rgba(0,0,0,0.65);align-items:center;justify-content:center;padding:16px;font-family:Cairo,sans-serif;" dir="rtl">
         <div class="card" style="max-width:390px;flex:1; min-width:0;padding:22px 18px;text-align:center;border:2px solid #f59e0b;">
             <div style="font-size:40px;margin-bottom:8px;">⚠️</div>
             <h3 style="font-size:17px;font-weight:900;margin:0 0 6px;color:#92400e;">لديك مشوار جاري ومقبول بالفعل!</h3>
@@ -1209,7 +1209,7 @@ window.setCleanMapTarget = function(target) {
             <button class="btn-primary" id="btn-open-app" onclick="confirmTripTypeAndOpen()" disabled style="opacity:0.5;width:100%">
                 متابعة وفتح التطبيق
             </button>
-            <button type="button" onclick="closeTripTypeModal()" style="margin-top:10px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;color:#6b7280;cursor:pointer;width:100%">
+            <button type="button" onclick="closeTripTypeModal()" style="margin-top:10px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:10px;padding:10px;font-family:Cairo,sans-serif;font-size:13px;font-weight:700;color:#6b7280;cursor:pointer;width:100%">
                 إلغاء ✕
             </button>
         </div>
@@ -1217,7 +1217,7 @@ window.setCleanMapTarget = function(target) {
 
     <!-- Floating refresh button -->
     <div style="position:fixed;bottom:16px;left:16px;z-index:9999">
-        <button onclick="forcePurgeAndReload()" style="background:#fff;border:1.5px solid #d1d5db;border-radius:999px;padding:10px 16px;font-size:12px;font-weight:700;font-family:'Cairo',sans-serif;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
+        <button onclick="forcePurgeAndReload()" style="background:#fff;border:1.5px solid #d1d5db;border-radius:999px;padding:10px 16px;font-size:12px;font-weight:700;font-family:Cairo,sans-serif;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(0,0,0,0.1)">
             <span>🔄</span><span>تحديث</span>
         </button>
     </div>
@@ -1225,13 +1225,13 @@ window.setCleanMapTarget = function(target) {
     <!-- Main Content -->
     <!-- Onboarding Tutorial -->
     <div id="onboarding-overlay" style="display:none;position:fixed;inset:0;z-index:99998;background:#ffffff;align-items:center;justify-content:center;flex-direction:column">
-        <button type="button" onclick="finishOnboarding()" style="position:absolute;top:16px;left:16px;background:#f3f4f6;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;color:#6b7280;cursor:pointer;font-family:'Cairo',sans-serif">تخطي ✕</button>
+        <button type="button" onclick="finishOnboarding()" style="position:absolute;top:16px;left:16px;background:#f3f4f6;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;color:#6b7280;cursor:pointer;font-family:Cairo,sans-serif">تخطي ✕</button>
         <div id="onboarding-content" style="max-width:380px;width:90%;text-align:center;padding:40px 20px">
             <div id="onb-icon" style="font-size:64px;margin-bottom:16px"></div>
             <h2 id="onb-title" style="font-size:20px;font-weight:900;color:#111;margin:0 0 8px"></h2>
             <p id="onb-desc" style="font-size:14px;color:#6b7280;margin:0 0 24px"></p>
             <div id="onb-dots" style="display:flex;justify-content:center;gap:8px;margin-bottom:24px"></div>
-            <button id="onb-next-btn" onclick="nextOnboardingScreen()" style="background:#111;color:#fff;border:none;border-radius:12px;padding:14px 40px;font-family:'Cairo',sans-serif;font-weight:900;font-size:15px;cursor:pointer">التالي</button>
+            <button id="onb-next-btn" onclick="nextOnboardingScreen()" style="background:#111;color:#fff;border:none;border-radius:12px;padding:14px 40px;font-family:Cairo,sans-serif;font-weight:900;font-size:15px;cursor:pointer">التالي</button>
         </div>
     </div>
     
@@ -1243,7 +1243,7 @@ window.setCleanMapTarget = function(target) {
         </div>
 
         <div style="flex:1; min-width:0;text-align:right;">
-            <h1 style="font-size:36px;font-weight:900;color:#111;margin:0 0 12px;font-family:'Cairo',sans-serif;">ياهلا</h1>
+            <h1 style="font-size:36px;font-weight:900;color:#111;margin:0 0 12px;font-family:Cairo,sans-serif;">ياهلا</h1>
             <p style="font-size:18px;color:#374151;margin:0 0 30px;font-weight:700;">قم بادخال رقم هاتفك</p>
 
             <!-- Phone Input -->
@@ -1272,7 +1272,7 @@ window.setCleanMapTarget = function(target) {
         </div>
 
         <div style="flex:1; min-width:0;text-align:right;">
-            <h2 style="font-size:26px;font-weight:900;color:#111;margin:0 0 16px;font-family:'Cairo',sans-serif;">ادخل رمز التفعيل</h2>
+            <h2 style="font-size:26px;font-weight:900;color:#111;margin:0 0 16px;font-family:Cairo,sans-serif;">ادخل رمز التفعيل</h2>
             <p style="font-size:15px;color:#374151;margin:0 0 8px;font-weight:600;">
                 لقد تم ارسال رمز التفعيل على الواتساب الرقم <span id="unified-otp-phone-display" dir="ltr" style="font-weight:900;"></span>
             </p>
@@ -1289,7 +1289,7 @@ window.setCleanMapTarget = function(target) {
             </div>
 
             <div style="text-align:left;">
-                <button type="button" onclick="unifiedResendOtp()" style="background:none;border:none;color:#2563eb;font-size:15px;font-weight:700;cursor:pointer;font-family:'Cairo',sans-serif;padding:0;text-decoration:none;">اعادة ارسال</button>
+                <button type="button" onclick="unifiedResendOtp()" style="background:none;border:none;color:#2563eb;font-size:15px;font-weight:700;cursor:pointer;font-family:Cairo,sans-serif;padding:0;text-decoration:none;">اعادة ارسال</button>
             </div>
         </div>
     </main>
@@ -1330,11 +1330,11 @@ window.setCleanMapTarget = function(target) {
         </div>
 
         <div style="flex:1; min-width:0;display:flex;flex-direction:column;gap:24px;padding: 0 10px;">
-            <button type="button" onclick="handleServiceSelect('short')" style="background:#f97316;color:#ffffff;border:none;border-radius:24px;padding:22px;font-size:26px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer;box-shadow:0 8px 20px rgba(249,115,22,0.35);transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.96)';" onmouseup="this.style.transform='scale(1)';">
+            <button type="button" onclick="handleServiceSelect('short')" style="background:#f97316;color:#ffffff;border:none;border-radius:24px;padding:22px;font-size:26px;font-weight:900;font-family:Cairo,sans-serif;cursor:pointer;box-shadow:0 8px 20px rgba(249,115,22,0.35);transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.96)';" onmouseup="this.style.transform='scale(1)';">
                 طلب مشوار سريع
             </button>
             
-            <button type="button" onclick="handleServiceSelect('daily')" style="background:#f97316;color:#ffffff;border:none;border-radius:24px;padding:22px;font-size:26px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer;box-shadow:0 8px 20px rgba(249,115,22,0.35);transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.96)';" onmouseup="this.style.transform='scale(1)';">
+            <button type="button" onclick="handleServiceSelect('daily')" style="background:#f97316;color:#ffffff;border:none;border-radius:24px;padding:22px;font-size:26px;font-weight:900;font-family:Cairo,sans-serif;cursor:pointer;box-shadow:0 8px 20px rgba(249,115,22,0.35);transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.96)';" onmouseup="this.style.transform='scale(1)';">
                 حجز خط دائمي
             </button>
         </div>
@@ -4633,7 +4633,7 @@ window.setCleanMapTarget = function(target) {
             bPickupCoords = [lng, lat];
             if (!bPickupMarker && bMap) {
                 var el = document.createElement('div');
-                el.innerHTML = '<div style="position:relative;display:flex;align-items:center;justify-content:center;flex-direction:column;cursor:grab;"><div style="background:#ffffff;padding:4px 12px;border-radius:12px;font-size:14px;font-weight:900;color:#111;box-shadow:0 2px 8px rgba(0,0,0,0.15);margin-bottom:6px;font-family:\'Cairo\',sans-serif;">الانطلاق</div><div style="background:#f97316;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(249,115,22,0.4);border:2px solid #ffffff;"><div style="background:#ffffff;width:8px;height:8px;border-radius:50%;"></div></div></div>';
+                el.innerHTML = '<div style="position:relative;display:flex;align-items:center;justify-content:center;flex-direction:column;cursor:grab;"><div style="background:#ffffff;padding:4px 12px;border-radius:12px;font-size:14px;font-weight:900;color:#111;box-shadow:0 2px 8px rgba(0,0,0,0.15);margin-bottom:6px;font-family:Cairo,sans-serif;">الانطلاق</div><div style="background:#f97316;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(249,115,22,0.4);border:2px solid #ffffff;"><div style="background:#ffffff;width:8px;height:8px;border-radius:50%;"></div></div></div>';
                 bPickupMarker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat([lng, lat]).addTo(bMap);
                 bPickupMarker.on('dragend', async function() {
                     var p = bPickupMarker.getLngLat();
@@ -4666,7 +4666,7 @@ window.setCleanMapTarget = function(target) {
             bDropoffCoords = [lng, lat];
             if (!bDropoffMarker && bMap) {
                 var el = document.createElement('div');
-                el.innerHTML = '<div style="position:relative;display:flex;align-items:center;justify-content:center;cursor:grab;"><div style="background:#ffffff;padding:4px 12px;border-radius:12px;font-size:14px;font-weight:900;color:#111;box-shadow:0 2px 8px rgba(0,0,0,0.15);margin-left:6px;font-family:\'Cairo\',sans-serif;">الوصول</div><div style="background:#0000ff;width:24px;height:24px;border-radius:8px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,255,0.4);border:2px solid #ffffff;"><div style="background:#ffffff;width:8px;height:8px;border-radius:2px;"></div></div></div>';
+                el.innerHTML = '<div style="position:relative;display:flex;align-items:center;justify-content:center;cursor:grab;"><div style="background:#ffffff;padding:4px 12px;border-radius:12px;font-size:14px;font-weight:900;color:#111;box-shadow:0 2px 8px rgba(0,0,0,0.15);margin-left:6px;font-family:Cairo,sans-serif;">الوصول</div><div style="background:#0000ff;width:24px;height:24px;border-radius:8px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,255,0.4);border:2px solid #ffffff;"><div style="background:#ffffff;width:8px;height:8px;border-radius:2px;"></div></div></div>';
                 bDropoffMarker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat([lng, lat]).addTo(bMap);
                 bDropoffMarker.on('dragend', async function() {
                     var p = bDropoffMarker.getLngLat();
