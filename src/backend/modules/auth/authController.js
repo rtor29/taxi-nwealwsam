@@ -872,8 +872,9 @@ window.setCleanMapTarget = function(target) {
                 <i class="fa-solid fa-microphone" style="color:#64748b;font-size:18px;margin-left:12px;"></i>
                 <input type="text" id="fs-search-input" oninput="window.handleFsSearch(this.value)" placeholder="البحث عن نقطة الانطلاق..." style="flex:1;min-width:0;background:transparent;border:none;outline:none;font-size:16px;font-family:Cairo,sans-serif;font-weight:700;color:#0f172a;">
                 <div style="width:1px;height:24px;background:#cbd5e1;margin:0 12px;"></div>
-                <div style="display:flex;align-items:center;gap:6px;color:#64748b;font-size:14px;font-weight:700;cursor:pointer;">
-                    المدينة الحالية <i class="fa-solid fa-caret-down"></i>
+                <div onclick="window.toggleCityDropdown()" style="position:relative;display:flex;align-items:center;gap:6px;color:#64748b;font-size:14px;font-weight:700;cursor:pointer;">
+                    <span id="current-search-city">النجف</span> <i class="fa-solid fa-caret-down"></i>
+                    <div id="city-dropdown-menu" style="display:none;position:absolute;top:32px;left:0;background:#fff;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,0.1);width:150px;max-height:300px;overflow-y:auto;z-index:999999;flex-direction:column;border:1px solid #f1f5f9;text-align:right;"></div>
                 </div>
             </div>
         </div>
