@@ -3205,11 +3205,7 @@ window.setCleanMapTarget = function(target) {
                         if (fullName) localStorage.setItem('flutter.user_fullname', JSON.stringify(fullName));
                     } catch(_) {}
                     
-                    setTimeout(function() {
-                        if (typeof window.openAppView === 'function') {
-                            window.openAppView(tokenToUse, userId, role, fullName, true);
-                        }
-                    }, 100);
+                    // Removed auto-openAppView to prevent map from jumping over Home page on refresh.
                 } else if (params.get('showMap') === '1' || params.get('openMap') === '1') {
                     setTimeout(function() {
                         alert('يرجى تسجيل الدخول أولاً لتثبيت المسار.');
