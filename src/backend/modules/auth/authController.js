@@ -461,8 +461,8 @@ class AuthController {
         <!-- Top Action Buttons -->
         <!-- Home Icon (Top Right) -->
         <div style="position:absolute;top:30px;right:20px;z-index:20;">
-            <button type="button" onclick="window.closeBookingApp()" style="background:#ffffff;border:1px solid #cbd5e1;border-radius:50%;width:55px;height:55px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 15px rgba(0,0,0,0.1);padding:0;">
-                <i class="fa-solid fa-house" style="font-size:24px;color:#475569;"></i>
+            <button type="button" id="btn-top-right-action" onclick="window.closeBookingApp()" style="background:#ffffff;border:1px solid #cbd5e1;border-radius:50%;width:55px;height:55px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 15px rgba(0,0,0,0.1);padding:0;">
+                <i id="icon-top-right-action" class="fa-solid fa-house" style="font-size:24px;color:#475569;"></i>
             </button>
         </div>
 
@@ -691,6 +691,11 @@ window.setCleanMapTarget = function(target) {
                 if (btnText) btnText.innerText = 'تاكيد نقطة الانطلاق';
                 if (pCont) pCont.style.display = 'block';
                 if (dCont) dCont.style.display = 'none';
+                
+                var topBtn = document.getElementById('btn-top-right-action');
+                var topIco = document.getElementById('icon-top-right-action');
+                if (topBtn) topBtn.setAttribute('onclick', 'window.closeBookingApp()');
+                if (topIco) topIco.className = 'fa-solid fa-house';
                 if (mapWrap) mapWrap.style.display = 'block';
             } else {
                 if (pinHead) {
@@ -702,6 +707,11 @@ window.setCleanMapTarget = function(target) {
                 if (btnText) btnText.innerText = 'تاكيد نقطة الوصول';
                 if (pCont) pCont.style.display = 'none';
                 if (dCont) dCont.style.display = 'block';
+                
+                var topBtn = document.getElementById('btn-top-right-action');
+                var topIco = document.getElementById('icon-top-right-action');
+                if (topBtn) topBtn.setAttribute('onclick', 'window.setCleanMapTarget(\'pickup\')');
+                if (topIco) topIco.className = 'fa-solid fa-chevron-right';
                 if (mapWrap) mapWrap.style.display = 'none';
             }
         };
