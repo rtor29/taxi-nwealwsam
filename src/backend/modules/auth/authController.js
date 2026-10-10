@@ -1195,7 +1195,11 @@ class AuthController {
             document.getElementById('new-service-ui').style.display = 'flex';
         };
 
+        window._isSubmittingService = false;
         async function handleServiceSelect(type) {
+            if (window._isSubmittingService) return;
+            window._isSubmittingService = true;
+            
             var role = window.unifiedAuthRole || 'Customer';
             var phone = window.__unifiedPhone;
             
@@ -1242,22 +1246,27 @@ class AuthController {
                         if (loginData.success) {
                             persistSession(loginData);
                             serviceMain.style.opacity = '1';
+                            window._isSubmittingService = false;
                             setTimeout(function(){ openRouteApp('set-route'); }, 200);
                         } else {
                             serviceMain.style.opacity = '1';
+                            window._isSubmittingService = false;
                             alert(loginData.error || 'تم التسجيل ولكن حدث خطأ أثناء تسجيل الدخول التلقائي.');
                         }
                     } else {
                         serviceMain.style.opacity = '1';
+                            window._isSubmittingService = false;
                         alert(regData.error || 'حدث خطأ أثناء إعداد الحساب. المرجو المحاولة مجددا.');
                     }
                 } else {
                     // Already logged in!
                     serviceMain.style.opacity = '1';
+                            window._isSubmittingService = false;
                     setTimeout(function(){ openRouteApp('set-route'); }, 200);
                 }
             } catch (err) {
                 serviceMain.style.opacity = '1';
+                            window._isSubmittingService = false;
                 alert('خطأ في الاتصال.');
             }
         }
