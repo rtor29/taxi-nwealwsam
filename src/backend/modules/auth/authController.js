@@ -569,12 +569,23 @@ class AuthController {
                     if (window.setBookingDropoff) window.setBookingDropoff(center.lng, center.lat, val);
                 }
                 
-                // Change button to indicate loading
-                var btn = document.getElementById('btn-floating-save-route');
-                if (btn) btn.style.opacity = '0.5';
+                // INSTEAD OF SAVING DIRECTLY, SHOW VEHICLE SELECTION
+                var actPanel = document.getElementById('clean-action-panel');
+                if (actPanel) actPanel.style.display = 'none';
+                var vPanel = document.getElementById('vehicle-selection-panel');
+                if (vPanel) vPanel.style.display = 'block';
                 
-                // Call the original save logic
-                if (window.saveUserRouteToDatabase) window.saveUserRouteToDatabase();
+                // Change top right button to go back to Dropoff Selection
+                var topBtn = document.getElementById('btn-top-right-action');
+                if (topBtn) topBtn.setAttribute('onclick', 'window.closeVehicleSelection()');
+                
+                // Ensure fares are updated
+                if (window.bRouteFare) {
+                    var base = window.bRouteFare;
+                    document.getElementById('fare-eco').innerText = (base - 750).toLocaleString() + ' دينار';
+                    document.getElementById('fare-super').innerText = base.toLocaleString() + ' دينار';
+                    document.getElementById('fare-plus').innerText = (base + 500).toLocaleString() + ' دينار';
+                }
             }
         };
 
@@ -697,6 +708,16 @@ window.setCleanMapTarget = function(target) {
                 if (topBtn) topBtn.setAttribute('onclick', 'window.closeBookingApp()');
                 if (topIco) topIco.className = 'fa-solid fa-house';
                 if (mapWrap) mapWrap.style.display = 'block';
+                
+                // Clear pickup marker when returning to pickup selection
+                if (window.bPickupMarker) {
+                    window.bPickupMarker.remove();
+                    window.bPickupMarker = null;
+                    window.bPickupCoords = null;
+                }
+                if (window.bMap && window.bMap.getSource('booking-route-source')) {
+                    window.bMap.getSource('booking-route-source').setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } });
+                }
             } else {
                 if (pinHead) {
                     pinHead.style.background = '#f97316';
@@ -714,6 +735,42 @@ window.setCleanMapTarget = function(target) {
                 if (topIco) topIco.className = 'fa-solid fa-chevron-right';
                 if (mapWrap) mapWrap.style.display = 'none';
             }
+        };
+        
+        
+        window.closeVehicleSelection = function() {
+            var vPanel = document.getElementById('vehicle-selection-panel');
+            if (vPanel) vPanel.style.display = 'none';
+            var actPanel = document.getElementById('clean-action-panel');
+            if (actPanel) actPanel.style.display = 'block';
+            
+            var topBtn = document.getElementById('btn-top-right-action');
+            if (topBtn) topBtn.setAttribute('onclick', 'window.setCleanMapTarget("pickup")');
+            
+            // Clear dropoff marker
+            if (window.bDropoffMarker) {
+                window.bDropoffMarker.remove();
+                window.bDropoffMarker = null;
+                window.bDropoffCoords = null;
+            }
+            if (window.bMap && window.bMap.getSource('booking-route-source')) {
+                window.bMap.getSource('booking-route-source').setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } });
+            }
+        };
+        
+        window.bSelectedVehicle = 'super';
+        window.selectVehicleType = function(type) {
+            window.bSelectedVehicle = type;
+            var btn = document.getElementById('btn-request-vehicle');
+            document.getElementById('veh-opt-super').style.background = '#ffffff';
+            document.getElementById('veh-opt-eco').style.background = '#ffffff';
+            document.getElementById('veh-opt-plus').style.background = '#ffffff';
+            
+            document.getElementById('veh-opt-' + type).style.background = '#f8fafc';
+            
+            if (type === 'super') btn.innerText = 'طلب سوبر';
+            else if (type === 'eco') btn.innerText = 'طلب توفير';
+            else if (type === 'plus') btn.innerText = 'طلب بلس';
         };
         
         // Override original to connect them
@@ -862,6 +919,74 @@ window.setCleanMapTarget = function(target) {
         </div>
     </div>
 
+    
+    
+    <!-- Vehicle Selection Panel -->
+    <div id="vehicle-selection-panel" style="display:none;position:absolute;bottom:0;left:0;right:0;background:#ffffff;border-top-left-radius:24px;border-top-right-radius:24px;box-shadow:0 -4px 20px rgba(0,0,0,0.1);z-index:30;font-family:'Cairo',sans-serif;" dir="rtl">
+        <div style="display:flex;border-bottom:1px solid #e2e8f0;padding:16px 0 0 0;">
+            <div style="flex:1;text-align:center;padding-bottom:12px;font-size:16px;font-weight:800;color:#111;border-bottom:3px solid #111;cursor:pointer;">تكسي</div>
+            <div style="flex:1;text-align:center;padding-bottom:12px;font-size:16px;font-weight:700;color:#94a3b8;cursor:pointer;">بوكس</div>
+        </div>
+        <div style="padding:10px 0;">
+            <!-- Super -->
+            <div onclick="window.selectVehicleType('super')" id="veh-opt-super" style="display:flex;align-items:center;padding:12px 20px;background:#f8fafc;cursor:pointer;border-bottom:1px solid #f1f5f9;">
+                <div style="flex:1;">
+                    <div style="font-size:18px;font-weight:900;color:#111;">سوبر</div>
+                    <div style="font-size:13px;color:#94a3b8;">الخيار الأفضل</div>
+                </div>
+                <div style="display:flex;align-items:center;">
+                    <div style="font-size:16px;font-weight:800;color:#111;margin-left:16px;" id="fare-super">5,500 دينار</div>
+                    <div style="position:relative;">
+                        <span style="font-size:32px;">🚗</span>
+                        <span style="position:absolute;top:-5px;right:-5px;font-size:14px;background:#fef08a;border-radius:50%;padding:2px;">⚡</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Economy -->
+            <div onclick="window.selectVehicleType('eco')" id="veh-opt-eco" style="display:flex;align-items:center;padding:12px 20px;background:#ffffff;cursor:pointer;border-bottom:1px solid #f1f5f9;">
+                <div style="flex:1;">
+                    <div style="font-size:18px;font-weight:800;color:#334155;">توفير</div>
+                    <div style="font-size:13px;color:#94a3b8;">التكسي الأوفر</div>
+                </div>
+                <div style="display:flex;align-items:center;">
+                    <div style="font-size:16px;font-weight:800;color:#334155;margin-left:16px;" id="fare-eco">4,750 دينار</div>
+                    <div style="position:relative;">
+                        <span style="font-size:32px;">🚙</span>
+                        <span style="position:absolute;top:-5px;right:-5px;font-size:14px;background:#fef08a;border-radius:50%;padding:2px;">💲</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Plus -->
+            <div onclick="window.selectVehicleType('plus')" id="veh-opt-plus" style="display:flex;align-items:center;padding:12px 20px;background:#ffffff;cursor:pointer;">
+                <div style="flex:1;">
+                    <div style="font-size:18px;font-weight:800;color:#334155;">بلس</div>
+                    <div style="font-size:13px;color:#94a3b8;">رحلة أكثر راحة</div>
+                </div>
+                <div style="display:flex;align-items:center;">
+                    <div style="font-size:16px;font-weight:800;color:#334155;margin-left:16px;" id="fare-plus">6,000 دينار</div>
+                    <div style="position:relative;">
+                        <span style="font-size:32px;">🚘</span>
+                        <span style="position:absolute;top:-5px;right:-5px;font-size:14px;background:#fef08a;border-radius:50%;padding:2px;">⭐</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div style="display:flex;border-top:1px solid #e2e8f0;padding:12px 0;">
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-left:1px solid #e2e8f0;cursor:pointer;">
+                <i class="fa-solid fa-sliders" style="font-size:20px;color:#475569;margin-bottom:4px;"></i>
+                <div style="font-size:13px;color:#475569;font-weight:700;">خيارات الرحلة</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;">
+                <i class="fa-solid fa-tags" style="font-size:20px;color:#475569;margin-bottom:4px;"></i>
+                <div style="font-size:13px;color:#475569;font-weight:700;">قسيمة</div>
+            </div>
+        </div>
+        <div style="padding:16px 20px 24px 20px;">
+            <button id="btn-request-vehicle" type="button" onclick="window.saveUserRouteToDatabase()" style="width:100%;background:#0000ff;color:#ffffff;border:none;border-radius:12px;padding:18px;font-size:20px;font-weight:900;font-family:'Cairo',sans-serif;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,255,0.2);">
+                طلب سوبر
+            </button>
+        </div>
+    </div>
     
     <!-- User Profile Modal -->
     <div id="user-profile-modal" style="display:none;position:fixed;inset:0;z-index:9999999;background:#f8fafc;flex-direction:column;font-family:'Cairo',sans-serif;" dir="rtl">
@@ -4508,7 +4633,7 @@ window.setCleanMapTarget = function(target) {
             bPickupCoords = [lng, lat];
             if (!bPickupMarker && bMap) {
                 var el = document.createElement('div');
-                el.innerHTML = '<div style="background:#16a34a;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,0.3);font-size:14px;cursor:grab;">🟢</div>';
+                el.innerHTML = '<div style="position:relative;display:flex;align-items:center;justify-content:center;flex-direction:column;cursor:grab;"><div style="background:#ffffff;padding:4px 12px;border-radius:12px;font-size:14px;font-weight:900;color:#111;box-shadow:0 2px 8px rgba(0,0,0,0.15);margin-bottom:6px;font-family:\'Cairo\',sans-serif;">الانطلاق</div><div style="background:#f97316;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(249,115,22,0.4);border:2px solid #ffffff;"><div style="background:#ffffff;width:8px;height:8px;border-radius:50%;"></div></div></div>';
                 bPickupMarker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat([lng, lat]).addTo(bMap);
                 bPickupMarker.on('dragend', async function() {
                     var p = bPickupMarker.getLngLat();
@@ -4541,7 +4666,7 @@ window.setCleanMapTarget = function(target) {
             bDropoffCoords = [lng, lat];
             if (!bDropoffMarker && bMap) {
                 var el = document.createElement('div');
-                el.innerHTML = '<div style="background:#dc2626;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 3px 8px rgba(0,0,0,0.3);font-size:14px;cursor:grab;">🔴</div>';
+                el.innerHTML = '<div style="position:relative;display:flex;align-items:center;justify-content:center;cursor:grab;"><div style="background:#ffffff;padding:4px 12px;border-radius:12px;font-size:14px;font-weight:900;color:#111;box-shadow:0 2px 8px rgba(0,0,0,0.15);margin-left:6px;font-family:\'Cairo\',sans-serif;">الوصول</div><div style="background:#0000ff;width:24px;height:24px;border-radius:8px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,255,0.4);border:2px solid #ffffff;"><div style="background:#ffffff;width:8px;height:8px;border-radius:2px;"></div></div></div>';
                 bDropoffMarker = new mapboxgl.Marker({ element: el, draggable: true }).setLngLat([lng, lat]).addTo(bMap);
                 bDropoffMarker.on('dragend', async function() {
                     var p = bDropoffMarker.getLngLat();
