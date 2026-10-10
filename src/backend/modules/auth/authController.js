@@ -3724,13 +3724,13 @@ class AuthController {
                 '<div style="position:relative;margin-bottom:8px;">' +
                     '<label class="label" style="font-size:11px;">🟢 نقطة الانطلاق</label>' +
                     '<div style="display:flex;gap:6px;">' +
-                        '<input type="text" id="book-pickup-input" onfocus="this.blur(); window.openFullscreenSearch(\'pickup\');" class="inp" placeholder="حدد الانطلاق على الخريطة أو عبر GPS" value="' + (bPickupName||'') + '" style="font-size:12px;padding:9px 12px;">' +
+                        '<input type="text" id="book-pickup-input" onfocus="this.blur(); window.openFullscreenSearch(\\\'pickup\\\');" class="inp" placeholder="حدد الانطلاق على الخريطة أو عبر GPS" value="' + (bPickupName||'') + '" style="font-size:12px;padding:9px 12px;">' +
                         '<button type="button" onclick="centerOnUserGps()" class="btn-small" style="padding:8px 10px;" title="موقعي الحالي">📍</button>' +
                     '</div>' +
                 '</div>' +
                 '<div style="position:relative;margin-bottom:10px;">' +
                     '<label class="label" style="font-size:11px;">🔴 نقطة الوصول</label>' +
-                    '<input type="text" id="book-dropoff-input" onfocus="this.blur(); window.openFullscreenSearch(\'dropoff\');" class="inp" placeholder="ابحث: جامعة الكوفة، مركز النجف، شارع الروان..." value="' + (bDropoffName||'') + '"  style="font-size:12px;padding:9px 12px;">' +
+                    '<input type="text" id="book-dropoff-input" onfocus="this.blur(); window.openFullscreenSearch(\\\'dropoff\\\');" class="inp" placeholder="ابحث: جامعة الكوفة، مركز النجف، شارع الروان..." value="' + (bDropoffName||'') + '"  style="font-size:12px;padding:9px 12px;">' +
                     '<div id="book-dropoff-results" style="display:none !important;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;"></div>' +
                 '</div>' +
                 '<div id="side-route-summary" style="display:' + (bRouteDist > 0 ? 'block' : 'none') + ';background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px;margin-bottom:10px;">' +
@@ -4580,13 +4580,13 @@ class AuthController {
                 '<div style="position:relative;">' +
                     '<label class="label" style="font-size:11px;">🟢 نقطة الانطلاق</label>' +
                     '<div style="display:flex;gap:6px;">' +
-                        '<input type="text" id="book-pickup-input" onfocus="this.blur(); window.openFullscreenSearch(\'pickup\');" class="inp" placeholder="حدد على الخريطة أو موقعي الحالي" value="' + (bPickupName||'') + '" style="font-size:12px;padding:9px 12px;">' +
+                        '<input type="text" id="book-pickup-input" onfocus="this.blur(); window.openFullscreenSearch(\\\'pickup\\\');" class="inp" placeholder="حدد على الخريطة أو موقعي الحالي" value="' + (bPickupName||'') + '" style="font-size:12px;padding:9px 12px;">' +
                         '<button type="button" onclick="centerOnUserGps()" class="btn-small" style="padding:8px 10px;" title="موقعي الحالي">📍</button>' +
                     '</div>' +
                 '</div>' +
                 '<div style="position:relative;">' +
                     '<label class="label" style="font-size:11px;">🔴 نقطة الوصول (ابحث عن جامعة/حي/معلم)</label>' +
-                    '<input type="text" id="book-dropoff-input" onfocus="this.blur(); window.openFullscreenSearch(\'dropoff\');" class="inp" placeholder="ابحث: جامعة الكوفة، شارع الروان..." value="' + (bDropoffName||'') + '"  style="font-size:12px;padding:9px 12px;">' +
+                    '<input type="text" id="book-dropoff-input" onfocus="this.blur(); window.openFullscreenSearch(\\\'dropoff\\\');" class="inp" placeholder="ابحث: جامعة الكوفة، شارع الروان..." value="' + (bDropoffName||'') + '"  style="font-size:12px;padding:9px 12px;">' +
                     '<div id="book-dropoff-results" style="display:none !important;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;"></div>' +
                 '</div>' +
                 '<div id="side-route-summary" style="display:' + (bRouteDist > 0 ? 'block' : 'none') + ';background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:12px;padding:10px;">' +
@@ -5069,11 +5069,11 @@ class AuthController {
             panel.innerHTML = '<div style="font-size:14px;font-weight:900;color:#111;margin-bottom:4px;">🔄 تثبيت خط دائمي (اشتراك يومي)</div>' +
                 '<div style="position:relative;">' +
                     '<label class="label" style="font-size:11px;">🟢 نقطة الانطلاق الدائمية</label>' +
-                    '<input type="text" id="book-pickup-input" onfocus="this.blur(); window.openFullscreenSearch(\'pickup\');" class="inp" placeholder="حدد الانطلاق على الخريطة" value="' + (bPickupName || '') + '" style="font-size:12px;padding:9px 12px;">' +
+                    '<input type="text" id="book-pickup-input" onfocus="this.blur(); window.openFullscreenSearch(\\\'pickup\\\');" class="inp" placeholder="حدد الانطلاق على الخريطة" value="' + (bPickupName || '') + '" style="font-size:12px;padding:9px 12px;">' +
                 '</div>' +
                 '<div style="position:relative;">' +
                     '<label class="label" style="font-size:11px;">🔴 نقطة الوصول الدائمية (الدوام / الجامعة)</label>' +
-                    '<input type="text" id="book-dropoff-input" onfocus="this.blur(); window.openFullscreenSearch(\'dropoff\');" class="inp" placeholder="حدد الوصول على الخريطة" value="' + (bDropoffName || '') + '"  style="font-size:12px;padding:9px 12px;">' +
+                    '<input type="text" id="book-dropoff-input" onfocus="this.blur(); window.openFullscreenSearch(\\\'dropoff\\\');" class="inp" placeholder="حدد الوصول على الخريطة" value="' + (bDropoffName || '') + '"  style="font-size:12px;padding:9px 12px;">' +
                     '<div id="book-dropoff-results" style="display:none !important;position:absolute;top:100%;left:0;right:0;z-index:50;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-height:160px;overflow-y:auto;margin-top:2px;"></div>' +
                 '</div>' +
                 '<div>' +
