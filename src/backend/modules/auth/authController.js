@@ -4984,8 +4984,8 @@ class AuthController {
                 '<div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:10px;">' +
                     '<div style="font-weight:900;font-size:13px;color:#111;margin-bottom:6px;">نظام العمل</div>' +
                     '<div style="display:flex;gap:8px;">' +
-                        '<button type="button" onclick="setDriverWorkMode(\'مشوار قصير\')" class="btn-primary" style="flex:1;background:' + shortBg + ';padding:6px;font-size:12px;">مشوار قصير</button>' +
-                        '<button type="button" onclick="setDriverWorkMode(\'خط دائمي\')" class="btn-primary" style="flex:1;background:' + longBg + ';padding:6px;font-size:12px;">خط دائمي</button>' +
+                        '<button type="button" onclick=\"setDriverWorkMode(&quot;مشوار قصير&quot;)\" class="btn-primary" style="flex:1;background:' + shortBg + ';padding:6px;font-size:12px;">مشوار قصير</button>' +
+                        '<button type="button" onclick=\"setDriverWorkMode(&quot;خط دائمي&quot;)\" class="btn-primary" style="flex:1;background:' + longBg + ';padding:6px;font-size:12px;">خط دائمي</button>' +
                     '</div>' +
                 '</div>' +
                 '<div>' +
