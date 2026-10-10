@@ -458,10 +458,18 @@ class AuthController {
         <!-- The Map Viewport -->
         <div id="booking-mapbox-map" style="position:absolute;inset:0;flex:1; min-width:0;height:100%;z-index:10;"></div>
         
-        <!-- Hamburger Menu (Top Right) -->
+        <!-- Top Action Buttons -->
+        <!-- Home Icon (Top Right) -->
         <div style="position:absolute;top:30px;right:20px;z-index:20;">
-            <button type="button" id="btn-toggle-booking-drawer" onclick="toggleBookingDrawer()" style="background:transparent;border:none;cursor:pointer;padding:10px;">
-                <i class="fa-solid fa-bars" style="font-size:34px;color:#111;"></i>
+            <button type="button" onclick="window.closeBookingApp()" style="background:#ffffff;border:1px solid #cbd5e1;border-radius:50%;width:55px;height:55px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 15px rgba(0,0,0,0.1);padding:0;">
+                <i class="fa-solid fa-house" style="font-size:24px;color:#475569;"></i>
+            </button>
+        </div>
+
+        <!-- User Profile Icon (Top Left) -->
+        <div style="position:absolute;top:30px;left:20px;z-index:20;">
+            <button type="button" onclick="window.openUserProfile()" style="background:#ffffff;border:1px solid #cbd5e1;border-radius:50%;width:55px;height:55px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 15px rgba(0,0,0,0.1);padding:0;">
+                <i class="fa-regular fa-user" style="font-size:24px;color:#475569;"></i>
             </button>
         </div>
         
@@ -531,64 +539,14 @@ class AuthController {
             <button id="btn-clear-dropoff"></button>
         </div>
 
-        <!-- OFF-CANVAS SIDEBAR DRAWER (FOR REQUESTS & MATCHING DRIVERS) -->
-        <div id="booking-sidebar-backdrop" onclick="toggleBookingDrawer(false)"></div>
-        <div id="booking-sidebar">
-            <!-- Close button only (invisible, just for safety if needed, we'll let backdrop close it, but let's keep it clean) -->
-            <div style="position:absolute;top:20px;left:20px;">
-                <button type="button" onclick="toggleBookingDrawer(false)" style="background:transparent;border:none;font-size:20px;color:#94a3b8;cursor:pointer;">✕</button>
-            </div>
-
-            <div style="margin-top:60px;padding:0 20px;">
-                <!-- Top Avatar Section -->
-                <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:10px;">
-                    <div onclick="document.getElementById('drawer-image-upload').click()" style="width:110px;height:110px;border-radius:50%;background:linear-gradient(135deg, #e0e7ff, #c7d2fe);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 4px 10px rgba(0,0,0,0.05), 0 10px 20px rgba(99,102,241,0.2);position:relative;cursor:pointer;overflow:hidden;">
-                        <span id="drawer-user-icon" style="font-size:12px;color:#3730a3;text-align:center;font-weight:700;line-height:1.2;">صورة السائق<br>او الراكب</span>
-                        <img id="drawer-user-image" src="" style="display:none;flex:1; min-width:0;height:100%;object-fit:cover;" />
-                        <div id="drawer-user-plus" style="position:absolute;bottom:-5px;color:#6366f1;font-size:28px;font-weight:300;">+</div>
-                    </div>
-                    <input type="file" id="drawer-image-upload" accept="image/*" style="display:none;" onchange="window.uploadUserImage(this)" />
-                    <div id="drawer-user-name" style="margin-top:16px;font-size:13px;color:#475569;font-weight:800;">اسم السائق او الراكب</div>
-                </div>
-                
-                <hr style="border:none;border-top:1.5px solid #cbd5e1;margin:10px 0 25px 0;">
-
-                <!-- Menu Items -->
-                <div style="display:flex;flex-direction:column;gap:18px;padding-right:10px;height:calc(100vh - 230px);position:relative;">
-                    <div style="display:flex;flex-direction:column;gap:18px;">
-                        <button type="button" onclick="window.goToHome()" style="background:none;border:none;text-align:right;font-size:28px;font-weight:900;color:#0f172a;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
-                            الرئيسيه
-                        </button>
-                        <button type="button" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;margin-top:5px;">
-                            الحساب
-                        </button>
-                        <button type="button" onclick="window.contactSupport()" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
-                            التواصل مع الدعم
-                        </button>
-                        <button type="button" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
-                            محفضتي
-                        </button>
-                        <button type="button" onclick="handleLogout()" style="background:none;border:none;text-align:right;font-size:18px;font-weight:700;color:#334155;font-family:'Cairo',sans-serif;cursor:pointer;padding:0;">
-                            تسجيل الخروج
-                        </button>
-                    </div>
-                    
-                    <div style="position:absolute;bottom:20px;left:0;right:0;text-align:center;font-size:12px;color:#94a3b8;font-family:'Cairo',sans-serif;line-height:1.6;">
-                        توصيله جميع الحقوق محفوظه<br>
-                        المهندس وسام شاكر
-                    </div>
-                </div>
-            </div>
-
-            <!-- Hidden elements to satisfy existing JS logic -->
-            <div style="display:none;">
+        <!-- Hidden elements to satisfy existing JS logic (Drawer removed) -->
+        <div style="display:none;">
                 <div id="sidebar-panel-set-route"></div>
                 <div id="sidebar-panel-join-requests"></div>
                 <div id="sidebar-panel-short"></div>
                 <div id="sidebar-panel-daily"></div>
                 <div id="sidebar-panel-driver"></div>
             </div>
-        </div>
     </div>
 
     <script>
@@ -3687,6 +3645,11 @@ window.setCleanMapTarget = function(target) {
             document.body.style.overflow = '';
             if (bDriversPollTimer) clearInterval(bDriversPollTimer);
         };
+
+        window.openUserProfile = function() {
+            alert('الرجاء الانتظار، سيتم تفعيل هذه الميزة في الخطوة القادمة.');
+        };
+
 
         // ── Draggable floating card ──────────────────────────────────────────
         (function initDraggableCard() {
