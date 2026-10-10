@@ -1022,15 +1022,11 @@ class AuthController {
                 var checkData = await checkRes.json();
                 
                 if (checkData.exists) {
-                    if (checkData.role !== role) {
-                        var myRole = role === 'Driver' ? 'سائق' : 'راكب';
-                        window.showLoginError('الرقم مسجل مسبقاً كـ ' + checkData.roleAr + ' ولا يمكن الدخول كـ ' + myRole);
-                        resetBtn();
-                        return;
-                    }
-                    alert('الرقم مسجل في النظام كـ ' + checkData.roleAr + '. سيتم إرسال رمز الدخول عبر الواتساب.');
+                    window.showLoginError('الرقم مسجل بالفعل.');
+                    resetBtn();
+                    return;
                 } else {
-                    alert('الرقم غير مسجل في النظام. سيتم إرسال رمز التحقق لإنشاء حساب جديد.');
+                    // alert('الرقم غير مسجل في النظام. سيتم إرسال رمز التحقق لإنشاء حساب جديد.');
                 }
                 
                 var res = await fetch('/api/auth/send-whatsapp-otp', {
