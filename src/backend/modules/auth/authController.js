@@ -1123,8 +1123,13 @@ class AuthController {
                         if (loginRes.ok && loginData.success) {
                             persistSession(loginData);
                             document.getElementById('new-service-ui').style.display = 'flex';
-                        } else {
+                        } else if (loginData.notFound) {
                             document.getElementById('new-profile-ui').style.display = 'flex';
+                        } else {
+                            document.getElementById('unified-otp-inputs').style.opacity = '1';
+                            document.getElementById('new-otp-ui').style.display = 'flex';
+                            alert(loginData.error || 'حدث خطأ في تسجيل الدخول.');
+                            setTimeout(function(){ window.location.reload(); }, 2000);
                         }
                     } catch(e) {
                         document.getElementById('new-profile-ui').style.display = 'flex';
@@ -1223,7 +1228,7 @@ class AuthController {
                         }
                     } else {
                         serviceMain.style.opacity = '1';
-                        alert('حدث خطأ أثناء إعداد الحساب. المرجو المحاولة مجددا.');
+                        alert(regData.error || 'حدث خطأ أثناء إعداد الحساب. المرجو المحاولة مجددا.');
                     }
                 } else {
                     // Already logged in!
