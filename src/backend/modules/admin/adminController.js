@@ -75,34 +75,103 @@ class AdminController {
         if (data.phoneNumber !== undefined) driver.phoneNumber = String(data.phoneNumber).trim();
         if (data.governorate !== undefined) driver.governorate = String(data.governorate).trim();
         if (data.vehicleType !== undefined) driver.vehicleType = String(data.vehicleType).toLowerCase() === 'vip' ? 'vip' : 'eco';
-        if (data.permanentLat !== undefined && data.permanentLat !== null && data.permanentLat !== '') driver.permanentLat = parseFloat(data.permanentLat);
-        if (data.permanentLon !== undefined && data.permanentLon !== null && data.permanentLon !== '') driver.permanentLon = parseFloat(data.permanentLon);
+        if (data.permanentLat !== undefined && data.permanentLat !== null && data.permanentLat !== '') {
+            driver.permanentLat = parseFloat(data.permanentLat);
+            driver.latitude = driver.permanentLat;
+        }
+        if (data.permanentLon !== undefined && data.permanentLon !== null && data.permanentLon !== '') {
+            driver.permanentLon = parseFloat(data.permanentLon);
+            driver.longitude = driver.permanentLon;
+        }
         if (data.permanentLocationName !== undefined) driver.permanentLocationName = String(data.permanentLocationName).trim();
         if (data.permanentDropoffLat !== undefined && data.permanentDropoffLat !== null && data.permanentDropoffLat !== '') driver.permanentDropoffLat = parseFloat(data.permanentDropoffLat);
         if (data.permanentDropoffLon !== undefined && data.permanentDropoffLon !== null && data.permanentDropoffLon !== '') driver.permanentDropoffLon = parseFloat(data.permanentDropoffLon);
         if (data.permanentDropoffName !== undefined) driver.permanentDropoffName = String(data.permanentDropoffName).trim();
-        if (data.route !== undefined) {
-            driver.route = String(data.route).trim();
-            let r = db.memoryState.routes.find(rt => rt.driverId === driverId);
-            if (r) {
-                r.name = driver.route;
-                r.startName = driver.route.split('-')[0]?.trim() || driver.route;
-                r.endName = driver.route.split('-')[1]?.trim() || driver.route;
-            } else {
-                db.memoryState.routes.push({
-                    id: 'route-' + driverId,
-                    routeId: 'route-' + driverId,
-                    driverId: driverId,
-                    driverName: driver.fullName,
-                    driverPhone: driver.phoneNumber,
-                    name: driver.route,
-                    startName: driver.route.split('-')[0]?.trim() || driver.route,
-                    endName: driver.route.split('-')[1]?.trim() || driver.route,
-                    status: 'Active',
-                    createdAt: new Date().toISOString()
-                });
-            }
+
+        if (driver.permanentLat || data.route) {
+            driver.serviceType = 'Both';
+            driver.work_mode = 'خط دائمي';
         }
+
+        const effectiveRouteName = data.route ? String(data.route).trim() : 
+            (driver.permanentLocationName && driver.permanentDropoffName ? `${driver.permanentLocationName} ➔ ${driver.permanentDropoffName}` : (driver.route || 'مسار دائمي'));
+        driver.route = effectiveRouteName;
+
+        const sName = driver.permanentLocationName || effectiveRouteName.split(/[-➔→]/)[0]?.trim() || 'نقطة الانطلاق';
+        const eName = driver.permanentDropoffName || effectiveRouteName.split(/[-➔→]/)[1]?.trim() || 'نقطة الوصول';
+        const sLat = parseFloat(driver.permanentLat || driver.latitude || 31.9961);
+        const sLon = parseFloat(driver.permanentLon || driver.longitude || 44.3168);
+        const eLat = parseFloat(driver.permanentDropoffLat || 32.0321);
+        const eLon = parseFloat(driver.permanentDropoffLon || 44.3725);
+        const vInfo = `${driver.vehicleMake || 'تويوتا'} ${driver.vehicleModel || 'كورولا'} (${driver.vehiclePlate || 'النجف'})`;
+
+        // Update or insert in memoryState.routes
+        let r = db.memoryState.routes.find(rt => rt.driverId === driverId);
+        if (r) {
+            r.name = driver.route;
+            r.startName = sName;
+            r.endName = eName;
+            r.startLat = sLat;
+            r.startLon = sLon;
+            r.endLat = eLat;
+            r.endLon = eLon;
+            r.driverName = driver.fullName;
+            r.driverPhone = driver.phoneNumber;
+            r.vehicleInfo = vInfo;
+            r.status = 'Active';
+        } else {
+            db.memoryState.routes.push({
+                id: 'route-' + driverId,
+                routeId: 'route-' + driverId,
+                driverId: driverId,
+                driverName: driver.fullName,
+                driverPhone: driver.phoneNumber,
+                vehicleInfo: vInfo,
+                name: driver.route,
+                startName: sName,
+                endName: eName,
+                startLat: sLat,
+                startLon: sLon,
+                endLat: eLat,
+                endLon: eLon,
+                fare: 3000,
+                availableSeats: 4,
+                totalSeats: 4,
+                departureTime: '07:30 ص',
+                status: 'Active',
+                createdAt: new Date().toISOString()
+            });
+        }
+
+        // Establish driver in permanent routes list
+        db.memoryState.permanentRoutes = db.memoryState.permanentRoutes || [];
+        let prIdx = db.memoryState.permanentRoutes.findIndex(item => item.driverId === driverId || item.id === 'route-' + driverId);
+        const permRouteObj = {
+            id: 'route-' + driverId,
+            driverId: driverId,
+            driverName: driver.fullName,
+            driverPhone: driver.phoneNumber,
+            vehicleInfo: vInfo,
+            vehicleType: driver.vehicleType || 'eco',
+            startName: sName,
+            endName: eName,
+            startLat: sLat,
+            startLon: sLon,
+            endLat: eLat,
+            endLon: eLon,
+            fare: 3000,
+            days: ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء'],
+            departureTime: '07:30 ص',
+            status: 'Active',
+            isDriverRoute: true,
+            createdAt: new Date().toISOString()
+        };
+        if (prIdx >= 0) {
+            db.memoryState.permanentRoutes[prIdx] = { ...db.memoryState.permanentRoutes[prIdx], ...permRouteObj };
+        } else {
+            db.memoryState.permanentRoutes.unshift(permRouteObj);
+        }
+
         if (data.password !== undefined && String(data.password).trim() !== '') {
             const crypto = require('crypto');
             const pass = String(data.password).trim();
@@ -114,15 +183,25 @@ class AdminController {
             try {
                 await db.pool.query(`
                     UPDATE drivers 
-                    SET full_name = $1, phone_number = $2, password_hash = COALESCE($3, password_hash), plain_password = COALESCE($4, plain_password), updated_at = NOW()
-                    WHERE driver_id = $5
-                `, [driver.fullName, driver.phoneNumber, driver.passwordHash || null, driver.plainPassword || null, driverId]);
+                    SET full_name = $1, phone_number = $2, password_hash = COALESCE($3, password_hash), plain_password = COALESCE($4, plain_password),
+                        latitude = COALESCE($5, latitude), longitude = COALESCE($6, longitude), updated_at = NOW()
+                    WHERE driver_id = $7
+                `, [driver.fullName, driver.phoneNumber, driver.passwordHash || null, driver.plainPassword || null, driver.permanentLat || null, driver.permanentLon || null, driverId]);
 
                 await db.pool.query(`
                     UPDATE users 
                     SET full_name = $1, phone_number = $2, password_hash = COALESCE($3, password_hash), plain_password = COALESCE($4, plain_password), updated_at = NOW()
                     WHERE id = $5
                 `, [driver.fullName, driver.phoneNumber, driver.passwordHash || null, driver.plainPassword || null, driverId]);
+
+                await db.pool.query(`
+                    INSERT INTO routes (id, driver_id, driver_name, driver_phone, start_name, end_name, start_lat, start_lon, end_lat, end_lon, fare, available_seats, total_seats, departure_time, status, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 3000, 4, 4, '07:30 ص', 'Active', NOW())
+                    ON CONFLICT (id) DO UPDATE SET
+                        start_name = EXCLUDED.start_name, end_name = EXCLUDED.end_name,
+                        start_lat = EXCLUDED.start_lat, start_lon = EXCLUDED.start_lon,
+                        end_lat = EXCLUDED.end_lat, end_lon = EXCLUDED.end_lon
+                `, ['route-' + driverId, driverId, driver.fullName, driver.phoneNumber, sName, eName, sLat, sLon, eLat, eLon]);
             } catch (e) {
                 console.error('[AdminController] updateDriver PG error:', e);
             }
@@ -987,6 +1066,37 @@ class AdminController {
 
             db.memoryState.routes.unshift(createdRoute);
             newDriver.routes = [createdRoute];
+            newDriver.permanentLat = startLat;
+            newDriver.permanentLon = startLon;
+            newDriver.permanentLocationName = startName;
+            newDriver.permanentDropoffLat = endLat;
+            newDriver.permanentDropoffLon = endLon;
+            newDriver.permanentDropoffName = endName;
+            newDriver.route = `${startName} ➔ ${endName}`;
+            newDriver.work_mode = 'خط دائمي';
+            newDriver.serviceType = 'Both';
+
+            db.memoryState.permanentRoutes = db.memoryState.permanentRoutes || [];
+            db.memoryState.permanentRoutes.unshift({
+                id: 'route-' + driverId,
+                driverId,
+                driverName: fullName,
+                driverPhone: cleanPhone,
+                vehicleInfo: `${vMake} ${vPlate}`,
+                vehicleType: newDriver.vehicleType || 'eco',
+                startName,
+                endName,
+                startLat,
+                startLon,
+                endLat,
+                endLon,
+                fare,
+                days: ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء'],
+                departureTime: depTime,
+                status: 'Active',
+                isDriverRoute: true,
+                createdAt: now
+            });
         }
 
         // Save into PostgreSQL

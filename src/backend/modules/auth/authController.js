@@ -4406,9 +4406,13 @@ window.setCleanMapTarget = function(target) {
 
             var pLat = bPickupCoords ? bPickupCoords[1] : (bUserLat || 32.0);
             var pLon = bPickupCoords ? bPickupCoords[0] : (bUserLon || 44.3);
+            var dLat = bDropoffCoords ? bDropoffCoords[1] : '';
+            var dLon = bDropoffCoords ? bDropoffCoords[0] : '';
+            var tripType = localStorage.getItem('selected_trip_type') || 'daily';
 
             try {
-                var res = await fetch('/api/drivers/nearby?lat=' + pLat + '&lon=' + pLon + '&rangeKm=25');
+                var url = '/api/drivers/nearby?lat=' + pLat + '&lon=' + pLon + '&rangeKm=30' + (tripType ? '&tripType=' + tripType : '') + (dLat ? '&dropoffLat=' + dLat + '&dropoffLon=' + dLon : '');
+                var res = await fetch(url);
                 var data = await res.json();
                 var drivers = Array.isArray(data) ? data : (data.drivers || []);
 
@@ -4426,13 +4430,18 @@ window.setCleanMapTarget = function(target) {
                     var waNum = dPhone.replace(/[^0-9]/g, '').replace(/^07/, '9647');
                     var waBtn = waNum ? '<a href="https://wa.me/' + waNum + '" target="_blank" class="btn-small" style="background:#25d366;color:#fff;text-decoration:none;padding:6px 10px;font-size:11px;font-weight:700;">واتساب 💬</a>' : '';
 
+                    var routeText = d.route || (d.routeStartName && d.routeEndName ? (d.routeStartName + ' ➔ ' + d.routeEndName) : (d.permanentLocationName ? (d.permanentLocationName + (d.permanentDropoffName ? ' ➔ ' + d.permanentDropoffName : '')) : ''));
+                    var routeBadge = routeText ? '<div style="font-size:11px;color:#047857;font-weight:800;background:#ecfdf5;padding:4px 8px;border-radius:8px;margin:4px 0 6px;border:1px solid #a7f3d0;">🛣️ مسار الخط المعتمد: ' + routeText + '</div>' : '';
+                    var vClassBadge = d.vehicleType === 'vip' ? '<span style="background:#fef3c7;color:#b45309;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:900;">👑 VIP</span>' : '<span style="background:#e0f2fe;color:#0369a1;padding:2px 6px;border-radius:6px;font-size:10px;font-weight:900;">🚕 توفير</span>';
+
                     card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
-                        '<span style="font-weight:900;font-size:13px;color:#111;">🚕 ' + (d.driverName || d.fullName || 'كابتن') + '</span>' +
+                        '<span style="font-weight:900;font-size:13px;color:#111;">🚕 ' + (d.driverName || d.fullName || 'كابتن') + ' ' + vClassBadge + '</span>' +
                         '<span style="font-size:11px;font-weight:800;color:#059669;">📍 يبعد ' + (d.distanceKm || 1) + ' كم</span>' +
                         '</div>' +
+                        routeBadge +
                         '<div style="font-size:11px;color:#64748b;margin-bottom:6px;">🚗 ' + (d.carModel || d.vehicleInfo || 'تويوتا') + '</div>' +
                         '<div style="display:flex;gap:6px;align-items:center;">' +
-                        '<button type="button" onclick="sendPassengerJoinRequest(&quot;' + d.driverId + '&quot;)" class="btn-primary" style="flex:1;padding:6px 10px;font-size:11px;background:#2563eb;">🙋 طلب انضمام</button>' +
+                        '<button type="button" onclick="sendPassengerJoinRequest(&quot;' + d.driverId + '&quot;)" class="btn-primary" style="flex:1;padding:6px 10px;font-size:11px;background:#2563eb;">🙋 طلب انضمام للخط</button>' +
                         waBtn +
                         '</div>';
                     container.appendChild(card);
@@ -4445,10 +4454,13 @@ window.setCleanMapTarget = function(target) {
 
         window.sendPassengerJoinRequest = async function(driverId) {
             var userId = localStorage.getItem('user_id') || 'usr-current';
-            if (!bPickupCoords || !bDropoffCoords) {
-                alert('يرجى تحديد مسارك على الخريطة أولاً');
-                return;
-            }
+            var pLat = bPickupCoords ? bPickupCoords[1] : (bUserLat || 31.9961);
+            var pLon = bPickupCoords ? bPickupCoords[0] : (bUserLon || 44.3168);
+            var dLat = bDropoffCoords ? bDropoffCoords[1] : 32.0321;
+            var dLon = bDropoffCoords ? bDropoffCoords[0] : 44.3725;
+            var pText = bPickupName || 'موقعي الحالي';
+            var dText = bDropoffName || 'وجهة الوصول';
+
             try {
                 var res = await fetch('/api/passenger/join-request', {
                     method: 'POST',
@@ -4456,12 +4468,12 @@ window.setCleanMapTarget = function(target) {
                     body: JSON.stringify({
                         passengerId: userId,
                         driverId: driverId,
-                        pickupLat: bPickupCoords[1],
-                        pickupLon: bPickupCoords[0],
-                        dropoffLat: bDropoffCoords[1],
-                        dropoffLon: bDropoffCoords[0],
-                        pickupText: bPickupName || 'موقع الركوب',
-                        dropoffText: bDropoffName || 'وجهة الوصول'
+                        pickupLat: pLat,
+                        pickupLon: pLon,
+                        dropoffLat: dLat,
+                        dropoffLon: dLon,
+                        pickupText: pText,
+                        dropoffText: dText
                     })
                 });
                 var data = await res.json();
@@ -5011,9 +5023,7 @@ window.setCleanMapTarget = function(target) {
                     bMap.getSource('booking-drivers-source').setData({ type: 'FeatureCollection', features: features });
                 }
 
-                if (activeType === 'short') {
-                    renderNearbyDriversList();
-                }
+                renderNearbyDriversList();
             } catch(_) {}
         }
 
@@ -5138,6 +5148,8 @@ window.setCleanMapTarget = function(target) {
                 var card = document.createElement('div');
                 card.className = 'driver-mini-card';
                 var eta = Math.max(2, Math.round(d.distanceKm / 0.5));
+                var dRoute = d.route || (d.routeStartName && d.routeEndName ? (d.routeStartName + ' ➔ ' + d.routeEndName) : '');
+                var routeSnippet = dRoute ? '<div style="font-size:10px;color:#047857;font-weight:700;margin-top:2px;">🛣️ ' + dRoute + '</div>' : '';
                 card.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">' +
                         '<span style="font-weight:900;font-size:12px;color:#111;">🚕 ' + d.driverName + '</span>' +
                         '<span style="font-size:11px;font-weight:800;color:#059669;">⏱️ ' + eta + ' دقيقة</span>' +
@@ -5145,7 +5157,7 @@ window.setCleanMapTarget = function(target) {
                     '<div style="font-size:11px;color:#64748b;display:flex;justify-content:space-between;align-items:center;">' +
                         '<span>🚗 ' + (d.carModel || 'تويوتا') + '</span>' +
                         '<span>' + (d.vehicleType === 'vip' ? '👑 VIP' : '🚕 توفير') + ' · 📏 ' + d.distanceKm + ' كم</span>' +
-                    '</div>';
+                    '</div>' + routeSnippet;
                 card.onclick = function() {
                     if (bMap) bMap.flyTo({ center: [d.longitude, d.latitude], zoom: 15 });
                 };

@@ -1339,17 +1339,18 @@ async function startServer() {
                         return d.work_mode ? d.work_mode === 'مشوار قصير' : (d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType);
                     }
                     if (tripType === 'daily') {
-                        return d.work_mode ? d.work_mode === 'خط دائمي' : (d.serviceType === 'PermanentLine' || d.serviceType === 'Both' || !d.serviceType);
+                        return (d.permanentLat && d.permanentLon) || (d.route && d.route.length > 0) || (d.work_mode ? d.work_mode === 'خط دائمي' : (d.serviceType === 'PermanentLine' || d.serviceType === 'Both' || !d.serviceType));
                     }
                     return true;
                 })
                 .map((d, idx) => {
-                    const dLat = d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : (lat + (idx % 2 === 0 ? 0.003 * (idx + 1) : -0.003 * (idx + 1))));
-                    const dLon = d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : (lon + (idx % 2 === 0 ? 0.002 * (idx + 1) : -0.002 * (idx + 1))));
+                    const dLat = (d.permanentLat ? parseFloat(d.permanentLat) : (d.currentLat ? parseFloat(d.currentLat) : (d.latitude ? parseFloat(d.latitude) : (lat + (idx % 2 === 0 ? 0.003 * (idx + 1) : -0.003 * (idx + 1))))));
+                    const dLon = (d.permanentLon ? parseFloat(d.permanentLon) : (d.currentLon ? parseFloat(d.currentLon) : (d.longitude ? parseFloat(d.longitude) : (lon + (idx % 2 === 0 ? 0.002 * (idx + 1) : -0.002 * (idx + 1))))));
                     const distanceKm = haversine(lat, lon, dLat, dLon);
                     const vMake = d.vehicleMake || (d.vehicle ? d.vehicle.make : 'تويوتا');
                     const vModel = d.vehicleModel || (d.vehicle ? (d.vehicle.model || '') : 'كورولا');
                     const vPlate = d.vehiclePlate || (d.vehicle ? (d.vehicle.plateNumber || d.vehicle.plate) : 'النجف');
+                    const routeStr = d.route || (d.permanentLocationName && d.permanentDropoffName ? `${d.permanentLocationName} ➔ ${d.permanentDropoffName}` : (d.permanentLocationName || ''));
                     return {
                         driverId: d.driverId,
                         driverName: d.fullName || 'كابتن توصيله',
@@ -1364,6 +1365,15 @@ async function startServer() {
                         plateNumber: vPlate,
                         latitude: dLat,
                         longitude: dLon,
+                        permanentLat: d.permanentLat ? parseFloat(d.permanentLat) : null,
+                        permanentLon: d.permanentLon ? parseFloat(d.permanentLon) : null,
+                        permanentLocationName: d.permanentLocationName || '',
+                        permanentDropoffLat: d.permanentDropoffLat ? parseFloat(d.permanentDropoffLat) : null,
+                        permanentDropoffLon: d.permanentDropoffLon ? parseFloat(d.permanentDropoffLon) : null,
+                        permanentDropoffName: d.permanentDropoffName || '',
+                        route: routeStr,
+                        routeStartName: d.permanentLocationName || (routeStr ? routeStr.split(/[-➔→]/)[0]?.trim() : ''),
+                        routeEndName: d.permanentDropoffName || (routeStr ? routeStr.split(/[-➔→]/)[1]?.trim() : ''),
                         distanceKm: Math.round(distanceKm * 10) / 10,
                         heading: d.heading || (idx * 45) % 360,
                         status: d.tripStatus || 'Online',
@@ -1807,11 +1817,42 @@ async function startServer() {
 
         if (pathname === '/api/routes/permanent' && method === 'GET') {
             const customerId = parsedUrl.searchParams.get('customerId');
-            let routes = db.memoryState.permanentRoutes || [];
+            let permRoutes = [...(db.memoryState.permanentRoutes || [])];
+
+            (db.memoryState.drivers || []).forEach(d => {
+                if ((d.permanentLat && d.permanentLon) || d.route) {
+                    const already = permRoutes.find(pr => pr.driverId === d.driverId || pr.id === 'route-' + d.driverId);
+                    if (!already) {
+                        const sName = d.permanentLocationName || d.route?.split(/[-➔→]/)[0]?.trim() || 'نقطة الانطلاق';
+                        const eName = d.permanentDropoffName || d.route?.split(/[-➔→]/)[1]?.trim() || 'نقطة الوصول';
+                        permRoutes.push({
+                            id: 'route-' + d.driverId,
+                            driverId: d.driverId,
+                            driverName: d.fullName || 'كابتن توصيله',
+                            driverPhone: d.phoneNumber || '',
+                            vehicleInfo: `${d.vehicleMake || 'تويوتا'} ${d.vehicleModel || 'كورولا'} (${d.vehiclePlate || 'النجف'})`,
+                            vehicleType: d.vehicleType || 'eco',
+                            startName: sName,
+                            endName: eName,
+                            startLat: parseFloat(d.permanentLat || 31.9961),
+                            startLon: parseFloat(d.permanentLon || 44.3168),
+                            endLat: parseFloat(d.permanentDropoffLat || 32.0321),
+                            endLon: parseFloat(d.permanentDropoffLon || 44.3725),
+                            fare: 3000,
+                            days: ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء'],
+                            departureTime: '07:30 ص',
+                            status: 'Active',
+                            isDriverRoute: true,
+                            createdAt: d.createdAt || new Date().toISOString()
+                        });
+                    }
+                }
+            });
+
             if (customerId) {
-                routes = routes.filter(r => r.customerId === customerId);
+                permRoutes = permRoutes.filter(r => r.customerId === customerId);
             }
-            return sendJson({ success: true, routes });
+            return sendJson({ success: true, routes: permRoutes });
         }
 
         if (pathname.startsWith('/api/routes/permanent/') && method === 'DELETE') {
