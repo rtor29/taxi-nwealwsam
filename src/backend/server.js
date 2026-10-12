@@ -1917,6 +1917,45 @@ async function startServer() {
             return sendJson({ success: true, driverId, matches });
         }
 
+        // ---------------------------------------------------------------------
+        // PASSENGER: SPATIAL ROUTE MATCHING (3-TIER: 🟢 <=500m, 🟣 <=1500m, 🔴 >1500m)
+        // ---------------------------------------------------------------------
+        if (pathname === '/api/passenger/match-route' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const points = body.coordinates || body.points || (body.passengerLineGeoJson && body.passengerLineGeoJson.coordinates) || [];
+                const maxMeters = parseFloat(body.maxMeters || 5000);
+                const matched = db.matchPassengerRoute(points, maxMeters);
+                return sendJson({ success: true, count: matched.length, drivers: matched });
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // ATOMIC BOOKING ENDPOINT (CONCURRENCY SAFE WITH INSTANT SEAT DEDUCTION)
+        // ---------------------------------------------------------------------
+        if (pathname === '/api/bookings/atomic-book' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const { driverId, passengerId, passengerName, passengerPhone, platform, seats } = body;
+                if (!driverId || !passengerId) {
+                    return sendJson({ success: false, error: 'driverId and passengerId are required' }, 400);
+                }
+                const result = await db.executeAtomicBooking({
+                    driverId,
+                    passengerId,
+                    passengerName,
+                    passengerPhone,
+                    platform: platform || 'web',
+                    seatsToBook: seats || 1
+                });
+                return sendJson(result, result.statusCode || (result.success ? 200 : 400));
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
         // Driver Service Type Selection (ShortTrip / PermanentLine / Both)
         if (pathname === '/api/driver/service-type' && method === 'POST') {
             try {

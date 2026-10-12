@@ -294,6 +294,7 @@ async function handleStart(chatId, user) {
                     { text: '⚡ مشوار قصير', callback_data: 'passenger_trip_short' },
                     { text: '🔄 خط دائم', callback_data: 'passenger_trip_daily' }
                 ],
+                [{ text: '🗺️ فتح خريطة الخطوط الدائمية (WebApp)', web_app: { url: 'https://tawseelaiq.app/?role=Customer&tripType=daily' } }],
                 [{ text: '🚗 فتح التطبيق مباشرة', url: 'https://tawseelaiq.app/?login_token=' + encodeURIComponent(token) + '&userId=' + encodeURIComponent(customer.customerId) + '&role=Customer&fullName=' + encodeURIComponent(customer.fullName) }],
                 [{ text: '📞 تواصل مع الإدارة', callback_data: 'contact_admin' }],
                 [{ text: '❓ مساعدة', callback_data: 'help' }],
@@ -320,6 +321,7 @@ async function handleStart(chatId, user) {
     }
 
     const keyboard = [
+        [{ text: '🗺️ فتح خريطة الخطوط الدائمية (WebApp)', web_app: { url: 'https://tawseelaiq.app/?role=Customer&tripType=daily' } }],
         [{ text: '🚶 تسجيل راكب', callback_data: 'reg_passenger' }, { text: '🚕 تسجيل سائق', callback_data: 'reg_driver' }],
         [{ text: '🔑 تسجيل دخول', callback_data: 'login' }],
         [{ text: '📞 تواصل مع الإدارة', callback_data: 'contact_admin' }],
@@ -744,6 +746,56 @@ async function handleCallback(chatId, data, user) {
                 if (String(chatId) === ADMIN_CHAT_ID) await handleApproveDriver(chatId, data.replace('approve_', ''));
             } else if (data.startsWith('reject_')) {
                 if (String(chatId) === ADMIN_CHAT_ID) await handleRejectDriver(chatId, data.replace('reject_', ''));
+            } else if (data.startsWith('book_')) {
+                const driverId = data.replace('book_', '');
+                let passenger = (db.memoryState.customers || []).find(c => String(c.telegramChatId) === String(chatId));
+                const passId = passenger ? passenger.customerId : ('tg_' + chatId);
+                const passName = passenger ? passenger.fullName : ((user && (user.first_name || user.username)) || 'راكب تيليجرام');
+                const passPhone = passenger ? passenger.phoneNumber : '';
+
+                const bookingResult = await db.executeAtomicBooking({
+                    driverId,
+                    passengerId: passId,
+                    passengerName: passName,
+                    passengerPhone: passPhone,
+                    platform: 'telegram',
+                    seatsToBook: 1
+                });
+
+                if (bookingResult.success) {
+                    const drv = bookingResult.driver;
+                    const waNum = (drv.phoneNumber || '').replace(/[^0-9]/g, '').replace(/^07/, '9647');
+                    await tgRequest('sendMessage', {
+                        chat_id: chatId,
+                        text: `🎉 <b>تم حجز مقعدك بنجاح!</b>\n\n` +
+                              `🚖 <b>الكابتن:</b> ${drv.fullName}\n` +
+                              `💺 <b>المقاعد المتبقية:</b> ${drv.availableSeats} من أصل ${drv.totalSeats}\n` +
+                              `📱 <b>الهاتف:</b> <code>${drv.phoneNumber || 'غير متوفر'}</code>\n` +
+                              `🛣️ <b>المسار:</b> ${drv.route || drv.permanentLocationName || 'خط دائمي'}\n\n` +
+                              `💬 يمكنك الاتصال بالكابتن أو مراسلته عبر واتساب للتنسيق.`,
+                        parse_mode: 'HTML',
+                        reply_markup: {
+                            inline_keyboard: [
+                                (drv.phoneNumber ? [{ text: '💬 تواصل واتساب', url: `https://wa.me/${waNum}` }] : []),
+                                [{ text: '🗺️ فتح خريطة الخطوط الدائمية', web_app: { url: 'https://tawseelaiq.app/?role=Customer&tripType=daily' } }]
+                            ].filter(r => r.length > 0)
+                        }
+                    });
+
+                    // If driver has telegramChatId, notify them
+                    if (drv.telegramChatId) {
+                        await tgRequest('sendMessage', {
+                            chat_id: drv.telegramChatId,
+                            text: `🔔 <b>حجز مقعد جديد في خطك الدائمي!</b>\n\n` +
+                                  `👤 <b>الراكب:</b> ${passName}\n` +
+                                  `📱 <b>الهاتف:</b> ${passPhone || 'عبر تيليجرام'}\n` +
+                                  `💺 <b>المقاعد المتبقية لديك:</b> ${drv.availableSeats}/${drv.totalSeats}`,
+                            parse_mode: 'HTML'
+                        }).catch(() => {});
+                    }
+                } else {
+                    await sendMessage(chatId, `⚠️ <b>تعذر إتمام الحجز:</b>\n${bookingResult.error || 'عذراً، المقاعد اكتملت لدى هذا الكابتن.'}`);
+                }
             }
     }
 }
@@ -907,45 +959,51 @@ async function handleMessage(chatId, text, user, location) {
                 db.saveStateSnapshot();
             }
 
-            let dailyDrivers = (db.memoryState.drivers || []).filter(d =>
-                !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' &&
-                (d.isVerified === true || d.status === 'Active' || d.status === 'Approved') &&
-                (d.workMode === 'خط دائمي' || d.serviceType === 'PermanentLine')
-            );
+            // Perform 3-Tier spatial route matching
+            const passengerPoints = [{ lat: state.startLat, lon: state.startLon }];
+            const matched = db.matchPassengerRoute(passengerPoints, 5000);
             
             userStates.delete(chatId);
             const token = passenger ? 'jwt_customer_' + passenger.customerId : '';
             const appUrl = `https://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&role=Customer&tripType=daily`;
 
-            if (dailyDrivers.length === 0) {
+            if (matched.length === 0) {
                 await sendKeyboard(chatId,
-                    `🔄 <b>تم تحديد المسار: ${startName} ➔ ${endName}</b>\n\n🚕 لا يوجد سائقون مسجلون للخطوط الدائمة حالياً.`,
+                    `🔄 <b>تم تحديد المسار: ${startName} ➔ ${endName}</b>\n\n🚕 لا يوجد سائقون متاحون أو توجد مقاعد شاغرة على هذا المسار حالياً.`,
                     [
-                        [{ text: '🗺️ فتح التطبيق وتثبيت مسار الخط الدائم', url: appUrl }],
+                        [{ text: '🗺️ فتح خريطة الخطوط الدائمية وتحديد المسار', web_app: { url: appUrl } }],
                         [{ text: '⚡ البحث عن مشوار قصير', callback_data: 'passenger_trip_short' }]
                     ]
                 );
             } else {
-                let msg = `🔄 <b>تم تحديد المسار: ${startName} ➔ ${endName}</b>\n\n📍 <b>السائقون العاملون بالخطوط الدائمة:</b>\n\n`;
-                dailyDrivers.slice(0, 8).forEach((d, i) => {
-                    const waNum = (d.phoneNumber || '').replace(/[^0-9]/g, '').replace(/^07/, '9647');
+                let msg = `🔄 <b>تم تحديد المسار: ${startName} ➔ ${endName}</b>\n\n📍 <b>السائقون الأقرب لمسارك (نظام المطابقة المكانية):</b>\n\n`;
+                const buttons = [];
+
+                matched.slice(0, 6).forEach((item, i) => {
+                    const d = item.driver;
                     const vMake = d.vehicleMake || (d.vehicle ? d.vehicle.make : 'تويوتا');
                     const vModel = d.vehicleModel || (d.vehicle ? (d.vehicle.model || '') : '');
                     const carInfo = `${vMake} ${vModel}`.trim();
-                    const routeInfo = d.route || d.permanentLocationName || 'خطوط دائمية';
+                    const routeInfo = d.route || d.permanentLocationName || 'خط دائمي';
+                    const icon = item.tier === 1 ? '🟢' : item.tier === 2 ? '🟣' : '🔴';
                     
-                    msg += `${i+1}. 🚕 <b>${d.fullName}</b>\n`;
+                    msg += `${i+1}. ${icon} <b>${d.fullName}</b> (${item.tierName} - ${item.minDistanceMeters}م)\n`;
                     msg += `   🛣️ المسار: <i>${routeInfo}</i>\n`;
                     msg += `   🚗 المركبة: ${carInfo}\n`;
-                    msg += `   📞 الهاتف: <code>${d.phoneNumber || '07800000000'}</code>\n`;
-                    msg += `   💬 <a href="https://wa.me/${waNum}">مراسلة الكابتن للاتفاق</a>\n\n`;
-                });
-                msg += `💡 تواصل مع الكابتن مباشرة أو افتح التطبيق لمشاهدته على الخريطة.`;
+                    msg += `   💺 المقاعد المتاحة: <b>${d.availableSeats}</b> من ${d.totalSeats}\n`;
+                    msg += `   📞 الهاتف: <code>${d.phoneNumber || '07800000000'}</code>\n\n`;
 
-                await sendKeyboard(chatId, msg, [
-                    [{ text: '🗺️ فتح التطبيق للتثبيت والعرض المباشر', url: appUrl }],
-                    [{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]
-                ]);
+                    buttons.push([
+                        { text: `⚡ احجز الآن مع ${d.fullName} (${d.availableSeats} مقاعد)`, callback_data: `book_${d.driverId}` }
+                    ]);
+                });
+
+                buttons.push([{ text: '🗺️ فتح خريطة الخطوط الدائمية (WebApp)', web_app: { url: appUrl } }]);
+                buttons.push([{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]);
+
+                msg += `💡 اضغط على زر الحجز أدناه لاقتناص مقعدك فورياً، أو افتح الخريطة لمشاهدة المسار!`;
+
+                await sendKeyboard(chatId, msg, buttons);
             }
             return;
         }

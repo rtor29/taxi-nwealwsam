@@ -518,11 +518,43 @@ class AuthController {
                 <div id="book-dropoff-results" style="display:none !important;" class="search-autocomplete-dropdown" style="display:none;position:absolute;bottom:100%;left:20px;right:20px;z-index:30;background:#fff;border-radius:16px;box-shadow:0 -10px 30px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;margin-bottom:10px;"></div>
             </div>
 
-            <!-- Confirm Button -->
+            <!-- Permanent Lines Mode Indicator -->
+            <div id="perm-lines-mode-banner" style="display:none;align-items:center;justify-content:space-between;background:#f0fdf4;padding:8px 14px;border-radius:14px;border:1.5px solid #bbf7d0;margin-bottom:-10px;">
+                <span style="font-weight:900;font-size:13px;color:#166534;">🔄 نظام الخطوط الدائمية (تثبيت المسار اليومي)</span>
+                <span style="font-size:11px;color:#059669;font-weight:800;background:#dcfce7;padding:2px 8px;border-radius:8px;">مطابقة مكانية 🟢🟣🔴</span>
+            </div>
+
+            <!-- Confirm Button (Short Trips) -->
             <button type="button" id="btn-floating-save-route" onclick="handleCleanMapConfirm()" style="background:#f97316;color:#ffffff;border:none;border-radius:20px;padding:22px;font-size:24px;font-weight:900;font-family:Cairo,sans-serif;cursor:pointer;box-shadow:0 8px 20px rgba(249,115,22,0.3);transition:transform 0.2s;" onmousedown="this.style.transform='scale(0.97)';" onmouseup="this.style.transform='scale(1)';">
                 <span id="floating-save-btn-text">تاكيد نقطة الانطلاق</span>
                 <span id="floating-btn-fare" style="display:none;"></span>
             </button>
+
+            <!-- Permanent Lines Match Drivers Button (Disabled until path pinned) -->
+            <button type="button" id="btn-match-daily-drivers" onclick="window.findMatchingDailyDrivers()" style="display:none;background:linear-gradient(135deg, #059669 0%, #047857 100%);color:#ffffff;border:none;border-radius:20px;padding:20px;font-size:19px;font-weight:900;font-family:Cairo,sans-serif;cursor:not-allowed;box-shadow:0 8px 20px rgba(5,150,105,0.25);transition:all 0.2s;opacity:0.5;" disabled>
+                <span id="match-daily-btn-text">⚠️ حدد نقطتي الانطلاق والوصول لتفعيل البحث</span>
+            </button>
+        </div>
+
+        <!-- Matched Daily Drivers Drawer / Panel (3-Tier Spatial Results) -->
+        <div id="matched-daily-drivers-panel" style="display:none;position:absolute;bottom:0;left:0;right:0;max-height:80vh;background:#ffffff;border-top-left-radius:28px;border-top-right-radius:28px;box-shadow:0 -6px 30px rgba(0,0,0,0.25);z-index:26;font-family:Cairo,sans-serif;flex-direction:column;animation:slideUpPanel 0.25s ease;overflow:hidden;" dir="rtl">
+            <div style="width:40px;height:4px;background:#cbd5e1;border-radius:2px;margin:10px auto 4px auto;"></div>
+            <div style="padding:8px 20px 12px 20px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;">
+                <div>
+                    <div style="font-size:16px;font-weight:900;color:#0f172a;" id="matched-drivers-title">🚕 السائقون الأقرب لمسارك</div>
+                    <div style="font-size:11px;color:#64748b;">مطابقة مكانية للمسار الدائمي حسب لوحة التحكم</div>
+                </div>
+                <button type="button" onclick="window.closeMatchedDriversPanel()" style="background:#f1f5f9;border:none;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;color:#475569;">✕</button>
+            </div>
+            <!-- 3-Tier Legend -->
+            <div style="padding:6px 16px;background:#f8fafc;display:flex;align-items:center;gap:6px;border-bottom:1px solid #f1f5f9;font-size:11px;font-weight:800;overflow-x:auto;">
+                <span style="background:#ecfdf5;color:#059669;padding:3px 8px;border-radius:8px;">🟢 ≤500م (مطابق جداً)</span>
+                <span style="background:#f5f3ff;color:#7c3aed;padding:3px 8px;border-radius:8px;">🟣 ≤1500م (مسار قريب)</span>
+                <span style="background:#fef2f2;color:#dc2626;padding:3px 8px;border-radius:8px;">🔴 &gt;1500م (متقاطع)</span>
+            </div>
+            <!-- List of matched drivers -->
+            <div id="matched-drivers-list" style="padding:12px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;max-height:calc(80vh - 120px);">
+            </div>
         </div>
 
         <!-- Vehicle Selection Panel (VIP / Eco like Baly) - Inside booking-modal-view -->
@@ -617,6 +649,16 @@ class AuthController {
 
     <script>
         window.showVehicleSelectionPanel = function() {
+            // Guard: Destination must be searched and selected before showing vehicle options (توفير / VIP)
+            if (!window.bPickupCoords || !window.bDropoffCoords) {
+                if (!window.bPickupCoords) {
+                    window.openFullscreenSearch('pickup');
+                } else {
+                    window.openFullscreenSearch('dropoff');
+                }
+                return;
+            }
+
             var actPanel = document.getElementById('clean-bottom-sheet') || document.getElementById('clean-action-panel');
             if (actPanel) actPanel.style.display = 'none';
             var vPanel = document.getElementById('vehicle-selection-panel');
@@ -635,6 +677,244 @@ class AuthController {
             if (elEco) elEco.innerText = ecoFare.toLocaleString() + ' د.ع';
             if (elVip) elVip.innerText = vipFare.toLocaleString() + ' د.ع';
             if (window.selectVehicleType) window.selectVehicleType(window.bSelectedVehicle || 'eco');
+        };
+
+        // ===== Permanent Lines Matching & Atomic Booking System =====
+        window.updateDailyMatchingButtonState = function() {
+            var btn = document.getElementById('btn-match-daily-drivers');
+            var txt = document.getElementById('match-daily-btn-text');
+            if (!btn || !txt) return;
+
+            var hasPath = !!(window.bPickupCoords && window.bDropoffCoords);
+            if (hasPath) {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+                btn.style.background = 'linear-gradient(135deg, #059669 0%, #047857 100%)';
+                btn.style.boxShadow = '0 8px 25px rgba(5,150,105,0.4)';
+                txt.innerHTML = '🔍 إظهار السائقين القريبين من مساري 🟢🟣🔴';
+            } else {
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+                btn.style.cursor = 'not-allowed';
+                btn.style.background = '#64748b';
+                btn.style.boxShadow = 'none';
+                if (!window.bPickupCoords) {
+                    txt.innerHTML = '⚠️ حدد نقطة الانطلاق على الخريطة أولاً';
+                } else {
+                    txt.innerHTML = '⚠️ حدد نقطة الوصول لإكمال المسار وتفعيل البحث';
+                }
+            }
+        };
+
+        window.findMatchingDailyDrivers = async function() {
+            if (!window.bPickupCoords || !window.bDropoffCoords) {
+                alert('يرجى تحديد نقطتي الانطلاق والوصول على الخريطة أولاً لتثبيت مسارك.');
+                return;
+            }
+
+            var btn = document.getElementById('btn-match-daily-drivers');
+            var txt = document.getElementById('match-daily-btn-text');
+            if (btn) btn.disabled = true;
+            if (txt) txt.innerHTML = '⏳ جاري البحث عن الكباتن ومطابقة المسار...';
+
+            try {
+                var passengerPoints = [];
+                if (window.bRouteGeom && window.bRouteGeom.coordinates && window.bRouteGeom.coordinates.length > 0) {
+                    passengerPoints = window.bRouteGeom.coordinates.map(function(c) {
+                        return { lat: c[1], lon: c[0] };
+                    });
+                } else {
+                    passengerPoints = [
+                        { lat: window.bPickupCoords[1], lon: window.bPickupCoords[0] },
+                        { lat: window.bDropoffCoords[1], lon: window.bDropoffCoords[0] }
+                    ];
+                }
+
+                var res = await fetch('/api/passenger/match-route', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ passengerPoints: passengerPoints, maxMeters: 5000 })
+                });
+                var data = await res.json();
+                var matched = data.matchedDrivers || [];
+
+                if (btn) btn.disabled = false;
+                if (txt) txt.innerHTML = '🔍 إظهار السائقين القريبين من مساري 🟢🟣🔴';
+
+                // 1. Render routes on Mapbox with 3-tier colors (Green <=500m, Purple <=1500m, Red >1500m)
+                if (window.bMap && window.bMap.getSource('matched-routes-source')) {
+                    var features = [];
+                    matched.forEach(function(item) {
+                        var d = item.driver;
+                        var coords = [];
+                        if (d.routeGeometry && d.routeGeometry.coordinates) {
+                            coords = d.routeGeometry.coordinates;
+                        } else if (d.permanentLat && d.permanentDropoffLat) {
+                            coords = [
+                                [d.permanentLon || d.longitude, d.permanentLat || d.latitude],
+                                [d.permanentDropoffLon, d.permanentDropoffLat]
+                            ];
+                        }
+                        if (coords.length > 0) {
+                            features.push({
+                                type: 'Feature',
+                                properties: {
+                                    driverId: d.driverId,
+                                    driverName: d.fullName,
+                                    tier: item.tier,
+                                    tierName: item.tierName,
+                                    tierColor: item.tierColor,
+                                    availableSeats: d.availableSeats !== undefined ? d.availableSeats : 4
+                                },
+                                geometry: {
+                                    type: 'LineString',
+                                    coordinates: coords
+                                }
+                            });
+                        }
+                    });
+                    window.bMap.getSource('matched-routes-source').setData({
+                        type: 'FeatureCollection',
+                        features: features
+                    });
+                }
+
+                // 2. Open drawer with matched drivers
+                window.renderMatchedDriversDrawer(matched);
+
+            } catch (err) {
+                console.error('Match error:', err);
+                if (btn) btn.disabled = false;
+                if (txt) txt.innerHTML = '🔍 إظهار السائقين القريبين من مساري 🟢🟣🔴';
+                alert('حدث خطأ أثناء الاتصال بالخادم لمطابقة المسار.');
+            }
+        };
+
+        window.renderMatchedDriversDrawer = function(matched) {
+            var panel = document.getElementById('matched-daily-drivers-panel');
+            var list = document.getElementById('matched-drivers-list');
+            var title = document.getElementById('matched-drivers-title');
+            if (!panel || !list) return;
+
+            panel.style.display = 'flex';
+            if (title) title.innerHTML = '🚕 السائقون الأقرب لمسارك (' + matched.length + ' كابتن متاح)';
+
+            if (matched.length === 0) {
+                list.innerHTML = '<div style="text-align:center;padding:26px 16px;background:#f8fafc;border-radius:18px;border:1.5px dashed #cbd5e1;">' +
+                    '<div style="font-size:36px;margin-bottom:8px;">🚕</div>' +
+                    '<div style="font-size:16px;font-weight:900;color:#1e293b;">لا يوجد سائقون متاحون على هذا المسار حالياً</div>' +
+                    '<div style="font-size:12px;color:#64748b;margin-top:5px;line-height:1.6;">تم تثبيت مسارك وسنقوم بإشعارك فور تسجيل كابتن جديد يمر بنفس النطاق.</div>' +
+                '</div>';
+                return;
+            }
+
+            var html = '';
+            matched.forEach(function(item) {
+                var d = item.driver;
+                var seats = (d.availableSeats !== undefined) ? d.availableSeats : 4;
+                var total = (d.totalSeats !== undefined) ? d.totalSeats : 4;
+                var isFull = seats <= 0;
+                var waNum = (d.phoneNumber || '').replace(/[^0-9]/g, '').replace(/^07/, '9647');
+                var vMake = d.vehicleMake || (d.vehicle ? d.vehicle.make : 'تويوتا');
+                var vPlate = d.vehiclePlate || (d.vehicle ? d.vehicle.plateNumber : 'خصوصي');
+                var rText = d.route || (d.permanentLocationName ? (d.permanentLocationName + ' ➔ ' + (d.permanentDropoffName || '')) : 'خط دائمي');
+
+                var tierBg = item.tier === 1 ? '#ecfdf5' : (item.tier === 2 ? '#f5f3ff' : '#fef2f2');
+                var tierColor = item.tierColor || '#10B981';
+                var tierIcon = item.tier === 1 ? '🟢' : (item.tier === 2 ? '🟣' : '🔴');
+
+                html += '<div id="drv-card-' + d.driverId + '" style="background:#ffffff;border:1.5px solid #e2e8f0;border-radius:20px;padding:14px;box-shadow:0 4px 14px rgba(0,0,0,0.05);display:flex;flex-direction:column;gap:10px;">' +
+                    '<div style="display:flex;align-items:flex-start;justify-content:space-between;">' +
+                        '<div>' +
+                            '<div style="display:flex;align-items:center;gap:8px;">' +
+                                '<span style="font-size:16px;font-weight:900;color:#0f172a;">' + d.fullName + '</span>' +
+                                '<span style="background:' + tierBg + ';color:' + tierColor + ';font-size:11px;font-weight:800;padding:3px 8px;border-radius:10px;">' + tierIcon + ' ' + item.tierName + ' (' + item.minDistanceMeters + 'م)</span>' +
+                            '</div>' +
+                            '<div style="font-size:12px;color:#64748b;margin-top:3px;">🚗 ' + vMake + ' • ' + vPlate + '</div>' +
+                            '<div style="font-size:12px;color:#334155;margin-top:3px;font-weight:700;">🛣️ مسار الكابتن: ' + rText + '</div>' +
+                        '</div>' +
+                        '<div style="text-align:left;flex-shrink:0;">' +
+                            '<div id="drv-seats-' + d.driverId + '" style="background:' + (isFull ? '#fee2e2' : '#f0fdf4') + ';color:' + (isFull ? '#dc2626' : '#16a34a') + ';font-weight:900;font-size:12px;padding:5px 10px;border-radius:12px;border:1px solid ' + (isFull ? '#fecaca' : '#bbf7d0') + ';">' +
+                                '💺 ' + seats + ' / ' + total + ' مقاعد' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div style="display:flex;gap:8px;align-items:center;margin-top:2px;">' +
+                        (d.phoneNumber ? '<a href="tel:' + d.phoneNumber + '" style="background:#f1f5f9;color:#334155;border-radius:12px;padding:9px 12px;font-size:12px;font-weight:800;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">📞 اتصال</a>' : '') +
+                        (waNum ? '<a href="https://wa.me/' + waNum + '" target="_blank" style="background:#dcfce7;color:#166534;border-radius:12px;padding:9px 12px;font-size:12px;font-weight:800;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">💬 واتساب</a>' : '') +
+                        '<button type="button" id="btn-book-' + d.driverId + '" onclick="window.atomicBookSeat(\'' + d.driverId + '\', \'' + d.fullName.replace(/'/g, "\\'") + '\')" ' + (isFull ? 'disabled' : '') + ' style="flex:1;background:' + (isFull ? '#94a3b8' : 'linear-gradient(135deg, #059669 0%, #047857 100%)') + ';color:#ffffff;border:none;border-radius:12px;padding:10px 14px;font-size:13px;font-weight:900;font-family:Cairo,sans-serif;cursor:' + (isFull ? 'not-allowed' : 'pointer') + ';box-shadow:0 3px 8px rgba(5,150,105,0.25);">' +
+                            (isFull ? 'المقاعد مكتملة 🔴' : 'احجز مقعدك الآن ⚡') +
+                        '</button>' +
+                    '</div>' +
+                '</div>';
+            });
+
+            list.innerHTML = html;
+        };
+
+        window.atomicBookSeat = async function(driverId, driverName) {
+            var btn = document.getElementById('btn-book-' + driverId);
+            if (btn) { btn.disabled = true; btn.innerText = 'جاري الحجز الفوري...'; }
+
+            var uid = localStorage.getItem('user_id') || ('cust-web-' + Math.random().toString(36).substr(2, 7));
+            var uName = localStorage.getItem('user_fullname') || localStorage.getItem('user_fullName') || 'راكب توصيله';
+            var uPhone = localStorage.getItem('user_phone') || '';
+
+            try {
+                var res = await fetch('/api/bookings/atomic-book', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        driverId: driverId,
+                        passengerId: uid,
+                        passengerName: uName,
+                        passengerPhone: uPhone,
+                        platform: 'web',
+                        seatsToBook: 1
+                    })
+                });
+                var result = await res.json();
+
+                if (result.success) {
+                    var drv = result.driver;
+                    var seatsEl = document.getElementById('drv-seats-' + driverId);
+                    if (seatsEl) {
+                        seatsEl.innerHTML = '💺 ' + drv.availableSeats + ' / ' + drv.totalSeats + ' مقاعد';
+                        if (drv.availableSeats <= 0) {
+                            seatsEl.style.background = '#fee2e2';
+                            seatsEl.style.color = '#dc2626';
+                            seatsEl.style.borderColor = '#fecaca';
+                        }
+                    }
+                    if (btn) {
+                        if (drv.availableSeats <= 0) {
+                            btn.disabled = true;
+                            btn.innerText = 'المقاعد مكتملة 🔴';
+                            btn.style.background = '#94a3b8';
+                        } else {
+                            btn.disabled = false;
+                            btn.innerText = 'تم الحجز! احجز مقعد آخر ⚡';
+                        }
+                    }
+                    alert('🎉 تم حجز مقعدك بنجاح مع الكابتن ' + driverName + '!\nالمقاعد المتبقية: ' + drv.availableSeats + ' من أصل ' + drv.totalSeats + '\nيمكنك الاتصال بالكابتن أو مراسلته للتنسيق.');
+                } else {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerText = 'احجز مقعدك الآن ⚡';
+                    }
+                    alert('⚠️ ' + (result.error || 'تعذر إتمام الحجز، قد تكون المقاعد اكتملت.'));
+                }
+            } catch (e) {
+                console.error('Booking error:', e);
+                if (btn) { btn.disabled = false; btn.innerText = 'احجز مقعدك الآن ⚡'; }
+                alert('حدث خطأ أثناء إرسال طلب الحجز.');
+            }
+        };
+
+        window.closeMatchedDriversPanel = function() {
+            var panel = document.getElementById('matched-daily-drivers-panel');
+            if (panel) panel.style.display = 'none';
         };
 
         window.handleCleanMapConfirm = function() {
@@ -3806,6 +4086,9 @@ window.setCleanMapTarget = function(target) {
             if (typeof mapboxgl === 'undefined' && window.loadMapboxDynamically) {
                 await window.loadMapboxDynamically();
             }
+            if (tab === 'daily' || tab === 'PermanentLine') {
+                localStorage.setItem('selected_trip_type', 'daily');
+            }
             var tripType = localStorage.getItem('selected_trip_type') || 'short';
             if (tripType === 'daily' || isDriver) {
                 try {
@@ -3822,6 +4105,23 @@ window.setCleanMapTarget = function(target) {
                         }
                     }
                 } catch(_) {}
+            }
+
+            var permBanner = document.getElementById('perm-lines-mode-banner');
+            var btnMatchDaily = document.getElementById('btn-match-daily-drivers');
+            var btnFloatSave = document.getElementById('btn-floating-save-route');
+            var dContainer = document.getElementById('clean-dropoff-container');
+
+            if (tripType === 'daily' && !isDriver) {
+                if (permBanner) permBanner.style.display = 'flex';
+                if (btnMatchDaily) btnMatchDaily.style.display = 'block';
+                if (btnFloatSave) btnFloatSave.style.display = 'none';
+                if (dContainer) dContainer.style.display = 'block';
+                if (window.updateDailyMatchingButtonState) window.updateDailyMatchingButtonState();
+            } else {
+                if (permBanner) permBanner.style.display = 'none';
+                if (btnMatchDaily) btnMatchDaily.style.display = 'none';
+                if (btnFloatSave) btnFloatSave.style.display = 'block';
             }
 
             if (!bMap) {
@@ -4819,6 +5119,42 @@ window.setCleanMapTarget = function(target) {
                     paint: { 'line-color': '#22c55e', 'line-width': 4, 'line-opacity': 0.95 }
                 });
 
+                // Matched driver routes source & layers (3-Tier: Green <=500m, Purple <=1500m, Red >1500m)
+                bMap.addSource('matched-routes-source', {
+                    type: 'geojson',
+                    data: { type: 'FeatureCollection', features: [] }
+                });
+                bMap.addLayer({
+                    id: 'matched-routes-casing',
+                    type: 'line',
+                    source: 'matched-routes-source',
+                    layout: { 'line-join': 'round', 'line-cap': 'round' },
+                    paint: { 'line-color': '#0f172a', 'line-width': 7, 'line-opacity': 0.5 }
+                });
+                bMap.addLayer({
+                    id: 'matched-routes-line',
+                    type: 'line',
+                    source: 'matched-routes-source',
+                    layout: { 'line-join': 'round', 'line-cap': 'round' },
+                    paint: { 
+                        'line-color': ['get', 'tierColor'], 
+                        'line-width': 4.5, 
+                        'line-opacity': 0.95 
+                    }
+                });
+
+                bMap.on('click', 'matched-routes-line', function(e) {
+                    if (e.features && e.features[0] && e.features[0].properties) {
+                        var props = e.features[0].properties;
+                        var card = document.getElementById('drv-card-' + props.driverId);
+                        if (card) {
+                            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            card.style.outline = '2px solid #059669';
+                            setTimeout(function() { card.style.outline = 'none'; }, 2000);
+                        }
+                    }
+                });
+
                 // Map Click handler to set pins based on active target
                 bMap.on('click', function(e) {
                     var lng = e.lngLat.lng, lat = e.lngLat.lat;
@@ -4980,6 +5316,8 @@ window.setCleanMapTarget = function(target) {
                     sideInfo.style.display = 'block';
                     sideInfo.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-weight:900;color:#111">المسار المقدر:</span><span style="font-weight:900;color:#059669;font-size:14px">' + bRouteFare.toLocaleString() + ' د.ع</span></div><div style="font-size:11px;color:#64748b;display:flex;gap:12px"><span>📏 ' + bRouteDist + ' كم</span><span>⏱️ ' + bRouteDur + ' دقيقة</span></div>';
                 }
+
+                if (window.updateDailyMatchingButtonState) window.updateDailyMatchingButtonState();
             } catch(e) {}
         }
 

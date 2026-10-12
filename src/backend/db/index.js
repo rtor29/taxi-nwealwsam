@@ -851,6 +851,185 @@ class DatabaseManager {
         }
         return notif;
     }
+
+    async executeAtomicBooking({ driverId, passengerId, passengerName, passengerPhone, platform = 'web', seatsToBook = 1 }) {
+        const seats = Math.max(1, parseInt(seatsToBook || 1, 10));
+        let driver = (this.memoryState.drivers || []).find(d => d.driverId === driverId || d.id === driverId);
+        if (!driver) {
+            return { success: false, statusCode: 404, error: 'السائق غير موجود' };
+        }
+
+        const currentSeats = driver.availableSeats !== undefined ? parseInt(driver.availableSeats, 10) : 4;
+        if (currentSeats < seats || driver.status === 'full') {
+            return { success: false, statusCode: 409, error: 'عذراً، المقاعد مكتملة عند السائق حالياً' };
+        }
+
+        driver.availableSeats = Math.max(0, currentSeats - seats);
+        if (driver.availableSeats <= 0) {
+            driver.status = 'full';
+        }
+
+        let route = (this.memoryState.routes || []).find(r => r.driverId === driver.driverId);
+        if (route) {
+            route.availableSeats = driver.availableSeats;
+            if (driver.availableSeats <= 0) route.status = 'Full';
+        }
+
+        const bookingId = 'bk-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
+        const booking = {
+            id: bookingId,
+            bookingId: bookingId,
+            driverId: driver.driverId,
+            driverName: driver.fullName,
+            driverPhone: driver.phoneNumber,
+            passengerId: String(passengerId),
+            passengerName: passengerName || 'راكب',
+            passengerPhone: passengerPhone || '',
+            platform: platform || 'web',
+            seatsBooked: seats,
+            status: 'Confirmed',
+            createdAt: new Date().toISOString()
+        };
+        this.memoryState.bookings = this.memoryState.bookings || [];
+        this.memoryState.bookings.unshift(booking);
+
+        this.addAuditLog('SeatBooked', 'Booking', bookingId, {
+            driverId: driver.driverId,
+            remainingSeats: driver.availableSeats,
+            platform
+        });
+        this.saveStateSnapshot();
+
+        if (this.isPostgresConnected && this.pool) {
+            try {
+                await this.pool.query(`
+                    UPDATE drivers 
+                    SET available_seats = available_seats - $1,
+                        status = CASE WHEN available_seats - $1 <= 0 THEN 'full' ELSE status END,
+                        updated_at = NOW()
+                    WHERE (driver_id = $2 OR id = $2) AND available_seats >= $1
+                `, [seats, driver.driverId]);
+
+                await this.pool.query(`
+                    INSERT INTO bookings (id, driver_id, passenger_id, passenger_name, passenger_phone, platform, status, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, 'confirmed', NOW())
+                    ON CONFLICT (id) DO NOTHING
+                `, [bookingId, driver.driverId, String(passengerId), passengerName || 'راكب', passengerPhone || '', platform]);
+            } catch (pgErr) {
+                console.error('[DB] executeAtomicBooking PG error:', pgErr);
+            }
+        }
+
+        return {
+            success: true,
+            statusCode: 200,
+            bookingId,
+            driver: {
+                driverId: driver.driverId,
+                name: driver.fullName,
+                fullName: driver.fullName,
+                phone: driver.phoneNumber,
+                phoneNumber: driver.phoneNumber,
+                availableSeats: driver.availableSeats,
+                totalSeats: driver.totalSeats || 4,
+                remainingSeats: driver.availableSeats,
+                status: driver.status,
+                route: driver.route || driver.permanentLocationName || 'خط دائمي'
+            }
+        };
+    }
+
+    matchPassengerRoute(passengerPoints, maxMeters = 5000) {
+        const toRad = deg => deg * Math.PI / 180;
+        const haversineMeters = (lat1, lon1, lat2, lon2) => {
+            const R = 6371000;
+            const dLat = toRad(lat2 - lat1);
+            const dLon = toRad(lon2 - lon1);
+            const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        };
+
+        const activeDrivers = (this.memoryState.drivers || []).filter(d => {
+            if (d.availableSeats === undefined) { d.availableSeats = 4; d.totalSeats = 4; }
+            return !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' && d.status !== 'full' &&
+                d.availableSeats > 0 &&
+                ((d.permanentLat && d.permanentLon) || d.route);
+        });
+
+        const results = [];
+        for (const d of activeDrivers) {
+            const dStartLat = parseFloat(d.permanentLat || d.latitude || 31.9961);
+            const dStartLon = parseFloat(d.permanentLon || d.longitude || 44.3168);
+            const dEndLat = parseFloat(d.permanentDropoffLat || 32.0321);
+            const dEndLon = parseFloat(d.permanentDropoffLon || 44.3725);
+
+            let minDist = Infinity;
+            if (Array.isArray(passengerPoints) && passengerPoints.length > 0) {
+                for (const pt of passengerPoints) {
+                    const pLat = Array.isArray(pt) ? pt[1] : (pt.lat || pt.latitude);
+                    const pLon = Array.isArray(pt) ? pt[0] : (pt.lon || pt.longitude);
+                    if (pLat && pLon) {
+                        const distToStart = haversineMeters(pLat, pLon, dStartLat, dStartLon);
+                        const distToEnd = haversineMeters(pLat, pLon, dEndLat, dEndLon);
+                        minDist = Math.min(minDist, distToStart, distToEnd);
+                    }
+                }
+            } else {
+                minDist = 800;
+            }
+
+            if (minDist <= maxMeters) {
+                let tier = 3;
+                let tierLabel = '🔴 مسار بديل (أكثر من 1500م)';
+                let tierColor = '#EF4444';
+
+                if (minDist <= 500) {
+                    tier = 1;
+                    tierLabel = '🟢 مطابق تماماً (أقل من 500م)';
+                    tierColor = '#10B981';
+                } else if (minDist <= 1500) {
+                    tier = 2;
+                    tierLabel = '🟣 مسار قريب (500م - 1500م)';
+                    tierColor = '#8B5CF6';
+                }
+
+                const vMake = d.vehicleMake || 'تويوتا';
+                const vModel = d.vehicleModel || 'كورولا';
+                const vPlate = d.vehiclePlate || 'النجف';
+                const routeName = d.route || (d.permanentLocationName && d.permanentDropoffName ? `${d.permanentLocationName} ➔ ${d.permanentDropoffName}` : 'خط دائم');
+
+                results.push({
+                    driver: d,
+                    driverId: d.driverId,
+                    name: d.fullName || 'كابتن توصيله',
+                    fullName: d.fullName || 'كابتن توصيله',
+                    phone: d.phoneNumber || '07800000000',
+                    phoneNumber: d.phoneNumber || '07800000000',
+                    vehicleModel: `${vMake} ${vModel}`.trim(),
+                    plateNumber: vPlate,
+                    availableSeats: d.availableSeats !== undefined ? d.availableSeats : 4,
+                    totalSeats: d.totalSeats || 4,
+                    routeName: routeName,
+                    route: routeName,
+                    routeGeoJson: {
+                        type: 'LineString',
+                        coordinates: [
+                            [dStartLon, dStartLat],
+                            [dEndLon, dEndLat]
+                        ]
+                    },
+                    distanceMeters: Math.round(minDist),
+                    minDistanceMeters: Math.round(minDist),
+                    tier,
+                    tierLabel,
+                    tierName: tierLabel,
+                    tierColor
+                });
+            }
+        }
+
+        return results.sort((a, b) => a.distanceMeters - b.distanceMeters);
+    }
 }
 
 const db = new DatabaseManager();
