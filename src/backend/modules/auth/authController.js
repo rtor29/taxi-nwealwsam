@@ -579,13 +579,15 @@ class AuthController {
                 var topBtn = document.getElementById('btn-top-right-action');
                 if (topBtn) topBtn.setAttribute('onclick', 'window.closeVehicleSelection()');
                 
-                // Ensure fares are updated
-                if (window.bRouteFare) {
-                    var base = window.bRouteFare;
-                    document.getElementById('fare-eco').innerText = (base - 750).toLocaleString() + ' دينار';
-                    document.getElementById('fare-super').innerText = base.toLocaleString() + ' دينار';
-                    document.getElementById('fare-plus').innerText = (base + 500).toLocaleString() + ' دينار';
-                }
+                // Ensure fares are updated for Eco and VIP
+                var base = window.bRouteFare || 3000;
+                var ecoFare = Math.max(2000, Math.round(base / 250) * 250);
+                var vipFare = Math.max(3000, Math.round((base * 1.35) / 250) * 250);
+                var elEco = document.getElementById('fare-eco');
+                var elVip = document.getElementById('fare-vip');
+                if (elEco) elEco.innerText = ecoFare.toLocaleString() + ' د.ع';
+                if (elVip) elVip.innerText = vipFare.toLocaleString() + ' د.ع';
+                if (window.selectVehicleType) window.selectVehicleType(window.bSelectedVehicle || 'eco');
             }
         };
 
@@ -850,19 +852,48 @@ window.setCleanMapTarget = function(target) {
             }
         };
         
-        window.bSelectedVehicle = 'super';
+        window.bSelectedVehicle = 'eco';
         window.selectVehicleType = function(type) {
             window.bSelectedVehicle = type;
+            var optEco = document.getElementById('veh-opt-eco');
+            var optVip = document.getElementById('veh-opt-vip');
             var btn = document.getElementById('btn-request-vehicle');
-            document.getElementById('veh-opt-super').style.background = '#ffffff';
-            document.getElementById('veh-opt-eco').style.background = '#ffffff';
-            document.getElementById('veh-opt-plus').style.background = '#ffffff';
-            
-            document.getElementById('veh-opt-' + type).style.background = '#f8fafc';
-            
-            if (type === 'super') btn.innerText = 'طلب سوبر';
-            else if (type === 'eco') btn.innerText = 'طلب توفير';
-            else if (type === 'plus') btn.innerText = 'طلب بلس';
+            var base = window.bRouteFare || 3000;
+            var ecoFare = Math.max(2000, Math.round(base / 250) * 250);
+            var vipFare = Math.max(3000, Math.round((base * 1.35) / 250) * 250);
+
+            if (optEco) {
+                if (type === 'eco') {
+                    optEco.style.border = '2px solid #059669';
+                    optEco.style.background = '#ecfdf5';
+                    optEco.style.boxShadow = '0 4px 12px rgba(5,150,105,0.15)';
+                } else {
+                    optEco.style.border = '2px solid #e2e8f0';
+                    optEco.style.background = '#ffffff';
+                    optEco.style.boxShadow = 'none';
+                }
+            }
+            if (optVip) {
+                if (type === 'vip') {
+                    optVip.style.border = '2px solid #f59e0b';
+                    optVip.style.background = '#fffbeb';
+                    optVip.style.boxShadow = '0 4px 12px rgba(245,158,11,0.2)';
+                } else {
+                    optVip.style.border = '2px solid #e2e8f0';
+                    optVip.style.background = '#ffffff';
+                    optVip.style.boxShadow = 'none';
+                }
+            }
+
+            if (btn) {
+                if (type === 'vip') {
+                    btn.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+                    btn.innerHTML = '<span>تأكيد طلب VIP 👑</span> <span style="font-size:16px;opacity:0.95;margin-right:6px">(' + vipFare.toLocaleString() + ' د.ع)</span>';
+                } else {
+                    btn.style.background = 'linear-gradient(135deg, #059669 0%, #047857 100%)';
+                    btn.innerHTML = '<span>تأكيد طلب توفير 🚗</span> <span style="font-size:16px;opacity:0.95;margin-right:6px">(' + ecoFare.toLocaleString() + ' د.ع)</span>';
+                }
+            }
         };
         
         // Override original to connect them
@@ -1033,72 +1064,68 @@ window.setCleanMapTarget = function(target) {
 
     
     
-    <!-- Vehicle Selection Panel -->
-    <div id="vehicle-selection-panel" style="display:none;position:absolute;bottom:0;left:0;right:0;background:#ffffff;border-top-left-radius:24px;border-top-right-radius:24px;box-shadow:0 -4px 20px rgba(0,0,0,0.1);z-index:30;font-family:Cairo,sans-serif;" dir="rtl">
-        <div style="display:flex;border-bottom:1px solid #e2e8f0;padding:16px 0 0 0;">
-            <div style="flex:1;text-align:center;padding-bottom:12px;font-size:16px;font-weight:800;color:#111;border-bottom:3px solid #111;cursor:pointer;">تكسي</div>
-            <div style="flex:1;text-align:center;padding-bottom:12px;font-size:16px;font-weight:700;color:#94a3b8;cursor:pointer;">بوكس</div>
-        </div>
-        <div style="padding:10px 0;">
-            <!-- Super -->
-            <div onclick="window.selectVehicleType('super')" id="veh-opt-super" style="display:flex;align-items:center;padding:14px 20px;background:#f8fafc;cursor:pointer;border-bottom:1px solid #f1f5f9;">
-                <div style="font-size:15px;font-weight:800;color:#111;" id="fare-super">5,500 دينار</div>
-                <div style="flex:1;"></div>
-                <div style="display:flex;align-items:center;justify-content:flex-end;">
-                    <div style="text-align:right;margin-left:12px;">
-                        <div style="font-size:16px;font-weight:900;color:#111;">سوبر</div>
-                        <div style="font-size:12px;color:#94a3b8;">الخيار الأفضل</div>
-                    </div>
-                    <div style="position:relative;">
-                        <span style="font-size:36px;">🚗</span>
-                        <span style="position:absolute;top:-5px;right:-5px;font-size:14px;background:#fef08a;border-radius:50%;padding:2px;">⚡</span>
-                    </div>
-                </div>
+    <!-- Vehicle Selection Panel (VIP / Eco like Baly) -->
+    <div id="vehicle-selection-panel" style="display:none;position:absolute;bottom:0;left:0;right:0;background:#ffffff;border-top-left-radius:28px;border-top-right-radius:28px;box-shadow:0 -6px 30px rgba(0,0,0,0.15);z-index:30;font-family:Cairo,sans-serif;animation:slideUpPanel 0.25s ease;" dir="rtl">
+        <!-- Drag pill handle -->
+        <div style="width:40px;height:4px;background:#cbd5e1;border-radius:2px;margin:10px auto 4px auto;"></div>
+        
+        <div style="padding:4px 20px 10px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f1f5f9;">
+            <div>
+                <div style="font-size:17px;font-weight:900;color:#0f172a;">اختر فئة المشوار</div>
+                <div style="font-size:12px;color:#64748b;">تحديد أقرب كابتن متواجد فوراً</div>
             </div>
-            <!-- Economy -->
-            <div onclick="window.selectVehicleType('eco')" id="veh-opt-eco" style="display:flex;align-items:center;padding:14px 20px;background:#ffffff;cursor:pointer;border-bottom:1px solid #f1f5f9;">
-                <div style="font-size:15px;font-weight:800;color:#334155;" id="fare-eco">4,750 دينار</div>
-                <div style="flex:1;"></div>
-                <div style="display:flex;align-items:center;justify-content:flex-end;">
-                    <div style="text-align:right;margin-left:12px;">
-                        <div style="font-size:16px;font-weight:900;color:#334155;">توفير</div>
-                        <div style="font-size:12px;color:#94a3b8;">التكسي الأوفر</div>
-                    </div>
-                    <div style="position:relative;">
-                        <span style="font-size:36px;">🚙</span>
-                        <span style="position:absolute;top:-5px;right:-5px;font-size:14px;background:#fef08a;border-radius:50%;padding:2px;">💲</span>
-                    </div>
-                </div>
-            </div>
-            <!-- Plus -->
-            <div onclick="window.selectVehicleType('plus')" id="veh-opt-plus" style="display:flex;align-items:center;padding:14px 20px;background:#ffffff;cursor:pointer;">
-                <div style="font-size:15px;font-weight:800;color:#334155;" id="fare-plus">6,000 دينار</div>
-                <div style="flex:1;"></div>
-                <div style="display:flex;align-items:center;justify-content:flex-end;">
-                    <div style="text-align:right;margin-left:12px;">
-                        <div style="font-size:16px;font-weight:900;color:#334155;">بلس</div>
-                        <div style="font-size:12px;color:#94a3b8;">رحلة أكثر راحة</div>
-                    </div>
-                    <div style="position:relative;">
-                        <span style="font-size:36px;">🚘</span>
-                        <span style="position:absolute;top:-5px;right:-5px;font-size:14px;background:#fef08a;border-radius:50%;padding:2px;">⭐</span>
-                    </div>
-                </div>
+            <div style="font-size:12px;font-weight:800;background:#f8fafc;color:#059669;padding:4px 10px;border-radius:12px;border:1px solid #e2e8f0;">
+                ⏱️ وصول سريع
             </div>
         </div>
-        <div style="display:flex;border-top:1px solid #e2e8f0;padding:12px 0;">
-            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-left:1px solid #e2e8f0;cursor:pointer;">
-                <i class="fa-solid fa-sliders" style="font-size:20px;color:#475569;margin-bottom:4px;"></i>
-                <div style="font-size:13px;color:#475569;font-weight:700;">خيارات الرحلة</div>
+
+        <div style="padding:10px 0 6px 0;">
+            <!-- Option 1: Eco / توفير -->
+            <div onclick="window.selectVehicleType('eco')" id="veh-opt-eco" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;margin:6px 16px;border-radius:18px;border:2px solid #059669;background:#ecfdf5;cursor:pointer;transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1);box-shadow:0 4px 12px rgba(5,150,105,0.12);">
+                <div style="display:flex;align-items:center;gap:14px;">
+                    <div style="width:50px;height:50px;background:#ffffff;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 2px 8px rgba(0,0,0,0.06);flex-shrink:0;">
+                        🚗
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span style="font-size:16px;font-weight:900;color:#0f172a;">توفير</span>
+                            <span style="font-size:11px;font-weight:800;background:#dcfce7;color:#166534;padding:2px 7px;border-radius:8px;">الأوفر</span>
+                        </div>
+                        <div style="font-size:12px;color:#64748b;margin-top:2px;">مشوار اقتصادي ومناسب للرحلات السريعة</div>
+                    </div>
+                </div>
+                <div style="text-align:left;flex-shrink:0;">
+                    <div style="font-size:16px;font-weight:900;color:#059669;" id="fare-eco">3,000 د.ع</div>
+                    <div style="font-size:11px;color:#94a3b8;">سعر ثابت</div>
+                </div>
             </div>
-            <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;">
-                <i class="fa-solid fa-tags" style="font-size:20px;color:#475569;margin-bottom:4px;"></i>
-                <div style="font-size:13px;color:#475569;font-weight:700;">قسيمة</div>
+
+            <!-- Option 2: VIP -->
+            <div onclick="window.selectVehicleType('vip')" id="veh-opt-vip" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;margin:6px 16px;border-radius:18px;border:2px solid #e2e8f0;background:#ffffff;cursor:pointer;transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1);">
+                <div style="display:flex;align-items:center;gap:14px;">
+                    <div style="width:50px;height:50px;background:#fffbeb;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 2px 8px rgba(245,158,11,0.15);flex-shrink:0;position:relative;">
+                        🚘
+                        <span style="position:absolute;top:-4px;right:-4px;font-size:13px;">👑</span>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span style="font-size:16px;font-weight:900;color:#0f172a;">VIP</span>
+                            <span style="font-size:11px;font-weight:800;background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:8px;">فخامة وراحة</span>
+                        </div>
+                        <div style="font-size:12px;color:#64748b;margin-top:2px;">كابتن معتمد، سيارات حديثة ومكيفة</div>
+                    </div>
+                </div>
+                <div style="text-align:left;flex-shrink:0;">
+                    <div style="font-size:16px;font-weight:900;color:#d97706;" id="fare-vip">4,500 د.ع</div>
+                    <div style="font-size:11px;color:#94a3b8;">سعر مميز</div>
+                </div>
             </div>
         </div>
-        <div style="padding:16px 20px 24px 20px;">
-            <button id="btn-request-vehicle" type="button" onclick="window.confirmVehicleRequest()" style="width:100%;background:#0000ff;color:#ffffff;border:none;border-radius:12px;padding:18px;font-size:20px;font-weight:900;font-family:Cairo,sans-serif;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,255,0.2);">
-                طلب سوبر
+
+        <!-- Request Button -->
+        <div style="padding:8px 16px 20px 16px;">
+            <button id="btn-request-vehicle" type="button" onclick="window.confirmVehicleRequest()" style="width:100%;background:linear-gradient(135deg, #059669 0%, #047857 100%);color:#ffffff;border:none;border-radius:16px;padding:16px;font-size:18px;font-weight:900;font-family:Cairo,sans-serif;cursor:pointer;box-shadow:0 6px 20px rgba(5,150,105,0.25);transition:all 0.2s ease;display:flex;align-items:center;justify-content:center;gap:8px;" onmousedown="this.style.transform='scale(0.98)';" onmouseup="this.style.transform='scale(1)';">
+                <span>تأكيد طلب توفير 🚗</span>
             </button>
         </div>
     </div>
@@ -4184,8 +4211,9 @@ window.setCleanMapTarget = function(target) {
             var modal = document.getElementById('ride-dispatch-modal');
             if (modal) {
                 modal.style.display = 'flex';
+                var isVip = window.bSelectedVehicle === 'vip';
                 var titleEl = document.getElementById('dispatch-modal-title');
-                if (titleEl) titleEl.textContent = 'جاري البحث عن أقرب كابتن ' + (window.bSelectedVehicle === 'super' ? 'سوبر' : (window.bSelectedVehicle === 'eco' ? 'توفير' : 'بلس')) + '...';
+                if (titleEl) titleEl.textContent = 'جاري البحث عن أقرب كابتن ' + (isVip ? 'VIP 👑' : 'توفير 🚗') + '...';
                 
                 var subEl = document.getElementById('dispatch-modal-subtitle');
                 if (subEl) subEl.textContent = 'تم تثبيت مسارك (' + fromText + ' ➔ ' + toText + ')';
@@ -5135,7 +5163,8 @@ window.setCleanMapTarget = function(target) {
                         dropoffName: bDropoffName || 'وجهة الوصول',
                         dropoffLat: bDropoffCoords[1],
                         dropoffLon: bDropoffCoords[0],
-                        fare: bRouteFare || 3000,
+                        fare: (window.bSelectedVehicle === 'vip' ? Math.max(3000, Math.round(((bRouteFare || 3000) * 1.35) / 250) * 250) : Math.max(2000, Math.round((bRouteFare || 3000) / 250) * 250)),
+                        vehicleType: window.bSelectedVehicle || 'eco',
                         distanceKm: bRouteDist || 3.5,
                         durationMins: bRouteDur || 8,
                         rangeKm: bRangeKm
@@ -5204,8 +5233,9 @@ window.setCleanMapTarget = function(target) {
             var carEl = document.getElementById('dispatch-drv-car');
             var stEl = document.getElementById('dispatch-drv-status');
             var titleEl = document.getElementById('dispatch-modal-title');
-            if (titleEl) titleEl.textContent = 'جاري البحث عن أقرب سائق متواجد...';
-            if (nameEl) nameEl.textContent = '🚕 الكابتن: ' + (req.assignedDriverName || 'أقرب سائق متاح');
+            var isVip = req.vehicleType === 'VIP' || window.bSelectedVehicle === 'vip';
+            if (titleEl) titleEl.textContent = 'جاري البحث عن كابتن ' + (isVip ? 'VIP 👑' : 'توفير 🚗') + '...';
+            if (nameEl) nameEl.textContent = '🚕 الكابتن: ' + (req.assignedDriverName || 'أقرب سائق متاح') + (isVip ? ' ⭐ (VIP)' : '');
             if (carEl) carEl.textContent = '🚗 المركبة: ' + (req.assignedDriverVehicle || 'تويوتا');
             if (stEl) {
                 if (req.assignedDriverName) {

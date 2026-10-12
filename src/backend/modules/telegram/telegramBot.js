@@ -3,7 +3,8 @@ const https = require('https');
 const config = require('../../config');
 const db = require('../../db');
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8904440367:AAEBLFy5DK-eM_MDqiLwQYgHIi-h-tjvyfU';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+if (!BOT_TOKEN) { console.error('[TelegramBot] TELEGRAM_BOT_TOKEN env var is required!'); }
 const ADMIN_CHAT_ID = '391762837';
 const API_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
@@ -45,6 +46,128 @@ function getGovernoratesKeyboard(rolePrefix) {
     }
     return rows;
 }
+
+// ===================================================================
+// --- SECURITY LAYER: Anti-Spam, Rate Limit, Flood & Bot Protection ---
+// ===================================================================
+const _tgRateMap = new Map();       // chatId -> { count, resetAt }
+const _tgFloodMap = new Map();      // chatId -> { msgs: [], warned }
+const _tgBannedUsers = new Set();   // permanently blocked chatIds this session
+const _tgSuspiciousLog = [];        // log of suspicious activity
+
+// Cleanup every 5 minutes
+setInterval(() => {
+    const now = Date.now();
+    for (const [k, v] of _tgRateMap) { if (now > v.resetAt) _tgRateMap.delete(k); }
+    for (const [k, v] of _tgFloodMap) {
+        v.msgs = v.msgs.filter(t => now - t < 60000);
+        if (v.msgs.length === 0) _tgFloodMap.delete(k);
+    }
+    // Keep only last 200 suspicious logs
+    if (_tgSuspiciousLog.length > 200) _tgSuspiciousLog.splice(0, _tgSuspiciousLog.length - 200);
+}, 300000);
+
+// Rate limit: max messages per window per user
+function _tgRateLimit(chatId, max = 20, windowMs = 60000) {
+    const key = String(chatId);
+    const now = Date.now();
+    let entry = _tgRateMap.get(key);
+    if (!entry || now > entry.resetAt) {
+        entry = { count: 1, resetAt: now + windowMs };
+        _tgRateMap.set(key, entry);
+        return false;
+    }
+    entry.count++;
+    return entry.count > max;
+}
+
+// Flood detection: too many messages in short burst
+function _tgFloodCheck(chatId, maxBurst = 8, burstWindowMs = 10000) {
+    const key = String(chatId);
+    const now = Date.now();
+    let entry = _tgFloodMap.get(key) || { msgs: [], warned: false };
+    entry.msgs.push(now);
+    entry.msgs = entry.msgs.filter(t => now - t < burstWindowMs);
+    _tgFloodMap.set(key, entry);
+    return entry.msgs.length > maxBurst;
+}
+
+// Suspicious content detection (code injection, bot commands, source code probing)
+const SUSPICIOUS_PATTERNS = [
+    /\/?(get|show|dump|export|print|cat|type|head|tail)\s*(source|code|config|env|token|secret|password|key|db|database|server|\.js|\.env|\.json)/i,
+    /process\.env/i,
+    /require\s*\(/i,
+    /eval\s*\(/i,
+    /exec\s*\(/i,
+    /child_process/i,
+    /\bfs\b\.\w+/i,
+    /SELECT\s+.*\s+FROM/i,
+    /DROP\s+TABLE/i,
+    /INSERT\s+INTO/i,
+    /UPDATE\s+.*\s+SET/i,
+    /DELETE\s+FROM/i,
+    /UNION\s+SELECT/i,
+    /<script/i,
+    /javascript:/i,
+    /on(error|load|click)\s*=/i,
+    /\.\.\//,
+    /\/etc\/passwd/i,
+    /bot_?token/i,
+    /admin_?chat/i,
+    /api[_\s]?key/i,
+    /database[_\s]?url/i,
+    /\{.*\{.*\}\}/,
+    /__proto__/,
+    /constructor\s*\[/,
+];
+
+function _isSuspiciousText(text) {
+    if (!text || typeof text !== 'string') return false;
+    for (const pattern of SUSPICIOUS_PATTERNS) {
+        if (pattern.test(text)) return true;
+    }
+    return false;
+}
+
+// Sanitize user text input
+function _sanitizeTgInput(text) {
+    if (!text || typeof text !== 'string') return '';
+    // Strip control characters except newline/tab, limit length
+    let clean = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
+    if (clean.length > 500) clean = clean.substring(0, 500);
+    return clean;
+}
+
+// Master security gate - returns null if OK, or error string if blocked
+function _securityGate(chatId, text) {
+    const cid = String(chatId);
+
+    // 1. Check permanent ban
+    if (_tgBannedUsers.has(cid)) return 'banned';
+
+    // 2. Rate limit (20 msgs/min)
+    if (_tgRateLimit(chatId, 20, 60000)) {
+        _tgSuspiciousLog.push({ chatId: cid, reason: 'rate_limit', time: new Date().toISOString() });
+        return 'rate_limit';
+    }
+
+    // 3. Flood detection (8 msgs in 10 sec)
+    if (_tgFloodCheck(chatId, 8, 10000)) {
+        _tgSuspiciousLog.push({ chatId: cid, reason: 'flood', text: (text || '').substring(0, 80), time: new Date().toISOString() });
+        // Auto-ban after flood
+        _tgBannedUsers.add(cid);
+        return 'flood_ban';
+    }
+
+    // 4. Suspicious content / source code probing
+    if (_isSuspiciousText(text)) {
+        _tgSuspiciousLog.push({ chatId: cid, reason: 'suspicious', text: (text || '').substring(0, 120), time: new Date().toISOString() });
+        return 'suspicious';
+    }
+
+    return null; // OK
+}
+// ===================================================================
 
 // --- Telegram API Helpers ---
 function tgRequest(method, body) {
@@ -594,6 +717,27 @@ async function handleCallback(chatId, data, user) {
             break;
         case 'admin_pending':
             if (String(chatId) === ADMIN_CHAT_ID) await handleAdminPending(chatId);
+            break;
+        case 'admin_security_log':
+            if (String(chatId) === ADMIN_CHAT_ID) {
+                const last20 = _tgSuspiciousLog.slice(-20);
+                if (last20.length === 0) {
+                    await sendMessage(chatId, '🛡️ لا توجد سجلات أمنية مشبوهة.');
+                } else {
+                    let logMsg = '🛡️ <b>آخر 20 حدث أمني:</b>\n\n';
+                    last20.forEach((e, i) => {
+                        logMsg += `${i+1}. [${e.reason}] ChatID: ${e.chatId}\n   ${(e.text || '-').substring(0, 60)}\n   ${e.time}\n\n`;
+                    });
+                    logMsg += `\n🚫 محظورون حالياً: ${_tgBannedUsers.size}`;
+                    await sendMessage(chatId, logMsg);
+                }
+            }
+            break;
+        case 'admin_unban_all':
+            if (String(chatId) === ADMIN_CHAT_ID) {
+                _tgBannedUsers.clear();
+                await sendMessage(chatId, '✅ تم رفع الحظر عن جميع المستخدمين.');
+            }
             break;
         default:
             if (data.startsWith('approve_')) {
@@ -1195,26 +1339,61 @@ async function poll() {
                         const cb = update.callback_query;
                         const chatId = cb.message?.chat?.id;
                         if (chatId) {
+                            // --- Security gate for callbacks ---
+                            const blocked = _securityGate(chatId, cb.data);
+                            if (blocked) {
+                                await tgRequest('answerCallbackQuery', { callback_query_id: cb.id });
+                                if (blocked === 'flood_ban') {
+                                    await sendMessage(chatId, '🚫 تم حظرك مؤقتاً بسبب إرسال رسائل مفرطة.');
+                                    sendMessage(ADMIN_CHAT_ID, `⚠️ تم حظر مستخدم (flood): ${chatId}`).catch(()=>{});
+                                }
+                                continue;
+                            }
+                            // Validate callback_data format
+                            const cbData = _sanitizeTgInput(cb.data);
+                            if (!cbData || cbData.length > 100) continue;
+
                             await tgRequest('answerCallbackQuery', { callback_query_id: cb.id });
-                            await handleCallback(chatId, cb.data, cb.from);
+                            await handleCallback(chatId, cbData, cb.from);
                         }
                     } else if (update.message) {
                         const msg = update.message;
                         const chatId = msg.chat?.id;
                         if (!chatId) continue;
-                        const text = (msg.text || '').trim();
+
+                        // Block group/supergroup/channel - only private chat allowed
+                        if (msg.chat.type !== 'private') continue;
+
+                        const rawText = (msg.text || '').trim();
+                        const text = _sanitizeTgInput(rawText);
                         const location = msg.location;
+
+                        // --- Security gate for messages ---
+                        const blocked = _securityGate(chatId, text);
+                        if (blocked) {
+                            if (blocked === 'flood_ban') {
+                                await sendMessage(chatId, '🚫 تم حظرك مؤقتاً بسبب إرسال رسائل مفرطة. حاول لاحقاً.');
+                                sendMessage(ADMIN_CHAT_ID, `⚠️ تم حظر مستخدم (flood): ${chatId}`).catch(()=>{});
+                            } else if (blocked === 'suspicious') {
+                                await sendMessage(chatId, '⚠️ تم رفض الرسالة لأسباب أمنية.');
+                                sendMessage(ADMIN_CHAT_ID, `🔴 محاولة مشبوهة من ${chatId}: ${text.substring(0, 100)}`).catch(()=>{});
+                            } else if (blocked === 'rate_limit') {
+                                await sendMessage(chatId, '⏳ أنت ترسل رسائل بسرعة كبيرة. انتظر قليلاً.');
+                            }
+                            // banned users get no response at all
+                            continue;
+                        }
 
                         // Commands
                         if (text === '/start') { await handleStart(chatId, msg.from); }
                         else if (text === '/status') {
-                            const phone = ''; // Would need stored chat-phone mapping
                             await sendMessage(chatId, 'ℹ️ استخدم /start لبدء التسجيل أو تسجيل الدخول.');
                         }
                         else if (text === '/admin' && String(chatId) === ADMIN_CHAT_ID) {
                             await sendKeyboard(chatId, '🔧 <b>لوحة الإدارة</b>', [
                                 [{ text: '📊 إحصائيات', callback_data: 'admin_stats' }],
-                                [{ text: '⏳ سائقين معلقين', callback_data: 'admin_pending' }]
+                                [{ text: '⏳ سائقين معلقين', callback_data: 'admin_pending' }],
+                                [{ text: '🛡️ سجل الأمان', callback_data: 'admin_security_log' }]
                             ]);
                         }
                         else { await handleMessage(chatId, text, msg.from, location); }

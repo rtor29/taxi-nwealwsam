@@ -83,9 +83,13 @@ function serveCompressedFile(filePath, req, res) {
         const isDashboardOrHtml = ext === '.html' || filePath.includes('dashboard');
         const headers = {
             'Content-Type': contentType,
-            'Access-Control-Allow-Origin': '*',
-            'Cache-Control': isDashboardOrHtml ? 'no-cache, no-store, must-revalidate' : 'public, max-age=86400'
+            'Access-Control-Allow-Origin': req.headers['origin'] || '*',
+            'Cache-Control': isDashboardOrHtml ? 'no-store, no-cache, must-revalidate, proxy-revalidate' : 'public, max-age=86400',
         };
+        if (isDashboardOrHtml) {
+            headers['Pragma'] = 'no-cache';
+            headers['Expires'] = '0';
+        }
 
         if (acceptEncoding.includes('gzip') && stats.size > 1024 && ext !== '.png' && ext !== '.jpg' && ext !== '.jpeg' && ext !== '.webp') {
             headers['Content-Encoding'] = 'gzip';
@@ -109,6 +113,7 @@ function sanitizeObject(obj) {
     } else if (obj !== null && typeof obj === 'object') {
         const newObj = {};
         for (const key in obj) {
+            if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
             newObj[key] = sanitizeObject(obj[key]);
         }
         return newObj;
@@ -123,10 +128,11 @@ function parseJsonBody(req) {
             body += chunk;
             if (body.length > 50 * 1024 * 1024) { // 50MB max (for backup or images)
                 req.destroy();
-                resolve({});
+                return resolve({});
             }
         });
         req.on('end', () => {
+            if (req.destroyed) return;
             try {
                 const parsed = body ? JSON.parse(body) : {};
                 resolve(sanitizeObject(parsed));
@@ -134,6 +140,7 @@ function parseJsonBody(req) {
                 resolve({});
             }
         });
+        req.on('error', () => resolve({}));
     });
 }
 
@@ -145,15 +152,18 @@ async function startServer() {
     const server = http.createServer(async (req, res) => {
         // ---[ Security Headers ]---
         res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+        res.setHeader('X-Frame-Options', 'DENY');
         res.setHeader('X-XSS-Protection', '1; mode=block');
         res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
 
         // Set default CORS (restricted to known origins in production)
         const allowedOrigins = ['https://tawseelaiq.app', 'https://www.tawseelaiq.app', 'http://localhost:5050', 'http://173.212.206.86'];
         const reqOrigin = req.headers['origin'] || '';
-        if (allowedOrigins.includes(reqOrigin) || !reqOrigin) {
-            res.setHeader('Access-Control-Allow-Origin', reqOrigin || '*');
+        if (allowedOrigins.includes(reqOrigin)) {
+            res.setHeader('Access-Control-Allow-Origin', reqOrigin);
+        } else if (!reqOrigin) {
+            res.setHeader('Access-Control-Allow-Origin', allowedOrigins[0]);
         }
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
@@ -180,7 +190,9 @@ async function startServer() {
         const sendJson = (data, statusCode = 200) => {
             res.writeHead(statusCode, {
                 'Content-Type': 'application/json; charset=utf-8',
-                'Cache-Control': 'no-cache, no-store, must-revalidate'
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
             });
             res.end(JSON.stringify(data));
         };
@@ -1394,7 +1406,8 @@ async function startServer() {
                     customerId, customerName, customerPhone,
                     pickupName, pickupLat, pickupLon,
                     dropoffName, dropoffLat, dropoffLon,
-                    fare, distanceKm, durationMins, rangeKm = 5
+                    fare, distanceKm, durationMins, rangeKm = 5,
+                    vehicleType = 'eco'
                 } = body;
 
                 // Check if passenger already has an active accepted/arrived ride
@@ -1432,7 +1445,23 @@ async function startServer() {
                         .filter(d => !d.isBlocked && d.status !== 'Suspended' && d.status !== 'Rejected');
                 }
 
-                const candidates = driverCandidates
+                // Filter by VIP or Eco (توفير)
+                const reqTier = (vehicleType || 'eco').toLowerCase();
+                const isVipTier = reqTier === 'vip';
+                const isDriverVip = (d) => {
+                    const vt = (d.vehicleType || d.vehicleClass || d.tier || '').toLowerCase();
+                    if (vt === 'vip') return true;
+                    if (d.isVip === true) return true;
+                    const y = parseInt(d.vehicleYear || (d.vehicle && d.vehicle.year) || 0, 10);
+                    return y >= 2021 && (d.ratingAverage || 5) >= 4.7;
+                };
+
+                let tierCandidates = driverCandidates.filter(d => isVipTier ? isDriverVip(d) : true);
+                if (tierCandidates.length === 0) {
+                    tierCandidates = driverCandidates; // Graceful fallback to nearest driver
+                }
+
+                let candidates = tierCandidates
                     .map(d => {
                         const dLat = d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : pLat);
                         const dLon = d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : pLon);
@@ -1441,6 +1470,17 @@ async function startServer() {
                     })
                     .filter(d => d.dist <= maxDist || maxDist >= 15)
                     .sort((a, b) => a.dist - b.dist);
+
+                if (candidates.length === 0) {
+                    candidates = driverCandidates
+                        .map(d => {
+                            const dLat = d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : pLat);
+                            const dLon = d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : pLon);
+                            const dist = haversine(pLat, pLon, dLat, dLon);
+                            return { ...d, dist };
+                        })
+                        .sort((a, b) => a.dist - b.dist);
+                }
 
                 const candidateDriverIds = candidates.map(c => c.driverId);
                 const assignedDriver = candidates[0] || (driverCandidates[0] || null);
@@ -1457,6 +1497,7 @@ async function startServer() {
                     dropoffLat: parseFloat(dropoffLat) || 32.0321,
                     dropoffLon: parseFloat(dropoffLon) || 44.3725,
                     fare: fare || 3000,
+                    vehicleType: isVipTier ? 'VIP' : 'توفير',
                     distanceKm: distanceKm || 3.5,
                     durationMins: durationMins || 8,
                     status: 'Pending',
@@ -1475,10 +1516,11 @@ async function startServer() {
                 db.memoryState.rideRequests.unshift(newRequest);
                 db.saveStateSnapshot();
 
+                const tierBadge = isVipTier ? '👑 VIP' : '🚗 توفير';
                 // Notify passenger via Telegram if connected
                 const custObj = (db.memoryState.customers || []).find(c => c.customerId === customerId || (customerPhone && c.phoneNumber === customerPhone));
                 if (custObj && custObj.telegramChatId && assignedDriver) {
-                    const tgMsg = `🚖 <b>تم إرسال طلبك لأقرب كابتن متواجد!</b>\n\n` +
+                    const tgMsg = `🚖 <b>تم إرسال طلبك (${tierBadge}) لأقرب كابتن متواجد!</b>\n\n` +
                         `👤 <b>الكابتن:</b> ${assignedDriver.fullName}\n` +
                         `🚗 <b>المركبة:</b> ${newRequest.assignedDriverVehicle}\n` +
                         `📞 <b>الهاتف:</b> ${assignedDriver.phoneNumber}\n` +
@@ -1488,7 +1530,7 @@ async function startServer() {
                     telegramBot.notifyUser(custObj.telegramChatId, tgMsg).catch(() => {});
                 }
                 if (assignedDriver && assignedDriver.telegramChatId) {
-                    const drvMsg = `🚖 <b>طلب مشوار جديد بالقرب منك!</b>\n\n` +
+                    const drvMsg = `🚖 <b>طلب مشوار جديد (${tierBadge}) بالقرب منك!</b>\n\n` +
                         `👤 <b>الراكب:</b> ${newRequest.customerName}\n` +
                         `🟢 <b>الانطلاق:</b> ${newRequest.pickupName}\n` +
                         `🔴 <b>الوصول:</b> ${newRequest.dropoffName}\n` +
