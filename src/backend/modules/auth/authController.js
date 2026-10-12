@@ -495,27 +495,27 @@ class AuthController {
             <div style="width:40px;height:4px;background:#9ca3af;border-radius:2px;margin:0 auto;"></div>
             
             <!-- Pickup Container (Default) -->
-            <div id="clean-pickup-container" style="position:relative;">
+            <div id="clean-pickup-container" onclick="window.openFullscreenSearch('pickup')" style="position:relative;cursor:pointer;">
                 <div style="background:#f1f5f9;border-radius:30px;display:flex;align-items:center;padding:14px 20px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.03);">
                     <i class="fa-solid fa-magnifying-glass" style="font-size:20px;color:#64748b;"></i>
-                    <input type="text" id="book-pickup-input" onfocus="this.blur(); window.openFullscreenSearch('pickup');"  placeholder="نقطة الانطلاق..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:Cairo,sans-serif;font-weight:700;color:#0f172a;padding:0 15px;">
+                    <input type="text" id="book-pickup-input" readonly onclick="window.openFullscreenSearch('pickup');" placeholder="نقطة الانطلاق..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:Cairo,sans-serif;font-weight:700;color:#0f172a;padding:0 15px;cursor:pointer;">
                     <div style="width:26px;height:26px;background:#ef4444;border-radius:50%;display:flex;align-items:center;justify-content:center;">
                         <div style="width:8px;height:8px;background:#fff;border-radius:50%;"></div>
                     </div>
                 </div>
-                <div id="book-pickup-results" style="display:none !important;" class="search-autocomplete-dropdown" style="display:none;position:absolute;bottom:100%;left:20px;right:20px;z-index:30;background:#fff;border-radius:16px;box-shadow:0 -10px 30px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;margin-bottom:10px;"></div>
+                <div id="book-pickup-results" style="display:none !important;" class="search-autocomplete-dropdown"></div>
             </div>
 
             <!-- Dropoff Container (Hidden Default) -->
-            <div id="clean-dropoff-container" style="position:relative;display:none;">
+            <div id="clean-dropoff-container" onclick="window.openFullscreenSearch('dropoff')" style="position:relative;display:none;cursor:pointer;">
                 <div style="background:#f1f5f9;border-radius:30px;display:flex;align-items:center;padding:14px 20px;box-shadow:inset 0 2px 4px rgba(0,0,0,0.03);">
                     <i class="fa-solid fa-magnifying-glass" style="font-size:20px;color:#64748b;"></i>
-                    <input type="text" id="book-dropoff-input" onfocus="this.blur(); window.openFullscreenSearch('dropoff');"  placeholder="نقطة الوصول..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:Cairo,sans-serif;font-weight:700;color:#0f172a;padding:0 15px;">
+                    <input type="text" id="book-dropoff-input" readonly onclick="window.openFullscreenSearch('dropoff');" placeholder="نقطة الوصول..." style="flex:1;background:transparent;border:none;outline:none;font-size:18px;font-family:Cairo,sans-serif;font-weight:700;color:#0f172a;padding:0 15px;cursor:pointer;">
                     <div style="width:26px;height:26px;background:#f97316;border-radius:6px;display:flex;align-items:center;justify-content:center;">
                         <div style="width:10px;height:10px;background:#fff;border-radius:2px;"></div>
                     </div>
                 </div>
-                <div id="book-dropoff-results" style="display:none !important;" class="search-autocomplete-dropdown" style="display:none;position:absolute;bottom:100%;left:20px;right:20px;z-index:30;background:#fff;border-radius:16px;box-shadow:0 -10px 30px rgba(0,0,0,0.1);max-height:200px;overflow-y:auto;margin-bottom:10px;"></div>
+                <div id="book-dropoff-results" style="display:none !important;" class="search-autocomplete-dropdown"></div>
             </div>
 
             <!-- Permanent Lines Mode Indicator -->
@@ -648,6 +648,60 @@ class AuthController {
     </div>
 
     <script>
+        window.BOOKING_MAPBOX_TOKEN = 'pk.eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9._J6DYjYBDhsdcidErQrblA';
+        var BOOKING_MAPBOX_TOKEN = window.BOOKING_MAPBOX_TOKEN;
+
+        window.normalizeArabicText = function(s) {
+            return (s || '').replace(/[\u0623\u0625\u0622]/g, '\u0627').replace(/\u0629/g, '\u0647').replace(/\u0649/g, '\u064a').toLowerCase().trim();
+        };
+        var normalizeArabicText = window.normalizeArabicText;
+
+        window.NAJAF_PLACES = [
+            { name: 'مرقد الإمام علي عليه السلام', lat: 31.9962, lon: 44.3113 },
+            { name: 'حولي النجف', lat: 32.0010, lon: 44.3350 },
+            { name: 'بنات الحسن', lat: 31.9900, lon: 44.3050 },
+            { name: 'المحافظة - مبنى المحافظة', lat: 31.9955, lon: 44.3170 },
+            { name: 'جامعة الكوفة', lat: 32.0296, lon: 44.3828 },
+            { name: 'كلية الطب - جامعة الكوفة', lat: 32.0270, lon: 44.3800 },
+            { name: 'كلية الهندسة - جامعة الكوفة', lat: 32.0310, lon: 44.3850 },
+            { name: 'جامعة الإمام الصادق', lat: 32.0050, lon: 44.3200 },
+            { name: 'مستشفى الصدر التعليمي', lat: 31.9985, lon: 44.3220 },
+            { name: 'مستشفى الحكيم', lat: 32.0010, lon: 44.3260 },
+            { name: 'مستشفى النجف التعليمي', lat: 31.9960, lon: 44.3120 },
+            { name: 'مركز صحي حي الجامعة', lat: 32.0100, lon: 44.3300 },
+            { name: 'حي الجامعة', lat: 32.0100, lon: 44.3300 },
+            { name: 'حي الحسين', lat: 31.9950, lon: 44.3100 },
+            { name: 'حي القادسية', lat: 32.0150, lon: 44.3400 },
+            { name: 'حي الصالحية', lat: 32.0080, lon: 44.3180 },
+            { name: 'حي الشرطة', lat: 32.0020, lon: 44.3200 },
+            { name: 'حي الرسالة', lat: 31.9870, lon: 44.3050 },
+            { name: 'حي الإسكان', lat: 32.0200, lon: 44.3500 },
+            { name: 'حي الزهراء', lat: 31.9930, lon: 44.3000 },
+            { name: 'حي الكوفة القديمة', lat: 32.0280, lon: 44.4000 },
+            { name: 'حي العلوية', lat: 32.0060, lon: 44.3140 },
+            { name: 'حي المنطقة الصناعية', lat: 32.0400, lon: 44.3600 },
+            { name: 'شارع الروان', lat: 31.9980, lon: 44.3160 },
+            { name: 'شارع الكوفة', lat: 32.0100, lon: 44.3600 },
+            { name: 'السوق الكبير - النجف', lat: 31.9970, lon: 44.3140 },
+            { name: 'الصحن الشريف - الحرم العلوي', lat: 31.9962, lon: 44.3113 },
+            { name: 'بلدية النجف', lat: 31.9965, lon: 44.3180 },
+            { name: 'مديرية تربية النجف', lat: 32.0015, lon: 44.3250 },
+            { name: 'مطار النجف الأشرف', lat: 31.9906, lon: 44.4040 },
+            { name: 'الحيرة', lat: 32.0700, lon: 44.4000 },
+            { name: 'الكوفة', lat: 32.0300, lon: 44.4000 },
+            { name: 'المشخاب', lat: 31.7600, lon: 44.3500 }
+        ];
+        var NAJAF_PLACES = window.NAJAF_PLACES;
+
+        window.searchLocalNajafPlaces = function(query) {
+            var q = window.normalizeArabicText(query);
+            var places = window.NAJAF_PLACES || [];
+            return places.filter(function(p) {
+                return window.normalizeArabicText(p.name).indexOf(q) !== -1;
+            }).slice(0, 30);
+        };
+        var searchLocalNajafPlaces = window.searchLocalNajafPlaces;
+
         window.showVehicleSelectionPanel = function() {
             // Guard: Destination must be searched and selected before showing vehicle options (توفير / VIP)
             if (!window.bPickupCoords || !window.bDropoffCoords) {
@@ -920,6 +974,7 @@ class AuthController {
         window.handleCleanMapConfirm = function() {
             var target = window.bMapPickTarget || 'pickup';
             var center = window.bMap ? window.bMap.getCenter() : null;
+            var tripType = localStorage.getItem('selected_trip_type') || 'short';
             
             if (target === 'pickup') {
                 if (center) {
@@ -948,8 +1003,12 @@ class AuthController {
                     if (window.setBookingDropoff) window.setBookingDropoff(center.lng, center.lat, val);
                 }
                 
-                // Show vehicle selection (توفير / VIP)
-                window.showVehicleSelectionPanel();
+                if (tripType === 'daily') {
+                    if (window.updateDailyMatchingButtonState) window.updateDailyMatchingButtonState();
+                } else {
+                    // Show vehicle selection (توفير / VIP) for short trips only
+                    window.showVehicleSelectionPanel();
+                }
             }
         };
 
@@ -1030,6 +1089,14 @@ class AuthController {
         };
 
         var fsSearchTimer = null;
+        window._fsCurrentResults = [];
+        window.selectFsResultByIndex = function(idx) {
+            var item = window._fsCurrentResults[idx];
+            if (item) {
+                window.selectFsResult(item.name, item.lon, item.lat);
+            }
+        };
+
         window.handleFsSearch = function(query) {
             clearTimeout(fsSearchTimer);
             var resultsEl = document.getElementById('fs-suggested-list');
@@ -1037,26 +1104,31 @@ class AuthController {
             var suggSec = document.getElementById('fs-suggested-section');
             
             if (!query || query.trim().length === 0) {
-                resultsEl.innerHTML = '';
-                recentSec.style.display = 'block';
-                suggSec.style.display = 'none';
+                window._fsCurrentResults = [];
+                if (resultsEl) resultsEl.innerHTML = '';
+                if (recentSec) recentSec.style.display = 'block';
+                if (suggSec) suggSec.style.display = 'none';
                 return;
             }
-            recentSec.style.display = 'none';
-            suggSec.style.display = 'block';
-            resultsEl.innerHTML = '<div style="padding:20px;text-align:center;color:#64748b;font-weight:700;"><i class="fa-solid fa-spinner fa-spin"></i> جاري البحث...</div>';
+            if (recentSec) recentSec.style.display = 'none';
+            if (suggSec) suggSec.style.display = 'block';
+            if (resultsEl) resultsEl.innerHTML = '<div style="padding:20px;text-align:center;color:#64748b;font-weight:700;"><i class="fa-solid fa-spinner fa-spin"></i> جاري البحث...</div>';
             
             fsSearchTimer = setTimeout(async function() {
+                window._fsCurrentResults = [];
                 var html = '';
+                var curCity = window.selectedSearchCity || { name: 'النجف', lon: 44.3168, lat: 31.9961, bbox: "42.6,29.9,44.5,32.3" };
                 
-                if (window.selectedSearchCity.name === 'النجف') {
-                    var local = searchLocalNajafPlaces(query);
-                    if (local.length > 0) {
+                if (curCity.name === 'النجف' && window.searchLocalNajafPlaces) {
+                    var local = window.searchLocalNajafPlaces(query);
+                    if (local && local.length > 0) {
                         local.forEach(function(p) {
-                            html += '<div onclick="window.selectFsResult(\\\''+p.name+'\\\', '+p.lon+', '+p.lat+')" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">' +
+                            var idx = window._fsCurrentResults.length;
+                            window._fsCurrentResults.push({ name: p.name, lon: p.lon, lat: p.lat });
+                            html += '<div onclick="window.selectFsResultByIndex(' + idx + ')" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">' +
                                 '<div style="font-size:20px;color:#94a3b8;flex-shrink:0;"><i class="fa-solid fa-location-dot"></i></div>' +
                                 '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">' +
-                                    '<span style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">'+p.name+'</span>' +
+                                    '<span style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + p.name + '</span>' +
                                     '<span style="font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">النجف الأشرف، العراق</span>' +
                                 '</div>' +
                                 '<div style="font-size:20px;color:#cbd5e1;flex-shrink:0;"><i class="fa-regular fa-star"></i></div>' +
@@ -1066,11 +1138,11 @@ class AuthController {
                 }
                 
                 try {
-                    // Do NOT append governorate name as text, it confuses Mapbox exact match. Use pure query + bbox
                     var q = encodeURIComponent(query.trim());
-                    var bbox = window.selectedSearchCity.bbox;
-                    var prox = window.selectedSearchCity.lon + ',' + window.selectedSearchCity.lat;
-                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + prox + '&bbox=' + bbox + '&language=ar,en&limit=12&access_token=' + BOOKING_MAPBOX_TOKEN;
+                    var bbox = curCity.bbox;
+                    var prox = curCity.lon + ',' + curCity.lat;
+                    var token = window.BOOKING_MAPBOX_TOKEN || 'pk.eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9._J6DYjYBDhsdcidErQrblA';
+                    var url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/' + q + '.json?country=iq&proximity=' + prox + '&bbox=' + bbox + '&language=ar,en&limit=12&access_token=' + token;
                     
                     var res = await fetch(url);
                     var data = await res.json();
@@ -1078,45 +1150,75 @@ class AuthController {
                     feats.forEach(function(f) {
                         var nm = f.place_name_ar || f.place_name || '';
                         var title = f.text_ar || f.text || nm.split(',')[0];
-                        html += '<div onclick="window.selectFsResult(\\\''+title.replace(/'/g, "\\\\'")+'\\\', '+f.center[0]+', '+f.center[1]+')" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">' +
+                        var idx = window._fsCurrentResults.length;
+                        window._fsCurrentResults.push({ name: title, lon: f.center[0], lat: f.center[1] });
+                        html += '<div onclick="window.selectFsResultByIndex(' + idx + ')" style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid #f1f5f9;cursor:pointer;">' +
                             '<div style="font-size:20px;color:#94a3b8;flex-shrink:0;"><i class="fa-solid fa-location-dot"></i></div>' +
                             '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">' +
-                                '<span style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">'+title+'</span>' +
-                                '<span style="font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">'+nm+'</span>' +
+                                '<span style="font-size:15px;font-weight:800;color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + title + '</span>' +
+                                '<span style="font-size:12px;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">' + nm + '</span>' +
                             '</div>' +
                             '<div style="font-size:20px;color:#cbd5e1;flex-shrink:0;"><i class="fa-solid fa-chevron-left"></i></div>' +
                         '</div>';
                     });
-                } catch(e) {}
+                } catch(e) {
+                    console.error('Error fetching mapbox places:', e);
+                }
                 
                 if (html === '') {
                     html = '<div style="padding:20px;text-align:center;color:#64748b;font-weight:700;">لا توجد نتائج مطابقة</div>';
                 }
-                resultsEl.innerHTML = html;
-            }, 500);
+                if (resultsEl) resultsEl.innerHTML = html;
+            }, 300);
         };
+
         window.selectFsResult = function(name, lon, lat) {
             window.closeFullscreenSearch();
+            var tripType = localStorage.getItem('selected_trip_type') || 'short';
+            
             if (window._fsSearchTarget === 'pickup') {
-                document.getElementById('book-pickup-input').value = name;
-                if(window.setBookingPickup) setBookingPickup(lon, lat, name);
-                if(window.setCleanMapTarget) setCleanMapTarget('dropoff');
+                var pInps = document.querySelectorAll('#book-pickup-input');
+                pInps.forEach(function(el){ el.value = name; });
+                if (window.setBookingPickup) window.setBookingPickup(lon, lat, name);
+                if (window.setCleanMapTarget) window.setCleanMapTarget('dropoff');
+                
+                if (tripType === 'daily') {
+                    var pCont = document.getElementById('clean-pickup-container');
+                    var dCont = document.getElementById('clean-dropoff-container');
+                    if (pCont) pCont.style.display = 'block';
+                    if (dCont) dCont.style.display = 'block';
+                    if (window.updateDailyMatchingButtonState) window.updateDailyMatchingButtonState();
+                }
+                
                 setTimeout(function() {
                     window.openFullscreenSearch('dropoff');
                 }, 250);
             } else {
-                document.getElementById('book-dropoff-input').value = name;
-                if(window.setBookingDropoff) setBookingDropoff(lon, lat, name);
+                var dInps = document.querySelectorAll('#book-dropoff-input');
+                dInps.forEach(function(el){ el.value = name; });
+                if (window.setBookingDropoff) window.setBookingDropoff(lon, lat, name);
                 if (window.bMap) window.bMap.easeTo({ center: [lon, lat], zoom: Math.max(window.bMap.getZoom(), 15), duration: 350 });
-                // Destination selected -> show vehicle options (توفير / VIP)
-                setTimeout(function() {
-                    if (window.showVehicleSelectionPanel) window.showVehicleSelectionPanel();
-                }, 350);
+                
+                if (tripType === 'daily') {
+                    var actPanel = document.getElementById('clean-bottom-sheet') || document.getElementById('clean-action-panel');
+                    if (actPanel) actPanel.style.display = 'flex';
+                    var pCont = document.getElementById('clean-pickup-container');
+                    var dCont = document.getElementById('clean-dropoff-container');
+                    if (pCont) pCont.style.display = 'block';
+                    if (dCont) dCont.style.display = 'block';
+                    var vPanel = document.getElementById('vehicle-selection-panel');
+                    if (vPanel) vPanel.style.display = 'none';
+                    if (window.updateDailyMatchingButtonState) window.updateDailyMatchingButtonState();
+                } else {
+                    // Short trips -> Destination selected -> show vehicle options (توفير / VIP)
+                    setTimeout(function() {
+                        if (window.showVehicleSelectionPanel) window.showVehicleSelectionPanel();
+                    }, 350);
+                }
             }
         };
-        // ------------------------------------------
 
-window.setCleanMapTarget = function(target) {
+        window.setCleanMapTarget = function(target) {
             window.bMapPickTarget = target;
             var pinHead = document.getElementById('clean-map-pin-head');
             var btnText = document.getElementById('floating-save-btn-text');
@@ -1124,6 +1226,7 @@ window.setCleanMapTarget = function(target) {
             var dCont = document.getElementById('clean-dropoff-container');
             var gpsBtn = document.getElementById('btn-gps-pickup');
             var mapWrap = document.getElementById('btn-gps-pickup') ? document.getElementById('btn-gps-pickup').parentElement : null;
+            var tripType = localStorage.getItem('selected_trip_type') || 'short';
             
             if (target === 'pickup') {
                 if (pinHead) {
@@ -1134,7 +1237,7 @@ window.setCleanMapTarget = function(target) {
                 }
                 if (btnText) btnText.innerText = 'تاكيد نقطة الانطلاق';
                 if (pCont) pCont.style.display = 'block';
-                if (dCont) dCont.style.display = 'none';
+                if (dCont) dCont.style.display = (tripType === 'daily') ? 'block' : 'none';
                 
                 var topBtn = document.getElementById('btn-top-right-action');
                 var topIco = document.getElementById('icon-top-right-action');
@@ -1173,7 +1276,6 @@ window.setCleanMapTarget = function(target) {
                     fareSpan.style.display = 'none';
                     fareSpan.textContent = '';
                 }
-                var btnText = document.getElementById('floating-save-btn-text');
                 if (btnText) {
                     btnText.innerText = 'تاكيد نقطة الانطلاق';
                 }
@@ -1182,6 +1284,7 @@ window.setCleanMapTarget = function(target) {
                 if (vPanel) vPanel.style.display = 'none';
                 var actPanel = document.getElementById('clean-bottom-sheet') || document.getElementById('clean-action-panel');
                 if (actPanel) actPanel.style.display = 'flex';
+                if (window.updateDailyMatchingButtonState) window.updateDailyMatchingButtonState();
             } else {
                 if (pinHead) {
                     pinHead.style.background = '#f97316';
@@ -1190,7 +1293,7 @@ window.setCleanMapTarget = function(target) {
                     if (inner) { inner.style.borderRadius = '2px'; inner.style.width = '8px'; inner.style.height = '8px'; }
                 }
                 if (btnText) btnText.innerText = 'تاكيد نقطة الوصول';
-                if (pCont) pCont.style.display = 'none';
+                if (pCont) pCont.style.display = (tripType === 'daily') ? 'block' : 'none';
                 if (dCont) dCont.style.display = 'block';
                 
                 var topBtn = document.getElementById('btn-top-right-action');
@@ -1198,6 +1301,7 @@ window.setCleanMapTarget = function(target) {
                 if (topBtn) topBtn.setAttribute('onclick', 'window.setCleanMapTarget("pickup")');
                 if (topIco) topIco.className = 'fa-solid fa-chevron-right';
                 if (mapWrap) mapWrap.style.display = 'none';
+                if (window.updateDailyMatchingButtonState) window.updateDailyMatchingButtonState();
             }
         };
         
@@ -5185,6 +5289,7 @@ window.setCleanMapTarget = function(target) {
 
         function setBookingPickup(lng, lat, name) {
             bPickupCoords = [lng, lat];
+            window.bPickupCoords = bPickupCoords;
             if (!bPickupMarker && bMap) {
                 var el = document.createElement('div');
                 el.innerHTML = '<div style="position:relative;display:flex;align-items:center;justify-content:center;flex-direction:column;cursor:grab;"><div style="background:#ffffff;padding:4px 12px;border-radius:12px;font-size:14px;font-weight:900;color:#111;box-shadow:0 2px 8px rgba(0,0,0,0.15);margin-bottom:6px;font-family:Cairo,sans-serif;">الانطلاق</div><div style="background:#f97316;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(249,115,22,0.4);border:2px solid #ffffff;"><div style="background:#ffffff;width:8px;height:8px;border-radius:50%;"></div></div></div>';
@@ -5192,8 +5297,10 @@ window.setCleanMapTarget = function(target) {
                 bPickupMarker.on('dragend', async function() {
                     var p = bPickupMarker.getLngLat();
                     bPickupCoords = [p.lng, p.lat];
+                    window.bPickupCoords = bPickupCoords;
                     var addr = await bReverseGeocode(p.lng, p.lat);
                     bPickupName = addr;
+                    window.bPickupName = addr;
                     var inp = document.getElementById('book-pickup-input');
                     if (inp) inp.value = addr;
                     calculateBookingRoute();
@@ -5204,11 +5311,13 @@ window.setCleanMapTarget = function(target) {
 
             if (name) {
                 bPickupName = name;
+                window.bPickupName = name;
                 var inp = document.getElementById('book-pickup-input');
                 if (inp) inp.value = name;
             } else {
                 bReverseGeocode(lng, lat).then(function(addr) {
                     bPickupName = addr;
+                    window.bPickupName = addr;
                     var inp = document.getElementById('book-pickup-input');
                     if (inp) inp.value = addr;
                 });
@@ -5218,6 +5327,7 @@ window.setCleanMapTarget = function(target) {
 
         function setBookingDropoff(lng, lat, name) {
             bDropoffCoords = [lng, lat];
+            window.bDropoffCoords = bDropoffCoords;
             if (!bDropoffMarker && bMap) {
                 var el = document.createElement('div');
                 el.innerHTML = '<div style="position:relative;display:flex;align-items:center;justify-content:center;cursor:grab;"><div style="background:#ffffff;padding:4px 12px;border-radius:12px;font-size:14px;font-weight:900;color:#111;box-shadow:0 2px 8px rgba(0,0,0,0.15);margin-left:6px;font-family:Cairo,sans-serif;">الوصول</div><div style="background:#0000ff;width:24px;height:24px;border-radius:8px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,255,0.4);border:2px solid #ffffff;"><div style="background:#ffffff;width:8px;height:8px;border-radius:2px;"></div></div></div>';
@@ -5225,8 +5335,10 @@ window.setCleanMapTarget = function(target) {
                 bDropoffMarker.on('dragend', async function() {
                     var p = bDropoffMarker.getLngLat();
                     bDropoffCoords = [p.lng, p.lat];
+                    window.bDropoffCoords = bDropoffCoords;
                     var addr = await bReverseGeocode(p.lng, p.lat);
                     bDropoffName = addr;
+                    window.bDropoffName = addr;
                     var inp = document.getElementById('book-dropoff-input');
                     if (inp) inp.value = addr;
                     calculateBookingRoute();
@@ -5320,6 +5432,9 @@ window.setCleanMapTarget = function(target) {
                 if (window.updateDailyMatchingButtonState) window.updateDailyMatchingButtonState();
             } catch(e) {}
         }
+        window.setBookingPickup = setBookingPickup;
+        window.setBookingDropoff = setBookingDropoff;
+        window.calculateBookingRoute = calculateBookingRoute;
 
         async function fetchNearbyDriversForMap() {
             try {
