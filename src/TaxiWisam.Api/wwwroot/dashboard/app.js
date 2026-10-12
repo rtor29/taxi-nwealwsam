@@ -940,7 +940,7 @@ async function loadDrivers(search = '') {
                     ${d.isBlocked ? '<span class="px-1.5 py-0.5 text-[10px] bg-rose-600 text-white rounded font-black">معلق</span>' : ''}
                 </td>
                 <td class="p-4 text-slate-600 font-mono text-xs"><a href="tel:${escapeHtml(d.phoneNumber)}" class="hover:text-amber-600 underline">${escapeHtml(d.phoneNumber)}</a></td>
-                <td class="p-4"><span class="px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg text-xs font-bold">${escapeHtml(d.workMode || 'مشوار قصير')}</span></td>
+                <td class="p-4"><span class="px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg text-xs font-bold">${escapeHtml(d.workMode || 'مشوار قصير')}</span> <span class="px-2 py-1 text-xs rounded-lg font-bold ${d.vehicleType === 'vip' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">${d.vehicleType === 'vip' ? '👑 VIP' : '🚕 توفير'}</span></td>
                 <td class="p-4"><span class="px-2 py-1 bg-slate-100 text-slate-800 font-mono text-xs rounded border border-slate-200 font-bold select-all" title="كلمة المرور">${escapeHtml(d.password || '••••••••')}</span></td>
                 <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full font-bold ${statusClass}">${statusLabel}</span></td>
                 <td class="p-4">${verifBadge}${approveBadge}</td>
@@ -2841,6 +2841,7 @@ async function submitAdminAddCaptain(event) {
     const vehicleColor = document.getElementById('admin-drv-color').value.trim();
     const availableSeats = parseInt(document.getElementById('admin-drv-seats').value, 10);
     const serviceType = document.getElementById('admin-drv-service').value;
+    const vehicleType = document.getElementById('admin-drv-vehicle-type').value;
 
     const startName = document.getElementById('admin-route-start-label').innerText;
     const endName = document.getElementById('admin-route-dest-label').innerText;
@@ -2860,6 +2861,7 @@ async function submitAdminAddCaptain(event) {
         vehicleColor,
         availableSeats,
         serviceType,
+        vehicleType,
         route: {
             startName,
             endName,
@@ -3431,6 +3433,8 @@ function openEditDriverModal(driverId) {
     document.getElementById('edit-drv-phone').value = driver.phoneNumber || '';
     document.getElementById('edit-drv-route').value = driver.route || '';
     document.getElementById('edit-drv-password').value = '';
+    const vehicleTypeEl = document.getElementById('edit-drv-vehicle-type');
+    if (vehicleTypeEl) vehicleTypeEl.value = driver.vehicleType === 'vip' ? 'vip' : 'eco';
 
     const govKey = driver.governorate || 'najaf';
     const govEl = document.getElementById('edit-drv-gov');
@@ -3477,6 +3481,7 @@ async function submitEditDriver(event) {
     const route = document.getElementById('edit-drv-route').value.trim();
     const password = document.getElementById('edit-drv-password').value.trim();
     const governorate = (document.getElementById('edit-drv-gov') && document.getElementById('edit-drv-gov').value) || 'najaf';
+    const vehicleType = (document.getElementById('edit-drv-vehicle-type') || {}).value || 'eco';
 
     const permanentLat = document.getElementById('edit-drv-lat').value;
     const permanentLon = document.getElementById('edit-drv-lon').value;
@@ -3487,7 +3492,7 @@ async function submitEditDriver(event) {
 
     try {
         const payload = {
-            fullName, phoneNumber, route, governorate,
+            fullName, phoneNumber, route, governorate, vehicleType,
             permanentLat: permanentLat || null,
             permanentLon: permanentLon || null,
             permanentLocationName: permanentLocationName || route,

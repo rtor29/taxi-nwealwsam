@@ -1,36 +1,6 @@
 {
   "drivers": [
     {
-      "driverId": "drv-t-lhil8jhxd",
-      "fullName": "سائق",
-      "phoneNumber": "07706204066",
-      "email": "07706204066@tawseelaiq.app",
-      "plainPassword": null,
-      "passwordHash": null,
-      "googleId": null,
-      "licenseNumber": "PENDING",
-      "vehicleMake": "تويوتا",
-      "vehicleModel": "كورولا",
-      "vehicleYear": 2020,
-      "vehiclePlate": "النجف",
-      "status": "Approved",
-      "isVerified": true,
-      "isBlocked": false,
-      "rejectionReason": null,
-      "ratingAverage": 5,
-      "totalTrips": 0,
-      "permanentLat": 32.01889009017769,
-      "permanentLon": 44.34710789272074,
-      "permanentLocationName": "حي الغدير",
-      "permanentDropoffLat": 32.02377018761045,
-      "permanentDropoffLon": 44.33519192707871,
-      "permanentDropoffName": "حی الغری",
-      "telegramChatId": "391762837",
-      "createdAt": "2026-10-02T19:14:26.320Z",
-      "isOnline": false,
-      "route": "حي الغدير → حی الغری"
-    },
-    {
       "driverId": "drv-8atms9lfq",
       "fullName": "محمة",
       "phoneNumber": "٢٣٤٢٤٣٣",
@@ -61,6 +31,38 @@
     }
   ],
   "customers": [
+    {
+      "customerId": "usr-c-2vsh3xouq",
+      "fullName": "محمد محمد الموسوي",
+      "email": "07706204066@tawseelaiq.app",
+      "phoneNumber": "07706204066",
+      "route": "العراق",
+      "preferredRoute": "العراق",
+      "address": "العراق",
+      "plainPassword": "auto-generated",
+      "passwordHash": "5e34da6fe1e08969c75dd65be031b7b1d8aa3e15f5712ef5aee1ec86cf03f71f",
+      "googleId": null,
+      "preferredPaymentMethod": "Cash",
+      "area": "العراق",
+      "governorate": "najaf",
+      "tripType": "ShortTrip",
+      "pickupLat": 31.9961,
+      "pickupLon": 44.3168,
+      "dropoffLat": 32.0161,
+      "dropoffLon": 44.336800000000004,
+      "permanentLat": 31.9961,
+      "permanentLon": 44.3168,
+      "permanentLocationName": "العراق",
+      "permanentDropoffLat": 32.0161,
+      "permanentDropoffLon": 44.336800000000004,
+      "permanentDropoffName": "",
+      "telegramChatId": null,
+      "ratingAverage": 5,
+      "totalBookings": 0,
+      "isActive": true,
+      "isBlocked": false,
+      "registeredAt": "2026-10-12T06:07:14.915Z"
+    },
     {
       "customerId": "usr-c-tb545e2rj",
       "fullName": "محمد راكب",
@@ -107,18 +109,6 @@
       "status": "Active",
       "createdAt": "2026-10-02T18:47:56.137Z",
       "name": "حي الضباط → الكوفة"
-    },
-    {
-      "id": "route-drv-t-lhil8jhxd",
-      "routeId": "route-drv-t-lhil8jhxd",
-      "driverId": "drv-t-lhil8jhxd",
-      "driverName": "سائق",
-      "driverPhone": "07706204066",
-      "name": "حي الغدير → حی الغری",
-      "startName": "حي الغدير → حی الغری",
-      "endName": "حي الغدير → حی الغری",
-      "status": "Active",
-      "createdAt": "2026-10-02T19:27:17.811Z"
     }
   ],
   "bookings": [],
@@ -141,6 +131,24 @@
     }
   ],
   "auditLogs": [
+    {
+      "id": 1791785235583,
+      "action": "PassengerRegistered",
+      "entityName": "Customer",
+      "entityId": "usr-c-2vsh3xouq",
+      "newValuesJson": "{\"fullName\":\"محمد محمد الموسوي\",\"phoneNumber\":\"07706204066\",\"route\":\"العراق\",\"address\":\"العراق\",\"registeredAt\":\"2026-10-12T06:07:14.915Z\"}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-10-12T06:07:14.916Z"
+    },
+    {
+      "id": 1791785184363,
+      "action": "DriverDeletedPermanently",
+      "entityName": "Driver",
+      "entityId": "drv-t-lhil8jhxd",
+      "newValuesJson": "{\"deletedDriverName\":\"سائق\",\"deletedAt\":\"2026-10-12T06:06:23.707Z\"}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-10-12T06:06:23.707Z"
+    },
     {
       "id": 1790969261834,
       "action": "DriverUpdated",
@@ -887,11 +895,11 @@
     }
   ],
   "stats": {
-    "totalUsers": 1,
-    "totalDrivers": 2,
-    "verifiedDrivers": 2,
+    "totalUsers": 2,
+    "totalDrivers": 1,
+    "verifiedDrivers": 1,
     "pendingVerifications": 0,
-    "activeRoutes": 2,
+    "activeRoutes": 1,
     "totalBookings": 0,
     "pendingComplaints": 0,
     "totalRevenue": 0

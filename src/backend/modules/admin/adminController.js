@@ -74,6 +74,7 @@ class AdminController {
         if (data.fullName !== undefined) driver.fullName = String(data.fullName).trim();
         if (data.phoneNumber !== undefined) driver.phoneNumber = String(data.phoneNumber).trim();
         if (data.governorate !== undefined) driver.governorate = String(data.governorate).trim();
+        if (data.vehicleType !== undefined) driver.vehicleType = String(data.vehicleType).toLowerCase() === 'vip' ? 'vip' : 'eco';
         if (data.permanentLat !== undefined && data.permanentLat !== null && data.permanentLat !== '') driver.permanentLat = parseFloat(data.permanentLat);
         if (data.permanentLon !== undefined && data.permanentLon !== null && data.permanentLon !== '') driver.permanentLon = parseFloat(data.permanentLon);
         if (data.permanentLocationName !== undefined) driver.permanentLocationName = String(data.permanentLocationName).trim();
@@ -862,6 +863,7 @@ class AdminController {
             vehicleYear,
             vehiclePlate,
             vehicleColor,
+            vehicleType,
             serviceType,
             availableSeats,
             route
@@ -926,6 +928,7 @@ class AdminController {
             vehicleYear: vYear,
             vehiclePlate: vPlate,
             vehicleColor: vehicleColor || 'أبيض',
+            vehicleType: String(vehicleType || 'eco').toLowerCase() === 'vip' ? 'vip' : 'eco',
             serviceType: serviceType || 'both',
             status: 'Approved',
             isVerified: true,

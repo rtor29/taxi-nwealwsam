@@ -2101,6 +2101,13 @@
                                 <option value="daily">توصيل يومي مرن / تكسي</option>
                             </select>
                         </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">فئة المركبة للراكب <span class="text-rose-500">*</span></label>
+                            <select id="admin-drv-vehicle-type" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 font-semibold">
+                                <option value="eco" selected>🚕 توفير</option>
+                                <option value="vip">👑 VIP</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -2439,6 +2446,13 @@
                     <input type="text" id="edit-drv-route" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
                 </div>
                 <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">فئة المركبة للراكب</label>
+                    <select id="edit-drv-vehicle-type" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500">
+                        <option value="eco">🚕 توفير</option>
+                        <option value="vip">👑 VIP</option>
+                    </select>
+                </div>
+                <div>
                     <label class="block text-xs font-bold text-slate-700 mb-1">المحافظة</label>
                     <select id="edit-drv-gov" onchange="onEditModalGovChange('driver', this.value)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500">
                         <option value="najaf">النجف</option>
@@ -2573,6 +2587,6 @@
         });
     </script>
 
-    <script src="/dashboard/app.js?v=20261007_v5"></script>
+    <script src="/dashboard/app.js?v=20261012_v6"></script>
 </body>
 </html>

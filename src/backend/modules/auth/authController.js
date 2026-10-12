@@ -525,6 +525,72 @@ class AuthController {
             </button>
         </div>
 
+        <!-- Vehicle Selection Panel (VIP / Eco like Baly) - Inside booking-modal-view -->
+        <div id="vehicle-selection-panel" style="display:none;position:absolute;bottom:0;left:0;right:0;background:#ffffff;border-top-left-radius:28px;border-top-right-radius:28px;box-shadow:0 -6px 30px rgba(0,0,0,0.2);z-index:25;font-family:Cairo,sans-serif;animation:slideUpPanel 0.25s ease;" dir="rtl">
+            <!-- Drag pill handle -->
+            <div style="width:40px;height:4px;background:#cbd5e1;border-radius:2px;margin:10px auto 4px auto;"></div>
+            
+            <div style="padding:4px 20px 10px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f1f5f9;">
+                <div>
+                    <div style="font-size:17px;font-weight:900;color:#0f172a;">اختر فئة المشوار</div>
+                    <div style="font-size:12px;color:#64748b;">تحديد أقرب كابتن متواجد فوراً</div>
+                </div>
+                <div style="font-size:12px;font-weight:800;background:#f8fafc;color:#059669;padding:4px 10px;border-radius:12px;border:1px solid #e2e8f0;">
+                    ⏱️ وصول سريع
+                </div>
+            </div>
+
+            <div style="padding:10px 0 6px 0;">
+                <!-- Option 1: Eco / توفير -->
+                <div onclick="window.selectVehicleType('eco')" id="veh-opt-eco" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;margin:6px 16px;border-radius:18px;border:2px solid #059669;background:#ecfdf5;cursor:pointer;transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1);box-shadow:0 4px 12px rgba(5,150,105,0.12);">
+                    <div style="display:flex;align-items:center;gap:14px;">
+                        <div style="width:50px;height:50px;background:#ffffff;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 2px 8px rgba(0,0,0,0.06);flex-shrink:0;">
+                            🚗
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <span style="font-size:16px;font-weight:900;color:#0f172a;">توفير</span>
+                                <span style="font-size:11px;font-weight:800;background:#dcfce7;color:#166534;padding:2px 7px;border-radius:8px;">الأوفر</span>
+                            </div>
+                            <div style="font-size:12px;color:#64748b;margin-top:2px;">مشوار اقتصادي ومناسب للرحلات السريعة</div>
+                        </div>
+                    </div>
+                    <div style="text-align:left;flex-shrink:0;">
+                        <div style="font-size:16px;font-weight:900;color:#059669;" id="fare-eco">3,000 د.ع</div>
+                        <div style="font-size:11px;color:#94a3b8;">سعر ثابت</div>
+                    </div>
+                </div>
+
+                <!-- Option 2: VIP -->
+                <div onclick="window.selectVehicleType('vip')" id="veh-opt-vip" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;margin:6px 16px;border-radius:18px;border:2px solid #e2e8f0;background:#ffffff;cursor:pointer;transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1);">
+                    <div style="display:flex;align-items:center;gap:14px;">
+                        <div style="width:50px;height:50px;background:#fffbeb;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 2px 8px rgba(245,158,11,0.15);flex-shrink:0;position:relative;">
+                            🚘
+                            <span style="position:absolute;top:-4px;right:-4px;font-size:13px;">👑</span>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <span style="font-size:16px;font-weight:900;color:#0f172a;">VIP</span>
+                                <span style="font-size:11px;font-weight:800;background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:8px;">فخامة وراحة</span>
+                            </div>
+                            <div style="font-size:12px;color:#64748b;margin-top:2px;">كابتن معتمد، سيارات حديثة ومكيفة</div>
+                        </div>
+                    </div>
+                    <div style="text-align:left;flex-shrink:0;">
+                        <div style="font-size:16px;font-weight:900;color:#d97706;" id="fare-vip">4,500 د.ع</div>
+                        <div style="font-size:11px;color:#94a3b8;">سعر مميز</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Request Button -->
+            <div style="padding:8px 16px 20px 16px;">
+                <button id="btn-request-vehicle" type="button" onclick="window.confirmVehicleRequest()" style="width:100%;background:linear-gradient(135deg, #059669 0%, #047857 100%);color:#ffffff;border:none;border-radius:16px;padding:16px;font-size:18px;font-weight:900;font-family:Cairo,sans-serif;cursor:pointer;box-shadow:0 6px 20px rgba(5,150,105,0.25);transition:all 0.2s ease;display:flex;align-items:center;justify-content:center;gap:8px;" onmousedown="this.style.transform='scale(0.98)';" onmouseup="this.style.transform='scale(1)';">
+                    <span>تأكيد طلب توفير 🚗</span>
+                </button>
+            </div>
+        </div>
+
         <!-- Hidden elements to satisfy existing JS logic -->
         <div style="display:none;">
             <button id="btn-target-pickup"></button>
@@ -570,7 +636,7 @@ class AuthController {
                 }
                 
                 // INSTEAD OF SAVING DIRECTLY, SHOW VEHICLE SELECTION
-                var actPanel = document.getElementById('clean-action-panel');
+                var actPanel = document.getElementById('clean-bottom-sheet') || document.getElementById('clean-action-panel');
                 if (actPanel) actPanel.style.display = 'none';
                 var vPanel = document.getElementById('vehicle-selection-panel');
                 if (vPanel) vPanel.style.display = 'block';
@@ -742,6 +808,7 @@ class AuthController {
             } else {
                 document.getElementById('book-dropoff-input').value = name;
                 if(window.setBookingDropoff) setBookingDropoff(lon, lat, name);
+                if (window.bMap) window.bMap.easeTo({ center: [lon, lat], zoom: Math.max(window.bMap.getZoom(), 15), duration: 350 });
             }
         };
         // ------------------------------------------
@@ -810,8 +877,8 @@ window.setCleanMapTarget = function(target) {
                 
                 var vPanel = document.getElementById('vehicle-selection-panel');
                 if (vPanel) vPanel.style.display = 'none';
-                var actPanel = document.getElementById('clean-action-panel');
-                if (actPanel) actPanel.style.display = 'block';
+                var actPanel = document.getElementById('clean-bottom-sheet') || document.getElementById('clean-action-panel');
+                if (actPanel) actPanel.style.display = 'flex';
             } else {
                 if (pinHead) {
                     pinHead.style.background = '#f97316';
@@ -835,8 +902,8 @@ window.setCleanMapTarget = function(target) {
         window.closeVehicleSelection = function() {
             var vPanel = document.getElementById('vehicle-selection-panel');
             if (vPanel) vPanel.style.display = 'none';
-            var actPanel = document.getElementById('clean-action-panel');
-            if (actPanel) actPanel.style.display = 'block';
+            var actPanel = document.getElementById('clean-bottom-sheet') || document.getElementById('clean-action-panel');
+            if (actPanel) actPanel.style.display = 'flex';
             
             var topBtn = document.getElementById('btn-top-right-action');
             if (topBtn) topBtn.setAttribute('onclick', 'window.setCleanMapTarget("pickup")');
@@ -894,6 +961,7 @@ window.setCleanMapTarget = function(target) {
                     btn.innerHTML = '<span>تأكيد طلب توفير 🚗</span> <span style="font-size:16px;opacity:0.95;margin-right:6px">(' + ecoFare.toLocaleString() + ' د.ع)</span>';
                 }
             }
+            if (typeof fetchNearbyDriversForMap === 'function') fetchNearbyDriversForMap();
         };
         
         // Override original to connect them
@@ -1063,72 +1131,6 @@ window.setCleanMapTarget = function(target) {
     </div>
 
     
-    
-    <!-- Vehicle Selection Panel (VIP / Eco like Baly) -->
-    <div id="vehicle-selection-panel" style="display:none;position:absolute;bottom:0;left:0;right:0;background:#ffffff;border-top-left-radius:28px;border-top-right-radius:28px;box-shadow:0 -6px 30px rgba(0,0,0,0.15);z-index:30;font-family:Cairo,sans-serif;animation:slideUpPanel 0.25s ease;" dir="rtl">
-        <!-- Drag pill handle -->
-        <div style="width:40px;height:4px;background:#cbd5e1;border-radius:2px;margin:10px auto 4px auto;"></div>
-        
-        <div style="padding:4px 20px 10px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f1f5f9;">
-            <div>
-                <div style="font-size:17px;font-weight:900;color:#0f172a;">اختر فئة المشوار</div>
-                <div style="font-size:12px;color:#64748b;">تحديد أقرب كابتن متواجد فوراً</div>
-            </div>
-            <div style="font-size:12px;font-weight:800;background:#f8fafc;color:#059669;padding:4px 10px;border-radius:12px;border:1px solid #e2e8f0;">
-                ⏱️ وصول سريع
-            </div>
-        </div>
-
-        <div style="padding:10px 0 6px 0;">
-            <!-- Option 1: Eco / توفير -->
-            <div onclick="window.selectVehicleType('eco')" id="veh-opt-eco" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;margin:6px 16px;border-radius:18px;border:2px solid #059669;background:#ecfdf5;cursor:pointer;transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1);box-shadow:0 4px 12px rgba(5,150,105,0.12);">
-                <div style="display:flex;align-items:center;gap:14px;">
-                    <div style="width:50px;height:50px;background:#ffffff;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 2px 8px rgba(0,0,0,0.06);flex-shrink:0;">
-                        🚗
-                    </div>
-                    <div style="text-align:right;">
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            <span style="font-size:16px;font-weight:900;color:#0f172a;">توفير</span>
-                            <span style="font-size:11px;font-weight:800;background:#dcfce7;color:#166534;padding:2px 7px;border-radius:8px;">الأوفر</span>
-                        </div>
-                        <div style="font-size:12px;color:#64748b;margin-top:2px;">مشوار اقتصادي ومناسب للرحلات السريعة</div>
-                    </div>
-                </div>
-                <div style="text-align:left;flex-shrink:0;">
-                    <div style="font-size:16px;font-weight:900;color:#059669;" id="fare-eco">3,000 د.ع</div>
-                    <div style="font-size:11px;color:#94a3b8;">سعر ثابت</div>
-                </div>
-            </div>
-
-            <!-- Option 2: VIP -->
-            <div onclick="window.selectVehicleType('vip')" id="veh-opt-vip" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;margin:6px 16px;border-radius:18px;border:2px solid #e2e8f0;background:#ffffff;cursor:pointer;transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1);">
-                <div style="display:flex;align-items:center;gap:14px;">
-                    <div style="width:50px;height:50px;background:#fffbeb;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 2px 8px rgba(245,158,11,0.15);flex-shrink:0;position:relative;">
-                        🚘
-                        <span style="position:absolute;top:-4px;right:-4px;font-size:13px;">👑</span>
-                    </div>
-                    <div style="text-align:right;">
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            <span style="font-size:16px;font-weight:900;color:#0f172a;">VIP</span>
-                            <span style="font-size:11px;font-weight:800;background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:8px;">فخامة وراحة</span>
-                        </div>
-                        <div style="font-size:12px;color:#64748b;margin-top:2px;">كابتن معتمد، سيارات حديثة ومكيفة</div>
-                    </div>
-                </div>
-                <div style="text-align:left;flex-shrink:0;">
-                    <div style="font-size:16px;font-weight:900;color:#d97706;" id="fare-vip">4,500 د.ع</div>
-                    <div style="font-size:11px;color:#94a3b8;">سعر مميز</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Request Button -->
-        <div style="padding:8px 16px 20px 16px;">
-            <button id="btn-request-vehicle" type="button" onclick="window.confirmVehicleRequest()" style="width:100%;background:linear-gradient(135deg, #059669 0%, #047857 100%);color:#ffffff;border:none;border-radius:16px;padding:16px;font-size:18px;font-weight:900;font-family:Cairo,sans-serif;cursor:pointer;box-shadow:0 6px 20px rgba(5,150,105,0.25);transition:all 0.2s ease;display:flex;align-items:center;justify-content:center;gap:8px;" onmousedown="this.style.transform='scale(0.98)';" onmouseup="this.style.transform='scale(1)';">
-                <span>تأكيد طلب توفير 🚗</span>
-            </button>
-        </div>
-    </div>
     
     <!-- User Profile Modal -->
     <div id="user-profile-modal" style="display:none;position:fixed;inset:0;z-index:9999999;background:#f8fafc;flex-direction:column;font-family:Cairo,sans-serif;" dir="rtl">
@@ -3801,9 +3803,12 @@ window.setCleanMapTarget = function(target) {
 
             if (!bMap) {
                 await initBookingMapbox();
+                // Open the booking map at the passenger's live position immediately.
+                if (navigator.geolocation) window.centerOnUserGps();
             } else {
                 setTimeout(function() { if (bMap) bMap.resize(); }, 100);
                 setTimeout(function() { if (bMap) bMap.resize(); }, 350);
+                if (navigator.geolocation) window.centerOnUserGps();
                 fetchNearbyDriversForMap();
             }
         };
@@ -4225,9 +4230,11 @@ window.setCleanMapTarget = function(target) {
                 if (drvStatus) { drvStatus.textContent = 'الحالة: إرسال الطلب للسائقين القريبين...'; drvStatus.style.color = '#2563eb'; }
             }
             
-            // Hide vehicle selection
+            // Hide vehicle selection and bottom sheet
             var vPanel = document.getElementById('vehicle-selection-panel');
             if (vPanel) vPanel.style.display = 'none';
+            var actPanel = document.getElementById('clean-bottom-sheet') || document.getElementById('clean-action-panel');
+            if (actPanel) actPanel.style.display = 'none';
 
             // Now request the driver
             if (window.requestNearestDriver) {
@@ -4251,14 +4258,10 @@ window.setCleanMapTarget = function(target) {
                 if (!bPickupName) bPickupName = typedPickup || 'موقعي الحالي';
             }
 
-            if (!bDropoffCoords) {
-                if (!typedDropoff && !bDropoffName) {
-                    alert('⚠️ يرجى كتابة أو تحديد وجهة الوصول أولاً');
-                    if (dropInp) dropInp.focus();
-                    return;
-                }
-                bDropoffName = typedDropoff || bDropoffName || 'وجهة الوصول';
-                bDropoffCoords = [bPickupCoords[0] + 0.025, bPickupCoords[1] + 0.025];
+            if (!bDropoffCoords || !bDropoffMarker) {
+                alert('⚠️ يرجى تثبيت نقطة الوصول الفعلية على الخريطة أولاً');
+                if (dropInp) dropInp.focus();
+                return;
             }
 
             var userId = localStorage.getItem('user_id') || 'usr-current';
@@ -4861,6 +4864,9 @@ window.setCleanMapTarget = function(target) {
                 bDropoffMarker.setLngLat([lng, lat]);
             }
 
+            // A searched or tapped destination must remain visibly anchored to its exact coordinates.
+            if (bMap) bMap.easeTo({ center: [lng, lat], duration: 250 });
+
             if (name) {
                 bDropoffName = name;
                 var inp = document.getElementById('book-dropoff-input');
@@ -4943,7 +4949,7 @@ window.setCleanMapTarget = function(target) {
                 
                 var activeType = isDriver ? (workMode === 'خط دائمي' ? 'daily' : 'short') : tripType;
                 
-                var res = await fetch('/api/drivers/nearby?tripType=' + activeType + '&lat=' + lat + '&lon=' + lon + '&rangeKm=' + bRangeKm);
+                var res = await fetch('/api/drivers/nearby?tripType=' + activeType + '&lat=' + lat + '&lon=' + lon + '&rangeKm=' + bRangeKm + '&vehicleType=' + encodeURIComponent(window.bSelectedVehicle || 'eco'));
                 var drivers = await res.json();
                 bNearbyDrivers = Array.isArray(drivers) ? drivers : [];
                 
@@ -5105,7 +5111,7 @@ window.setCleanMapTarget = function(target) {
                     '</div>' +
                     '<div style="font-size:11px;color:#64748b;display:flex;justify-content:space-between;align-items:center;">' +
                         '<span>🚗 ' + (d.carModel || 'تويوتا') + '</span>' +
-                        '<span>📏 يبعد ' + d.distanceKm + ' كم</span>' +
+                        '<span>' + (d.vehicleType === 'vip' ? '👑 VIP' : '🚕 توفير') + ' · 📏 ' + d.distanceKm + ' كم</span>' +
                     '</div>';
                 card.onclick = function() {
                     if (bMap) bMap.flyTo({ center: [d.longitude, d.latitude], zoom: 15 });
@@ -5136,14 +5142,10 @@ window.setCleanMapTarget = function(target) {
                 bPickupCoords = [pLon, pLat];
                 if (!bPickupName) bPickupName = pTxt || 'موقعي الحالي';
             }
-            if (!bDropoffCoords) {
-                if (!dTxt && !bDropoffName) {
-                    alert('يرجى كتابة أو تحديد وجهة الوصول على الخريطة');
-                    if (dInp) dInp.focus();
-                    return;
-                }
-                bDropoffName = dTxt || bDropoffName;
-                bDropoffCoords = [bPickupCoords[0] + 0.025, bPickupCoords[1] + 0.025];
+            if (!bDropoffCoords || !bDropoffMarker) {
+                alert('يرجى تثبيت نقطة الوصول على الخريطة أولاً.');
+                if (dInp) dInp.focus();
+                return;
             }
             var uid = localStorage.getItem('user_id') || 'cust-user';
             var uName = localStorage.getItem('user_fullname') || 'راكب توصيله';
@@ -5499,6 +5501,8 @@ window.setCleanMapTarget = function(target) {
                 saveBtn2.innerHTML = '<span>📌</span> <span>تأكيد وتثبيت المسار</span>' + fareHtml;
             }
             
+            var actPanel = document.getElementById('clean-bottom-sheet') || document.getElementById('clean-action-panel');
+            if (actPanel) actPanel.style.display = 'flex';
             var statusEl = document.getElementById('map-target-status');
             if (statusEl) {
                 statusEl.textContent = '📍 تم تثبيت المسار - جاهز للطلب';
@@ -6109,6 +6113,14 @@ window.setCleanMapTarget = function(target) {
             if (urlParams.get('openMap') === '1' || urlParams.get('showMap') === '1') {
                 window.openBookingApp(urlParams.get('tripType') || 'short');
             }
+            // Ask once on entry so the first booking opens at the user's real location.
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(pos) {
+                    bUserLat = pos.coords.latitude;
+                    bUserLon = pos.coords.longitude;
+                    bHasUserGps = true;
+                }, function() {}, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+            }
             try {
                 var savedRide = JSON.parse(localStorage.getItem('active_accepted_ride') || 'null');
                 if (savedRide && savedRide.id) {
@@ -6342,7 +6354,7 @@ window.setCleanMapTarget = function(target) {
      * Completes Driver Registration with Duplicate Prevention, Password Hashing, documents & route
      */
     async handleCompleteDriverRegistration(req, res, body) {
-        const { fullName, email, password, googleId, phoneNumber, vehicleMake, vehiclePlate, vehicleYear, licenseNumber, documents, route, governorate, serviceType } = body;
+        const { fullName, email, password, googleId, phoneNumber, vehicleMake, vehiclePlate, vehicleYear, vehicleType, licenseNumber, documents, route, governorate, serviceType } = body;
         if (!fullName || !phoneNumber || !password) {
             res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
             return res.end(JSON.stringify({ success: false, error: 'الاسم الكامل، رقم الهاتف، وكلمة المرور مطلوبة.' }));
@@ -6420,6 +6432,7 @@ window.setCleanMapTarget = function(target) {
             passwordHash,
             googleId: googleId || null,
             licenseNumber: finalLicenseNumber,
+            vehicleType: String(vehicleType || 'eco').toLowerCase() === 'vip' ? 'vip' : 'eco',
             vehicle: {
                 make: vehicleMake || 'تويوتا',
                 model: vehicleMake || 'كورولا',

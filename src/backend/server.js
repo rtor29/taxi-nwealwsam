@@ -1318,6 +1318,9 @@ async function startServer() {
             const lat = parseFloat(parsedUrl.searchParams.get('lat') || config.najafDefaults.latitude);
             const lon = parseFloat(parsedUrl.searchParams.get('lon') || config.najafDefaults.longitude);
             const tripType = parsedUrl.searchParams.get('tripType'); // 'short' or 'daily'
+            const requestedVehicleType = (parsedUrl.searchParams.get('vehicleType') || '').toLowerCase();
+            const normaliseVehicleType = (driver) =>
+                String(driver.vehicleType || driver.vehicleClass || driver.tier || 'eco').toLowerCase() === 'vip' ? 'vip' : 'eco';
             
             const toRad = (deg) => deg * Math.PI / 180;
             const haversine = (lat1, lon1, lat2, lon2) => {
@@ -1329,7 +1332,8 @@ async function startServer() {
             };
 
             const activeDrivers = (db.memoryState.drivers || [])
-                .filter(d => !d.isBlocked && d.isApproved === true)
+                .filter(d => !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' && d.status !== 'Suspended' && (d.isApproved === true || d.isVerified === true || d.status === 'Approved' || d.status === 'Active'))
+                .filter(d => !requestedVehicleType || normaliseVehicleType(d) === requestedVehicleType)
                 .filter(d => {
                     if (tripType === 'short') {
                         return d.work_mode ? d.work_mode === 'مشوار قصير' : (d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType);
@@ -1353,6 +1357,7 @@ async function startServer() {
                         phone: d.phoneNumber || '07800000000',
                         phoneNumber: d.phoneNumber || '07800000000',
                         rating: d.ratingAverage || 5.0,
+                        vehicleType: normaliseVehicleType(d),
                         serviceType: d.serviceType || 'Both',
                         vehicleInfo: `${vMake} ${vModel} (${vPlate})`.trim(),
                         carModel: `${vMake} ${vModel}`.trim(),
@@ -1451,15 +1456,15 @@ async function startServer() {
                 const isDriverVip = (d) => {
                     const vt = (d.vehicleType || d.vehicleClass || d.tier || '').toLowerCase();
                     if (vt === 'vip') return true;
+                    if (vt === 'eco' || vt === 'economy' || vt === 'توفير') return false;
                     if (d.isVip === true) return true;
-                    const y = parseInt(d.vehicleYear || (d.vehicle && d.vehicle.year) || 0, 10);
-                    return y >= 2021 && (d.ratingAverage || 5) >= 4.7;
+                    return false;
                 };
 
-                let tierCandidates = driverCandidates.filter(d => isVipTier ? isDriverVip(d) : true);
-                if (tierCandidates.length === 0) {
-                    tierCandidates = driverCandidates; // Graceful fallback to nearest driver
-                }
+                // A passenger must only be matched with the class they selected.
+                // Existing captains without a stored tier remain "توفير" for backwards compatibility.
+                const driverTier = (d) => isDriverVip(d) ? 'vip' : 'eco';
+                let tierCandidates = driverCandidates.filter(d => driverTier(d) === (isVipTier ? 'vip' : 'eco'));
 
                 let candidates = tierCandidates
                     .map(d => {
@@ -1472,14 +1477,12 @@ async function startServer() {
                     .sort((a, b) => a.dist - b.dist);
 
                 if (candidates.length === 0) {
-                    candidates = driverCandidates
-                        .map(d => {
-                            const dLat = d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : pLat);
-                            const dLon = d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : pLon);
-                            const dist = haversine(pLat, pLon, dLat, dLon);
-                            return { ...d, dist };
-                        })
-                        .sort((a, b) => a.dist - b.dist);
+                    return sendJson({
+                        success: false,
+                        error: isVipTier
+                            ? 'لا يوجد كابتن VIP متاح بالقرب منك حالياً.'
+                            : 'لا يوجد كابتن توفير متاح بالقرب منك حالياً.'
+                    }, 404);
                 }
 
                 const candidateDriverIds = candidates.map(c => c.driverId);
