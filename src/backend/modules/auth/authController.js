@@ -616,6 +616,27 @@ class AuthController {
     </div>
 
     <script>
+        window.showVehicleSelectionPanel = function() {
+            var actPanel = document.getElementById('clean-bottom-sheet') || document.getElementById('clean-action-panel');
+            if (actPanel) actPanel.style.display = 'none';
+            var vPanel = document.getElementById('vehicle-selection-panel');
+            if (vPanel) vPanel.style.display = 'block';
+            
+            // Change top right button to go back to Dropoff Selection
+            var topBtn = document.getElementById('btn-top-right-action');
+            if (topBtn) topBtn.setAttribute('onclick', 'window.closeVehicleSelection()');
+            
+            // Ensure fares are updated for Eco and VIP
+            var base = window.bRouteFare || 3000;
+            var ecoFare = Math.max(2000, Math.round(base / 250) * 250);
+            var vipFare = Math.max(3000, Math.round((base * 1.35) / 250) * 250);
+            var elEco = document.getElementById('fare-eco');
+            var elVip = document.getElementById('fare-vip');
+            if (elEco) elEco.innerText = ecoFare.toLocaleString() + ' د.ع';
+            if (elVip) elVip.innerText = vipFare.toLocaleString() + ' د.ع';
+            if (window.selectVehicleType) window.selectVehicleType(window.bSelectedVehicle || 'eco');
+        };
+
         window.handleCleanMapConfirm = function() {
             var target = window.bMapPickTarget || 'pickup';
             var center = window.bMap ? window.bMap.getCenter() : null;
@@ -628,32 +649,27 @@ class AuthController {
                 }
                 
                 window.setCleanMapTarget('dropoff');
+                // Auto-open destination search like Baly
+                setTimeout(function() {
+                    window.openFullscreenSearch('dropoff');
+                }, 250);
             } else {
-                if (center) {
-                    var inp = document.getElementById('book-dropoff-input');
-                    var val = inp && inp.value ? inp.value : "الموقع المحدد على الخريطة";
+                var dInp = document.getElementById('book-dropoff-input');
+                var dVal = dInp ? dInp.value.trim() : '';
+
+                // If user hasn't searched or selected a destination yet, open search first
+                if (!window.bDropoffCoords && !dVal) {
+                    window.openFullscreenSearch('dropoff');
+                    return;
+                }
+
+                if (center && (!window.bDropoffCoords || !dVal)) {
+                    var val = dVal || "الموقع المحدد على الخريطة";
                     if (window.setBookingDropoff) window.setBookingDropoff(center.lng, center.lat, val);
                 }
                 
-                // INSTEAD OF SAVING DIRECTLY, SHOW VEHICLE SELECTION
-                var actPanel = document.getElementById('clean-bottom-sheet') || document.getElementById('clean-action-panel');
-                if (actPanel) actPanel.style.display = 'none';
-                var vPanel = document.getElementById('vehicle-selection-panel');
-                if (vPanel) vPanel.style.display = 'block';
-                
-                // Change top right button to go back to Dropoff Selection
-                var topBtn = document.getElementById('btn-top-right-action');
-                if (topBtn) topBtn.setAttribute('onclick', 'window.closeVehicleSelection()');
-                
-                // Ensure fares are updated for Eco and VIP
-                var base = window.bRouteFare || 3000;
-                var ecoFare = Math.max(2000, Math.round(base / 250) * 250);
-                var vipFare = Math.max(3000, Math.round((base * 1.35) / 250) * 250);
-                var elEco = document.getElementById('fare-eco');
-                var elVip = document.getElementById('fare-vip');
-                if (elEco) elEco.innerText = ecoFare.toLocaleString() + ' د.ع';
-                if (elVip) elVip.innerText = vipFare.toLocaleString() + ' د.ع';
-                if (window.selectVehicleType) window.selectVehicleType(window.bSelectedVehicle || 'eco');
+                // Show vehicle selection (توفير / VIP)
+                window.showVehicleSelectionPanel();
             }
         };
 
@@ -805,10 +821,17 @@ class AuthController {
                 document.getElementById('book-pickup-input').value = name;
                 if(window.setBookingPickup) setBookingPickup(lon, lat, name);
                 if(window.setCleanMapTarget) setCleanMapTarget('dropoff');
+                setTimeout(function() {
+                    window.openFullscreenSearch('dropoff');
+                }, 250);
             } else {
                 document.getElementById('book-dropoff-input').value = name;
                 if(window.setBookingDropoff) setBookingDropoff(lon, lat, name);
                 if (window.bMap) window.bMap.easeTo({ center: [lon, lat], zoom: Math.max(window.bMap.getZoom(), 15), duration: 350 });
+                // Destination selected -> show vehicle options (توفير / VIP)
+                setTimeout(function() {
+                    if (window.showVehicleSelectionPanel) window.showVehicleSelectionPanel();
+                }, 350);
             }
         };
         // ------------------------------------------
@@ -4929,6 +4952,16 @@ window.setCleanMapTarget = function(target) {
                 // Update floating save button fare badge
                 var fareSpan = document.getElementById('floating-btn-fare');
                 if (fareSpan) { fareSpan.style.display = 'inline'; fareSpan.textContent = bRouteFare.toLocaleString() + ' د.ع'; }
+
+                // Update vehicle panel fares dynamically
+                var baseFare = bRouteFare || 3000;
+                var ecoFare = Math.max(2000, Math.round(baseFare / 250) * 250);
+                var vipFare = Math.max(3000, Math.round((baseFare * 1.35) / 250) * 250);
+                var elEco = document.getElementById('fare-eco');
+                var elVip = document.getElementById('fare-vip');
+                if (elEco) elEco.innerText = ecoFare.toLocaleString() + ' د.ع';
+                if (elVip) elVip.innerText = vipFare.toLocaleString() + ' د.ع';
+                if (window.selectVehicleType) window.selectVehicleType(window.bSelectedVehicle || 'eco');
 
                 var sideInfo = document.getElementById('side-route-summary');
                 if (sideInfo) {
