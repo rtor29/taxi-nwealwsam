@@ -1468,7 +1468,7 @@ async function poll() {
 }
 
 function startBot() {
-    if (pollingActive) return;
+    if (process.env.TELEGRAM_BOT_ENABLED === 'false' || !BOT_TOKEN || pollingActive) return;
     pollingActive = true;
     console.log('[TelegramBot] Started polling...');
     // Delete webhook first (in case one exists)

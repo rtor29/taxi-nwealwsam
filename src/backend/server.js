@@ -1624,6 +1624,13 @@ async function startServer() {
                     r.status = 'Accepted';
                     r.acceptedDriverId = driverId;
                     r.acceptedAt = new Date().toISOString();
+                    const targetDriver = (db.memoryState.drivers || []).find(d => d.driverId === driverId);
+                    if (targetDriver) {
+                        r.assignedDriverId = driverId;
+                        r.assignedDriverName = targetDriver.fullName || 'كابتن توصيله';
+                        r.assignedDriverPhone = targetDriver.phoneNumber || '';
+                        r.assignedDriverVehicle = `${targetDriver.vehicleMake||'تويوتا'} ${targetDriver.vehicleModel||'كورولا'}`;
+                    }
                     db.saveStateSnapshot();
                     return sendJson({ success: true, message: 'تم قبول المشوار بنجاح!', request: r });
                 } else {
@@ -1737,9 +1744,8 @@ async function startServer() {
         if (pathname.startsWith('/api/driver/') && pathname.endsWith('/pending-requests') && method === 'GET') {
             const parts = pathname.split('/');
             const driverId = parts[parts.length - 2];
-            const now = Date.now();
             const list = (db.memoryState.rideRequests || []).filter(r => 
-                r.status === 'Pending' && r.assignedDriverId === driverId && now < r.stepTimeoutAt
+                r.status === 'Pending' && (r.assignedDriverId === driverId || (r.candidateDriverIds && r.candidateDriverIds.includes(driverId)) || !r.assignedDriverId)
             );
             return sendJson({ success: true, requests: list });
         }
@@ -1748,11 +1754,39 @@ async function startServer() {
         if (pathname === '/api/driver/toggle-online' && method === 'POST') {
             try {
                 const body = await parseJsonBody(req);
-                const { driverId, isOnline } = body;
-                const driver = (db.memoryState.drivers || []).find(d => d.driverId === driverId);
+                const { driverId, isOnline, driverName, driverPhone, latitude, longitude } = body;
+                let driver = (db.memoryState.drivers || []).find(d => d.driverId === driverId);
+                if (!driver && driverId) {
+                    driver = {
+                        driverId,
+                        fullName: driverName || 'كابتن توصيله',
+                        phoneNumber: driverPhone || '',
+                        status: isOnline ? 'Online' : 'Offline',
+                        isOnline: !!isOnline,
+                        isVerified: true,
+                        isApproved: true,
+                        serviceType: 'Both',
+                        vehicleMake: 'تويوتا',
+                        vehicleModel: 'كورولا',
+                        vehiclePlate: 'النجف',
+                        ratingAverage: 5.0,
+                        currentLat: latitude || 32.0298,
+                        currentLon: longitude || 44.3285,
+                        latitude: latitude || 32.0298,
+                        longitude: longitude || 44.3285
+                    };
+                    db.memoryState.drivers = db.memoryState.drivers || [];
+                    db.memoryState.drivers.unshift(driver);
+                }
                 if (driver) {
                     driver.status = isOnline ? 'Online' : 'Offline';
                     driver.isOnline = !!isOnline;
+                    if (latitude && longitude) {
+                        driver.currentLat = latitude;
+                        driver.currentLon = longitude;
+                        driver.latitude = latitude;
+                        driver.longitude = longitude;
+                    }
                     db.saveStateSnapshot();
                     return sendJson({ success: true, driverId, status: driver.status, isOnline: driver.isOnline });
                 }
@@ -3017,7 +3051,7 @@ async function startServer() {
         return serveCompressedFile(dashFile, req, res);
     });
 
-    server.listen(config.port, () => {
+    server.listen(config.port, process.env.HOST || '0.0.0.0', () => {
         console.log(`\n========================================================`);
         console.log(`🚖 Taxi-Wisam Unified Web Server (PostgreSQL Engine)`);
         console.log(`🔗 Port:          ${config.port}`);
