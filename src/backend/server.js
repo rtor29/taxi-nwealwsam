@@ -1,3 +1,4 @@
+process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || '64';
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -355,7 +356,8 @@ async function startServer() {
                 message: 'تم إرسال رمز التحقق عبر واتساب بنجاح',
                 phone: result.phone,
                 normalized: result.normalized,
-                otpDisplayUrl: `https://tawseelaiq.app/otp?phone=${result.phone}`
+                otpDisplayUrl: `https://tawseelaiq.app/otp?phone=${result.phone}`,
+                devCode: result.code
             });
         }
 

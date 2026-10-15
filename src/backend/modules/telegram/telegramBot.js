@@ -1462,8 +1462,16 @@ async function poll() {
             }
         }
     } catch (e) {
-        console.error('[TelegramBot] Poll error:', e.message);
+        if (!global._tgPollErrorCount) global._tgPollErrorCount = 0;
+        global._tgPollErrorCount++;
+        if (global._tgPollErrorCount <= 2 || global._tgPollErrorCount % 20 === 0) {
+            console.error('[TelegramBot] Poll error:', e.message);
+        }
+        const delay = global._tgPollErrorCount > 3 ? 30000 : 3000;
+        if (pollingActive) setTimeout(poll, delay);
+        return;
     }
+    global._tgPollErrorCount = 0;
     if (pollingActive) setTimeout(poll, 1000);
 }
 
