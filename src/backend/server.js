@@ -1338,10 +1338,10 @@ async function startServer() {
                 .filter(d => !requestedVehicleType || normaliseVehicleType(d) === requestedVehicleType)
                 .filter(d => {
                     if (tripType === 'short') {
-                        return d.work_mode ? d.work_mode === 'مشوار قصير' : (d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType);
+                        return d.work_mode === 'مشوار قصير' || d.serviceType === 'ShortTrip';
                     }
                     if (tripType === 'daily') {
-                        return (d.permanentLat && d.permanentLon) || (d.route && d.route.length > 0) || (d.work_mode ? d.work_mode === 'خط دائمي' : (d.serviceType === 'PermanentLine' || d.serviceType === 'Both' || !d.serviceType));
+                        return d.work_mode === 'خط دائمي' || d.serviceType === 'PermanentLine' || d.serviceType === 'Both' || (d.permanentLat && d.permanentLon) || (d.route && d.route.length > 0) || !d.work_mode;
                     }
                     return true;
                 })

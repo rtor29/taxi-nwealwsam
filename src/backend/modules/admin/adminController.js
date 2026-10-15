@@ -1014,8 +1014,7 @@ class AdminController {
             vehicleYear: vYear,
             vehiclePlate: vPlate,
             vehicleColor: vehicleColor || 'أبيض',
-            vehicleType: String(vehicleType || 'eco').toLowerCase() === 'vip' ? 'vip' : 'eco',
-            serviceType: serviceType || 'both',
+            serviceType: (serviceType === 'daily' || serviceType === 'short') ? 'ShortTrip' : (serviceType === 'both' ? 'Both' : 'PermanentLine'),
             availableSeats: parseInt(availableSeats || (route && route.availableSeats) || 4, 10),
             totalSeats: parseInt(availableSeats || (route && route.availableSeats) || 4, 10),
             status: 'Approved',
@@ -1083,7 +1082,7 @@ class AdminController {
             newDriver.permanentDropoffName = endName;
             newDriver.route = `${startName} ➔ ${endName}`;
             newDriver.work_mode = 'خط دائمي';
-            newDriver.serviceType = 'Both';
+            newDriver.serviceType = (serviceType === 'daily' || serviceType === 'short') ? 'ShortTrip' : (serviceType === 'both' ? 'Both' : 'PermanentLine');
 
             db.memoryState.permanentRoutes = db.memoryState.permanentRoutes || [];
             db.memoryState.permanentRoutes.unshift({
