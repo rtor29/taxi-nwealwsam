@@ -29,17 +29,26 @@ function _rateLimit(key, maxRequests = 60, windowMs = 60000) {
 // Dedicated namespaced rate limiters
 function _authRateLimit(ip) { 
     if (!ip || ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') return false;
-    return _rateLimit(`auth:${ip}`, 30, 60000); 
+    return _rateLimit(`auth:${ip}`, 10, 60000); 
 }
 
 function _otpRateLimit(phone, ip) {
     const cleanP = String(phone || '').replace(/[^0-9]/g, '');
-    if (cleanP && _rateLimit(`otp_phone:${cleanP}`, 6, 600000)) {
+    if (cleanP && _rateLimit(`otp_phone:${cleanP}`, 3, 600000)) {
         return true;
     }
     if (ip && ip !== '127.0.0.1' && ip !== '::1' && ip !== '::ffff:127.0.0.1') {
-        if (_rateLimit(`otp_ip:${ip}`, 30, 600000)) return true;
+        if (_rateLimit(`otp_ip:${ip}`, 10, 600000)) return true;
     }
+    return false;
+}
+
+function _orderRateLimit(ip, identifier) {
+    if (identifier && _rateLimit(`order_id:${identifier}`, 6, 60000)) return true;
+    if (ip && ip !== '127.0.0.1' && ip !== '::1' && ip !== '::ffff:127.0.0.1') {
+        if (_rateLimit(`order_ip:${ip}`, 6, 60000)) return true;
+    }
+    return false;
 }
 
 // Helper to verify if a driver is currently online and active (not idle, not offline, approved)
@@ -186,12 +195,12 @@ async function startServer() {
             return res.end();
         }
 
-        // ---[ Global Rate Limit: 300 req/min per IP ]---
+        // ---[ Global Rate Limit: 120 req/min per IP ]---
         const clientIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
         if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1' && clientIp !== '::ffff:127.0.0.1') {
-            if (_rateLimit(`req:${clientIp}`, 300, 60000)) {
+            if (_rateLimit(`req:${clientIp}`, 120, 60000)) {
                 res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '60' });
-                return res.end(JSON.stringify({ success: false, error: 'Too Many Requests - حاول بعد دقيقة' }));
+                return res.end(JSON.stringify({ success: false, error: 'Too Many Requests - تجاوزت الحد المسموح، يرجى المحاولة بعد دقيقة' }));
             }
         }
 
@@ -1442,6 +1451,14 @@ async function startServer() {
                     vehicleType = 'eco'
                 } = body;
 
+                // Rate limiting on ride requests
+                if (_orderRateLimit(clientIp, customerId || customerPhone)) {
+                    return sendJson({
+                        success: false,
+                        error: '⚠️ لقد أرسلت طلبات كثيرة في وقت قصير. يرجى الانتظار دقيقة قبل إرسال طلب جديد.'
+                    }, 429);
+                }
+
                 // Check if passenger already has an active accepted/arrived ride
                 const activeExisting = (db.memoryState.rideRequests || []).find(r =>
                     (r.customerId === customerId || (customerPhone && r.customerPhone === customerPhone)) &&
@@ -2119,6 +2136,12 @@ async function startServer() {
                 if (!driverId || !passengerId) {
                     return sendJson({ success: false, error: 'driverId and passengerId are required' }, 400);
                 }
+                if (_orderRateLimit(clientIp, passengerId || passengerPhone)) {
+                    return sendJson({
+                        success: false,
+                        error: '⚠️ لقد أرسلت طلبات حجز كثيرة في وقت قصير. يرجى الانتظار دقيقة قبل المحاولة مجدداً.'
+                    }, 429);
+                }
                 const result = await db.executeAtomicBooking({
                     driverId,
                     passengerId,
@@ -2394,6 +2417,13 @@ async function startServer() {
         // Customer Book Route Endpoint
         if ((pathname === '/api/customer/book-route' || pathname === '/api/bookings' || pathname === '/bookings') && method === 'POST') {
             const body = await parseJsonBody(req);
+            const userIdentifier = body.customerId || body.passengerPhone || body.phone || body.userId;
+            if (_orderRateLimit(clientIp, userIdentifier)) {
+                return sendJson({
+                    success: false,
+                    error: '⚠️ لقد أرسلت طلبات حجز كثيرة في وقت قصير. يرجى الانتظار دقيقة قبل المحاولة مجدداً.'
+                }, 429);
+            }
             const routeId = body.routeId || body.driverRouteId;
             let targetRoute = (db.memoryState.routes || []).find(r => (r.id === routeId || r.routeId === routeId));
             
