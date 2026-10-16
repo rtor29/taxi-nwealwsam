@@ -1836,11 +1836,18 @@ async function startServer() {
         // Driver Current Active Accepted Ride
         if (pathname.startsWith('/api/driver/') && pathname.endsWith('/active-ride') && method === 'GET') {
             const parts = pathname.split('/');
-            const driverId = parts[parts.length - 2];
-            const active = (db.memoryState.rideRequests || []).find(r => 
-                (r.acceptedDriverId === driverId || r.assignedDriverId === driverId) &&
-                (r.status === 'Accepted' || r.status === 'Arrived' || r.status === 'InProgress')
+            const rawParam = decodeURIComponent(parts[parts.length - 2]);
+            const cleanPhone = rawParam.replace(/[^0-9]/g, '');
+            const matchedDriver = (db.memoryState.drivers || []).find(d => 
+                d.driverId === rawParam || d.id === rawParam || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
             );
+            const targetDriverId = matchedDriver ? matchedDriver.driverId : rawParam;
+
+            const active = (db.memoryState.rideRequests || []).find(r => {
+                const isDriver = r.acceptedDriverId === targetDriverId || r.assignedDriverId === targetDriverId || r.acceptedDriverId === rawParam || r.assignedDriverId === rawParam;
+                const isActive = r.status === 'Accepted' || r.status === 'Arrived' || r.status === 'InProgress' || r.status === 'Pending';
+                return isDriver && isActive;
+            });
             return sendJson({ success: true, activeRide: active || null });
         }
 

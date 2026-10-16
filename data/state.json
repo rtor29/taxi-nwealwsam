@@ -14,8 +14,8 @@
       "vehiclePlate": "sofa",
       "vehicleColor": "أبيض",
       "serviceType": "Both",
-      "work_mode": "مشوار قصير",
-      "workStatus": "taxi",
+      "work_mode": "خط دائمي",
+      "workStatus": "permanent",
       "availableSeats": 1,
       "totalSeats": 1,
       "status": "Online",
@@ -73,7 +73,7 @@
       ],
       "isApproved": true,
       "heading": 0,
-      "lastLocationUpdate": "2026-10-16T15:35:14.220Z"
+      "lastLocationUpdate": "2026-10-16T16:21:22.165Z"
     },
     {
       "driverId": "drv-ue9560v2y",
@@ -1240,35 +1240,56 @@
   ],
   "rideRequests": [
     {
-      "id": "ride-4phcpi62z",
-      "customerId": "test-cust-1792165552264",
-      "customerName": "فاحص النظام",
-      "customerPhone": "07709998877",
+      "id": "ride-hssi9mjwq",
+      "customerId": "test-cust-1792169682196",
+      "customerName": "راكب فاحص",
+      "customerPhone": "07701112233",
       "pickupName": "شارع الكوفة",
       "pickupLat": 32.02,
       "pickupLon": 44.34,
-      "dropoffName": "جامعة الكوفة",
-      "dropoffLat": 32.04,
-      "dropoffLon": 44.36,
-      "fare": 3500,
+      "dropoffName": "المدينة القديمة",
+      "dropoffLat": 32.03,
+      "dropoffLon": 44.35,
+      "fare": 3000,
       "vehicleType": "توفير",
-      "distanceKm": 4.5,
-      "durationMins": 12,
+      "distanceKm": 3.5,
+      "durationMins": 10,
       "status": "Cancelled",
       "candidateDriverIds": [
-        "drv-dzb52n1ul",
         "drv-ue9560v2y"
       ],
       "currentDriverIndex": 0,
-      "assignedDriverId": "drv-dzb52n1ul",
-      "assignedDriverName": "سايق 10000",
-      "assignedDriverPhone": "07706204088",
+      "assignedDriverId": "drv-ue9560v2y",
+      "assignedDriverName": "سايق ١١",
+      "assignedDriverPhone": "٠٧٧٠٦٢٠٤٠٠٠",
       "assignedDriverVehicle": "er2w er2w",
-      "requestedAt": 1792165552279,
-      "stepTimeoutAt": 1792165582279,
+      "requestedAt": 1792169682209,
+      "stepTimeoutAt": 1792169712209,
       "history": [],
-      "cancelReason": "فحص النظام",
-      "cancelledAt": "2026-10-16T15:45:52.283Z"
+      "cancelReason": "انتهاء الفحص",
+      "cancelledAt": "2026-10-16T16:54:42.218Z"
+    }
+  ],
+  "chatMessages": [
+    {
+      "id": "msg-1792169682215-5v2y23",
+      "requestId": "ride-hssi9mjwq",
+      "senderId": "test-cust-1792169682196",
+      "senderRole": "Customer",
+      "senderName": "راكب فاحص",
+      "text": "أنا عند الباب كابتن 🚪",
+      "createdAt": "2026-10-16T16:54:42.215Z",
+      "timestamp": "2026-10-16T16:54:42.215Z"
+    },
+    {
+      "id": "msg-1792169682217-gulpqo",
+      "requestId": "ride-hssi9mjwq",
+      "senderId": "drv-ue9560v2y",
+      "senderRole": "Driver",
+      "senderName": "الكابتن",
+      "text": "تمام يا هلا، دقيقة وأكون عندك 🚖",
+      "createdAt": "2026-10-16T16:54:42.217Z",
+      "timestamp": "2026-10-16T16:54:42.217Z"
     }
   ],
   "stats": {
