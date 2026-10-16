@@ -1650,6 +1650,21 @@ async function startServer() {
                         r.assignedDriverPhone = targetDriver.phoneNumber || '';
                         r.assignedDriverVehicle = `${targetDriver.vehicleMake||'تويوتا'} ${targetDriver.vehicleModel||'كورولا'}`;
                     }
+
+                    // Initial welcome chat message
+                    db.memoryState.chatMessages = db.memoryState.chatMessages || [];
+                    const initMsg = {
+                        id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+                        requestId: r.id,
+                        senderId: driverId,
+                        senderRole: 'Driver',
+                        senderName: r.assignedDriverName || 'الكابتن',
+                        text: `مرحباً بك! أنا الكابتن ${r.assignedDriverName || ''} قبلت طلبك وأنا في طريقي إليك الآن 🚖`,
+                        createdAt: new Date().toISOString(),
+                        timestamp: new Date().toISOString()
+                    };
+                    db.memoryState.chatMessages.push(initMsg);
+
                     db.saveStateSnapshot();
                     return sendJson({ success: true, message: 'تم قبول المشوار بنجاح!', request: r });
                 } else {
@@ -1707,7 +1722,62 @@ async function startServer() {
                     console.error('[RideArrived] Telegram notify error:', tgErr.message);
                 }
 
+                // Send in-app chat arrival message from driver to passenger
+                db.memoryState.chatMessages = db.memoryState.chatMessages || [];
+                const arrivalMsg = {
+                    id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+                    requestId: r.id,
+                    senderId: driverId || r.assignedDriverId || 'driver',
+                    senderRole: 'Driver',
+                    senderName: r.assignedDriverName || 'الكابتن',
+                    text: '🚖 وصلت إلى موقعك الآن وأنا في انتظارك عند نقطة الانطلاق! 📍',
+                    isAutoArrival: true,
+                    createdAt: new Date().toISOString(),
+                    timestamp: new Date().toISOString()
+                };
+                db.memoryState.chatMessages.push(arrivalMsg);
+                db.saveStateSnapshot();
+
                 return sendJson({ success: true, message: 'تم إشعار الراكب بوصولك إلى الموقع 📍', request: r });
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // IN-APP CHAT (Passenger & Driver)
+        // ---------------------------------------------------------------------
+        if (pathname === '/api/chat/messages' && method === 'GET') {
+            const requestId = parsedUrl.searchParams.get('requestId');
+            if (!requestId) {
+                return sendJson({ success: false, error: 'requestId is required' }, 400);
+            }
+            const allMessages = db.memoryState.chatMessages || [];
+            const messages = allMessages.filter(m => m.requestId === requestId);
+            return sendJson({ success: true, messages });
+        }
+
+        if (pathname === '/api/chat/send' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const { requestId, senderId, senderRole, senderName, text } = body;
+                if (!requestId || !text || !text.trim()) {
+                    return sendJson({ success: false, error: 'requestId and text are required' }, 400);
+                }
+                db.memoryState.chatMessages = db.memoryState.chatMessages || [];
+                const newMsg = {
+                    id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+                    requestId,
+                    senderId: senderId || 'user',
+                    senderRole: senderRole || 'Customer',
+                    senderName: senderName || (senderRole === 'Driver' ? 'الكابتن' : 'الراكب'),
+                    text: text.trim(),
+                    createdAt: new Date().toISOString(),
+                    timestamp: new Date().toISOString()
+                };
+                db.memoryState.chatMessages.push(newMsg);
+                db.saveStateSnapshot();
+                return sendJson({ success: true, message: newMsg });
             } catch (err) {
                 return sendJson({ success: false, error: err.message }, 500);
             }
