@@ -1640,12 +1640,16 @@ async function startServer() {
                 if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
 
                 if (action === 'accept') {
+                    const cleanPhone = String(driverId || '').replace(/[^0-9]/g, '');
+                    const targetDriver = (db.memoryState.drivers || []).find(d => 
+                        d.driverId === driverId || d.id === driverId || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
+                    );
+                    const actualDriverId = targetDriver ? targetDriver.driverId : driverId;
                     r.status = 'Accepted';
-                    r.acceptedDriverId = driverId;
+                    r.acceptedDriverId = actualDriverId;
                     r.acceptedAt = new Date().toISOString();
-                    const targetDriver = (db.memoryState.drivers || []).find(d => d.driverId === driverId);
                     if (targetDriver) {
-                        r.assignedDriverId = driverId;
+                        r.assignedDriverId = actualDriverId;
                         r.assignedDriverName = targetDriver.fullName || 'كابتن توصيله';
                         r.assignedDriverPhone = targetDriver.phoneNumber || '';
                         r.assignedDriverVehicle = `${targetDriver.vehicleMake||'تويوتا'} ${targetDriver.vehicleModel||'كورولا'}`;
@@ -1845,7 +1849,7 @@ async function startServer() {
 
             const active = (db.memoryState.rideRequests || []).find(r => {
                 const isDriver = r.acceptedDriverId === targetDriverId || r.assignedDriverId === targetDriverId || r.acceptedDriverId === rawParam || r.assignedDriverId === rawParam;
-                const isActive = r.status === 'Accepted' || r.status === 'Arrived' || r.status === 'InProgress' || r.status === 'Pending';
+                const isActive = r.status === 'Accepted' || r.status === 'Arrived' || r.status === 'InProgress';
                 return isDriver && isActive;
             });
             return sendJson({ success: true, activeRide: active || null });
@@ -1854,9 +1858,20 @@ async function startServer() {
         // Driver Pending Requests List
         if (pathname.startsWith('/api/driver/') && pathname.endsWith('/pending-requests') && method === 'GET') {
             const parts = pathname.split('/');
-            const driverId = parts[parts.length - 2];
+            const rawParam = decodeURIComponent(parts[parts.length - 2]);
+            const cleanPhone = rawParam.replace(/[^0-9]/g, '');
+            const matchedDriver = (db.memoryState.drivers || []).find(d => 
+                d.driverId === rawParam || d.id === rawParam || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
+            );
+            const targetDriverId = matchedDriver ? matchedDriver.driverId : rawParam;
+
             const list = (db.memoryState.rideRequests || []).filter(r => 
-                r.status === 'Pending' && (r.assignedDriverId === driverId || (r.candidateDriverIds && r.candidateDriverIds.includes(driverId)) || !r.assignedDriverId)
+                r.status === 'Pending' && (
+                    r.assignedDriverId === targetDriverId || 
+                    r.assignedDriverId === rawParam || 
+                    (r.candidateDriverIds && (r.candidateDriverIds.includes(targetDriverId) || r.candidateDriverIds.includes(rawParam))) || 
+                    !r.assignedDriverId
+                )
             );
             return sendJson({ success: true, requests: list });
         }

@@ -14,8 +14,8 @@
       "vehiclePlate": "sofa",
       "vehicleColor": "أبيض",
       "serviceType": "Both",
-      "work_mode": "خط دائمي",
-      "workStatus": "permanent",
+      "work_mode": "مشوار قصير",
+      "workStatus": "taxi",
       "availableSeats": 1,
       "totalSeats": 1,
       "status": "Online",
@@ -73,7 +73,7 @@
       ],
       "isApproved": true,
       "heading": 0,
-      "lastLocationUpdate": "2026-10-16T16:21:22.165Z"
+      "lastLocationUpdate": "2026-10-16T17:00:10.756Z"
     },
     {
       "driverId": "drv-ue9560v2y",
@@ -1240,8 +1240,8 @@
   ],
   "rideRequests": [
     {
-      "id": "ride-hssi9mjwq",
-      "customerId": "test-cust-1792169682196",
+      "id": "ride-rsj6risu4",
+      "customerId": "test-cust-1792170893495",
       "customerName": "راكب فاحص",
       "customerPhone": "07701112233",
       "pickupName": "شارع الكوفة",
@@ -1256,40 +1256,33 @@
       "durationMins": 10,
       "status": "Cancelled",
       "candidateDriverIds": [
+        "drv-dzb52n1ul",
         "drv-ue9560v2y"
       ],
       "currentDriverIndex": 0,
-      "assignedDriverId": "drv-ue9560v2y",
-      "assignedDriverName": "سايق ١١",
-      "assignedDriverPhone": "٠٧٧٠٦٢٠٤٠٠٠",
+      "assignedDriverId": "drv-dzb52n1ul",
+      "assignedDriverName": "سايق 10000",
+      "assignedDriverPhone": "07706204088",
       "assignedDriverVehicle": "er2w er2w",
-      "requestedAt": 1792169682209,
-      "stepTimeoutAt": 1792169712209,
+      "requestedAt": 1792170893513,
+      "stepTimeoutAt": 1792170923513,
       "history": [],
+      "acceptedDriverId": "drv-dzb52n1ul",
+      "acceptedAt": "2026-10-16T17:14:53.520Z",
       "cancelReason": "انتهاء الفحص",
-      "cancelledAt": "2026-10-16T16:54:42.218Z"
+      "cancelledAt": "2026-10-16T17:14:53.523Z"
     }
   ],
   "chatMessages": [
     {
-      "id": "msg-1792169682215-5v2y23",
-      "requestId": "ride-hssi9mjwq",
-      "senderId": "test-cust-1792169682196",
-      "senderRole": "Customer",
-      "senderName": "راكب فاحص",
-      "text": "أنا عند الباب كابتن 🚪",
-      "createdAt": "2026-10-16T16:54:42.215Z",
-      "timestamp": "2026-10-16T16:54:42.215Z"
-    },
-    {
-      "id": "msg-1792169682217-gulpqo",
-      "requestId": "ride-hssi9mjwq",
-      "senderId": "drv-ue9560v2y",
+      "id": "msg-1792170893520-56qvng",
+      "requestId": "ride-rsj6risu4",
+      "senderId": "drv-dzb52n1ul",
       "senderRole": "Driver",
-      "senderName": "الكابتن",
-      "text": "تمام يا هلا، دقيقة وأكون عندك 🚖",
-      "createdAt": "2026-10-16T16:54:42.217Z",
-      "timestamp": "2026-10-16T16:54:42.217Z"
+      "senderName": "سايق 10000",
+      "text": "مرحباً بك! أنا الكابتن سايق 10000 قبلت طلبك وأنا في طريقي إليك الآن 🚖",
+      "createdAt": "2026-10-16T17:14:53.520Z",
+      "timestamp": "2026-10-16T17:14:53.520Z"
     }
   ],
   "stats": {
