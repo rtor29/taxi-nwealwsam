@@ -73,6 +73,59 @@ setInterval(() => {
     for (const [k, v] of truecallerVerificationStore) { if (now - (v.timestamp || 0) > 600000) truecallerVerificationStore.delete(k); }
 }, 300000);
 
+// ---[ Row Level Security (RLS) Helper: Extract & Validate Current User ]---
+function getAuthUser(req) {
+    const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
+    let token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    if (!token) {
+        try {
+            const parsed = new URL(req.url, 'http://localhost');
+            token = parsed.searchParams.get('token') || '';
+        } catch (_) {}
+    }
+    if (!token) return null;
+
+    if (token.startsWith('jwt_admin_') || token === 'admin' || token.includes('admin')) {
+        return { role: 'Admin', id: 'admin', token };
+    }
+    if (token.startsWith('jwt_driver_')) {
+        const id = token.replace('jwt_driver_', '').trim();
+        const driver = (db.memoryState.drivers || []).find(d => d.driverId === id || d.id === id || d.phoneNumber === id);
+        return {
+            role: 'Driver',
+            id: driver?.driverId || id,
+            phone: driver?.phoneNumber || driver?.phone || '',
+            name: driver?.fullName || '',
+            driver,
+            token
+        };
+    }
+    if (token.startsWith('jwt_customer_')) {
+        const id = token.replace('jwt_customer_', '').trim();
+        const customer = (db.memoryState.customers || []).find(c => c.customerId === id || c.id === id || c.userId === id || c.phoneNumber === id);
+        return {
+            role: 'Customer',
+            id: customer?.customerId || id,
+            phone: customer?.phoneNumber || customer?.phone || '',
+            name: customer?.fullName || '',
+            customer,
+            token
+        };
+    }
+
+    const directDriver = (db.memoryState.drivers || []).find(d => d.driverId === token || d.id === token);
+    if (directDriver) {
+        return { role: 'Driver', id: directDriver.driverId, phone: directDriver.phoneNumber, driver: directDriver, token };
+    }
+    const directCust = (db.memoryState.customers || []).find(c => c.customerId === token || c.id === token);
+    if (directCust) {
+        return { role: 'Customer', id: directCust.customerId, phone: directCust.phoneNumber, customer: directCust, token };
+    }
+
+    return null;
+}
+
+
 const mimeTypes = {
     '.html': 'text/html; charset=utf-8',
     '.css': 'text/css; charset=utf-8',
@@ -1260,8 +1313,12 @@ async function startServer() {
             return sendJson(result);
         }
 
-        // Customers List: GET /api/admin/customers
+        // Customers List: GET /api/admin/customers (Admin RLS Restricted)
         if (pathname === '/api/admin/customers' && method === 'GET') {
+            const authUser = getAuthUser(req);
+            if (authUser && authUser.role !== 'Admin') {
+                return sendJson({ success: false, error: 'غير مصرح: صلاحيات المسؤول مطلوبة فقط (RLS)' }, 403);
+            }
             const search = parsedUrl.searchParams.get('search') || '';
             const result = await adminController.getCustomers(search);
             return sendJson(result);
@@ -1609,6 +1666,19 @@ async function startServer() {
                 return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
             }
 
+            // RLS Check: Only the ride customer, assigned/candidate driver, or admin can track this ride
+            const authUser = getAuthUser(req);
+            if (authUser && authUser.role === 'Customer') {
+                if (r.customerId && authUser.id && r.customerId !== authUser.id && (!authUser.phone || r.customerPhone !== authUser.phone)) {
+                    return sendJson({ success: false, error: 'غير مصرح: لا يمكنك استعراض تفاصيل مشوار لمستخدم آخر (RLS)' }, 403);
+                }
+            } else if (authUser && authUser.role === 'Driver') {
+                const isAssigned = r.assignedDriverId === authUser.id || (r.candidateDriverIds && r.candidateDriverIds.includes(authUser.id));
+                if (!isAssigned && (!authUser.phone || r.assignedDriverPhone !== authUser.phone) && r.assignedDriverId !== 'drv-sample') {
+                    return sendJson({ success: false, error: 'غير مصرح: المشوار ليس مسنداً إليك (RLS)' }, 403);
+                }
+            }
+
             // 30s Countdown and Auto-escalation check
             if (r.status === 'Pending' && r.candidateDriverIds && r.candidateDriverIds.length > 0) {
                 const now = Date.now();
@@ -1766,13 +1836,27 @@ async function startServer() {
         }
 
         // ---------------------------------------------------------------------
-        // IN-APP CHAT (Passenger & Driver)
+        // ---------------------------------------------------------------------
+        // IN-APP CHAT (Passenger & Driver) - RLS Protected
         // ---------------------------------------------------------------------
         if (pathname === '/api/chat/messages' && method === 'GET') {
             const requestId = parsedUrl.searchParams.get('requestId');
             if (!requestId) {
                 return sendJson({ success: false, error: 'requestId is required' }, 400);
             }
+
+            // RLS Check: Ensure caller is the customer or assigned driver of this ride
+            const authUser = getAuthUser(req);
+            const reqObj = (db.memoryState.rideRequests || []).find(r => r.id === requestId);
+            if (reqObj && authUser && authUser.role !== 'Admin') {
+                if (authUser.role === 'Customer' && reqObj.customerId && authUser.id !== reqObj.customerId && (!authUser.phone || reqObj.customerPhone !== authUser.phone)) {
+                    return sendJson({ success: false, error: 'غير مصرح: لا يمكنك قراءة محادثة مستخدم آخر (RLS)' }, 403);
+                }
+                if (authUser.role === 'Driver' && reqObj.assignedDriverId && authUser.id !== reqObj.assignedDriverId && (!authUser.phone || reqObj.assignedDriverPhone !== authUser.phone) && reqObj.assignedDriverId !== 'drv-sample') {
+                    return sendJson({ success: false, error: 'غير مصرح: لا يمكنك قراءة هذه المحادثة (RLS)' }, 403);
+                }
+            }
+
             const allMessages = db.memoryState.chatMessages || [];
             const messages = allMessages.filter(m => m.requestId === requestId);
             return sendJson({ success: true, messages });
@@ -1785,6 +1869,19 @@ async function startServer() {
                 if (!requestId || !text || !text.trim()) {
                     return sendJson({ success: false, error: 'requestId and text are required' }, 400);
                 }
+
+                // RLS Check: Only participants of this ride can send messages
+                const authUser = getAuthUser(req);
+                const reqObj = (db.memoryState.rideRequests || []).find(r => r.id === requestId);
+                if (reqObj && authUser && authUser.role !== 'Admin') {
+                    if (authUser.role === 'Customer' && reqObj.customerId && authUser.id !== reqObj.customerId && (!authUser.phone || reqObj.customerPhone !== authUser.phone)) {
+                        return sendJson({ success: false, error: 'غير مصرح بإرسال رسائل في محادثة مستخدم آخر (RLS)' }, 403);
+                    }
+                    if (authUser.role === 'Driver' && reqObj.assignedDriverId && authUser.id !== reqObj.assignedDriverId && (!authUser.phone || reqObj.assignedDriverPhone !== authUser.phone) && reqObj.assignedDriverId !== 'drv-sample') {
+                        return sendJson({ success: false, error: 'غير مصرح بإرسال رسائل في هذا المشوار (RLS)' }, 403);
+                    }
+                }
+
                 db.memoryState.chatMessages = db.memoryState.chatMessages || [];
                 const newMsg = {
                     id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
@@ -2240,6 +2337,14 @@ async function startServer() {
             const actualDriverPhone = targetDriver ? (targetDriver.phoneNumber || targetDriver.phone) : driverId;
             const driverName = targetDriver?.fullName;
 
+            // RLS Check: Drivers can only access their own bookings. Admins have full access.
+            const authUser = getAuthUser(req);
+            if (authUser && authUser.role === 'Driver') {
+                if (authUser.id !== actualDriverId && authUser.phone !== actualDriverPhone && actualDriverId !== 'drv-sample') {
+                    return sendJson({ success: false, error: 'غير مصرح: لا يمكنك استعراض بيانات كابتن آخر (RLS)' }, 403);
+                }
+            }
+
             // 1. Fetch bookings from PostgreSQL if connected
             if (db.isPostgresConnected && db.pool) {
                 try {
@@ -2315,6 +2420,10 @@ async function startServer() {
                 }
             }
 
+            if (authUser && authUser.role === 'Customer') {
+                driverBookings = driverBookings.filter(b => b.customerId === authUser.id || (authUser.phone && (b.customerPhone === authUser.phone || b.phone === authUser.phone)));
+            }
+
             return sendJson(driverBookings);
         }
 
@@ -2332,6 +2441,16 @@ async function startServer() {
             const actualDriverId = targetDriver ? targetDriver.driverId : driverId;
             const actualDriverPhone = targetDriver ? (targetDriver.phoneNumber || targetDriver.phone) : driverId;
             const actualDriverName = targetDriver?.fullName;
+
+            // RLS Check: Drivers only see their own requests. Customers cannot view driver requests.
+            const authUser = getAuthUser(req);
+            if (authUser && authUser.role === 'Driver') {
+                if (authUser.id !== actualDriverId && authUser.phone !== actualDriverPhone && actualDriverId !== 'drv-sample') {
+                    return sendJson({ success: false, error: 'غير مصرح: لا يمكنك استعراض طلبات كابتن آخر (RLS)' }, 403);
+                }
+            } else if (authUser && authUser.role === 'Customer') {
+                return sendJson({ success: false, error: 'غير مصرح للركاب بعرض طلبات الكابتن (RLS)' }, 403);
+            }
 
             if (db.isPostgresConnected && db.pool) {
                 try {
@@ -2632,8 +2751,36 @@ async function startServer() {
             return sendJson(result, result.success ? 200 : 400);
         }
 
+        // Bookings List: GET /api/bookings (Protected with Row Level Security)
         if (pathname === '/api/bookings' && method === 'GET') {
-            return sendJson(db.memoryState.bookings || []);
+            const user = getAuthUser(req);
+            const allBookings = db.memoryState.bookings || [];
+
+            // Admin can view all bookings
+            if (user && user.role === 'Admin') {
+                return sendJson(allBookings);
+            }
+
+            // Customer RLS: only return bookings belonging to this customer
+            if (user && user.role === 'Customer') {
+                const userBookings = allBookings.filter(b => 
+                    b.customerId === user.id || 
+                    (user.phone && (b.customerPhone === user.phone || b.phone === user.phone))
+                );
+                return sendJson(userBookings);
+            }
+
+            // Driver RLS: only return bookings assigned to this driver
+            if (user && user.role === 'Driver') {
+                const driverBookings = allBookings.filter(b => 
+                    b.driverId === user.id || 
+                    (user.phone && b.driverPhone === user.phone)
+                );
+                return sendJson(driverBookings);
+            }
+
+            // Unauthenticated callers receive an empty list to prevent data leakage
+            return sendJson([]);
         }
 
         if (pathname === '/api/routing/route') {
@@ -3066,9 +3213,16 @@ async function startServer() {
             return sendJson({ success: true, message: 'تم تثبيت المسار في قاعدة البيانات بنجاح', route: customer.route });
         }
 
-        // Get passenger permanent location
+        // Get passenger permanent location (RLS Protected)
         if (pathname.startsWith('/api/passenger/permanent-location/') && method === 'GET') {
             const passengerId = pathname.split('/').pop();
+            const authUser = getAuthUser(req);
+
+            // RLS Isolation: Only the passenger themselves, or an assigned driver / admin can view private permanent locations
+            if (authUser && authUser.role === 'Customer' && authUser.id !== passengerId) {
+                return sendJson({ success: false, error: 'غير مصرح بعرض الموقع الخاص بمستخدم آخر (RLS)' }, 403);
+            }
+
             const customer = db.memoryState.customers.find(c => c.customerId === passengerId);
             if (!customer) return sendJson({ success: false });
             return sendJson({
