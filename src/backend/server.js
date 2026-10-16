@@ -90,7 +90,7 @@ function getAuthUser(req) {
     }
     if (token.startsWith('jwt_driver_')) {
         const id = token.replace('jwt_driver_', '').trim();
-        const driver = (db.memoryState.drivers || []).find(d => d.driverId === id || d.id === id || d.phoneNumber === id);
+        const driver = db.findDriver(id);
         return {
             role: 'Driver',
             id: driver?.driverId || id,
@@ -102,7 +102,7 @@ function getAuthUser(req) {
     }
     if (token.startsWith('jwt_customer_')) {
         const id = token.replace('jwt_customer_', '').trim();
-        const customer = (db.memoryState.customers || []).find(c => c.customerId === id || c.id === id || c.userId === id || c.phoneNumber === id);
+        const customer = db.findCustomer(id);
         return {
             role: 'Customer',
             id: customer?.customerId || id,
@@ -113,11 +113,11 @@ function getAuthUser(req) {
         };
     }
 
-    const directDriver = (db.memoryState.drivers || []).find(d => d.driverId === token || d.id === token);
+    const directDriver = db.findDriver(token);
     if (directDriver) {
         return { role: 'Driver', id: directDriver.driverId, phone: directDriver.phoneNumber, driver: directDriver, token };
     }
-    const directCust = (db.memoryState.customers || []).find(c => c.customerId === token || c.id === token);
+    const directCust = db.findCustomer(token);
     if (directCust) {
         return { role: 'Customer', id: directCust.customerId, phone: directCust.phoneNumber, customer: directCust, token };
     }
@@ -248,10 +248,19 @@ async function startServer() {
             return res.end();
         }
 
-        // ---[ Global Rate Limit: 120 req/min per IP ]---
-        const clientIp = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
-        if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1' && clientIp !== '::ffff:127.0.0.1') {
-            if (_rateLimit(`req:${clientIp}`, 120, 60000)) {
+        // ---[ Intelligent Carrier-Grade NAT (CGNAT) Aware Rate Limiter ]---
+        const clientIp = (req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+        const authUser = getAuthUser(req);
+
+        if (authUser && authUser.id) {
+            // Per-user rate limiting: each authenticated user account has its own dedicated limit (180 req/min)
+            if (_rateLimit(`user:${authUser.role}:${authUser.id}`, 180, 60000)) {
+                res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '60' });
+                return res.end(JSON.stringify({ success: false, error: 'Too Many Requests - تجاوزت الحد المسموح لحسابك، يرجى المحاولة بعد دقيقة' }));
+            }
+        } else if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1' && clientIp !== '::ffff:127.0.0.1') {
+            // Unauthenticated IP limit (600 req/min): protects against DoS while allowing multiple users behind mobile carrier NATs (Zain/Asiacell/Korek)
+            if (_rateLimit(`unauth_ip:${clientIp}`, 600, 60000)) {
                 res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '60' });
                 return res.end(JSON.stringify({ success: false, error: 'Too Many Requests - تجاوزت الحد المسموح، يرجى المحاولة بعد دقيقة' }));
             }
@@ -1475,7 +1484,23 @@ async function startServer() {
 
             const maxRange = parseFloat(parsedUrl.searchParams.get('rangeKm') || parsedUrl.searchParams.get('radius') || '15');
             const inRange = activeDrivers.filter(d => d.distanceKm <= maxRange);
-            return sendJson(inRange.length > 0 ? inRange : activeDrivers.slice(0, 5));
+            const resultData = inRange.length > 0 ? inRange : activeDrivers.slice(0, 5);
+
+            // High-Performance 304 Not Modified caching for thousands of concurrent passengers
+            const etagPayload = resultData.map(d => `${d.driverId}:${d.latitude}:${d.longitude}:${d.status}`).join(';');
+            const etag = '"' + Buffer.from(etagPayload).toString('base64').slice(0, 24) + '"';
+
+            if (req.headers['if-none-match'] === etag) {
+                res.writeHead(304, {
+                    'ETag': etag,
+                    'Cache-Control': 'public, max-age=1'
+                });
+                return res.end();
+            }
+
+            res.setHeader('ETag', etag);
+            res.setHeader('Cache-Control', 'public, max-age=1');
+            return sendJson(resultData);
         }
 
         if (pathname === '/api/fleet/active-drivers') {

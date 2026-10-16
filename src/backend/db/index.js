@@ -8,7 +8,141 @@ class DatabaseManager {
         this.pool = null;
         this.isPostgresConnected = false;
         this.schemaPath = path.join(__dirname, 'schema.sql');
+        this._saveTimer = null;
+        this._isSaving = false;
+        this._pendingSave = false;
+
+        // O(1) Fast Hash Index Maps for instant lookup among 10,000+ users
+        this.indexes = {
+            customersById: new Map(),
+            customersByPhone: new Map(),
+            driversById: new Map(),
+            driversByPhone: new Map(),
+            bookingsById: new Map(),
+            rideRequestsById: new Map()
+        };
+
         this.initMemoryState();
+
+        // Auto-prune stale logs/messages once every hour to prevent heap bloat
+        setInterval(() => {
+            this.pruneOldMemoryState();
+        }, 3600000);
+    }
+
+    _cleanPhone(phone) {
+        if (!phone) return '';
+        return String(phone).replace(/[^0-9]/g, '');
+    }
+
+    rebuildIndexes() {
+        this.indexes.customersById.clear();
+        this.indexes.customersByPhone.clear();
+        for (const c of (this.memoryState.customers || [])) {
+            if (c.customerId) this.indexes.customersById.set(c.customerId, c);
+            if (c.id) this.indexes.customersById.set(c.id, c);
+            if (c.userId) this.indexes.customersById.set(c.userId, c);
+            const p = this._cleanPhone(c.phoneNumber || c.phone);
+            if (p) this.indexes.customersByPhone.set(p, c);
+        }
+
+        this.indexes.driversById.clear();
+        this.indexes.driversByPhone.clear();
+        for (const d of (this.memoryState.drivers || [])) {
+            if (d.driverId) this.indexes.driversById.set(d.driverId, d);
+            if (d.id) this.indexes.driversById.set(d.id, d);
+            const p = this._cleanPhone(d.phoneNumber || d.phone);
+            if (p) this.indexes.driversByPhone.set(p, d);
+        }
+
+        this.indexes.bookingsById.clear();
+        for (const b of (this.memoryState.bookings || [])) {
+            if (b.id) this.indexes.bookingsById.set(b.id, b);
+            if (b.bookingId) this.indexes.bookingsById.set(b.bookingId, b);
+        }
+
+        this.indexes.rideRequestsById.clear();
+        for (const r of (this.memoryState.rideRequests || [])) {
+            if (r.id) this.indexes.rideRequestsById.set(r.id, r);
+        }
+    }
+
+    findCustomer(idOrPhone) {
+        if (!idOrPhone) return null;
+        const byId = this.indexes.customersById.get(idOrPhone);
+        if (byId) return byId;
+        const cleanP = this._cleanPhone(idOrPhone);
+        if (cleanP) {
+            const byPhone = this.indexes.customersByPhone.get(cleanP);
+            if (byPhone) return byPhone;
+        }
+        return (this.memoryState.customers || []).find(c => 
+            c.customerId === idOrPhone || 
+            c.id === idOrPhone || 
+            c.userId === idOrPhone ||
+            (cleanP && this._cleanPhone(c.phoneNumber) === cleanP)
+        ) || null;
+    }
+
+    findDriver(idOrPhone) {
+        if (!idOrPhone) return null;
+        const byId = this.indexes.driversById.get(idOrPhone);
+        if (byId) return byId;
+        const cleanP = this._cleanPhone(idOrPhone);
+        if (cleanP) {
+            const byPhone = this.indexes.driversByPhone.get(cleanP);
+            if (byPhone) return byPhone;
+        }
+        return (this.memoryState.drivers || []).find(d => 
+            d.driverId === idOrPhone || 
+            d.id === idOrPhone || 
+            (cleanP && this._cleanPhone(d.phoneNumber) === cleanP)
+        ) || null;
+    }
+
+    indexCustomer(customer) {
+        if (!customer) return;
+        if (customer.customerId) this.indexes.customersById.set(customer.customerId, customer);
+        if (customer.id) this.indexes.customersById.set(customer.id, customer);
+        if (customer.userId) this.indexes.customersById.set(customer.userId, customer);
+        const p = this._cleanPhone(customer.phoneNumber || customer.phone);
+        if (p) this.indexes.customersByPhone.set(p, customer);
+    }
+
+    indexDriver(driver) {
+        if (!driver) return;
+        if (driver.driverId) this.indexes.driversById.set(driver.driverId, driver);
+        if (driver.id) this.indexes.driversById.set(driver.id, driver);
+        const p = this._cleanPhone(driver.phoneNumber || driver.phone);
+        if (p) this.indexes.driversByPhone.set(p, driver);
+    }
+
+    pruneOldMemoryState() {
+        const now = Date.now();
+        const twoDaysAgo = now - 48 * 3600 * 1000;
+        const sevenDaysAgo = now - 7 * 24 * 3600 * 1000;
+
+        // Prune old chat messages to keep RAM lean
+        if (this.memoryState.chatMessages && this.memoryState.chatMessages.length > 5000) {
+            this.memoryState.chatMessages = this.memoryState.chatMessages.filter(m => {
+                const ts = new Date(m.createdAt || m.timestamp || 0).getTime();
+                return ts > twoDaysAgo;
+            });
+            if (this.memoryState.chatMessages.length > 5000) {
+                this.memoryState.chatMessages = this.memoryState.chatMessages.slice(-5000);
+            }
+        }
+
+        // Prune old completed/cancelled ride requests
+        if (this.memoryState.rideRequests && this.memoryState.rideRequests.length > 5000) {
+            this.memoryState.rideRequests = this.memoryState.rideRequests.filter(r => {
+                if (r.status === 'InProgress' || r.status === 'Accepted' || r.status === 'Arrived' || r.status === 'Pending') {
+                    return true;
+                }
+                const ts = new Date(r.createdAt || 0).getTime();
+                return ts > sevenDaysAgo;
+            });
+        }
     }
 
     initMemoryState() {
@@ -146,23 +280,70 @@ class DatabaseManager {
                     createdAt: new Date().toISOString()
                 }
             ];
-            this.saveStateSnapshot();
+            this._doSaveSnapshotSync();
         }
+
+        // Initialize fast index maps
+        this.rebuildIndexes();
     }
 
-    saveStateSnapshot() {
+    // High-performance, non-blocking asynchronous state snapshot with debouncing & atomic write
+    saveStateSnapshot(immediate = false) {
+        if (immediate) {
+            this._doSaveSnapshotSync();
+            return;
+        }
+
+        // Debounce: batch rapid mutations into a single background write
+        if (this._saveTimer) return;
+        this._saveTimer = setTimeout(async () => {
+            this._saveTimer = null;
+            await this._doSaveSnapshotAsync();
+        }, 350);
+    }
+
+    async _doSaveSnapshotAsync() {
+        if (this._isSaving) {
+            this._pendingSave = true;
+            return;
+        }
+        this._isSaving = true;
         try {
             const dataDir = path.dirname(config.dataFile);
-            if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-            
-            // Add dynamically computed stats to snapshot
+            await fs.promises.mkdir(dataDir, { recursive: true });
+
             const snapshot = {
                 ...this.memoryState,
                 stats: this.getComputedStats()
             };
-            fs.writeFileSync(config.dataFile, JSON.stringify(snapshot, null, 2), 'utf8');
+            const tempFile = config.dataFile + '.tmp';
+            const jsonStr = JSON.stringify(snapshot, null, 2);
+            await fs.promises.writeFile(tempFile, jsonStr, 'utf8');
+            await fs.promises.rename(tempFile, config.dataFile);
         } catch (e) {
-            console.warn(`[Database] Snapshot save warning: ${e.message}`);
+            console.warn(`[Database] Async snapshot save warning: ${e.message}`);
+        } finally {
+            this._isSaving = false;
+            if (this._pendingSave) {
+                this._pendingSave = false;
+                this.saveStateSnapshot();
+            }
+        }
+    }
+
+    _doSaveSnapshotSync() {
+        try {
+            const dataDir = path.dirname(config.dataFile);
+            if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+            const snapshot = {
+                ...this.memoryState,
+                stats: this.getComputedStats()
+            };
+            const tempFile = config.dataFile + '.tmp';
+            fs.writeFileSync(tempFile, JSON.stringify(snapshot, null, 2), 'utf8');
+            fs.renameSync(tempFile, config.dataFile);
+        } catch (e) {
+            console.warn(`[Database] Sync snapshot save warning: ${e.message}`);
         }
     }
 
