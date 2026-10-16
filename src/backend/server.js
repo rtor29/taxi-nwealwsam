@@ -2208,7 +2208,13 @@ async function startServer() {
             const driverId = parts[parts.length - 2];
             let driverBookings = [];
 
-            const targetDriver = (db.memoryState.drivers || []).find(d => d.driverId === driverId);
+            const targetDriver = (db.memoryState.drivers || []).find(d => 
+                d.driverId === driverId || 
+                d.phoneNumber === driverId || 
+                (d.phone && d.phone === driverId)
+            );
+            const actualDriverId = targetDriver ? targetDriver.driverId : driverId;
+            const actualDriverPhone = targetDriver ? (targetDriver.phoneNumber || targetDriver.phone) : driverId;
             const driverName = targetDriver?.fullName;
 
             // 1. Fetch bookings from PostgreSQL if connected
@@ -2217,10 +2223,11 @@ async function startServer() {
                     const pgRes = await db.pool.query(`
                         SELECT * FROM bookings 
                         WHERE driver_id = $1 
-                           OR (driver_name IS NOT NULL AND LOWER(driver_name) = LOWER($2))
+                           OR driver_id = $2
+                           OR (driver_name IS NOT NULL AND LOWER(driver_name) = LOWER($3))
                            OR driver_id = 'drv-sample'
                         ORDER BY created_at DESC
-                    `, [driverId, driverName || '']);
+                    `, [driverId, actualDriverId, driverName || '']);
                     if (pgRes.rows && pgRes.rows.length > 0) {
                         driverBookings = pgRes.rows.map(r => ({
                             id: r.id,
@@ -2249,6 +2256,8 @@ async function startServer() {
             // 2. Fetch bookings from memory for this driver
             const memBookings = (db.memoryState.bookings || []).filter(b => 
                 b.driverId === driverId || 
+                b.driverId === actualDriverId ||
+                (actualDriverPhone && (b.driverPhone === actualDriverPhone || b.driverId === actualDriverPhone)) ||
                 (driverName && b.driverName && b.driverName.trim() === driverName.trim()) ||
                 (b.driverId === 'drv-sample')
             );
@@ -2260,14 +2269,14 @@ async function startServer() {
 
             // 3. Customers explicitly assigned to this driver
             const assignedCustomers = (db.memoryState.customers || []).filter(c => 
-                c.driverId === driverId || c.assignedDriverId === driverId
+                c.driverId === driverId || c.driverId === actualDriverId || c.assignedDriverId === driverId || c.assignedDriverId === actualDriverId
             );
             for (const ac of assignedCustomers) {
                 if (!driverBookings.some(b => b.customerId === ac.customerId)) {
                     driverBookings.push({
                         id: 'bk-assign-' + ac.customerId,
                         bookingId: 'bk-assign-' + ac.customerId,
-                        driverId: driverId,
+                        driverId: actualDriverId,
                         customerId: ac.customerId,
                         customerName: ac.fullName,
                         customerPhone: ac.phoneNumber,
@@ -2292,13 +2301,22 @@ async function startServer() {
             const driverId = parts[parts.length - 2];
             let pendingBookings = [];
 
+            const targetDriver = (db.memoryState.drivers || []).find(d => 
+                d.driverId === driverId || 
+                d.phoneNumber === driverId || 
+                (d.phone && d.phone === driverId)
+            );
+            const actualDriverId = targetDriver ? targetDriver.driverId : driverId;
+            const actualDriverPhone = targetDriver ? (targetDriver.phoneNumber || targetDriver.phone) : driverId;
+            const actualDriverName = targetDriver?.fullName;
+
             if (db.isPostgresConnected && db.pool) {
                 try {
                     const pgRes = await db.pool.query(`
                         SELECT * FROM bookings 
-                        WHERE (driver_id = $1 OR driver_id IS NULL) AND status = 'Pending'
+                        WHERE (driver_id = $1 OR driver_id = $2 OR (driver_name IS NOT NULL AND LOWER(driver_name) = LOWER($3)) OR driver_id IS NULL) AND status = 'Pending'
                         ORDER BY created_at DESC
-                    `, [driverId]);
+                    `, [driverId, actualDriverId, actualDriverName || '']);
                     if (pgRes.rows && pgRes.rows.length > 0) {
                         pendingBookings = pgRes.rows.map(r => ({
                             id: r.id,
@@ -2323,7 +2341,10 @@ async function startServer() {
             }
 
             const memPending = (db.memoryState.bookings || []).filter(b => 
-                (b.driverId === driverId || !b.driverId) && b.status === 'Pending'
+                (b.driverId === driverId || b.driverId === actualDriverId || 
+                 (actualDriverPhone && (b.driverPhone === actualDriverPhone || b.driverId === actualDriverPhone)) ||
+                 (actualDriverName && b.driverName && b.driverName.trim() === actualDriverName.trim()) ||
+                 !b.driverId) && b.status === 'Pending'
             );
             for (const mb of memPending) {
                 if (!pendingBookings.some(pb => (pb.id === mb.id || pb.bookingId === mb.bookingId))) {
