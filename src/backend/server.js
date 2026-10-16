@@ -40,7 +40,18 @@ function _otpRateLimit(phone, ip) {
     if (ip && ip !== '127.0.0.1' && ip !== '::1' && ip !== '::ffff:127.0.0.1') {
         if (_rateLimit(`otp_ip:${ip}`, 30, 600000)) return true;
     }
-    return false;
+}
+
+// Helper to verify if a driver is currently online and active (not idle, not offline, approved)
+function isDriverOnlineAndActive(d) {
+    if (!d) return false;
+    if (d.isBlocked === true) return false;
+    if (d.status === 'Pending' || d.status === 'Rejected' || d.status === 'Suspended' || d.status === 'Offline') return false;
+    if (d.tripStatus === 'Offline') return false;
+    if (d.isOnline === false) return false;
+    if (d.workStatus === 'idle' || d.work_mode === 'خمول' || d.work_mode === 'idle') return false;
+    if (d.isApproved !== true && d.isVerified !== true && d.status !== 'Approved' && d.status !== 'Active' && d.status !== 'Online') return false;
+    return true;
 }
 
 // In-memory store for Truecaller verification status
@@ -1334,13 +1345,15 @@ async function startServer() {
             };
 
             const activeDrivers = (db.memoryState.drivers || [])
-                .filter(d => !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' && d.status !== 'Suspended' && (d.isApproved === true || d.isVerified === true || d.status === 'Approved' || d.status === 'Active'))
+                .filter(d => isDriverOnlineAndActive(d))
                 .filter(d => !requestedVehicleType || normaliseVehicleType(d) === requestedVehicleType)
                 .filter(d => {
                     if (tripType === 'short') {
-                        return d.work_mode === 'مشوار قصير' || d.serviceType === 'ShortTrip';
+                        if (d.work_mode === 'خط دائمي' || d.workStatus === 'permanent') return false;
+                        return d.work_mode === 'مشوار قصير' || d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.work_mode;
                     }
                     if (tripType === 'daily') {
+                        if (d.work_mode === 'مشوار قصير' || d.workStatus === 'taxi') return false;
                         return d.work_mode === 'خط دائمي' || d.serviceType === 'PermanentLine' || d.serviceType === 'Both' || (d.permanentLat && d.permanentLon) || (d.route && d.route.length > 0) || !d.work_mode;
                     }
                     return true;
@@ -1392,12 +1405,14 @@ async function startServer() {
         if (pathname === '/api/fleet/active-drivers') {
             const tripType = parsedUrl.searchParams.get('tripType');
             const activeDrivers = (db.memoryState.drivers || [])
-                .filter(d => !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' && (d.isVerified === true || d.status === 'Approved' || d.status === 'Active'))
+                .filter(d => isDriverOnlineAndActive(d))
                 .filter(d => {
                     if (tripType === 'short') {
+                        if (d.work_mode === 'خط دائمي' || d.workStatus === 'permanent') return false;
                         return d.work_mode ? d.work_mode === 'مشوار قصير' : (d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType);
                     }
                     if (tripType === 'daily') {
+                        if (d.work_mode === 'مشوار قصير' || d.workStatus === 'taxi') return false;
                         return d.work_mode ? d.work_mode === 'خط دائمي' : (d.serviceType === 'PermanentLine' || d.serviceType === 'Both' || !d.serviceType);
                     }
                     return true;
@@ -1456,10 +1471,12 @@ async function startServer() {
 
                 const maxDist = parseFloat(rangeKm) || 5;
                 let driverCandidates = (db.memoryState.drivers || [])
-                    .filter(d => !d.isBlocked && d.status !== 'Pending' && d.status !== 'Rejected' && (d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.serviceType));
+                    .filter(d => isDriverOnlineAndActive(d))
+                    .filter(d => d.work_mode !== 'خط دائمي' && d.workStatus !== 'permanent')
+                    .filter(d => (d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || d.work_mode === 'مشوار قصير' || !d.serviceType));
                 if (driverCandidates.length === 0) {
                     driverCandidates = (db.memoryState.drivers || [])
-                        .filter(d => !d.isBlocked && d.status !== 'Suspended' && d.status !== 'Rejected');
+                        .filter(d => isDriverOnlineAndActive(d) && d.work_mode !== 'خط دائمي' && d.workStatus !== 'permanent');
                 }
 
                 // Filter by VIP or Eco (توفير)
@@ -1756,18 +1773,25 @@ async function startServer() {
         if (pathname === '/api/driver/toggle-online' && method === 'POST') {
             try {
                 const body = await parseJsonBody(req);
-                const { driverId, isOnline, driverName, driverPhone, latitude, longitude } = body;
+                const { driverId, isOnline, workStatus, workMode, driverName, driverPhone, latitude, longitude } = body;
                 let driver = (db.memoryState.drivers || []).find(d => d.driverId === driverId);
+                const onlineBool = isOnline === true || (workStatus && workStatus !== 'idle');
+                const computedWorkMode = !onlineBool ? 'خمول' : (workMode || (workStatus === 'permanent' ? 'خط دائمي' : 'مشوار قصير'));
+                const computedWorkStatus = !onlineBool ? 'idle' : (workStatus || (computedWorkMode === 'خط دائمي' ? 'permanent' : 'taxi'));
+
                 if (!driver && driverId) {
                     driver = {
                         driverId,
                         fullName: driverName || 'كابتن توصيله',
                         phoneNumber: driverPhone || '',
-                        status: isOnline ? 'Online' : 'Offline',
-                        isOnline: !!isOnline,
+                        status: onlineBool ? 'Online' : 'Offline',
+                        tripStatus: onlineBool ? 'Online' : 'Offline',
+                        isOnline: onlineBool,
+                        workStatus: computedWorkStatus,
+                        work_mode: computedWorkMode,
                         isVerified: true,
                         isApproved: true,
-                        serviceType: 'Both',
+                        serviceType: computedWorkStatus === 'permanent' ? 'PermanentLine' : 'ShortTrip',
                         vehicleMake: 'تويوتا',
                         vehicleModel: 'كورولا',
                         vehiclePlate: 'النجف',
@@ -1781,8 +1805,11 @@ async function startServer() {
                     db.memoryState.drivers.unshift(driver);
                 }
                 if (driver) {
-                    driver.status = isOnline ? 'Online' : 'Offline';
-                    driver.isOnline = !!isOnline;
+                    driver.status = onlineBool ? 'Online' : 'Offline';
+                    driver.tripStatus = onlineBool ? 'Online' : 'Offline';
+                    driver.isOnline = onlineBool;
+                    driver.workStatus = computedWorkStatus;
+                    driver.work_mode = computedWorkMode;
                     if (latitude && longitude) {
                         driver.currentLat = latitude;
                         driver.currentLon = longitude;
@@ -1790,7 +1817,14 @@ async function startServer() {
                         driver.longitude = longitude;
                     }
                     db.saveStateSnapshot();
-                    return sendJson({ success: true, driverId, status: driver.status, isOnline: driver.isOnline });
+                    return sendJson({
+                        success: true,
+                        driverId,
+                        status: driver.status,
+                        isOnline: driver.isOnline,
+                        workStatus: driver.workStatus,
+                        work_mode: driver.work_mode
+                    });
                 }
                 return sendJson({ success: false, error: 'Driver not found' }, 404);
             } catch (err) {
@@ -2198,7 +2232,8 @@ async function startServer() {
                 .filter(r => {
                     if (r.status && r.status !== 'Active') return false;
                     const drv = (db.memoryState.drivers || []).find(d => d.driverId === r.driverId);
-                    if (drv && (drv.status === 'Pending' || drv.status === 'Rejected' || !drv.isVerified || drv.isBlocked)) return false;
+                    if (drv && !isDriverOnlineAndActive(drv)) return false;
+                    if (drv && (drv.work_mode === 'مشوار قصير' || drv.workStatus === 'taxi')) return false;
                     return true;
                 })
                 .map(r => ({

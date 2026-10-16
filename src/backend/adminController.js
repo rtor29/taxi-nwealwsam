@@ -904,6 +904,24 @@ class AdminController {
         const startLat = (route && route.startLat) ? parseFloat(route.startLat) : 31.9961;
         const startLon = (route && route.startLon) ? parseFloat(route.startLon) : 44.3168;
 
+        const sType = String(serviceType || '').toLowerCase().trim();
+        let normalizedServiceType = 'PermanentLine';
+        let defaultWorkMode = 'خط دائمي';
+        let defaultWorkStatus = 'permanent';
+        if (sType === 'short' || sType === 'shorttrip' || sType === 'taxi') {
+            normalizedServiceType = 'ShortTrip';
+            defaultWorkMode = 'مشوار قصير';
+            defaultWorkStatus = 'taxi';
+        } else if (sType === 'both') {
+            normalizedServiceType = 'Both';
+            defaultWorkMode = 'خط دائمي';
+            defaultWorkStatus = 'permanent';
+        } else {
+            normalizedServiceType = 'PermanentLine';
+            defaultWorkMode = 'خط دائمي';
+            defaultWorkStatus = 'permanent';
+        }
+
         const passStr = String(password).trim();
         const newDriver = {
             driverId,
@@ -918,14 +936,29 @@ class AdminController {
             vehicleYear: vYear,
             vehiclePlate: vPlate,
             vehicleColor: vehicleColor || 'أبيض',
-            serviceType: serviceType || 'both',
+            serviceType: normalizedServiceType,
+            work_mode: defaultWorkMode,
+            workStatus: defaultWorkStatus,
+            availableSeats: parseInt(availableSeats || (route && route.availableSeats) || 4, 10),
+            totalSeats: parseInt(availableSeats || (route && route.availableSeats) || 4, 10),
             status: 'Approved',
+            tripStatus: 'Online',
+            isOnline: true,
             isVerified: true,
             isBlocked: false,
             ratingAverage: 5.0,
             totalTrips: 0,
             latitude: startLat,
             longitude: startLon,
+            currentLat: startLat,
+            currentLon: startLon,
+            permanentLat: startLat,
+            permanentLon: startLon,
+            permanentLocationName: (route && route.startName) || 'نقطة الانطلاق (النجف)',
+            permanentDropoffLat: (route && route.endLat) ? parseFloat(route.endLat) : 32.0321,
+            permanentDropoffLon: (route && route.endLon) ? parseFloat(route.endLon) : 44.3725,
+            permanentDropoffName: (route && route.endName) || 'جامعة الكوفة',
+            route: (route && (route.startName || route.endName)) ? `${route.startName || 'نقطة الانطلاق'} ➔ ${route.endName || 'جامعة الكوفة'}` : 'النجف ➔ جامعة الكوفة',
             createdAt: now,
             registeredAt: now,
             vehicles: [{

@@ -719,7 +719,26 @@ class DatabaseManager {
 
     async setDriverWorkMode(driverId, workMode) {
         let driver = this.memoryState.drivers.find(d => d.driverId === driverId);
-        if (driver) driver.workMode = workMode;
+        if (driver) {
+            driver.workMode = workMode;
+            driver.work_mode = workMode;
+            if (workMode === 'خمول' || workMode === 'idle') {
+                driver.workStatus = 'idle';
+                driver.isOnline = false;
+                driver.status = 'Offline';
+                driver.tripStatus = 'Offline';
+            } else if (workMode === 'خط دائمي' || workMode === 'permanent') {
+                driver.workStatus = 'permanent';
+                driver.isOnline = true;
+                driver.status = 'Online';
+                driver.tripStatus = 'Online';
+            } else if (workMode === 'مشوار قصير' || workMode === 'taxi') {
+                driver.workStatus = 'taxi';
+                driver.isOnline = true;
+                driver.status = 'Online';
+                driver.tripStatus = 'Online';
+            }
+        }
         if (this.isPostgresConnected && this.pool) {
             try {
                 await this.pool.query('UPDATE drivers SET work_mode = $1, updated_at = NOW() WHERE driver_id = $2', [workMode, driverId]);
