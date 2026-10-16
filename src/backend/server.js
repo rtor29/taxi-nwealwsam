@@ -1818,6 +1818,21 @@ async function startServer() {
             }
         }
 
+        // Customer Current Active Ride (Persist across refreshes/reconnects)
+        if (pathname.startsWith('/api/customer/') && pathname.endsWith('/active-ride') && method === 'GET') {
+            const parts = pathname.split('/');
+            const customerId = decodeURIComponent(parts[parts.length - 2]);
+            const cleanPhone = customerId.replace(/[^0-9]/g, '');
+            const active = (db.memoryState.rideRequests || []).find(r => {
+                const rCustId = String(r.customerId || '');
+                const rCustPhone = String(r.customerPhone || '').replace(/[^0-9]/g, '');
+                const isMatch = rCustId === customerId || (cleanPhone && (rCustPhone.endsWith(cleanPhone) || cleanPhone.endsWith(rCustPhone)));
+                const isActive = r.status === 'Pending' || r.status === 'Accepted' || r.status === 'Arrived' || r.status === 'InProgress';
+                return isMatch && isActive;
+            });
+            return sendJson({ success: true, activeRide: active || null });
+        }
+
         // Driver Current Active Accepted Ride
         if (pathname.startsWith('/api/driver/') && pathname.endsWith('/active-ride') && method === 'GET') {
             const parts = pathname.split('/');
