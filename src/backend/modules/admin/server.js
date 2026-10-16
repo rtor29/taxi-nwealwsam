@@ -148,7 +148,8 @@ async function startServer() {
                 const token = parsedUrl.searchParams.get('hub.verify_token');
                 const challenge = parsedUrl.searchParams.get('hub.challenge');
 
-                if (mode === 'subscribe' && (token === 'Musaonline33' || pathname.endsWith('/Musaonline33') || token === whatsappService.verifyToken)) {
+                const expectedToken = (whatsappService && whatsappService.verifyToken) || process.env.WHATSAPP_VERIFY_TOKEN;
+                if (mode === 'subscribe' && expectedToken && (token === expectedToken || pathname.endsWith('/' + expectedToken))) {
                     console.log('[MetaWebhook] WhatsApp webhook verified successfully ✅');
                     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
                     return res.end(challenge || '');

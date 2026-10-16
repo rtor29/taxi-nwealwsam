@@ -1552,8 +1552,26 @@ function showToast(msg, isError = false) {
 
 // =============================================================================
 // Mapbox GL JS Fleet Tracking & Interactive Route Drawing Tool
-// =============================================================================
-const MAPBOX_PUBLIC_TOKEN = ['pk.', 'eyJ1IjoiYWxtdXNhd3kiLCJhIjoi', 'Y211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9.', '_J6DYjYBDhsdcidErQrblA'].join('');
+let MAPBOX_PUBLIC_TOKEN = window.__MAPBOX_TOKEN || '';
+
+// Load public runtime secrets from server environment only
+async function initServerConfig() {
+    try {
+        const res = await fetch('/api/config/public');
+        if (res.ok) {
+            const data = await res.json();
+            if (data.mapboxToken) {
+                MAPBOX_PUBLIC_TOKEN = data.mapboxToken;
+                window.__MAPBOX_TOKEN = data.mapboxToken;
+                if (typeof mapboxgl !== 'undefined') {
+                    mapboxgl.accessToken = data.mapboxToken;
+                }
+            }
+        }
+    } catch (_) {}
+}
+initServerConfig();
+
 
 function ensureMapboxRTL() {
     if (typeof mapboxgl !== 'undefined' && typeof mapboxgl.setRTLTextPlugin === 'function') {

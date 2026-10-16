@@ -1,9 +1,6 @@
 /**
  * WhatsApp Cloud API Service for Tawsela (توصيلة)
- * Phone Number ID: 1404147582779377
- * WABA ID: 25795264216635389
- * Phone: +964 780 580 964
- * Verify Token: Musaonline33
+ * Credentials and verify tokens are loaded dynamically from environment variables (.env).
  */
 
 const https = require('https');

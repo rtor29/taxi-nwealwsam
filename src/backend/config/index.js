@@ -31,6 +31,9 @@ const config = {
     googleClientId: process.env.GOOGLE_CLIENT_ID || googleSecretConfig.client_id || '',
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || googleSecretConfig.client_secret || '',
 
+    // Mapbox Public Token (loaded from environment)
+    mapboxToken: process.env.MAPBOX_TOKEN || process.env.VITE_MAPBOX_TOKEN || '',
+
     // Static Paths
     dashboardDir: process.env.DASHBOARD_DIR || path.join(__dirname, '..', '..', 'TaxiWisam.Api', 'wwwroot', 'dashboard'),
     flutterWebDir: process.env.FLUTTER_WEB_DIR || path.join(__dirname, '..', '..', '..', 'apps', 'taxi_wisam_flutter', 'build', 'web'),

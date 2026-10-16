@@ -333,6 +333,15 @@ async function startServer() {
             });
         }
 
+        // Public Runtime Config (Client API keys loaded from Server Environment only)
+        if (pathname === '/api/config/public' && method === 'GET') {
+            return sendJson({
+                success: true,
+                mapboxToken: process.env.MAPBOX_TOKEN || process.env.VITE_MAPBOX_TOKEN || config.mapboxToken || '',
+                googleClientId: config.googleClientId || process.env.GOOGLE_CLIENT_ID || ''
+            });
+        }
+
         // Dedicated Captain (Driver) Login Portal - Opens Captain tab directly
         if (pathname === '/captain-login' || pathname === '/driver-login') {
             return authController.renderMainPortalHtml(res, 'Driver', req.headers['x-forwarded-host'] || req.headers.host || '173.212.206.86.nip.io');
@@ -359,7 +368,8 @@ async function startServer() {
                 const token = parsedUrl.searchParams.get('hub.verify_token');
                 const challenge = parsedUrl.searchParams.get('hub.challenge');
 
-                if (mode === 'subscribe' && (token === 'Musaonline33' || pathname.endsWith('/Musaonline33') || token === whatsappService.verifyToken)) {
+                const expectedToken = whatsappService.verifyToken || process.env.WHATSAPP_VERIFY_TOKEN;
+                if (mode === 'subscribe' && expectedToken && (token === expectedToken || pathname.endsWith('/' + expectedToken))) {
                     console.log('[MetaWebhook] WhatsApp webhook verified successfully ✅');
                     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
                     return res.end(challenge || '');
