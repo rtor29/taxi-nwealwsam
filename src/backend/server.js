@@ -51,6 +51,17 @@ function _orderRateLimit(ip, identifier) {
     return false;
 }
 
+// ---[ Input Sanitization: prevent XSS and script/query injection ]---
+function sanitizeInput(str, maxLen = 255) {
+    if (typeof str !== 'string') return '';
+    return str
+        .replace(/[\u0000-\u001F\u007F]/g, '')
+        .replace(/<[^>]*>/g, '')
+        .replace(/[<>'";\\{}`$]/g, '')
+        .trim()
+        .slice(0, maxLen);
+}
+
 // Helper to verify if a driver is currently online and active (not idle, not offline, approved)
 function isDriverOnlineAndActive(d) {
     if (!d) return false;
@@ -224,18 +235,35 @@ async function startServer() {
     try { telegramBot.startBot(); } catch(e) { console.error('[TelegramBot] Start error:', e.message); }
 
     const server = http.createServer(async (req, res) => {
-        // ---[ Security Headers ]---
+        // ---[ Security Headers & Protection ]---
         res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.setHeader('X-Frame-Options', 'DENY');
+        res.setHeader('X-Frame-Options', 'SAMEORIGIN');
         res.setHeader('X-XSS-Protection', '1; mode=block');
         res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
         res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+        res.setHeader('Permissions-Policy', 'geolocation=(self), microphone=(), camera=()');
 
-        // Set default CORS (restricted to known origins in production)
-        const allowedOrigins = ['https://tawseelaiq.app', 'https://www.tawseelaiq.app', 'http://localhost:5050', 'http://173.212.206.86'];
+        // ---[ Strict CORS Policy (Restricted to Application Domains) ]---
+        const allowedOrigins = [
+            'https://tawseelaiq.app',
+            'https://www.tawseelaiq.app',
+            'http://localhost:5173',
+            'http://127.0.0.1:5173',
+            'http://localhost:5050',
+            'http://127.0.0.1:5050',
+            'http://173.212.206.86'
+        ];
+        if (process.env.ALLOWED_ORIGINS) {
+            process.env.ALLOWED_ORIGINS.split(',').forEach(o => {
+                const trimmed = o.trim();
+                if (trimmed && !allowedOrigins.includes(trimmed)) allowedOrigins.push(trimmed);
+            });
+        }
+
         const reqOrigin = req.headers['origin'] || '';
         if (allowedOrigins.includes(reqOrigin)) {
             res.setHeader('Access-Control-Allow-Origin', reqOrigin);
+            res.setHeader('Vary', 'Origin');
         } else if (!reqOrigin) {
             res.setHeader('Access-Control-Allow-Origin', allowedOrigins[0]);
         }
@@ -1279,7 +1307,7 @@ async function startServer() {
 
         // Drivers List: GET /api/admin/drivers
         if ((pathname === '/api/admin/drivers' || pathname === '/api/admin/admin/drivers' || pathname === '/api/drivers') && method === 'GET') {
-            const search = parsedUrl.searchParams.get('search') || '';
+            const search = sanitizeInput(parsedUrl.searchParams.get('search') || '', 100);
             const result = await adminController.getDrivers(search);
             return sendJson(result);
         }
@@ -1338,7 +1366,7 @@ async function startServer() {
             if (authUser && authUser.role !== 'Admin') {
                 return sendJson({ success: false, error: 'غير مصرح: صلاحيات المسؤول مطلوبة فقط (RLS)' }, 403);
             }
-            const search = parsedUrl.searchParams.get('search') || '';
+            const search = sanitizeInput(parsedUrl.searchParams.get('search') || '', 100);
             const result = await adminController.getCustomers(search);
             return sendJson(result);
         }
