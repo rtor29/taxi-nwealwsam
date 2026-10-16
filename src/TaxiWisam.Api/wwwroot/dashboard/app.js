@@ -2610,7 +2610,7 @@ function searchAdminNajafPlace(type) {
     clearTimeout(adminSearchDebounceTimer);
     adminSearchDebounceTimer = setTimeout(async () => {
         try {
-            const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?country=iq&proximity=44.345,32.015&bbox=44.05,31.75,44.65,32.35&language=ar&access_token=${MAPBOX_PUBLIC_TOKEN}`;
+            const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?country=iq&proximity=44.3168,31.9961&bbox=44.05,31.75,44.65,32.35&language=ar&types=poi,address,neighborhood,locality,place,district&limit=10&autocomplete=true&access_token=${MAPBOX_PUBLIC_TOKEN}`;
             const res = await fetch(geocodeUrl);
             let mbFeatures = [];
             if (res.ok) {
@@ -3297,7 +3297,7 @@ async function searchEditModalPlace(query, type) {
             const gov = DASHBOARD_IRAQ_GOVERNORATES[govKey] || DASHBOARD_IRAQ_GOVERNORATES.najaf;
             const bbox = gov.bbox;
             const prox = gov.center.join(',');
-            const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query.trim())}.json?access_token=${MAPBOX_PUBLIC_TOKEN}&country=iq&bbox=${bbox}&proximity=${prox}&language=ar&limit=5`);
+            const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query.trim())}.json?access_token=${MAPBOX_PUBLIC_TOKEN}&country=iq&bbox=${bbox}&proximity=${prox}&language=ar&types=poi,address,neighborhood,locality,place,district&limit=10&autocomplete=true`);
             const data = await res.json();
             if (!data.features || data.features.length === 0) {
                 resultsContainer.innerHTML = `<div class="p-2 text-slate-400 text-center">لا توجد نتائج مطابقة في ${gov.name}</div>`;
