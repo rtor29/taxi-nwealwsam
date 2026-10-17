@@ -774,10 +774,10 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                         <h2 class="text-2xl font-black text-slate-900 flex items-center gap-2">
-                            <span>تقييمات الرحلات وملاحظات الكباتن</span>
+                            <span>تقييمات الركاب للكباتن</span>
                             <span class="text-amber-500 text-xl">🌟</span>
                         </h2>
-                        <p class="text-xs md:text-sm text-slate-500">سجل تقييمات المشاوير، النقاط الممنوحة للكباتن، وملاحظات سلوك الركاب المباشرة</p>
+                        <p class="text-xs md:text-sm text-slate-500">سجل تقييمات الركاب للكباتن بعد انتهاء المشاوير، النقاط الممنوحة لحساب السائق، وملاحظات الخدمة المباشرة</p>
                     </div>
                     <div class="flex items-center space-x-2 space-x-reverse flex-wrap gap-2">
                         <input type="text" id="trip-ratings-search-input" placeholder="بحث بالاسم أو الكابتن أو الملاحظات..." class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" oninput="debounceTripRatingsSearch()">
@@ -790,20 +790,20 @@
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div id="trip-ratings-empty" class="hidden p-12 text-center text-slate-400">
                         <i class="fa-solid fa-star text-4xl text-amber-400 mb-2"></i>
-                        <p class="font-bold text-slate-700">لا توجد تقييمات مشاوير مسجلة حتى الآن</p>
-                        <p class="text-xs text-slate-400 mt-1">ستظهر التقييمات ومكافآت النقاط هنا فور إكمال الكباتن للمشاوير وتقييم الركاب.</p>
+                        <p class="font-bold text-slate-700">لا توجد تقييمات مسجلة حتى الآن</p>
+                        <p class="text-xs text-slate-400 mt-1">ستظهر التقييمات ومكافآت النقاط هنا فور قيام الركاب بتقييم الكباتن بعد انتهاء المشاوير.</p>
                     </div>
                     <div class="overflow-x-auto">
                         <table id="trip-ratings-table" class="w-full text-right text-sm border-collapse min-w-[850px]">
                             <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                                 <tr>
                                     <th class="p-4">تاريخ المشوار</th>
-                                    <th class="p-4">الكابتن</th>
-                                    <th class="p-4">الراكب</th>
+                                    <th class="p-4">الكابتن (المقيَّم)</th>
+                                    <th class="p-4">الراكب (المقيِّم)</th>
                                     <th class="p-4">التقييم ⭐</th>
-                                    <th class="p-4">وسوم المشوار</th>
-                                    <th class="p-4">ملاحظات الكابتن</th>
-                                    <th class="p-4 text-center">النقاط المكتسبة 🌟</th>
+                                    <th class="p-4">وسوم الخدمة</th>
+                                    <th class="p-4">ملاحظات الراكب</th>
+                                    <th class="p-4 text-center">النقاط المكتسبة للكابتن 🌟</th>
                                 </tr>
                             </thead>
                             <tbody id="trip-ratings-table-body" class="divide-y divide-slate-100">

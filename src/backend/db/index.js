@@ -668,9 +668,9 @@ class DatabaseManager {
         } catch (e) { console.warn('[Database] persistTelegramChatId error:', e.message); }
     }
 
-    // Record trip rating by driver, award points, and persist safely
-    async recordTripRating(data) {
-        const { rideId, driverId, passengerId, passengerName, rating, tags, comment, pointsEarned } = data;
+    // Record passenger rating of captain, update captain average rating & points, and persist safely
+    async recordCustomerTripRating(data) {
+        const { rideId, driverId, driverName, customerId, passengerName, rating, tags, comment, pointsEarned } = data;
         const pts = Number(pointsEarned) || 50;
         const numRating = Number(rating) || 5;
 
@@ -680,7 +680,9 @@ class DatabaseManager {
             id: 'rating_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
             rideId,
             driverId,
-            passengerId: passengerId || null,
+            driverName: driverName || 'الكابتن',
+            customerId: customerId || null,
+            passengerId: customerId || null,
             passengerName: passengerName || 'الراكب',
             rating: numRating,
             tags: Array.isArray(tags) ? tags : [],
@@ -690,19 +692,31 @@ class DatabaseManager {
         };
         this.memoryState.tripRatings.unshift(record);
 
-        // 2. Update driver in memory
+        // 2. Update driver in memory (points, totalTrips, and average rating)
         const driver = this.findDriver(driverId);
+        let newRatingAverage = 5.0;
         if (driver) {
             driver.points = (parseInt(driver.points, 10) || 0) + pts;
             driver.rewardScore = driver.points;
             driver.totalTrips = (parseInt(driver.totalTrips, 10) || 0) + 1;
+
+            const prevRatedCount = parseInt(driver.ratedTripsCount || driver.ratingsCount, 10) || 0;
+            const newRatedCount = prevRatedCount + 1;
+            const prevAvg = parseFloat(driver.ratingAverage) || 5.0;
+            const prevSum = parseFloat(driver.totalRatingSum) || (prevAvg * prevRatedCount);
+            const newSum = prevSum + numRating;
+            newRatingAverage = Math.round((newSum / newRatedCount) * 10) / 10;
+
+            driver.ratedTripsCount = newRatedCount;
+            driver.totalRatingSum = newSum;
+            driver.ratingAverage = newRatingAverage;
         }
 
         // 3. Mark on rideRequest in memory
         const ride = (this.memoryState.rideRequests || []).find(r => r.id === rideId);
         if (ride) {
-            ride.ratingByDriver = record;
-            ride.isRatedByDriver = true;
+            ride.ratingByCustomer = record;
+            ride.isRatedByCustomer = true;
         }
 
         // 4. PostgreSQL Persistence
@@ -711,18 +725,19 @@ class DatabaseManager {
                 await this.pool.query(
                     `INSERT INTO trip_ratings (ride_id, driver_id, passenger_id, passenger_name, rating, tags, comment, points_earned, created_at)
                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
-                    [rideId, driverId, passengerId || null, passengerName || 'الراكب', numRating, JSON.stringify(record.tags), record.comment, pts]
+                    [rideId, driverId, customerId || null, passengerName || 'الراكب', numRating, JSON.stringify(record.tags), record.comment, pts]
                 );
                 await this.pool.query(
                     `UPDATE drivers 
                      SET points = COALESCE(points, 0) + $1,
+                         rating_average = $2,
                          total_trips = COALESCE(total_trips, 0) + 1,
                          updated_at = NOW()
-                     WHERE driver_id = $2`,
-                    [pts, driverId]
+                     WHERE driver_id = $3`,
+                    [pts, newRatingAverage, driverId]
                 );
             } catch (pgErr) {
-                console.warn('[Database] recordTripRating PG error:', pgErr.message);
+                console.warn('[Database] recordCustomerTripRating PG error:', pgErr.message);
             }
         }
 
@@ -731,8 +746,14 @@ class DatabaseManager {
 
         return {
             record,
-            driverTotalPoints: driver ? driver.points : pts
+            driverTotalPoints: driver ? driver.points : pts,
+            driverRatingAverage: newRatingAverage
         };
+    }
+
+    // Alias for compatibility
+    async recordTripRating(data) {
+        return this.recordCustomerTripRating(data);
     }
 
     // -------------------------------------------------------------------------

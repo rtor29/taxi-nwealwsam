@@ -2127,17 +2127,14 @@ async function startServer() {
             }
         }
 
-        // Driver Rate Trip & Earn Points (Baly Style Rating & Points System)
-        if ((pathname === '/api/driver/rate-trip' || pathname === '/api/driver/rate' || pathname === '/api/ride/rate-trip') && method === 'POST') {
+        // Passenger Rate Captain & Award Points (Customer-to-Driver Rating System)
+        if ((pathname === '/api/customer/rate-driver' || pathname === '/api/customer/rate' || pathname === '/api/driver/rate-trip' || pathname === '/api/ride/rate') && method === 'POST') {
             try {
                 const body = await parseJsonBody(req);
-                const { rideId, driverId, passengerId, rating, tags, comment } = body;
+                const { rideId, customerId, driverId, rating, tags, comment } = body;
 
                 if (!rideId) {
                     return sendJson({ success: false, error: 'معرّف المشوار (rideId) مطلوب للتقييم' }, 400);
-                }
-                if (!driverId) {
-                    return sendJson({ success: false, error: 'معرّف الكابتن (driverId) مطلوب' }, 400);
                 }
 
                 const requests = db.memoryState.rideRequests || [];
@@ -2146,37 +2143,43 @@ async function startServer() {
                     return sendJson({ success: false, error: 'الرحلة المطلوبة غير موجودة' }, 404);
                 }
 
-                // Security Check: Caller must be the assigned/accepted driver for this ride
-                const driver = db.findDriver(driverId);
-                const realDriverId = driver ? (driver.driverId || driver.id) : driverId;
-                const isAssigned = (r.acceptedDriverId && (r.acceptedDriverId === driverId || r.acceptedDriverId === realDriverId)) ||
-                                   (r.assignedDriverId && (r.assignedDriverId === driverId || r.assignedDriverId === realDriverId)) ||
-                                   (driver && driver.phoneNumber && r.assignedDriverPhone && driver.phoneNumber.includes(r.assignedDriverPhone));
+                // Security Check (RLS): Ensure caller is the passenger of this completed trip
+                const authUser = getAuthUser(req);
+                const cleanReqCustPhone = String(r.customerPhone || '').replace(/\D/g, '');
+                const cleanCallerPhone = String(customerId || (authUser ? authUser.phone : '')).replace(/\D/g, '');
+                const isAuthorizedPassenger = (r.customerId && (r.customerId === customerId || (authUser && r.customerId === authUser.id))) ||
+                                              (cleanReqCustPhone && cleanCallerPhone && (cleanCallerPhone.endsWith(cleanReqCustPhone) || cleanReqCustPhone.endsWith(cleanCallerPhone))) ||
+                                              (!r.customerId); // fallback if guest customer
 
-                if (!isAssigned) {
-                    return sendJson({ success: false, error: 'غير مصرح: لا يمكنك تقييم مشوار لم تكن الكابتن المنفذ له' }, 403);
+                if (!isAuthorizedPassenger) {
+                    return sendJson({ success: false, error: 'غير مصرح: التقييم مخصص لراكب هذه الرحلة فقط' }, 403);
                 }
 
-                // Prevent duplicate rating point abuse
-                if (r.isRatedByDriver) {
+                // Prevent duplicate rating abuse
+                if (r.isRatedByCustomer) {
                     return sendJson({
                         success: true,
                         alreadyRated: true,
                         message: 'تم تسجيل تقييم هذا المشوار مسبقاً',
-                        pointsEarned: 0,
-                        totalPoints: driver ? (driver.points || 0) : 0,
-                        rating: r.ratingByDriver
+                        rating: r.ratingByCustomer
                     });
                 }
 
-                // Points calculation: 50 base points + 10 bonus points for 5-star rating
+                // Determine target driver
+                const targetDriverId = driverId || r.acceptedDriverId || r.assignedDriverId;
+                const driver = db.findDriver(targetDriverId);
+                const realDriverId = driver ? (driver.driverId || driver.id) : targetDriverId;
+                const driverName = driver ? driver.fullName : (r.assignedDriverName || 'الكابتن');
+
+                // Points calculation for Driver: 50 base points + 10 bonus points for 5-star rating
                 const numRating = Math.max(1, Math.min(5, Number(rating) || 5));
                 const pointsEarned = 50 + (numRating >= 5 ? 10 : 0);
 
-                const result = await db.recordTripRating({
+                const result = await db.recordCustomerTripRating({
                     rideId,
                     driverId: realDriverId,
-                    passengerId: passengerId || r.customerId,
+                    driverName,
+                    customerId: customerId || r.customerId,
                     passengerName: r.customerName || 'الراكب',
                     rating: numRating,
                     tags: Array.isArray(tags) ? tags : [],
@@ -2186,9 +2189,10 @@ async function startServer() {
 
                 return sendJson({
                     success: true,
-                    message: `تم تسجيل تقييم المشوار ومنحك +${pointsEarned} نقطة بنجاح 🌟`,
+                    message: 'تم إرسال تقييمك للكابتن بنجاح، شكراً لمساهمتك في رفع جودة الخدمة 🌟',
                     pointsEarned,
-                    totalPoints: result.driverTotalPoints,
+                    driverRatingAverage: result.driverRatingAverage,
+                    totalDriverPoints: result.driverTotalPoints,
                     rating: result.record
                 });
             } catch (err) {
