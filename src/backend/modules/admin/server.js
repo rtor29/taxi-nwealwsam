@@ -1211,6 +1211,36 @@ async function startServer() {
             const routeId = body.routeId || body.driverRouteId;
             const targetRoute = (db.memoryState.routes || []).find(r => (r.id === routeId || r.routeId === routeId));
             
+            // Prevent duplicate booking for the same passenger
+            const candidateCustomerId = String(body.customerId || body.passengerId || body.userId || '');
+            const candidateRawPhone = String(body.customerPhone || body.phoneNumber || body.phone || '');
+            const candidateCleanPhone = candidateRawPhone.replace(/[^0-9]/g, '');
+            const resolvedDriverId = targetRoute ? targetRoute.driverId : (body.driverId || 'drv-sample');
+
+            const existingActiveBooking = (db.memoryState.bookings || []).find(b => {
+                const isActive = b.status === 'Confirmed' || b.status === 'Pending' || b.status === 'Active' || !b.status;
+                if (!isActive) return false;
+                const bCustId = String(b.customerId || b.passengerId || '');
+                const bPhone = String(b.customerPhone || b.phone || '').replace(/[^0-9]/g, '');
+                const isSameCustomer = (candidateCustomerId && bCustId && candidateCustomerId === bCustId) ||
+                                       (candidateCleanPhone.length >= 7 && bPhone.length >= 7 && (bPhone.endsWith(candidateCleanPhone.slice(-8)) || candidateCleanPhone.endsWith(bPhone.slice(-8))));
+                if (!isSameCustomer) return false;
+                const bRouteId = String(b.routeId || '');
+                const currentRouteId = String(routeId || (targetRoute ? (targetRoute.id || targetRoute.routeId) : '') || '');
+                const isSameRoute = currentRouteId && bRouteId && currentRouteId === bRouteId;
+                const bDriverId = String(b.driverId || '');
+                const isSameDriver = resolvedDriverId && bDriverId && bDriverId === resolvedDriverId;
+                return isSameRoute || isSameDriver;
+            });
+
+            if (existingActiveBooking) {
+                return sendJson({
+                    success: false,
+                    alreadySubscribed: true,
+                    error: 'أنت مشترك بالفعل في هذا الخط، لا يمكنك تكرار الحجز.'
+                }, 409);
+            }
+
             const seats = Math.max(1, parseInt(body.seats || 1, 10));
             if (targetRoute && targetRoute.availableSeats < seats) {
                 return sendJson({ success: false, error: 'عذراً، لا تتوفر مقاعد شاغرة كافية في هذا الخط.' }, 400);

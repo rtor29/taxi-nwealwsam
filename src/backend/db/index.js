@@ -185,7 +185,26 @@ class DatabaseManager {
                 if (parsed.customers) this.memoryState.customers = parsed.customers;
                 if (parsed.verifications) this.memoryState.verifications = parsed.verifications;
                 if (parsed.routes) this.memoryState.routes = parsed.routes;
-                if (parsed.bookings) this.memoryState.bookings = parsed.bookings;
+                if (parsed.bookings && Array.isArray(parsed.bookings)) {
+                    const seen = new Set();
+                    const deduplicated = [];
+                    for (const b of parsed.bookings) {
+                        if (b.status === 'Cancelled' || b.status === 'Rejected') {
+                            deduplicated.push(b);
+                            continue;
+                        }
+                        const routeKey = b.routeId || b.driverId || 'general';
+                        const custId = b.customerId || b.passengerId || '';
+                        const phone = String(b.customerPhone || b.phone || '').replace(/[^0-9]/g, '');
+                        const custKey = custId || (phone.length >= 7 ? phone.slice(-8) : '');
+                        const key = custKey ? `${routeKey}__${custKey}` : (b.id || b.bookingId);
+                        if (!seen.has(key)) {
+                            seen.add(key);
+                            deduplicated.push(b);
+                        }
+                    }
+                    this.memoryState.bookings = deduplicated;
+                }
                 if (parsed.complaints) this.memoryState.complaints = parsed.complaints;
                 if (parsed.settings) this.memoryState.settings = parsed.settings;
                 if (parsed.auditLogs) this.memoryState.auditLogs = parsed.auditLogs;
@@ -1095,6 +1114,27 @@ class DatabaseManager {
         let driver = (this.memoryState.drivers || []).find(d => d.driverId === driverId || d.id === driverId);
         if (!driver) {
             return { success: false, statusCode: 404, error: 'السائق غير موجود' };
+        }
+
+        // Prevent duplicate booking for the same passenger
+        const cleanPassPhone = String(passengerPhone || '').replace(/[^0-9]/g, '');
+        const existingBooking = (this.memoryState.bookings || []).find(b => {
+            const isActive = b.status === 'Confirmed' || b.status === 'Pending' || b.status === 'Active' || !b.status;
+            if (!isActive) return false;
+            const sameDriver = b.driverId === driver.driverId;
+            const sameCustId = (passengerId && (b.passengerId === String(passengerId) || b.customerId === String(passengerId)));
+            const bPhone = String(b.passengerPhone || b.customerPhone || '').replace(/[^0-9]/g, '');
+            const samePhone = cleanPassPhone.length >= 7 && bPhone.length >= 7 && (bPhone.endsWith(cleanPassPhone.slice(-8)) || cleanPassPhone.endsWith(bPhone.slice(-8)));
+            return sameDriver && (sameCustId || samePhone);
+        });
+
+        if (existingBooking) {
+            return {
+                success: false,
+                statusCode: 409,
+                alreadySubscribed: true,
+                error: 'أنت مشترك بالفعل في هذا الخط، لا يمكنك تكرار الحجز.'
+            };
         }
 
         const currentSeats = driver.availableSeats !== undefined ? parseInt(driver.availableSeats, 10) : 4;

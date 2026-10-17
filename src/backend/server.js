@@ -2247,6 +2247,22 @@ async function startServer() {
             return sendJson({ success: true, activeRide: active || null });
         }
 
+        // Customer Subscriptions / Bookings List
+        if ((pathname.startsWith('/api/customer/') || pathname.startsWith('/customer/')) && 
+            (pathname.endsWith('/bookings') || pathname.endsWith('/subscriptions')) && method === 'GET') {
+            const parts = pathname.split('/');
+            const customerId = decodeURIComponent(parts[parts.length - 2]);
+            const cleanPhone = customerId.replace(/[^0-9]/g, '');
+            const userBookings = (db.memoryState.bookings || []).filter(b => {
+                const bCustId = String(b.customerId || b.passengerId || '');
+                const bPhone = String(b.customerPhone || b.phone || '').replace(/[^0-9]/g, '');
+                const isMatch = (customerId && bCustId === customerId) || (cleanPhone.length >= 7 && bPhone.length >= 7 && (bPhone.endsWith(cleanPhone.slice(-8)) || cleanPhone.endsWith(bPhone.slice(-8))));
+                const isActive = b.status === 'Confirmed' || b.status === 'Pending' || b.status === 'Active' || !b.status;
+                return isMatch && isActive;
+            });
+            return sendJson({ success: true, bookings: userBookings });
+        }
+
         // Driver Current Active Accepted Ride
         if (pathname.startsWith('/api/driver/') && pathname.endsWith('/active-ride') && method === 'GET') {
             const parts = pathname.split('/');
@@ -2619,7 +2635,7 @@ async function startServer() {
         }
 
         // Driver Bookings (All bookings for this driver: Pending requests & Confirmed passengers)
-        if (pathname.startsWith('/api/driver/') && pathname.endsWith('/bookings') && method === 'GET') {
+        if ((pathname.startsWith('/api/driver/') || pathname.startsWith('/driver/')) && pathname.endsWith('/bookings') && method === 'GET') {
             const parts = pathname.split('/');
             const driverId = parts[parts.length - 2];
             let driverBookings = [];
@@ -2720,11 +2736,32 @@ async function startServer() {
                 driverBookings = driverBookings.filter(b => b.customerId === authUser.id || (authUser.phone && (b.customerPhone === authUser.phone || b.phone === authUser.phone)));
             }
 
+            // Deduplicate driver bookings by customer to ensure no duplicate cards appear for the driver
+            const seenCustKeys = new Set();
+            const deduplicatedDriverBookings = [];
+            for (const b of driverBookings) {
+                const idKey = b.customerId ? `id_${b.customerId}` : null;
+                const cleanPhone = String(b.customerPhone || b.phone || '').replace(/[^0-9]/g, '');
+                const phoneKey = cleanPhone.length >= 7 ? `phone_${cleanPhone.slice(-8)}` : null;
+                const nameKey = b.customerName ? `name_${b.customerName.trim().toLowerCase()}` : null;
+
+                const isDup = (idKey && seenCustKeys.has(idKey)) || 
+                              (phoneKey && seenCustKeys.has(phoneKey)) ||
+                              (!idKey && !phoneKey && nameKey && seenCustKeys.has(nameKey));
+                if (!isDup) {
+                    if (idKey) seenCustKeys.add(idKey);
+                    if (phoneKey) seenCustKeys.add(phoneKey);
+                    if (nameKey) seenCustKeys.add(nameKey);
+                    deduplicatedDriverBookings.push(b);
+                }
+            }
+            driverBookings = deduplicatedDriverBookings;
+
             return sendJson(driverBookings);
         }
 
         // Driver Pending Requests (Customer booking requests awaiting driver approval)
-        if (pathname.startsWith('/api/driver/') && (pathname.endsWith('/requests') || pathname.endsWith('/pending-bookings') || pathname.endsWith('/pending')) && method === 'GET') {
+        if ((pathname.startsWith('/api/driver/') || pathname.startsWith('/driver/')) && (pathname.endsWith('/requests') || pathname.endsWith('/pending-bookings') || pathname.endsWith('/pending')) && method === 'GET') {
             const parts = pathname.split('/');
             const driverId = parts[parts.length - 2];
             let pendingBookings = [];
@@ -2790,6 +2827,23 @@ async function startServer() {
                 }
             }
 
+            // Deduplicate pending bookings by customer
+            const seenPendingKeys = new Set();
+            const deduplicatedPending = [];
+            for (const pb of pendingBookings) {
+                const idKey = pb.customerId ? `id_${pb.customerId}` : null;
+                const cleanPhone = String(pb.customerPhone || pb.phone || '').replace(/[^0-9]/g, '');
+                const phoneKey = cleanPhone.length >= 7 ? `phone_${cleanPhone.slice(-8)}` : null;
+
+                const isDup = (idKey && seenPendingKeys.has(idKey)) || (phoneKey && seenPendingKeys.has(phoneKey));
+                if (!isDup) {
+                    if (idKey) seenPendingKeys.add(idKey);
+                    if (phoneKey) seenPendingKeys.add(phoneKey);
+                    deduplicatedPending.push(pb);
+                }
+            }
+            pendingBookings = deduplicatedPending;
+
             return sendJson({ success: true, total: pendingBookings.length, requests: pendingBookings, bookings: pendingBookings });
         }
 
@@ -2830,7 +2884,7 @@ async function startServer() {
         }
 
         // Customer Book Route Endpoint
-        if ((pathname === '/api/customer/book-route' || pathname === '/api/bookings' || pathname === '/bookings') && method === 'POST') {
+        if ((pathname === '/api/customer/book-route' || pathname === '/api/bookings' || pathname === '/bookings' || pathname === '/api/routes/subscribe' || pathname === '/routes/subscribe') && method === 'POST') {
             const body = await parseJsonBody(req);
             const userIdentifier = body.customerId || body.passengerPhone || body.phone || body.userId;
             if (_orderRateLimit(clientIp, userIdentifier)) {
@@ -2863,6 +2917,64 @@ async function startServer() {
             const resolvedDriverId = targetDriver ? targetDriver.driverId : (targetRoute ? targetRoute.driverId : (body.driverId || (defaultDriver ? defaultDriver.driverId : 'drv-sample')));
             const resolvedDriverName = targetDriver ? targetDriver.fullName : (targetRoute ? targetRoute.driverName : (body.driverName || (defaultDriver ? defaultDriver.fullName : 'كابتن توصيله')));
             const resolvedDriverPhone = targetDriver ? targetDriver.phoneNumber : (targetRoute ? targetRoute.driverPhone : (body.driverPhone || (defaultDriver ? defaultDriver.phoneNumber : '07801234567')));
+
+            // -------------------------------------------------------------
+            // PREVENT DUPLICATE SUBSCRIPTION / BOOKING FOR THE SAME PASSENGER
+            // -------------------------------------------------------------
+            const candidateCustomerId = String(body.customerId || body.passengerId || body.userId || '');
+            const candidateRawPhone = String(body.customerPhone || body.phoneNumber || body.phone || '');
+            const candidateCleanPhone = candidateRawPhone.replace(/[^0-9]/g, '');
+
+            const existingActiveBooking = (db.memoryState.bookings || []).find(b => {
+                const isActive = b.status === 'Confirmed' || b.status === 'Pending' || b.status === 'Active' || !b.status;
+                if (!isActive) return false;
+
+                // 1. Match customer by ID or Phone number
+                const bCustId = String(b.customerId || b.passengerId || '');
+                const bPhone = String(b.customerPhone || b.phone || '').replace(/[^0-9]/g, '');
+                const isSameCustomer = (candidateCustomerId && bCustId && candidateCustomerId === bCustId) ||
+                                       (candidateCleanPhone.length >= 7 && bPhone.length >= 7 && (bPhone.endsWith(candidateCleanPhone.slice(-8)) || candidateCleanPhone.endsWith(bPhone.slice(-8))));
+                if (!isSameCustomer) return false;
+
+                // 2. Match Route or Driver
+                const bRouteId = String(b.routeId || '');
+                const currentRouteId = String(routeId || (targetRoute ? (targetRoute.id || targetRoute.routeId) : '') || '');
+                const isSameRoute = currentRouteId && bRouteId && currentRouteId === bRouteId;
+
+                const bDriverId = String(b.driverId || '');
+                const isSameDriver = resolvedDriverId && bDriverId && (bDriverId === resolvedDriverId || (targetDriver && bDriverId === targetDriver.driverId));
+
+                return isSameRoute || isSameDriver;
+            });
+
+            if (existingActiveBooking) {
+                return sendJson({
+                    success: false,
+                    alreadySubscribed: true,
+                    existingBookingId: existingActiveBooking.id || existingActiveBooking.bookingId,
+                    error: 'أنت مشترك بالفعل في هذا الخط، لا يمكنك تكرار الحجز.'
+                }, 409);
+            }
+
+            // Also check PostgreSQL database if connected
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    const pgDup = await db.pool.query(`
+                        SELECT id FROM bookings 
+                        WHERE (customer_id = $1 OR customer_id = $2)
+                          AND (driver_route_id = $3 OR route_id = $3 OR driver_id = $4)
+                          AND status IN ('Pending', 'Confirmed', 'Active')
+                        LIMIT 1
+                    `, [candidateCustomerId, userIdentifier, routeId, resolvedDriverId]);
+                    if (pgDup.rows && pgDup.rows.length > 0) {
+                        return sendJson({
+                            success: false,
+                            alreadySubscribed: true,
+                            error: 'أنت مشترك بالفعل في هذا الخط، لا يمكنك تكرار الحجز.'
+                        }, 409);
+                    }
+                } catch (_) {}
+            }
 
             const seats = Math.max(1, parseInt(body.seats || body.seatsBooked || 1, 10));
 
