@@ -1916,6 +1916,45 @@
                         </div>
                     </div>
 
+                    <!-- Brand Logo Color Section -->
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                                    <i class="fa-solid fa-car text-amber-500"></i>
+                                    <span>لون شعار وأيقونة توصيله (Logo Brand Color)</span>
+                                </h3>
+                                <p class="text-xs text-slate-500 mt-0.5">تحديد لون سيارة وشعار توصيله المفرغ في شاشات التطبيق وبطاقات الخدمات:</p>
+                            </div>
+                            <button type="button" onclick="setLogoColorPreset('#EBB812')" class="text-xs text-amber-600 hover:text-amber-700 font-bold flex items-center gap-1 cursor-pointer">
+                                <i class="fa-solid fa-rotate-left text-[10px]"></i>
+                                <span>استعادة الأصفر الأصيل (#EBB812)</span>
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5 items-center pt-2">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-2">اختيار لون الشعار المخصص</label>
+                                <div class="flex items-center gap-3">
+                                    <input type="color" id="theme-logo-color" value="#EBB812" onchange="onLogoColorChange(this.value)" class="w-12 h-11 rounded-xl border border-slate-200 cursor-pointer p-0.5 bg-white shadow-2xs">
+                                    <input type="text" id="theme-logo-hex" value="#EBB812" oninput="onLogoColorHexInput(this.value)" class="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-800 uppercase focus:outline-none focus:ring-2 focus:ring-amber-500/20">
+                                </div>
+                                <div class="flex items-center gap-2 mt-3">
+                                    <span class="text-[11px] text-slate-400 font-medium">ألوان مقترحة:</span>
+                                    <button type="button" onclick="setLogoColorPreset('#EBB812')" class="w-6 h-6 rounded-full border-2 border-white shadow-xs cursor-pointer hover:scale-110 transition" style="background-color: #EBB812;" title="أصفر توصيله الأصيل"></button>
+                                    <button type="button" onclick="setLogoColorPreset('#F59E0B')" class="w-6 h-6 rounded-full border-2 border-white shadow-xs cursor-pointer hover:scale-110 transition" style="background-color: #F59E0B;" title="كهرماني دافئ"></button>
+                                    <button type="button" onclick="setLogoColorPreset('#1B4965')" class="w-6 h-6 rounded-full border-2 border-white shadow-xs cursor-pointer hover:scale-110 transition" style="background-color: #1B4965;" title="كحلي ملكي"></button>
+                                    <button type="button" onclick="setLogoColorPreset('#10B981')" class="w-6 h-6 rounded-full border-2 border-white shadow-xs cursor-pointer hover:scale-110 transition" style="background-color: #10B981;" title="زمردي هادئ"></button>
+                                    <button type="button" onclick="setLogoColorPreset('#0F172A')" class="w-6 h-6 rounded-full border-2 border-white shadow-xs cursor-pointer hover:scale-110 transition" style="background-color: #0F172A;" title="فحمي داكن"></button>
+                                </div>
+                            </div>
+                            <div class="bg-slate-50 rounded-xl p-4 border border-slate-200/80 flex flex-col items-center justify-center">
+                                <span class="text-[11px] font-bold text-slate-400 mb-2">معاينة الشعار باللون المختار:</span>
+                                <div id="dashboard-logo-preview" class="tawseela-dynamic-logo w-36 h-18 transition-all duration-200" style="background-color: #EBB812;"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Action Buttons -->
                     <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
                         <div class="text-xs text-slate-500">
@@ -2093,31 +2132,149 @@
             </div>
         </div>
 
-        <!-- Advertisements Tab -->
-        <section id="tab-advertisements" class="tab-content hidden" style="display:none">
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-xl font-black text-white">📢 إدارة الإعلانات</h2>
-                <button onclick="showAddAdModal()" class="bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-4 py-2 rounded-xl text-sm">+ إعلان جديد</button>
+        <!-- Advertisements & Customer Hub Banners Tab -->
+        <section id="tab-advertisements" class="tab-content hidden space-y-6" style="display:none">
+            <!-- Header -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-xl font-black text-slate-900 flex items-center gap-2">
+                        <span>📢 إدارة إعلانات وبنرات واجهة الراكب (Customer Hub Banners)</span>
+                        <span class="text-xs bg-amber-50 text-amber-700 border border-amber-200/60 px-2.5 py-0.5 rounded-full font-semibold">مزامنة حية</span>
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-1">التحكم في البنر الإعلاني العلوي وبنر انضمام الكباتن المعروضين في الشاشة الرئيسية لاختيار الخدمات للراكب (على نمط بلي)</p>
+                </div>
+                <button type="button" onclick="saveBannersConfig()" class="px-5 py-2.5 bg-[#1B4965] hover:bg-[#143a50] text-white font-bold rounded-xl text-xs transition shadow-xs flex items-center justify-center gap-2 cursor-pointer self-start sm:self-auto">
+                    <i class="fa-solid fa-cloud-arrow-up text-xs"></i>
+                    <span>حفظ ونشر الإعلانات على التطبيق 🚀</span>
+                </button>
             </div>
-            <div id="ads-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-        </section>
 
-        <!-- Add / Edit Ad Modal -->
-        <div id="modal-add-ad" class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center" style="display:none">
-            <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full mx-4 border border-slate-600">
-                <h3 id="modal-ad-title" class="text-lg font-bold text-white mb-4">إضافة إعلان</h3>
-                <input type="hidden" id="ad-id" value="">
-                <div class="space-y-3">
-                    <div><label class="block text-xs font-bold text-slate-400 mb-1">عنوان الإعلان</label><input type="text" id="ad-title" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
-                    <div><label class="block text-xs font-bold text-slate-400 mb-1">نص الإعلان</label><textarea id="ad-content" rows="3" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></textarea></div>
-                    <div><label class="block text-xs font-bold text-slate-400 mb-1">رابط (اختياري)</label><input type="url" id="ad-link" dir="ltr" class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></div>
-                    <div class="flex gap-3 pt-2">
-                        <button onclick="submitNewAd()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold py-3 rounded-xl">نشر الإعلان</button>
-                        <button onclick="hideAddAdModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 rounded-xl">إلغاء</button>
+            <!-- Grid: 2 Main Cards -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- 1. Top Hero Promo Banner Card -->
+                <div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-5">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-sm shadow-2xs font-bold">1</span>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900">البنر الترويجي العلوي (Top Hero Promo)</h3>
+                                <p class="text-[11px] text-slate-400">يظهر بأعلى شاشة الخدمات كبطاقة عريضة جذابة</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="banner-top-enabled" onchange="updateBannersPreview()" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1.5">العنوان الرئيسي للبنر</label>
+                            <input type="text" id="banner-top-title" oninput="updateBannersPreview()" value="مشاويرك في النجف أسهل وأسرع" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1B4965]/20">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1.5">النص الفرعي / تفاصيل العرض</label>
+                            <input type="text" id="banner-top-subtitle" oninput="updateBannersPreview()" value="اطلب تكسي فوري أو احجز مقعدك بالخط اليومي بأفضل الأسعار" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1B4965]/20">
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1.5">شارة العرض / السعر (Badge)</label>
+                                <input type="text" id="banner-top-badge" oninput="updateBannersPreview()" value="توفير يومي 🚖" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1B4965]/20">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1.5">وجهة النقر (Click Action)</label>
+                                <select id="banner-top-action" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-800 focus:outline-none cursor-pointer">
+                                    <option value="taxi">طلب تكسي فوري (الخريطة الرئيسية)</option>
+                                    <option value="daily">حجز خط دائمي (الرحلات اليومية)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1.5">مسار أو رابط الصورة / الأيقونة</label>
+                            <input type="text" id="banner-top-image" oninput="updateBannersPreview()" value="/assets/tawseela-logo-yellow.png" dir="ltr" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#1B4965]/20">
+                        </div>
+
+                        <!-- Live Mini Preview -->
+                        <div class="pt-2">
+                            <span class="block text-[11px] font-bold text-slate-400 mb-2">معاينة مباشرة لشكل البنر في التطبيق:</span>
+                            <div id="preview-top-banner" class="rounded-2xl p-4 bg-gradient-to-l from-amber-500 via-amber-400 to-amber-500 text-slate-900 shadow-sm relative overflow-hidden transition-all duration-200">
+                                <div class="flex items-center justify-between">
+                                    <div class="space-y-1 z-10 max-w-[70%]">
+                                        <span id="preview-top-badge" class="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black bg-white/90 text-amber-900 shadow-2xs">توفير يومي 🚖</span>
+                                        <h4 id="preview-top-title" class="text-sm font-black leading-tight text-slate-900">مشاويرك في النجف أسهل وأسرع</h4>
+                                        <p id="preview-top-subtitle" class="text-[11px] font-medium text-slate-800/90 leading-tight">اطلب تكسي فوري أو احجز مقعدك بالخط اليومي</p>
+                                    </div>
+                                    <img id="preview-top-img" src="assets/tawseela-logo-yellow.png" alt="Tawseela" class="w-16 h-12 object-contain z-10 drop-shadow-xs">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Captain Recruitment Banner Card -->
+                <div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-5">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center text-sm shadow-2xs font-bold">2</span>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900">بنر تحفيز تسجيل الكباتن (Captain Recruitment)</h3>
+                                <p class="text-[11px] text-slate-400">يظهر تحت بطاقات الخدمات لتشجيع السائقين على التسجيل</p>
+                            </div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="banner-captain-enabled" onchange="updateBannersPreview()" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1.5">العنوان التحفيزي الرئيسي</label>
+                            <input type="text" id="banner-captain-title" oninput="updateBannersPreview()" value="سجل كابتن.. وزيد دخلك الشهري ويا توصيله" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1B4965]/20">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1.5">النص الترويجي ومبلغ الربح المتوقع</label>
+                            <input type="text" id="banner-captain-subtitle" oninput="updateBannersPreview()" value="أرباح تصل إلى 1,200,000 د.ع شهرياً مع عمولة رمزية 0% وساعات مرنة" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1B4965]/20">
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1.5">شارة الميزة التنافسية (Badge)</label>
+                                <input type="text" id="banner-captain-badge" oninput="updateBannersPreview()" value="عمولة 0% لأول شهر 🌟" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1B4965]/20">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1.5">نص زر التسجيل (CTA Button)</label>
+                                <input type="text" id="banner-captain-cta" oninput="updateBannersPreview()" value="سجل كابتن الآن 🚗" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1B4965]/20">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1.5">رابط توجيه زر الكابتن (رابط واتساب أو صفحة التسجيل)</label>
+                            <input type="text" id="banner-captain-action" value="https://wa.me/9647706204066" dir="ltr" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#1B4965]/20">
+                        </div>
+
+                        <!-- Live Mini Preview -->
+                        <div class="pt-2">
+                            <span class="block text-[11px] font-bold text-slate-400 mb-2">معاينة مباشرة لشكل بنر الكابتن في التطبيق:</span>
+                            <div id="preview-captain-banner" class="rounded-2xl p-4 bg-[#0F172A] text-white shadow-sm relative overflow-hidden transition-all duration-200">
+                                <div class="flex items-center justify-between">
+                                    <div class="space-y-1.5 z-10 max-w-[70%]">
+                                        <span id="preview-captain-badge" class="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950 shadow-2xs">عمولة 0% لأول شهر 🌟</span>
+                                        <h4 id="preview-captain-title" class="text-xs font-black leading-tight text-white">سجل كابتن.. وزيد دخلك الشهري ويا توصيله</h4>
+                                        <p id="preview-captain-subtitle" class="text-[10.5px] font-normal text-slate-300 leading-tight">أرباح تصل إلى 1,200,000 د.ع شهرياً</p>
+                                    </div>
+                                    <button type="button" id="preview-captain-cta" class="px-3 py-1.5 rounded-xl bg-amber-400 text-slate-950 text-xs font-black shrink-0 shadow-2xs">سجل كابتن الآن 🚗</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
 
         <!-- Telegram Tab -->
         <section id="tab-telegram" class="tab-content hidden" style="display:none">

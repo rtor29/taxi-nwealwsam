@@ -295,7 +295,7 @@ function switchTab(tabName) {
         case 'customization': loadCustomizationSettings(); break;
         case 'ui-management': loadCustomButtons(); loadAdvertisements(); break;
         case 'custom-buttons': loadCustomButtons(); break;
-        case 'advertisements': loadAdvertisements(); break;
+        case 'advertisements': loadBannersConfig(); break;
         case 'telegram': break;
     }
 }
@@ -5540,12 +5540,46 @@ async function saveAndPublishTheme() {
 window.saveAndPublishTheme = saveAndPublishTheme;
 window.saveDashboardTheme = saveAndPublishTheme;
 
+function setLogoColorDisplay(color) {
+    var cInput = document.getElementById('theme-logo-color');
+    var hInput = document.getElementById('theme-logo-hex');
+    var preview = document.getElementById('dashboard-logo-preview');
+    if (cInput) cInput.value = color;
+    if (hInput) hInput.value = color.toUpperCase();
+    if (preview) {
+        preview.style.backgroundColor = color;
+    }
+    document.documentElement.style.setProperty('--brand-logo-color', color);
+}
+window.setLogoColorDisplay = setLogoColorDisplay;
+
+function onLogoColorChange(val) {
+    currentThemeSettings.brandLogoColor = val;
+    setLogoColorDisplay(val);
+}
+window.onLogoColorChange = onLogoColorChange;
+
+function onLogoColorHexInput(val) {
+    if (/^#[0-9A-Fa-f]{6}$/.test(val)) {
+        currentThemeSettings.brandLogoColor = val;
+        setLogoColorDisplay(val);
+    }
+}
+window.onLogoColorHexInput = onLogoColorHexInput;
+
+function setLogoColorPreset(color) {
+    currentThemeSettings.brandLogoColor = color;
+    setLogoColorDisplay(color);
+}
+window.setLogoColorPreset = setLogoColorPreset;
+
 function resetToDefaultTheme() {
     selectThemePreset('default');
     var ffEl = document.getElementById('theme-font-family');
     if (ffEl) ffEl.value = 'IBM Plex Sans Arabic';
     currentThemeSettings.fontFamily = 'IBM Plex Sans Arabic';
     selectFontSize('14px');
+    setLogoColorPreset('#EBB812');
     updateLivePreviewCard();
     applyLiveThemeToDashboard(currentThemeSettings);
     showToast('تمت استعادة المظهر الافتراضي للمعاينة ✨');
@@ -5567,9 +5601,16 @@ async function loadCustomizationSettings() {
             if (th.fontSize) {
                 selectFontSize(th.fontSize);
             }
+            if (th.brandLogoColor) {
+                currentThemeSettings.brandLogoColor = th.brandLogoColor;
+                setLogoColorDisplay(th.brandLogoColor);
+            } else {
+                setLogoColorDisplay('#EBB812');
+            }
             updateLivePreviewCard();
             applyLiveThemeToDashboard(currentThemeSettings);
         } else {
+            setLogoColorDisplay('#EBB812');
             var cached = localStorage.getItem('tawseela_dashboard_theme');
             if (cached) {
                 try {
@@ -5886,6 +5927,127 @@ async function deleteCustomButton(id) {
         loadCustomButtons();
     } catch(e) { showToast('خطأ في الحذف', 'error'); }
 }
+
+// ===== Customer Hub Banners Manager (Baly-Style Promos) =====
+async function loadBannersConfig() {
+    try {
+        var res = await fetch('/api/public/banners', { cache: 'no-cache' });
+        var data = await res.json();
+        if (data && (data.topBanner || data.captainBanner)) {
+            var top = data.topBanner || {};
+            var cap = data.captainBanner || {};
+
+            var topEn = document.getElementById('banner-top-enabled');
+            if (topEn) topEn.checked = top.enabled !== false;
+            var topTitle = document.getElementById('banner-top-title');
+            if (topTitle) topTitle.value = top.title || 'مشاويرك في النجف أسهل وأسرع';
+            var topSub = document.getElementById('banner-top-subtitle');
+            if (topSub) topSub.value = top.subtitle || 'اطلب تكسي فوري أو احجز مقعدك بالخط اليومي بأفضل الأسعار';
+            var topBadge = document.getElementById('banner-top-badge');
+            if (topBadge) topBadge.value = top.badge || 'توفير يومي 🚖';
+            var topImg = document.getElementById('banner-top-image');
+            if (topImg) topImg.value = top.imageUrl || '/assets/tawseela-logo-yellow.png';
+            var topAct = document.getElementById('banner-top-action');
+            if (topAct) topAct.value = top.actionUrl || 'taxi';
+
+            var capEn = document.getElementById('banner-captain-enabled');
+            if (capEn) capEn.checked = cap.enabled !== false;
+            var capTitle = document.getElementById('banner-captain-title');
+            if (capTitle) capTitle.value = cap.title || 'سجل كابتن.. وزيد دخلك الشهري ويا توصيله';
+            var capSub = document.getElementById('banner-captain-subtitle');
+            if (capSub) capSub.value = cap.subtitle || 'أرباح تصل إلى 1,200,000 د.ع شهرياً مع عمولة رمزية 0% وساعات مرنة';
+            var capBadge = document.getElementById('banner-captain-badge');
+            if (capBadge) capBadge.value = cap.badge || 'عمولة 0% لأول شهر 🌟';
+            var capCta = document.getElementById('banner-captain-cta');
+            if (capCta) capCta.value = cap.ctaText || 'سجل كابتن الآن 🚗';
+            var capAct = document.getElementById('banner-captain-action');
+            if (capAct) capAct.value = cap.actionUrl || 'https://wa.me/9647706204066';
+
+            updateBannersPreview();
+        }
+    } catch (err) {
+        console.warn('[Banners] Load error:', err.message);
+    }
+}
+window.loadBannersConfig = loadBannersConfig;
+
+function updateBannersPreview() {
+    var topEn = document.getElementById('banner-top-enabled')?.checked;
+    var topTitle = document.getElementById('banner-top-title')?.value || '';
+    var topSub = document.getElementById('banner-top-subtitle')?.value || '';
+    var topBadge = document.getElementById('banner-top-badge')?.value || '';
+    var topImg = document.getElementById('banner-top-image')?.value || '';
+
+    var pTopTitle = document.getElementById('preview-top-title');
+    var pTopSub = document.getElementById('preview-top-subtitle');
+    var pTopBadge = document.getElementById('preview-top-badge');
+    var pTopCard = document.getElementById('preview-top-banner');
+    if (pTopTitle) pTopTitle.textContent = topTitle;
+    if (pTopSub) pTopSub.textContent = topSub;
+    if (pTopBadge) pTopBadge.textContent = topBadge;
+    if (pTopCard) pTopCard.style.opacity = topEn ? '1' : '0.4';
+
+    var capEn = document.getElementById('banner-captain-enabled')?.checked;
+    var capTitle = document.getElementById('banner-captain-title')?.value || '';
+    var capSub = document.getElementById('banner-captain-subtitle')?.value || '';
+    var capBadge = document.getElementById('banner-captain-badge')?.value || '';
+    var capCta = document.getElementById('banner-captain-cta')?.value || '';
+
+    var pCapTitle = document.getElementById('preview-captain-title');
+    var pCapSub = document.getElementById('preview-captain-subtitle');
+    var pCapBadge = document.getElementById('preview-captain-badge');
+    var pCapCta = document.getElementById('preview-captain-cta');
+    var pCapCard = document.getElementById('preview-captain-banner');
+    if (pCapTitle) pCapTitle.textContent = capTitle;
+    if (pCapSub) pCapSub.textContent = capSub;
+    if (pCapBadge) pCapBadge.textContent = capBadge;
+    if (pCapCta) pCapCta.textContent = capCta;
+    if (pCapCard) pCapCard.style.opacity = capEn ? '1' : '0.4';
+}
+window.updateBannersPreview = updateBannersPreview;
+
+async function saveBannersConfig() {
+    var payload = {
+        topBanner: {
+            enabled: document.getElementById('banner-top-enabled')?.checked ?? true,
+            title: document.getElementById('banner-top-title')?.value || '',
+            subtitle: document.getElementById('banner-top-subtitle')?.value || '',
+            badge: document.getElementById('banner-top-badge')?.value || '',
+            imageUrl: document.getElementById('banner-top-image')?.value || '/assets/tawseela-logo-yellow.png',
+            ctaText: 'اطلب الآن',
+            actionUrl: document.getElementById('banner-top-action')?.value || 'taxi'
+        },
+        captainBanner: {
+            enabled: document.getElementById('banner-captain-enabled')?.checked ?? true,
+            title: document.getElementById('banner-captain-title')?.value || '',
+            subtitle: document.getElementById('banner-captain-subtitle')?.value || '',
+            badge: document.getElementById('banner-captain-badge')?.value || '',
+            ctaText: document.getElementById('banner-captain-cta')?.value || 'سجل كابتن الآن 🚗',
+            actionUrl: document.getElementById('banner-captain-action')?.value || 'https://wa.me/9647706204066'
+        }
+    };
+
+    try {
+        var res = await fetch('/api/admin/banners', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...authHeaders()
+            },
+            body: JSON.stringify(payload)
+        });
+        var data = await res.json();
+        if (data.success) {
+            showToast('تم حفظ ونشر الإعلانات على واجهة الراكب بنجاح 📢');
+            updateBannersPreview();
+        } else {
+            showToast(data.error || 'فشل حفظ الإعلانات', 'error');
+        }
+    } catch (err) {
+        showToast('حدث خطأ أثناء حفظ الإعلانات: ' + err.message, 'error');
+    }
+}
+window.saveBannersConfig = saveBannersConfig;
 
 // ===== Advertisements Tab & UI Management =====
 async function loadAdvertisements() {

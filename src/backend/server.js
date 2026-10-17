@@ -3921,6 +3921,7 @@ async function startServer() {
                 primaryColor: '#1B4965',
                 primaryHover: '#14364A',
                 accentColor: '#D97706',
+                brandLogoColor: '#EBB812',
                 fontFamily: 'IBM Plex Sans Arabic',
                 fontSize: '14px',
                 bgColor: '#F8FAFC',
@@ -3959,6 +3960,82 @@ async function startServer() {
             }
 
             return sendJson({ success: true, message: 'تم حفظ وتحديث المظهر بنجاح', theme: db.memoryState.appConfig.theme });
+        }
+
+        // ===== Dedicated Banners API (Customer Service Hub & Dashboard) =====
+        if ((pathname === '/api/public/banners' || pathname === '/api/banners' || pathname === '/api/admin/banners') && method === 'GET') {
+            const defaultBanners = {
+                topBanner: {
+                    enabled: true,
+                    title: 'مشاويرك في النجف أسهل وأسرع',
+                    subtitle: 'اطلب تكسي فوري أو احجز مقعدك بالخط اليومي بأفضل الأسعار',
+                    badge: 'توفير يومي 🚖',
+                    imageUrl: '/assets/tawseela-logo-yellow.png',
+                    ctaText: 'اطلب الآن',
+                    actionUrl: 'taxi'
+                },
+                captainBanner: {
+                    enabled: true,
+                    title: 'سجل كابتن.. وزيد دخلك الشهري ويا توصيله',
+                    subtitle: 'أرباح تصل إلى 1,200,000 د.ع شهرياً مع عمولة رمزية 0% وساعات مرنة',
+                    badge: 'عمولة 0% لأول شهر 🌟',
+                    ctaText: 'سجل كابتن الآن 🚗',
+                    actionUrl: 'https://wa.me/9647706204066'
+                }
+            };
+            const currentBanners = (db.memoryState.banners)
+                ? {
+                    topBanner: { ...defaultBanners.topBanner, ...(db.memoryState.banners.topBanner || {}) },
+                    captainBanner: { ...defaultBanners.captainBanner, ...(db.memoryState.banners.captainBanner || {}) }
+                }
+                : defaultBanners;
+
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            return sendJson({ success: true, ...currentBanners });
+        }
+
+        if ((pathname === '/api/admin/banners' || pathname === '/api/banners') && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const defaultBanners = {
+                topBanner: {
+                    enabled: true,
+                    title: 'مشاويرك في النجف أسهل وأسرع',
+                    subtitle: 'اطلب تكسي فوري أو احجز مقعدك بالخط اليومي بأفضل الأسعار',
+                    badge: 'توفير يومي 🚖',
+                    imageUrl: '/assets/tawseela-logo-yellow.png',
+                    ctaText: 'اطلب الآن',
+                    actionUrl: 'taxi'
+                },
+                captainBanner: {
+                    enabled: true,
+                    title: 'سجل كابتن.. وزيد دخلك الشهري ويا توصيله',
+                    subtitle: 'أرباح تصل إلى 1,200,000 د.ع شهرياً مع عمولة رمزية وساعات مرنة',
+                    badge: 'عمولة 0% لأول شهر 🌟',
+                    ctaText: 'سجل كابتن الآن 🚗',
+                    actionUrl: 'https://wa.me/9647706204066'
+                }
+            };
+
+            const prev = db.memoryState.banners || defaultBanners;
+            db.memoryState.banners = {
+                topBanner: { ...prev.topBanner, ...(body.topBanner || {}) },
+                captainBanner: { ...prev.captainBanner, ...(body.captainBanner || {}) }
+            };
+            db.saveStateSnapshot();
+
+            if (db.pool) {
+                try {
+                    await db.pool.query(`
+                        INSERT INTO system_settings (key, value_json, description, updated_at)
+                        VALUES ('hub_banners', $1, 'Customer Service Hub Banners Configuration', NOW())
+                        ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json, updated_at = NOW()
+                    `, [JSON.stringify(db.memoryState.banners)]);
+                } catch (dbErr) {
+                    // Non-fatal fallback
+                }
+            }
+
+            return sendJson({ success: true, message: 'تم حفظ وتحديث الإعلانات بنجاح ✅', banners: db.memoryState.banners });
         }
 
         // Onboarding screens

@@ -212,6 +212,8 @@ class DatabaseManager {
                 if (parsed.cancellationRequests) this.memoryState.cancellationRequests = parsed.cancellationRequests;
                 if (parsed.tripRatings) this.memoryState.tripRatings = parsed.tripRatings;
                 if (parsed.rideRequests) this.memoryState.rideRequests = parsed.rideRequests;
+                if (parsed.banners) this.memoryState.banners = parsed.banners;
+                if (parsed.appConfig) this.memoryState.appConfig = parsed.appConfig;
                 console.log(`[Database] Loaded ${this.memoryState.drivers.length} drivers, ${this.memoryState.customers.length} customers, ${(this.memoryState.tripRatings || []).length} trip ratings from state snapshot`);
             }
         } catch (e) {
@@ -664,6 +666,21 @@ class DatabaseManager {
                         createdAt: r.created_at,
                         resolvedAt: r.resolved_at
                     }));
+                }
+            } catch (_) {}
+
+            try {
+                const settRes = await client.query("SELECT key, value_json FROM system_settings WHERE key IN ('hub_banners', 'app_theme')");
+                for (const row of settRes.rows) {
+                    if (row.key === 'hub_banners') {
+                        try { this.memoryState.banners = JSON.parse(row.value_json); } catch (_) {}
+                    }
+                    if (row.key === 'app_theme') {
+                        try {
+                            if (!this.memoryState.appConfig) this.memoryState.appConfig = {};
+                            this.memoryState.appConfig.theme = JSON.parse(row.value_json);
+                        } catch (_) {}
+                    }
                 }
             } catch (_) {}
 

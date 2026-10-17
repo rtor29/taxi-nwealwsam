@@ -299,3 +299,23 @@ tbody td {
     color: #0f172a !important;
     background-color: #f1f5f9 !important;
 }
+
+/* ==========================================================================
+   Dynamic Tawseela Logo Color Filter/Mask
+   ========================================================================== */
+:root {
+    --brand-logo-color: #EBB812;
+}
+
+.tawseela-dynamic-logo {
+    display: inline-block;
+    background-color: var(--brand-logo-color, #EBB812);
+    -webkit-mask-image: url('assets/tawseela-logo-transparent.png');
+    mask-image: url('assets/tawseela-logo-transparent.png');
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+}
