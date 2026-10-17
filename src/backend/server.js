@@ -3450,16 +3450,51 @@ async function startServer() {
             return sendJson({ success: true });
         }
 
-        // Theme Management
-        if (pathname === '/api/admin/theme' && method === 'GET') {
-            return sendJson((db.memoryState.appConfig && db.memoryState.appConfig.theme) || {});
+        // ===== Dedicated Theme & Typography Config APIs (Web App & Dashboard) =====
+        if ((pathname === '/api/app-config/theme' || pathname === '/api/admin/app-config/theme' || pathname === '/api/admin/theme') && method === 'GET') {
+            const defaultTheme = {
+                preset: 'default',
+                primaryColor: '#1B4965',
+                primaryHover: '#14364A',
+                accentColor: '#D97706',
+                fontFamily: 'IBM Plex Sans Arabic',
+                fontSize: '14px',
+                bgColor: '#F8FAFC',
+                cardBg: '#FFFFFF',
+                textColor: '#0F172A',
+                appName: 'توصيله',
+                logoEmoji: '🚕',
+                footerText: '© 2026 توصيله (Tawseela IQ) · النجف الأشرف'
+            };
+            const themeConfig = (db.memoryState.appConfig && db.memoryState.appConfig.theme) 
+                ? { ...defaultTheme, ...db.memoryState.appConfig.theme } 
+                : defaultTheme;
+
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            return sendJson({ success: true, theme: themeConfig, ...themeConfig });
         }
-        if (pathname === '/api/admin/theme' && method === 'POST') {
+
+        if ((pathname === '/api/admin/app-config/theme' || pathname === '/api/app-config/theme' || pathname === '/api/admin/theme') && method === 'POST') {
             const body = await parseJsonBody(req);
             if (!db.memoryState.appConfig) db.memoryState.appConfig = {};
-            db.memoryState.appConfig.theme = { ...(db.memoryState.appConfig.theme || {}), ...body };
+            const incoming = body.theme ? body.theme : body;
+            db.memoryState.appConfig.theme = { ...(db.memoryState.appConfig.theme || {}), ...incoming };
             db.saveStateSnapshot();
-            return sendJson({ success: true });
+
+            // Try persisting to system_settings in PostgreSQL
+            if (db.pool) {
+                try {
+                    await db.pool.query(`
+                        INSERT INTO system_settings (key, value_json, description, updated_at)
+                        VALUES ('app_theme', $1, 'App Theme & Typography Configuration', NOW())
+                        ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json, updated_at = NOW()
+                    `, [JSON.stringify(db.memoryState.appConfig.theme)]);
+                } catch (dbErr) {
+                    // Non-fatal fallback to state.json
+                }
+            }
+
+            return sendJson({ success: true, message: 'تم حفظ وتحديث المظهر بنجاح', theme: db.memoryState.appConfig.theme });
         }
 
         // Onboarding screens
