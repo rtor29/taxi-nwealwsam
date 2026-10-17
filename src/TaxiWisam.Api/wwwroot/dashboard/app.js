@@ -4,6 +4,13 @@
 // =============================================================================
 const API_BASE = '/api/admin';
 
+function authHeaders() {
+    const token = localStorage.getItem('admin_token') || localStorage.getItem('token') || '';
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    return headers;
+}
+
 let currentDocId = null;
 let currentDriverId = null;
 let currentDriverData = null;
@@ -267,6 +274,8 @@ function switchTab(tabName) {
             break;
         case 'fleet-map':
             initFleetMapbox();
+            setTimeout(() => { if (fleetMap) fleetMap.resize(); }, 150);
+            setTimeout(() => { if (fleetMap) fleetMap.resize(); }, 400);
             break;
         case 'complaints':
             loadComplaints();
@@ -2536,7 +2545,8 @@ function showToast(msg, isError = false) {
 
 // =============================================================================
 // Mapbox GL JS Fleet Tracking & Interactive Route Drawing Tool
-let MAPBOX_PUBLIC_TOKEN = window.__MAPBOX_TOKEN || '';
+const DEFAULT_MAPBOX_TOKEN = 'pk.eyJ1IjoiYWxtdXNhd3kiLCJhIjoiY211YjV3b2h1MWprZzJ5czd0NW9hdW1vayJ9._J6DYjYBDhsdcidErQrblA';
+let MAPBOX_PUBLIC_TOKEN = window.__MAPBOX_TOKEN || DEFAULT_MAPBOX_TOKEN;
 
 // Load public runtime secrets from server environment only
 async function initServerConfig() {
@@ -2555,7 +2565,6 @@ async function initServerConfig() {
     } catch (_) {}
 }
 initServerConfig();
-
 
 function ensureMapboxRTL() {
     if (typeof mapboxgl !== 'undefined' && typeof mapboxgl.setRTLTextPlugin === 'function') {
@@ -2589,30 +2598,36 @@ function initFleetMapbox() {
     }
 
     ensureMapboxRTL();
-    mapboxgl.accessToken = MAPBOX_PUBLIC_TOKEN;
+    mapboxgl.accessToken = MAPBOX_PUBLIC_TOKEN || DEFAULT_MAPBOX_TOKEN;
 
     const mapContainer = document.getElementById('mapbox-fleet-map');
     if (!mapContainer) return;
 
     if (!fleetMap) {
-        fleetMap = new mapboxgl.Map({
-            container: 'mapbox-fleet-map',
-            style: 'mapbox://styles/mapbox/streets-v12', // Clean, crisp vector map with muted roads
-            center: [44.3168, 31.9961], // Najaf Center [lon, lat]
-            zoom: 13.5,
-            pitch: 0,
-            attributionControl: false
-        });
+        try {
+            fleetMap = new mapboxgl.Map({
+                container: 'mapbox-fleet-map',
+                style: 'mapbox://styles/mapbox/streets-v12', // Clean, crisp vector map with muted roads
+                center: [44.3168, 31.9961], // Najaf Center [lon, lat]
+                zoom: 13.5,
+                pitch: 0,
+                attributionControl: false
+            });
 
-        // Add subtle navigation controls to bottom-left
-        fleetMap.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'bottom-left');
+            // Add subtle navigation controls to bottom-left
+            fleetMap.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'bottom-left');
 
-        fleetMap.on('load', () => {
-            setTimeout(() => { if (fleetMap) fleetMap.resize(); }, 50);
-            refreshFleetLocations();
-        });
+            fleetMap.on('load', () => {
+                setTimeout(() => { if (fleetMap) fleetMap.resize(); }, 60);
+                setTimeout(() => { if (fleetMap) fleetMap.resize(); }, 300);
+                refreshFleetLocations();
+            });
+        } catch (mapErr) {
+            console.error('[FleetRadar] Map initialization failed:', mapErr);
+        }
     } else {
-        setTimeout(() => { if (fleetMap) fleetMap.resize(); }, 100);
+        setTimeout(() => { if (fleetMap) fleetMap.resize(); }, 80);
+        setTimeout(() => { if (fleetMap) fleetMap.resize(); }, 300);
         refreshFleetLocations();
     }
 
@@ -2629,6 +2644,12 @@ function initFleetMapbox() {
 
 function isDriverOnline(driver) {
     if (!driver) return false;
+    if (driver.isBlocked === true) return false;
+    const workMode = String(driver.workMode || driver.work_mode || '').trim();
+    if (workMode === 'خمول' || workMode === 'idle') return false;
+    const workStatus = String(driver.workStatus || '').trim().toLowerCase();
+    if (workStatus === 'idle') return false;
+    if (driver.isOnline === true) return true;
     const s = String(driver.status || '').toLowerCase();
     return s === 'online' || s === 'on_trip' || s === 'available' || s === 'active' || s === 'in_ride';
 }
@@ -2636,8 +2657,8 @@ function isDriverOnline(driver) {
 async function refreshFleetLocations() {
     try {
         const [liveRes, allDriversRes] = await Promise.all([
-            fetch('/api/admin/fleet/live').then(r => r.ok ? r.json() : []).catch(() => []),
-            fetch('/api/admin/drivers').then(r => r.ok ? r.json() : { drivers: [] }).catch(() => ({ drivers: [] }))
+            fetch('/api/admin/fleet/live', { headers: authHeaders() }).then(r => r.ok ? r.json() : []).catch(() => []),
+            fetch('/api/admin/drivers', { headers: authHeaders() }).then(r => r.ok ? r.json() : { drivers: [] }).catch(() => ({ drivers: [] }))
         ]);
 
         const liveList = Array.isArray(liveRes) ? liveRes : [];
@@ -2646,35 +2667,41 @@ async function refreshFleetLocations() {
         // Build unified radar driver map
         const unifiedMap = new Map();
 
-        // 1. Add all approved drivers from registry
+        // 1. Add all drivers from registry
         allDrivers.forEach(d => {
             const id = d.driverId || d.id;
             if (!id) return;
             const vMake = d.vehicleMake || '';
             const vModel = d.vehicleModel || '';
             const vPlate = d.vehiclePlate || 'النجف';
+            const online = d.isOnline === true || ['online', 'active', 'available', 'on_trip', 'in_ride'].includes(String(d.status || '').toLowerCase());
+            const wm = d.work_mode || d.workMode || (d.workStatus === 'permanent' ? 'خط دائمي' : (online ? 'مشوار قصير' : 'خمول'));
             unifiedMap.set(id, {
                 driverId: id,
                 driverName: d.fullName || 'كابتن توصيله',
-                phone: d.phoneNumber || '07800000000',
+                fullName: d.fullName || 'كابتن توصيله',
+                phone: d.phoneNumber || d.phone || '07800000000',
                 carModel: `${vMake} ${vModel}`.trim() || 'مركبة كابتن',
                 plateNumber: vPlate,
-                latitude: d.latitude || 31.9961,
-                longitude: d.longitude || 44.3168,
+                latitude: parseFloat(d.latitude || d.currentLat || 31.9961),
+                longitude: parseFloat(d.longitude || d.currentLon || 44.3168),
                 heading: d.heading || 0,
-                status: 'offline', // default offline until detected in live
+                status: online ? (d.status || 'Online') : 'offline',
+                isOnline: online && wm !== 'خمول',
                 serviceType: d.serviceType || 'Both',
-                workMode: d.workMode || 'مشوار قصير',
+                workMode: wm,
                 speedKmh: 0,
                 rating: d.ratingAverage || 5.0
             });
         });
 
-        // 2. Overlay live coordinates & active statuses
+        // 2. Overlay live coordinates & active statuses from live tracking
         liveList.forEach(ld => {
             const id = ld.driverId;
             if (!id) return;
             const existing = unifiedMap.get(id) || {};
+            const online = ld.isOnline !== undefined ? Boolean(ld.isOnline) : ['online', 'active', 'available', 'on_trip', 'in_ride'].includes(String(ld.status || '').toLowerCase());
+            const wm = ld.work_mode || ld.workMode || existing.workMode || 'مشوار قصير';
             unifiedMap.set(id, {
                 ...existing,
                 ...ld,
@@ -2683,12 +2710,13 @@ async function refreshFleetLocations() {
                 phone: ld.phone || ld.phoneNumber || existing.phone || '07800000000',
                 carModel: ld.carModel || ld.vehicleInfo || existing.carModel || 'مركبة كابتن',
                 plateNumber: ld.plateNumber || existing.plateNumber || 'النجف',
-                latitude: ld.latitude,
-                longitude: ld.longitude,
+                latitude: parseFloat(ld.latitude || existing.latitude || 31.9961),
+                longitude: parseFloat(ld.longitude || existing.longitude || 44.3168),
                 heading: ld.heading !== undefined ? ld.heading : (existing.heading || 0),
-                status: ld.status || 'Online',
+                status: online ? (ld.status || existing.status || 'Online') : 'offline',
+                isOnline: online && wm !== 'خمول',
                 serviceType: ld.serviceType || existing.serviceType || 'Both',
-                workMode: ld.work_mode || ld.workMode || existing.workMode || 'مشوار قصير',
+                workMode: wm,
                 speedKmh: ld.speedKmh || 0
             });
         });
@@ -2707,6 +2735,7 @@ async function refreshFleetLocations() {
         console.warn('Error refreshing radar fleet locations:', err);
     }
 }
+window.fetchFleetDrivers = refreshFleetLocations;
 
 function renderRadarMarkers() {
     if (!fleetMap) return;

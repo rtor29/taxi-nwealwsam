@@ -247,13 +247,24 @@ tbody td {
     display: block !important;
 }
 
+#tab-fleet-map {
+    position: relative !important;
+    width: 100% !important;
+    height: calc(100vh - 4.5rem) !important;
+    min-height: 500px !important;
+    overflow: hidden !important;
+}
+
 #tab-fleet-map:not(.hidden) {
     display: block !important;
+}
+
+#mapbox-fleet-map {
     position: absolute !important;
     inset: 0 !important;
     width: 100% !important;
     height: 100% !important;
-    z-index: 10 !important;
+    min-height: 500px !important;
 }
 
 /* ==========================================================================

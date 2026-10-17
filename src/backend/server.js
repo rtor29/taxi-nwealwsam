@@ -1537,7 +1537,107 @@ async function startServer() {
         // ---------------------------------------------------------------------
         // 4. FLEET, MATCHING & ROUTING APIS
         // ---------------------------------------------------------------------
-        if (pathname === '/api/admin/fleet/live' || pathname === '/api/drivers/nearby') {
+        // 4.1 Admin Fleet Radar Live Tracking: GET /api/admin/fleet/live & /api/admin/drivers/locations
+        if ((pathname === '/api/admin/fleet/live' || pathname === '/api/admin/drivers/locations') && method === 'GET') {
+            try {
+                let dbDrivers = [];
+                if (db.isPostgresConnected && db.pool) {
+                    try {
+                        const pgRes = await db.pool.query(`
+                            SELECT 
+                                driver_id, full_name, phone_number, vehicle_make, vehicle_model, 
+                                vehicle_plate, vehicle_year, status, is_verified, is_approved, 
+                                is_blocked, work_mode, rating_average, total_trips, points,
+                                latitude, longitude, heading,
+                                permanent_lat, permanent_lon, permanent_location_name,
+                                permanent_dropoff_lat, permanent_dropoff_lon, permanent_dropoff_name,
+                                created_at
+                            FROM drivers
+                            ORDER BY created_at DESC
+                        `);
+                        dbDrivers = pgRes.rows || [];
+                    } catch (pgErr) {
+                        console.warn('[FleetLive] Postgres query fallback:', pgErr.message);
+                    }
+                }
+
+                // If DB query empty, fallback to in-memory drivers
+                const sourceDrivers = dbDrivers.length > 0 ? dbDrivers : (db.memoryState.drivers || []);
+                const memMap = new Map((db.memoryState.drivers || []).map(d => [d.driverId || d.id, d]));
+
+                // Check active rides in memory
+                const activeDriverRides = new Map();
+                (db.memoryState.rideRequests || []).forEach(r => {
+                    if (r.driverId && ['accepted', 'arrived', 'in_ride', 'in_trip', 'in_progress'].includes(r.status)) {
+                        activeDriverRides.set(r.driverId, r);
+                    }
+                });
+
+                const fleet = sourceDrivers.map(d => {
+                    const id = d.driver_id || d.driverId || d.id;
+                    const mem = memMap.get(id) || {};
+                    const activeRide = activeDriverRides.get(id);
+
+                    const vMake = d.vehicle_make || d.vehicleMake || mem.vehicleMake || 'تويوتا';
+                    const vModel = d.vehicle_model || d.vehicleModel || mem.vehicleModel || 'كورولا';
+                    const vPlate = d.vehicle_plate || d.vehiclePlate || mem.vehiclePlate || 'النجف';
+
+                    const rawMode = String(mem.work_mode || mem.workMode || d.work_mode || d.workMode || 'مشوار قصير').trim();
+                    const isBlocked = d.is_blocked === true || mem.isBlocked === true;
+                    const isOnline = !isBlocked && (mem.isOnline === true || mem.status === 'Online' || d.status === 'Online' || d.status === 'Active') && rawMode !== 'خمول' && mem.workStatus !== 'idle';
+
+                    let finalStatus = 'offline';
+                    let modeKey = 'idle';
+
+                    if (activeRide || mem.status === 'on_trip' || mem.tripStatus === 'on_trip') {
+                        finalStatus = 'on_trip';
+                        modeKey = 'taxi';
+                    } else if (isOnline) {
+                        finalStatus = 'Online';
+                        if (rawMode === 'خط دائمي' || mem.workStatus === 'permanent') {
+                            modeKey = 'route';
+                        } else {
+                            modeKey = 'taxi';
+                        }
+                    } else {
+                        finalStatus = 'offline';
+                        modeKey = 'idle';
+                    }
+
+                    const lat = parseFloat(mem.latitude || mem.currentLat || d.latitude || d.permanent_lat || config.najafDefaults.latitude);
+                    const lon = parseFloat(mem.longitude || mem.currentLon || d.longitude || d.permanent_lon || config.najafDefaults.longitude);
+
+                    return {
+                        driverId: id,
+                        driverName: d.full_name || d.fullName || mem.fullName || 'كابتن توصيله',
+                        fullName: d.full_name || d.fullName || mem.fullName || 'كابتن توصيله',
+                        phone: d.phone_number || d.phoneNumber || mem.phoneNumber || '07800000000',
+                        phoneNumber: d.phone_number || d.phoneNumber || mem.phoneNumber || '07800000000',
+                        carModel: `${vMake} ${vModel}`.trim(),
+                        plateNumber: vPlate,
+                        latitude: isNaN(lat) ? 31.9961 : lat,
+                        longitude: isNaN(lon) ? 44.3168 : lon,
+                        heading: parseFloat(mem.heading || d.heading || 0),
+                        status: finalStatus,
+                        isOnline: isOnline,
+                        in_trip: finalStatus === 'on_trip',
+                        mode: modeKey, // 'taxi' | 'route' | 'idle'
+                        workMode: rawMode, // 'مشوار قصير' | 'خط دائمي' | 'خمول'
+                        speedKmh: mem.speedKmh || 0,
+                        rating: parseFloat(d.rating_average || mem.ratingAverage || 5.0)
+                    };
+                });
+
+                res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+                return sendJson(fleet);
+            } catch (err) {
+                console.error('[FleetLive] Error:', err);
+                return sendJson([]);
+            }
+        }
+
+        // 4.2 Passenger Nearby Drivers: GET /api/drivers/nearby
+        if (pathname === '/api/drivers/nearby') {
             const lat = parseFloat(parsedUrl.searchParams.get('lat') || config.najafDefaults.latitude);
             const lon = parseFloat(parsedUrl.searchParams.get('lon') || config.najafDefaults.longitude);
             const tripType = parsedUrl.searchParams.get('tripType'); // 'short' or 'daily'
@@ -2479,15 +2579,26 @@ async function startServer() {
             return sendJson({ success: true, requests: list });
         }
 
-        // Driver Toggle Online/Offline
-        if (pathname === '/api/driver/toggle-online' && method === 'POST') {
+        // Driver Toggle Online/Offline & Work Mode (taxi / permanent / idle)
+        if ((pathname === '/api/driver/toggle-online' || pathname === '/api/driver/toggle-mode' || pathname === '/api/driver/status' ||
+             pathname === '/driver/toggle-online' || pathname === '/driver/toggle-mode' || pathname === '/driver/status') && method === 'POST') {
             try {
                 const body = await parseJsonBody(req);
-                const { driverId, isOnline, workStatus, workMode, driverName, driverPhone, latitude, longitude } = body;
-                let driver = (db.memoryState.drivers || []).find(d => d.driverId === driverId);
-                const onlineBool = isOnline === true || (workStatus && workStatus !== 'idle');
-                const computedWorkMode = !onlineBool ? 'خمول' : (workMode || (workStatus === 'permanent' ? 'خط دائمي' : 'مشوار قصير'));
-                const computedWorkStatus = !onlineBool ? 'idle' : (workStatus || (computedWorkMode === 'خط دائمي' ? 'permanent' : 'taxi'));
+                const { driverId, isOnline, workStatus, workMode, mode, driverName, driverPhone, latitude, longitude, lat, lng } = body;
+                
+                const actualLat = parseFloat(latitude || lat || 0) || null;
+                const actualLng = parseFloat(longitude || lng || 0) || null;
+
+                let targetMode = workMode || '';
+                if (!targetMode && (mode === 'taxi' || workStatus === 'taxi')) targetMode = 'مشوار قصير';
+                else if (!targetMode && (mode === 'permanent' || mode === 'route' || mode === 'daily' || workStatus === 'permanent')) targetMode = 'خط دائمي';
+                else if (!targetMode && (mode === 'idle' || workStatus === 'idle')) targetMode = 'خمول';
+
+                const onlineBool = isOnline === true || (mode && mode !== 'idle') || (workStatus && workStatus !== 'idle') || (targetMode && targetMode !== 'خمول');
+                const computedWorkMode = !onlineBool ? 'خمول' : (targetMode || 'مشوار قصير');
+                const computedWorkStatus = !onlineBool ? 'idle' : (computedWorkMode === 'خط دائمي' ? 'permanent' : 'taxi');
+
+                let driver = (db.memoryState.drivers || []).find(d => d.driverId === driverId || (driverPhone && d.phoneNumber === driverPhone));
 
                 if (!driver && driverId) {
                     driver = {
@@ -2506,37 +2617,65 @@ async function startServer() {
                         vehicleModel: 'كورولا',
                         vehiclePlate: 'النجف',
                         ratingAverage: 5.0,
-                        currentLat: latitude || 32.0298,
-                        currentLon: longitude || 44.3285,
-                        latitude: latitude || 32.0298,
-                        longitude: longitude || 44.3285
+                        currentLat: actualLat || 32.0298,
+                        currentLon: actualLng || 44.3285,
+                        latitude: actualLat || 32.0298,
+                        longitude: actualLng || 44.3285
                     };
                     db.memoryState.drivers = db.memoryState.drivers || [];
                     db.memoryState.drivers.unshift(driver);
                 }
+
                 if (driver) {
                     driver.status = onlineBool ? 'Online' : 'Offline';
                     driver.tripStatus = onlineBool ? 'Online' : 'Offline';
                     driver.isOnline = onlineBool;
                     driver.workStatus = computedWorkStatus;
                     driver.work_mode = computedWorkMode;
-                    if (latitude && longitude) {
-                        driver.currentLat = latitude;
-                        driver.currentLon = longitude;
-                        driver.latitude = latitude;
-                        driver.longitude = longitude;
+                    if (actualLat && actualLng) {
+                        driver.currentLat = actualLat;
+                        driver.currentLon = actualLng;
+                        driver.latitude = actualLat;
+                        driver.longitude = actualLng;
                     }
                     db.saveStateSnapshot();
-                    return sendJson({
-                        success: true,
-                        driverId,
-                        status: driver.status,
-                        isOnline: driver.isOnline,
-                        workStatus: driver.workStatus,
-                        work_mode: driver.work_mode
-                    });
                 }
-                return sendJson({ success: false, error: 'Driver not found' }, 404);
+
+                // Persist directly to PostgreSQL database
+                if (db.isPostgresConnected && db.pool && (driverId || driverPhone)) {
+                    try {
+                        await db.pool.query(`
+                            UPDATE drivers 
+                            SET status = $1, 
+                                work_mode = $2, 
+                                latitude = COALESCE($3, latitude), 
+                                longitude = COALESCE($4, longitude),
+                                updated_at = NOW()
+                            WHERE driver_id = $5 OR phone_number = $6
+                        `, [
+                            onlineBool ? 'Online' : 'Offline',
+                            computedWorkMode,
+                            actualLat,
+                            actualLng,
+                            driverId || '',
+                            driverPhone || ''
+                        ]);
+                    } catch (pgErr) {
+                        console.warn('[DriverToggleMode] PostgreSQL update error:', pgErr.message);
+                    }
+                }
+
+                return sendJson({
+                    success: true,
+                    driverId: driver ? driver.driverId : driverId,
+                    status: onlineBool ? 'Online' : 'Offline',
+                    isOnline: onlineBool,
+                    workStatus: computedWorkStatus,
+                    work_mode: computedWorkMode,
+                    mode: computedWorkStatus,
+                    latitude: driver ? driver.latitude : actualLat,
+                    longitude: driver ? driver.longitude : actualLng
+                });
             } catch (err) {
                 return sendJson({ success: false, error: err.message }, 500);
             }
