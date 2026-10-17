@@ -83,34 +83,20 @@ class AdminController {
         if (data.totalSeats !== undefined) {
             driver.totalSeats = parseInt(data.totalSeats, 10) || 4;
         }
-        if (data.permanentLat !== undefined && data.permanentLat !== null && data.permanentLat !== '') {
-            driver.permanentLat = parseFloat(data.permanentLat);
-            driver.latitude = driver.permanentLat;
-        }
-        if (data.permanentLon !== undefined && data.permanentLon !== null && data.permanentLon !== '') {
-            driver.permanentLon = parseFloat(data.permanentLon);
-            driver.longitude = driver.permanentLon;
-        }
-        if (data.permanentLocationName !== undefined) driver.permanentLocationName = String(data.permanentLocationName).trim();
-        if (data.permanentDropoffLat !== undefined && data.permanentDropoffLat !== null && data.permanentDropoffLat !== '') driver.permanentDropoffLat = parseFloat(data.permanentDropoffLat);
-        if (data.permanentDropoffLon !== undefined && data.permanentDropoffLon !== null && data.permanentDropoffLon !== '') driver.permanentDropoffLon = parseFloat(data.permanentDropoffLon);
-        if (data.permanentDropoffName !== undefined) driver.permanentDropoffName = String(data.permanentDropoffName).trim();
-
-        if (driver.permanentLat || data.route) {
+        if (data.route) {
             driver.serviceType = 'Both';
             driver.work_mode = 'خط دائمي';
         }
 
-        const effectiveRouteName = data.route ? String(data.route).trim() : 
-            (driver.permanentLocationName && driver.permanentDropoffName ? `${driver.permanentLocationName} ➔ ${driver.permanentDropoffName}` : (driver.route || 'مسار دائمي'));
+        const effectiveRouteName = data.route ? String(data.route).trim() : (driver.route || 'مسار دائمي');
         driver.route = effectiveRouteName;
 
-        const sName = driver.permanentLocationName || effectiveRouteName.split(/[-➔→]/)[0]?.trim() || 'نقطة الانطلاق';
-        const eName = driver.permanentDropoffName || effectiveRouteName.split(/[-➔→]/)[1]?.trim() || 'نقطة الوصول';
-        const sLat = parseFloat(driver.permanentLat || driver.latitude || 31.9961);
-        const sLon = parseFloat(driver.permanentLon || driver.longitude || 44.3168);
-        const eLat = parseFloat(driver.permanentDropoffLat || 32.0321);
-        const eLon = parseFloat(driver.permanentDropoffLon || 44.3725);
+        const sName = effectiveRouteName.split(/[-➔→]/)[0]?.trim() || 'نقطة الانطلاق';
+        const eName = effectiveRouteName.split(/[-➔→]/)[1]?.trim() || 'نقطة الوصول';
+        const sLat = parseFloat(driver.currentLat || driver.latitude || 31.9961);
+        const sLon = parseFloat(driver.currentLon || driver.longitude || 44.3168);
+        const eLat = parseFloat(driver.activeRoute?.toLat || 32.0321);
+        const eLon = parseFloat(driver.activeRoute?.toLon || 44.3725);
         const vInfo = `${driver.vehicleMake || 'تويوتا'} ${driver.vehicleModel || 'كورولا'} (${driver.vehiclePlate || 'النجف'})`;
 
         // Update or insert in memoryState.routes
@@ -221,13 +207,6 @@ class AdminController {
             route: driver.route
         });
         db.saveStateSnapshot();
-        if (driver.permanentLat && driver.permanentLon) {
-            db.persistDriverPermanentLocation(driverId, {
-                lat: driver.permanentLat, lon: driver.permanentLon, locationName: driver.permanentLocationName,
-                dropoffLat: driver.permanentDropoffLat, dropoffLon: driver.permanentDropoffLon, dropoffName: driver.permanentDropoffName
-            }).catch(()=>{});
-        }
-
         return { success: true, driver };
     }
 

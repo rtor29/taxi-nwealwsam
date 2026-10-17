@@ -247,7 +247,7 @@ function switchTab(tabName) {
         case 'backup':
             loadDashboardStats();
             break;
-        case 'customization': loadCustomizationSettings(); populateDriverPermSelect(); break;
+        case 'customization': loadCustomizationSettings(); break;
         case 'ui-management': loadCustomButtons(); loadAdvertisements(); break;
         case 'custom-buttons': loadCustomButtons(); break;
         case 'advertisements': loadAdvertisements(); break;
@@ -4086,7 +4086,7 @@ var currentThemeSettings = {
 };
 
 function switchCustomSubTab(tabName) {
-    var tabs = ['unified-theme', 'static-texts', 'driver-location'];
+    var tabs = ['unified-theme', 'static-texts'];
     tabs.forEach(function(t) {
         var btn = document.getElementById('custom-subtab-' + t);
         var view = document.getElementById('custom-view-' + t);
@@ -4096,7 +4096,7 @@ function switchCustomSubTab(tabName) {
             }
             if (view) {
                 view.classList.remove('hidden');
-                view.style.display = (t === 'driver-location' ? 'block' : 'grid');
+                view.style.display = 'grid';
             }
         } else {
             if (btn) {
@@ -4897,55 +4897,7 @@ async function adminRejectJoin(requestId) {
 // This runs in dashboard; portal listens via its own BroadcastChannel listener
 // (Portal's applyDynamicAppConfig is called from the portal's own polling)
 
-// ===== Driver Permanent Location =====
-async function populateDriverPermSelect() {
-    var sel = document.getElementById('driver-perm-select');
-    if (!sel) return;
-    try {
-        var res = await fetch(API_BASE + '/drivers', { headers: authHeaders() });
-        var data = await res.json();
-        sel.innerHTML = '<option value="">-- اختر سائق --</option>';
-        (data.drivers || []).forEach(function(d) {
-            var opt = document.createElement('option');
-            opt.value = d.driverId;
-            opt.textContent = d.fullName + ' (' + (d.phoneNumber || '') + ')';
-            sel.appendChild(opt);
-        });
-    } catch(e) {}
-}
-async function loadDriverPermLocation() {
-    var sel = document.getElementById('driver-perm-select');
-    if (!sel || !sel.value) return;
-    try {
-        var res = await fetch(API_BASE + '/drivers', { headers: authHeaders() });
-        var data = await res.json();
-        var drv = (data.drivers || []).find(function(d) { return d.driverId === sel.value; });
-        if (drv) {
-            document.getElementById('driver-perm-lat').value = drv.permanentLat || '';
-            document.getElementById('driver-perm-lon').value = drv.permanentLon || '';
-            document.getElementById('driver-perm-name').value = drv.permanentLocationName || '';
-        }
-    } catch(e) {}
-}
-async function saveDriverPermanentLocation() {
-    var driverId = (document.getElementById('driver-perm-select') || {}).value;
-    var lat = (document.getElementById('driver-perm-lat') || {}).value;
-    var lon = (document.getElementById('driver-perm-lon') || {}).value;
-    var name = (document.getElementById('driver-perm-name') || {}).value;
-    if (!driverId || !lat || !lon) { showToast('اختر السائق وأدخل الإحداثيات', 'error'); return; }
-    try {
-        var res = await fetch('/api/admin/driver/set-permanent-location', {
-            method:'POST', headers:{'Content-Type':'application/json', ...authHeaders()},
-            body:JSON.stringify({ driverId: driverId, lat: parseFloat(lat), lon: parseFloat(lon), locationName: name })
-        });
-        var data = await res.json();
-        if (data.success) {
-            showToast('تم تثبيت موقع السائق الدائمي ✅');
-            var st = document.getElementById('driver-perm-status');
-            if (st) { st.classList.remove('hidden'); st.textContent = '✅ ' + data.message; }
-        } else showToast(data.error || 'خطأ', 'error');
-    } catch(e) { showToast('خطأ في الاتصال', 'error'); }
-}
+
 
 // -----------------------------------------------------------------------------
 // Trip Ratings & Driver Points Management

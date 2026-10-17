@@ -4193,11 +4193,10 @@ class AuthController {
             if (tab === 'daily' || tab === 'PermanentLine') {
                 localStorage.setItem('selected_trip_type', 'daily');
             }
-            var tripType = localStorage.getItem('selected_trip_type') || 'short';
-            if (tripType === 'daily' || isDriver) {
+            if (tripType === 'daily' && !isDriver) {
                 try {
                     var uid = localStorage.getItem('user_id');
-                    var ep = isDriver ? '/api/driver/permanent-location/' : '/api/passenger/permanent-location/';
+                    var ep = '/api/passenger/permanent-location/';
                     var locRes = await fetch(ep + uid);
                     var locData = await locRes.json();
                     if (locData.success && locData.lat && locData.lon) {

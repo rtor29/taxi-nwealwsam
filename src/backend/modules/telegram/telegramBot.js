@@ -1359,10 +1359,9 @@ async function handleApproveDriver(chatId, driverId) {
     // Notify driver
     if (driver.telegramChatId) {
         await sendKeyboard(driver.telegramChatId,
-            '🎉 <b>تم تفعيل حسابك كسائق!</b>\n\n📌 ثبّت موقعك الدائمي على الخريطة ليتمكن الركاب من إيجادك:',
+            '🎉 <b>تم تفعيل حسابك كسائق!</b>\n\n🚗 يمكنك الآن الدخول للتطبيق وبدء العمل ومشاركة موقعك المباشر:',
             [
-                [{ text: '🗺️ فتح الخريطة لتثبيت موقعك الدائمي 📌', url: 'https://tawseelaiq.app/?login_token=' + encodeURIComponent('jwt_driver_' + driver.driverId) + '&userId=' + encodeURIComponent(driver.driverId) + '&role=Driver&fullName=' + encodeURIComponent(driver.fullName) + '&showMap=1' }],
-                [{ text: '🚗 الدخول للتطبيق', url: 'https://tawseelaiq.app/?role=Driver' }]
+                [{ text: '🚗 الدخول للتطبيق وبدء العمل', url: 'https://tawseelaiq.app/?role=Driver' }]
             ]
         );
     }

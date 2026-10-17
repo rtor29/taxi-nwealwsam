@@ -2465,11 +2465,11 @@ async function startServer() {
             let permRoutes = [...(db.memoryState.permanentRoutes || [])];
 
             (db.memoryState.drivers || []).forEach(d => {
-                if ((d.permanentLat && d.permanentLon) || d.route) {
+                if (d.route || d.activeRoute) {
                     const already = permRoutes.find(pr => pr.driverId === d.driverId || pr.id === 'route-' + d.driverId);
                     if (!already) {
-                        const sName = d.permanentLocationName || d.route?.split(/[-➔→]/)[0]?.trim() || 'نقطة الانطلاق';
-                        const eName = d.permanentDropoffName || d.route?.split(/[-➔→]/)[1]?.trim() || 'نقطة الوصول';
+                        const sName = d.route?.split(/[-➔→]/)[0]?.trim() || d.activeRoute?.fromText || 'نقطة الانطلاق';
+                        const eName = d.route?.split(/[-➔→]/)[1]?.trim() || d.activeRoute?.toText || 'نقطة الوصول';
                         permRoutes.push({
                             id: 'route-' + d.driverId,
                             driverId: d.driverId,
@@ -2479,10 +2479,10 @@ async function startServer() {
                             vehicleType: d.vehicleType || 'eco',
                             startName: sName,
                             endName: eName,
-                            startLat: parseFloat(d.permanentLat || 31.9961),
-                            startLon: parseFloat(d.permanentLon || 44.3168),
-                            endLat: parseFloat(d.permanentDropoffLat || 32.0321),
-                            endLon: parseFloat(d.permanentDropoffLon || 44.3725),
+                            startLat: parseFloat(d.currentLat || d.latitude || 31.9961),
+                            startLon: parseFloat(d.currentLon || d.longitude || 44.3168),
+                            endLat: parseFloat(d.activeRoute?.toLat || 32.0321),
+                            endLon: parseFloat(d.activeRoute?.toLon || 44.3725),
                             fare: 3000,
                             days: ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء'],
                             departureTime: '07:30 ص',
@@ -2536,10 +2536,10 @@ async function startServer() {
                 return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
             };
 
-            const dStartLat = (driver && driver.permanentLat) ? parseFloat(driver.permanentLat) : 31.9961;
-            const dStartLon = (driver && driver.permanentLon) ? parseFloat(driver.permanentLon) : 44.3168;
-            const dEndLat = (driver && driver.permanentDropoffLat) ? parseFloat(driver.permanentDropoffLat) : 32.0321;
-            const dEndLon = (driver && driver.permanentDropoffLon) ? parseFloat(driver.permanentDropoffLon) : 44.3725;
+            const dStartLat = (driver && (driver.currentLat || driver.latitude)) ? parseFloat(driver.currentLat || driver.latitude) : 31.9961;
+            const dStartLon = (driver && (driver.currentLon || driver.longitude)) ? parseFloat(driver.currentLon || driver.longitude) : 44.3168;
+            const dEndLat = (driver && (driver.activeRoute?.toLat || driver.dropoffLat)) ? parseFloat(driver.activeRoute?.toLat || driver.dropoffLat) : 32.0321;
+            const dEndLon = (driver && (driver.activeRoute?.toLon || driver.dropoffLon)) ? parseFloat(driver.activeRoute?.toLon || driver.dropoffLon) : 44.3725;
 
             const allPermRoutes = db.memoryState.permanentRoutes || [];
             const matches = allPermRoutes.map(pr => {
@@ -3600,21 +3600,9 @@ async function startServer() {
                 toLon: parseFloat(toLon) || 0,
                 setAt: new Date().toISOString()
             };
-            if (fromLat && fromLon) {
-                driver.currentLat = parseFloat(fromLat);
-                driver.currentLon = parseFloat(fromLon);
-                driver.permanentLat = parseFloat(fromLat);
-                driver.permanentLon = parseFloat(fromLon);
-            }
-            if (toLat && toLon) {
-                driver.permanentDropoffLat = parseFloat(toLat);
-                driver.permanentDropoffLon = parseFloat(toLon);
-            }
             const routeStr = `${fromText.trim()} ➔ ${toText.trim()}`;
             driver.route = routeStr;
             driver.preferredRoute = routeStr;
-            driver.permanentLocationName = fromText.trim();
-            driver.permanentDropoffName = toText.trim();
 
             // Update or add route in memoryState.routes so it displays in Dashboard routes table
             let r = (db.memoryState.routes || []).find(rt => rt.driverId === driverId);
@@ -3651,12 +3639,6 @@ async function startServer() {
             }
 
             db.saveStateSnapshot();
-            db.persistDriverPermanentLocation(driverId, {
-                lat: driver.permanentLat, lon: driver.permanentLon, locationName: driver.permanentLocationName,
-                dropoffLat: driver.permanentDropoffLat, dropoffLon: driver.permanentDropoffLon, dropoffName: driver.permanentDropoffName,
-                route: routeStr
-            }).catch(()=>{});
-
             return sendJson({ success: true, route: driver.activeRoute, routeStr: driver.route });
         }
 
@@ -3767,45 +3749,7 @@ async function startServer() {
                 locationName: customer.permanentLocationName || '',
                 dropoffLat: customer.permanentDropoffLat || null,
                 dropoffLon: customer.permanentDropoffLon || null,
-                dropoffName: customer.permanentDropoffName || ''
             });
-        }
-
-        // Get driver permanent location
-        if (pathname.startsWith('/api/driver/permanent-location/') && method === 'GET') {
-            const driverId = pathname.split('/').pop();
-            const driver = db.memoryState.drivers.find(d => d.driverId === driverId);
-            if (!driver) return sendJson({ success: false });
-            return sendJson({
-                success: true,
-                lat: driver.permanentLat || null,
-                lon: driver.permanentLon || null,
-                locationName: driver.permanentLocationName || '',
-                dropoffLat: driver.permanentDropoffLat || null,
-                dropoffLon: driver.permanentDropoffLon || null,
-                dropoffName: driver.permanentDropoffName || ''
-            });
-        }
-
-        // Admin: Set driver permanent location
-        if (pathname === '/api/admin/driver/set-permanent-location' && method === 'POST') {
-            const body = await parseJsonBody(req);
-            const { driverId, lat, lon, locationName } = body;
-            if (!driverId || !lat || !lon) return sendJson({ success: false, error: 'بيانات ناقصة' });
-            const driver = db.memoryState.drivers.find(d => d.driverId === driverId);
-            if (!driver) return sendJson({ success: false, error: 'السائق غير موجود' });
-            driver.permanentLat = parseFloat(lat);
-            driver.permanentLon = parseFloat(lon);
-            driver.permanentLocationName = locationName || '';
-            if (body.dropoffLat) driver.permanentDropoffLat = parseFloat(body.dropoffLat);
-            if (body.dropoffLon) driver.permanentDropoffLon = parseFloat(body.dropoffLon);
-            if (body.dropoffName !== undefined) driver.permanentDropoffName = body.dropoffName || '';
-            db.saveStateSnapshot();
-            db.persistDriverPermanentLocation(driverId, {
-                lat: driver.permanentLat, lon: driver.permanentLon, locationName: driver.permanentLocationName,
-                dropoffLat: driver.permanentDropoffLat, dropoffLon: driver.permanentDropoffLon, dropoffName: driver.permanentDropoffName
-            }).catch(()=>{});
-            return sendJson({ success: true, message: 'تم تثبيت موقع السائق الدائمي' });
         }
 
         if (pathname === '/api/driver/reject-join' && method === 'POST') {
@@ -3865,6 +3809,11 @@ async function startServer() {
             }
             res.writeHead(404);
             return res.end('File not found');
+        }
+
+        // Unhandled API endpoints return 404 JSON instead of falling through to dashboard HTML
+        if (pathname.startsWith('/api/')) {
+            return sendJson({ success: false, error: 'API endpoint not found' }, 404);
         }
 
         // ---------------------------------------------------------------------

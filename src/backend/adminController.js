@@ -133,13 +133,6 @@ class AdminController {
             route: driver.route
         });
         db.saveStateSnapshot();
-        if (driver.permanentLat && driver.permanentLon) {
-            db.persistDriverPermanentLocation(driverId, {
-                lat: driver.permanentLat, lon: driver.permanentLon, locationName: driver.permanentLocationName,
-                dropoffLat: driver.permanentDropoffLat, dropoffLon: driver.permanentDropoffLon, dropoffName: driver.permanentDropoffName
-            }).catch(()=>{});
-        }
-
         return { success: true, driver };
     }
 

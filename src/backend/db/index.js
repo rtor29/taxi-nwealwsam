@@ -661,21 +661,6 @@ class DatabaseManager {
         } catch (e) { console.warn('[Database] persistCustomerPermanentLocation error:', e.message); }
     }
 
-    // Persist permanent location & route for driver
-    async persistDriverPermanentLocation(driverId, data) {
-        if (!this.pool || !this.isPostgresConnected) return;
-        try {
-            await this.pool.query(
-                `UPDATE drivers SET 
-                    permanent_lat = $1, permanent_lon = $2, permanent_location_name = $3,
-                    permanent_dropoff_lat = $4, permanent_dropoff_lon = $5, permanent_dropoff_name = $6,
-                    route = COALESCE($7, route),
-                    updated_at = NOW()
-                 WHERE driver_id = $8`,
-                [data.lat, data.lon, data.locationName || '', data.dropoffLat || null, data.dropoffLon || null, data.dropoffName || '', data.route || null, driverId]
-            );
-        } catch (e) { console.warn('[Database] persistDriverPermanentLocation error:', e.message); }
-    }
 
     // Persist telegramChatId mapping
     async persistTelegramChatId(role, id, chatId) {
