@@ -170,6 +170,42 @@ function switchTab(tabName) {
         content.style.display = 'block';
     }
 
+    // Update Breadcrumbs
+    const tabTitles = {
+        'overview': 'نظرة عامة والمؤشرات',
+        'verifications': 'توثيق مستمسكات السائقين',
+        'drivers': 'إدارة السائقين',
+        'customers': 'إدارة الركاب',
+        'routes': 'المسارات والحجوزات',
+        'cancellations': 'طلبات إلغاء الركاب',
+        'trip-ratings': 'تقييمات الرحلات والنقاط',
+        'fleet-map': 'متابعة الأسطول والمسارات',
+        'complaints': 'إدارة الشكاوى والبلاغات',
+        'settings': 'إعدادات التسعير والمطابقة',
+        'audit': 'سجل التدقيق الأمني',
+        'backup': 'النسخ الاحتياطي وقاعدة البيانات',
+        'customization': 'التخصيص والمظهر',
+        'ui-management': 'إدارة الواجهة',
+        'custom-buttons': 'أزرار مخصصة',
+        'advertisements': 'الإعلانات',
+        'telegram': 'بوت تيليجرام'
+    };
+    const bSection = document.getElementById('breadcrumb-section');
+    if (bSection) bSection.textContent = tabTitles[tabName] || tabName;
+    const bDivider = document.getElementById('breadcrumb-divider');
+    const bSub = document.getElementById('breadcrumb-sub');
+    if (bDivider && bSub) {
+        if (tabName === 'routes') {
+            bDivider.classList.remove('hidden');
+            bSub.classList.remove('hidden');
+            const isBookings = document.getElementById('sub-view-bookings') && !document.getElementById('sub-view-bookings').classList.contains('hidden');
+            bSub.textContent = isBookings ? 'سجل الحجوزات' : 'خطوط السير';
+        } else {
+            bDivider.classList.add('hidden');
+            bSub.classList.add('hidden');
+        }
+    }
+
     switch (tabName) {
         case 'overview':
             loadDashboardStats();
@@ -224,18 +260,30 @@ function switchSubRouteTab(subTab) {
     const btnBookings = document.getElementById('sub-btn-bookings');
     const viewRoutes = document.getElementById('sub-view-routes');
     const viewBookings = document.getElementById('sub-view-bookings');
+    const bSub = document.getElementById('breadcrumb-sub');
+    const bDivider = document.getElementById('breadcrumb-divider');
+
+    if (bDivider) bDivider.classList.remove('hidden');
 
     if (subTab === 'routes-list') {
-        btnRoutes.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-slate-900';
-        btnBookings.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-200 text-slate-700';
-        viewRoutes.classList.remove('hidden');
-        viewBookings.classList.add('hidden');
+        if (btnRoutes) btnRoutes.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#1B4965] text-white shadow-xs transition-all';
+        if (btnBookings) btnBookings.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all';
+        if (viewRoutes) viewRoutes.classList.remove('hidden');
+        if (viewBookings) viewBookings.classList.add('hidden');
+        if (bSub) {
+            bSub.classList.remove('hidden');
+            bSub.textContent = 'خطوط السير';
+        }
         loadRoutes();
     } else {
-        btnBookings.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-slate-900';
-        btnRoutes.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-200 text-slate-700';
-        viewBookings.classList.remove('hidden');
-        viewRoutes.classList.add('hidden');
+        if (btnBookings) btnBookings.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#1B4965] text-white shadow-xs transition-all';
+        if (btnRoutes) btnRoutes.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all';
+        if (viewBookings) viewBookings.classList.remove('hidden');
+        if (viewRoutes) viewRoutes.classList.add('hidden');
+        if (bSub) {
+            bSub.classList.remove('hidden');
+            bSub.textContent = 'سجل الحجوزات';
+        }
         loadBookings();
     }
 }
@@ -338,7 +386,7 @@ async function loadVerifications() {
             window.pendingDriversMap[d.driverId] = d;
 
             const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition border-b border-slate-100';
+            tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80 text-xs md:text-sm';
 
             const vehicleInfo = d.vehicles && d.vehicles.length > 0 
                 ? `${d.vehicles[0].make} ${d.vehicles[0].model} (${d.vehicles[0].plateNumber || 'النجف'})`
@@ -353,33 +401,37 @@ async function loadVerifications() {
             const docsHtml = `
                 <div class="space-y-1">
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold ${hasIdFront ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold ${hasIdFront ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' : 'bg-rose-50 text-rose-700 border border-rose-200/60'}">
                             <i class="fa-solid ${hasIdFront ? 'fa-check' : 'fa-xmark'} text-[9px]"></i> بطاقة (وجه)
                         </span>
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold ${hasIdBack ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold ${hasIdBack ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' : 'bg-rose-50 text-rose-700 border border-rose-200/60'}">
                             <i class="fa-solid ${hasIdBack ? 'fa-check' : 'fa-xmark'} text-[9px]"></i> بطاقة (ظهر)
                         </span>
                     </div>
                     <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold ${hasLicFront ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold ${hasLicFront ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' : 'bg-rose-50 text-rose-700 border border-rose-200/60'}">
                             <i class="fa-solid ${hasLicFront ? 'fa-check' : 'fa-xmark'} text-[9px]"></i> رخصة (وجه)
                         </span>
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold ${hasLicBack ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold ${hasLicBack ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60' : 'bg-rose-50 text-rose-700 border border-rose-200/60'}">
                             <i class="fa-solid ${hasLicBack ? 'fa-check' : 'fa-xmark'} text-[9px]"></i> رخصة (ظهر)
                         </span>
                     </div>
                 </div>
             `;
 
+            const phoneHtml = d.phoneNumber 
+                ? `<a href="tel:${escapeHtml(d.phoneNumber)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 font-mono text-xs transition-colors" dir="ltr" title="اتصال بالكابتن"><i class="fa-solid fa-phone text-[10px] text-slate-400"></i><span>${escapeHtml(d.phoneNumber)}</span></a>`
+                : '<span class="text-slate-400">-</span>';
+
             tr.innerHTML = `
-                <td class="p-4 font-bold text-slate-900">${d.fullName || 'كابتن مسجل'}</td>
-                <td class="p-4 text-slate-600 font-mono text-xs"><a href="tel:${d.phoneNumber}" class="hover:text-amber-600 underline">${d.phoneNumber || '-'}</a></td>
-                <td class="p-4 text-slate-600 font-mono text-xs">${d.licenseNumber || '-'}</td>
-                <td class="p-4 text-slate-700 text-xs">${vehicleInfo}</td>
-                <td class="p-4 min-w-[220px]">${docsHtml}</td>
-                <td class="p-4 text-center">
-                    <button type="button" onclick="viewFullDriver('${d.driverId}')" class="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-black rounded-xl text-xs transition shadow flex items-center justify-center gap-1.5 mx-auto">
-                        <i class="fa-solid fa-id-card"></i>
+                <td class="py-3.5 px-4 font-bold text-slate-900">${escapeHtml(d.fullName || 'كابتن مسجل')}</td>
+                <td class="py-3.5 px-4">${phoneHtml}</td>
+                <td class="py-3.5 px-4 text-slate-600 font-mono text-xs">${escapeHtml(d.licenseNumber || '-')}</td>
+                <td class="py-3.5 px-4 text-slate-700 text-xs">${vehicleInfo}</td>
+                <td class="py-3.5 px-4 min-w-[220px]">${docsHtml}</td>
+                <td class="py-3.5 px-4 text-center">
+                    <button type="button" onclick="viewFullDriver('${d.driverId}')" class="px-3 py-1.5 bg-primary hover:bg-slate-800 active:scale-95 text-white font-medium rounded-lg text-xs transition shadow-xs flex items-center justify-center gap-1.5 mx-auto cursor-pointer">
+                        <i class="fa-solid fa-id-card text-[11px]"></i>
                         <span>فحص المستمسكات والاعتماد</span>
                     </button>
                 </td>
@@ -869,47 +921,41 @@ async function loadDrivers(search = '') {
         data.drivers.forEach(d => {
             window.driversMap[d.driverId] = d;
             const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition';
+            tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80';
 
-            let statusClass = 'bg-slate-100 text-slate-600';
-            let statusLabel = d.status || 'Pending';
-
+            let statusBadge = '';
             if (d.isBlocked || d.status === 'Suspended') {
-                statusClass = 'bg-rose-100 text-rose-800 font-bold';
-                statusLabel = 'معلق / محظور';
+                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-rose-50 text-rose-700 border border-rose-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>معلق / محظور</span>';
             } else if (d.status === 'Approved' || d.status === 'Online') {
-                statusClass = 'bg-emerald-100 text-emerald-800 font-bold';
-                statusLabel = 'معتمد (Approved)';
+                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>معتمد ✓</span>';
             } else if (d.status === 'Rejected') {
-                statusClass = 'bg-red-100 text-red-800 font-bold';
-                statusLabel = 'مرفوض (Rejected)';
-            } else if (d.status === 'Pending') {
-                statusClass = 'bg-amber-100 text-amber-800 font-bold';
-                statusLabel = 'بانتظار التدقيق';
+                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-rose-50 text-rose-700 border border-rose-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>مرفوض ✕</span>';
+            } else {
+                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>بانتظار التدقيق ⏳</span>';
             }
 
             const verifBadge = d.isVerified || d.status === 'Approved' || d.status === 'Online'
-                ? '<span class="px-2.5 py-1 text-xs bg-emerald-100 text-emerald-800 rounded-full font-bold"><i class="fa-solid fa-circle-check ml-1"></i> موثق</span>'
+                ? '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60"><i class="fa-solid fa-circle-check text-[10px]"></i> موثق</span>'
                 : (d.status === 'Rejected'
-                    ? '<span class="px-2.5 py-1 text-xs bg-rose-100 text-rose-800 rounded-full font-bold">مرفوض</span>'
-                    : '<span class="px-2.5 py-1 text-xs bg-amber-100 text-amber-800 rounded-full font-bold">قيد الفحص</span>');
+                    ? '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-rose-50 text-rose-700 border border-rose-200/60">مرفوض</span>'
+                    : '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200/60">قيد الفحص</span>');
 
             // Lifecycle Buttons
             let lifecycleButtons = '';
             if (d.status === 'Pending' || (!d.isVerified && d.status !== 'Rejected' && d.status !== 'Suspended')) {
                 lifecycleButtons = `
-                    <button onclick="updateDriverStatus('${d.driverId}', 'Approved')" title="قبول وتوثيق الكابتن" class="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                    <button onclick="updateDriverStatus('${d.driverId}', 'Approved')" title="قبول وتوثيق الكابتن" class="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer">
                         <i class="fa-solid fa-check text-xs"></i>
                         <span>قبول</span>
                     </button>
-                    <button onclick="promptRejectDriver('${d.driverId}')" title="رفض طلب الكابتن" class="px-2 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                    <button onclick="promptRejectDriver('${d.driverId}')" title="رفض طلب الكابتن" class="px-2 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer">
                         <i class="fa-solid fa-xmark text-xs"></i>
                         <span>رفض</span>
                     </button>
                 `;
             } else if (d.status === 'Approved' || d.status === 'Online' || (!d.isBlocked && d.isVerified)) {
                 lifecycleButtons = `
-                    <button onclick="updateDriverStatus('${d.driverId}', 'Suspended', 'تعليق إداري')" title="تعليق حساب الكابتن" class="px-2 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                    <button onclick="updateDriverStatus('${d.driverId}', 'Suspended', 'تعليق إداري')" title="تعليق حساب الكابتن" class="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/60 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer">
                         <i class="fa-solid fa-pause text-xs"></i>
                         <span>تعليق</span>
                     </button>
@@ -917,7 +963,7 @@ async function loadDrivers(search = '') {
             } else {
                 // Suspended or Rejected -> Reactivate
                 lifecycleButtons = `
-                    <button onclick="updateDriverStatus('${d.driverId}', 'Approved')" title="إعادة تفعيل واعتماد الكابتن" class="px-2 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                    <button onclick="updateDriverStatus('${d.driverId}', 'Approved')" title="إعادة تفعيل واعتماد الكابتن" class="px-2 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer">
                         <i class="fa-solid fa-play text-xs"></i>
                         <span>تنشيط</span>
                     </button>
@@ -926,7 +972,7 @@ async function loadDrivers(search = '') {
 
             if (!d.isApproved) {
                 lifecycleButtons = `
-                    <button onclick="approveDriver('${d.driverId}')" title="موافقة ظهور على الخريطة" class="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                    <button onclick="approveDriver('${d.driverId}')" title="موافقة ظهور على الخريطة" class="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer">
                         <i class="fa-solid fa-check text-xs"></i>
                         <span>موافقة</span>
                     </button>
@@ -934,37 +980,44 @@ async function loadDrivers(search = '') {
             }
 
             const approveBadge = d.isApproved 
-                ? '<span class="px-2.5 py-1 text-xs bg-emerald-100 text-emerald-800 rounded-full font-bold ml-1">موافق عليه</span>' 
-                : '<span class="px-2.5 py-1 text-xs bg-amber-100 text-amber-800 rounded-full font-bold ml-1">غير موافق عليه</span>';
+                ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 ml-1">موافق عليه</span>' 
+                : '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200/60 ml-1">غير موافق</span>';
+
+            const driverPhoneHtml = d.phoneNumber
+                ? `<a href="tel:${escapeHtml(d.phoneNumber)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 font-mono text-xs transition-colors" dir="ltr" title="اتصال بالكابتن"><i class="fa-solid fa-phone text-[10px] text-slate-400"></i><span>${escapeHtml(d.phoneNumber)}</span></a>`
+                : '-';
 
             tr.innerHTML = `
-                <td class="p-4 font-bold text-slate-900 flex items-center gap-1.5">
+                <td class="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-1.5">
                     ${escapeHtml(d.fullName)}
-                    ${d.isBlocked ? '<span class="px-1.5 py-0.5 text-[10px] bg-rose-600 text-white rounded font-black">معلق</span>' : ''}
+                    ${d.isBlocked ? '<span class="px-1.5 py-0.5 text-[10px] bg-rose-50 text-rose-700 border border-rose-200/60 rounded font-bold">معلق</span>' : ''}
                 </td>
-                <td class="p-4 text-slate-600 font-mono text-xs"><a href="tel:${escapeHtml(d.phoneNumber)}" class="hover:text-amber-600 underline">${escapeHtml(d.phoneNumber)}</a></td>
-                <td class="p-4"><span class="px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg text-xs font-bold">${escapeHtml(d.workMode || 'مشوار قصير')}</span> <span class="px-2 py-1 text-xs rounded-lg font-bold ${d.vehicleType === 'vip' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">${d.vehicleType === 'vip' ? '👑 VIP' : '🚕 توفير'}</span></td>
-                <td class="p-4"><span class="px-2 py-1 bg-slate-100 text-slate-800 font-mono text-xs rounded border border-slate-200 font-bold select-all" title="كلمة المرور">${escapeHtml(d.password || '••••••••')}</span></td>
-                <td class="p-4">
-                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs">
-                        <i class="fa-solid fa-star text-amber-500"></i>
+                <td class="py-3.5 px-4 font-mono text-xs">${driverPhoneHtml}</td>
+                <td class="py-3.5 px-4">
+                    <span class="inline-flex items-center px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200/60 rounded-md text-xs font-medium">${escapeHtml(d.workMode || 'مشوار قصير')}</span> 
+                    <span class="inline-flex items-center px-2 py-0.5 text-xs rounded-md font-semibold ${d.vehicleType === 'vip' ? 'bg-amber-50 text-amber-800 border border-amber-200/60' : 'bg-slate-100 text-slate-700 border border-slate-200/60'}">${d.vehicleType === 'vip' ? '👑 VIP' : '🚕 توفير'}</span>
+                </td>
+                <td class="py-3.5 px-4"><span class="px-2 py-1 bg-slate-50 text-slate-700 font-mono text-xs rounded border border-slate-200 font-medium select-all" title="كلمة المرور">${escapeHtml(d.password || '••••••••')}</span></td>
+                <td class="py-3.5 px-4">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200/60 shadow-2xs">
+                        <i class="fa-solid fa-star text-amber-500 text-[10px]"></i>
                         <span>${d.points || d.rewardScore || 0}</span>
                     </span>
                 </td>
-                <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full font-bold ${statusClass}">${statusLabel}</span></td>
-                <td class="p-4">${verifBadge}${approveBadge}</td>
-                <td class="p-4">
+                <td class="py-3.5 px-4 text-center">${statusBadge}</td>
+                <td class="py-3.5 px-4 text-center">${verifBadge}${approveBadge}</td>
+                <td class="py-3.5 px-4">
                     <div class="flex items-center justify-center gap-1.5 flex-wrap">
-                        <button onclick="openEditDriverModal('${d.driverId}')" title="تعديل بيانات الكابتن والمسار وكلمة المرور" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                        <button onclick="openEditDriverModal('${d.driverId}')" title="تعديل بيانات الكابتن والمسار وكلمة المرور" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer">
                             <i class="fa-solid fa-pen-to-square text-xs"></i>
                             <span>تعديل</span>
                         </button>
-                        <button onclick="viewFullDriver('${d.driverId}')" title="فحص المستمسكات والوثائق" class="px-2 py-1.5 bg-slate-900 text-amber-400 hover:bg-slate-800 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                        <button onclick="viewFullDriver('${d.driverId}')" title="فحص المستمسكات والوثائق" class="px-2.5 py-1.5 bg-[#1B4965] hover:bg-[#143a50] text-white rounded-lg text-xs font-semibold transition flex items-center gap-1 shadow-xs cursor-pointer">
                             <i class="fa-solid fa-id-card text-xs"></i>
                             <span>فحص</span>
                         </button>
                         ${lifecycleButtons}
-                        <button onclick="deleteDriverPermanently('${d.driverId}')" title="حذف السائق نهائياً من قاعدة البيانات" class="px-2 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                        <button onclick="deleteDriverPermanently('${d.driverId}')" title="حذف السائق نهائياً من قاعدة البيانات" class="px-2 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer">
                             <i class="fa-solid fa-trash-can text-xs"></i>
                             <span>حذف</span>
                         </button>
@@ -1063,46 +1116,50 @@ async function loadCustomers(search = '') {
         data.customers.forEach(c => {
             window.customersMap[c.customerId] = c;
             const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition';
+            tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80';
 
             let activeBadge;
             if (c.isBlocked) {
-                activeBadge = '<span class="px-2.5 py-1 text-xs bg-rose-100 text-rose-800 rounded-full font-bold"><i class="fa-solid fa-ban ml-1"></i> محظور</span>';
+                activeBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-rose-50 text-rose-700 border border-rose-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>محظور ✕</span>';
             } else if (c.isActive) {
-                activeBadge = '<span class="px-2.5 py-1 text-xs bg-emerald-100 text-emerald-800 rounded-full font-bold"><i class="fa-solid fa-circle-check ml-1"></i> نشط</span>';
+                activeBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>نشط ✓</span>';
             } else {
-                activeBadge = '<span class="px-2.5 py-1 text-xs bg-slate-100 text-slate-700 rounded-full font-bold">معطل</span>';
+                activeBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 border border-slate-200">معطل</span>';
             }
 
             const blockBtn = c.isBlocked
-                ? `<button onclick="toggleCustomerBlock('${c.customerId}', false)" title="فك حظر الراكب" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                ? `<button onclick="toggleCustomerBlock('${c.customerId}', false)" title="فك حظر الراكب" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1 shadow-xs cursor-pointer">
                      <i class="fa-solid fa-unlock text-xs"></i>
                      <span>فك الحظر</span>
                    </button>`
-                : `<button onclick="toggleCustomerBlock('${c.customerId}', true)" title="حظر الراكب ومنعه من حجز الرحلات" class="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                : `<button onclick="toggleCustomerBlock('${c.customerId}', true)" title="حظر الراكب ومنعه من حجز الرحلات" class="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/60 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer">
                      <i class="fa-solid fa-ban text-xs"></i>
                      <span>حظر</span>
                    </button>`;
 
+            const customerPhoneHtml = c.phoneNumber
+                ? `<a href="tel:${escapeHtml(c.phoneNumber)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 font-mono text-xs transition-colors" dir="ltr" title="اتصال بالراكب"><i class="fa-solid fa-phone text-[10px] text-slate-400"></i><span>${escapeHtml(c.phoneNumber)}</span></a>`
+                : '-';
+
             tr.innerHTML = `
-                <td class="p-4 font-bold text-slate-900 flex items-center gap-1.5">
+                <td class="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-1.5">
                     ${escapeHtml(c.fullName)}
-                    ${c.isBlocked ? '<span class="px-1.5 py-0.5 text-[10px] bg-rose-600 text-white rounded font-black">محظور</span>' : ''}
-                    ${c.telegramChatId ? '<span title="مسجل عبر تيليجرام" class="px-1.5 py-0.5 text-[10px] bg-blue-500 text-white rounded font-black">📱 تيليجرام</span>' : ''}
+                    ${c.isBlocked ? '<span class="px-1.5 py-0.5 text-[10px] bg-rose-50 text-rose-700 border border-rose-200/60 rounded font-bold">محظور</span>' : ''}
+                    ${c.telegramChatId ? '<span title="مسجل عبر تيليجرام" class="px-1.5 py-0.5 text-[10px] bg-sky-50 text-sky-700 border border-sky-200/60 rounded font-bold">📱 تيليجرام</span>' : ''}
                 </td>
-                <td class="p-4 text-slate-600 font-mono text-xs"><a href="tel:${escapeHtml(c.phoneNumber)}" class="hover:text-amber-600 underline">${escapeHtml(c.phoneNumber)}</a></td>
-                <td class="p-4"><span class="px-2.5 py-1 bg-blue-50 text-blue-900 border border-blue-200 rounded-lg text-xs font-bold">${escapeHtml(c.route || c.area || 'غير محدد')}</span></td>
-                <td class="p-4 text-slate-700 text-xs">${escapeHtml(c.address || c.area || '-')}</td>
-                <td class="p-4"><span class="px-2 py-1 bg-slate-100 text-slate-800 font-mono text-xs rounded border border-slate-200 font-bold select-all" title="كلمة المرور">${escapeHtml(c.password || '••••••••')}</span></td>
-                <td class="p-4">${activeBadge}</td>
-                <td class="p-4">
+                <td class="py-3.5 px-4 font-mono text-xs">${customerPhoneHtml}</td>
+                <td class="py-3.5 px-4"><span class="inline-flex items-center px-2.5 py-0.5 bg-slate-100 text-slate-700 border border-slate-200/60 rounded-md text-xs font-medium">${escapeHtml(c.route || c.area || 'غير محدد')}</span></td>
+                <td class="py-3.5 px-4 text-slate-600 text-xs">${escapeHtml(c.address || c.area || '-')}</td>
+                <td class="py-3.5 px-4"><span class="px-2 py-1 bg-slate-50 text-slate-700 font-mono text-xs rounded border border-slate-200 font-medium select-all" title="كلمة المرور">${escapeHtml(c.password || '••••••••')}</span></td>
+                <td class="py-3.5 px-4 text-center">${activeBadge}</td>
+                <td class="py-3.5 px-4">
                     <div class="flex items-center justify-center gap-1.5 flex-wrap">
-                        <button onclick="openEditCustomerModal('${c.customerId}')" title="تعديل بيانات الراكب والمسار وكلمة المرور" class="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                        <button onclick="openEditCustomerModal('${c.customerId}')" title="تعديل بيانات الراكب والمسار وكلمة المرور" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer">
                             <i class="fa-solid fa-pen-to-square text-xs"></i>
                             <span>تعديل</span>
                         </button>
                         ${blockBtn}
-                        <button onclick="deleteCustomerPermanently('${c.customerId}')" title="حذف الراكب وسجلاته نهائياً" class="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                        <button onclick="deleteCustomerPermanently('${c.customerId}')" title="حذف الراكب وسجلاته نهائياً" class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer">
                             <i class="fa-solid fa-trash-can text-xs"></i>
                             <span>حذف</span>
                         </button>
@@ -1197,28 +1254,53 @@ async function loadRoutes() {
 
         routesList.forEach(r => {
             const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition';
+            tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80';
+
+            const rawPrice = Number(r.pricePerSeat || r.fare || 3000);
+            const isAct = !r.status || r.status === 'Active' || r.status === 'متاح' || r.status === 'نشط';
+            const driverPhoneHtml = r.driverPhone
+                ? `<a href="tel:${escapeHtml(r.driverPhone)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 font-mono text-xs mt-0.5 transition-colors" dir="ltr" title="اتصال بالسائق"><i class="fa-solid fa-phone text-[10px] text-slate-400"></i><span>${escapeHtml(r.driverPhone)}</span></a>`
+                : '';
 
             tr.innerHTML = `
-                <td class="p-4 font-bold text-slate-900">${r.routeName || r.name || 'مسار معتمد'}</td>
-                <td class="p-4 text-slate-700 text-xs">${r.driverName || 'كابتن'} <span class="text-slate-400 block font-mono">${r.driverPhone || ''}</span></td>
-                <td class="p-4 text-slate-600 text-xs">${r.startName || ''} ➔ ${r.endName || ''}</td>
-                <td class="p-4 font-mono text-xs">${r.departureTime || '08:00 AM'}</td>
-                <td class="p-4 font-bold text-slate-800">${r.availableSeats || 4}</td>
-                <td class="p-4 text-emerald-600 font-bold">${Number(r.pricePerSeat || r.fare || 3000).toLocaleString()} د.ع</td>
-                <td class="p-4"><span class="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-800 rounded font-bold">${r.status || 'Active'}</span></td>
+                <td class="py-3.5 px-4 font-bold text-slate-900">${escapeHtml(r.routeName || r.name || 'مسار معتمد')}</td>
+                <td class="py-3.5 px-4">
+                    <div class="font-bold text-slate-900 text-xs">${escapeHtml(r.driverName || 'كابتن')}</div>
+                    ${driverPhoneHtml}
+                </td>
+                <td class="py-3.5 px-4">
+                    <div class="text-xs text-slate-600 flex items-center gap-1.5">
+                        <span class="font-semibold text-slate-800">${escapeHtml(r.startName || 'البداية')}</span>
+                        <i class="fa-solid fa-arrow-left text-[10px] text-slate-400"></i>
+                        <span class="font-semibold text-slate-800">${escapeHtml(r.endName || 'النهاية')}</span>
+                    </div>
+                </td>
+                <td class="py-3.5 px-4 font-mono text-xs text-slate-600">
+                    <span class="inline-flex items-center gap-1"><i class="fa-regular fa-clock text-slate-400"></i>${escapeHtml(r.departureTime || '08:00 AM')}</span>
+                </td>
+                <td class="py-3.5 px-4 text-center">
+                    <span class="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">${r.availableSeats || 4} مقاعد</span>
+                </td>
+                <td class="py-3.5 px-4">
+                    <span class="font-bold text-slate-900">${rawPrice.toLocaleString()}</span> <span class="text-xs font-normal text-slate-500 mr-0.5">د.ع</span>
+                </td>
+                <td class="py-3.5 px-4 text-center">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full ${isAct ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-xs' : 'bg-slate-100 text-slate-600 border border-slate-200'}">
+                        ${isAct ? '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>نشط ✓' : escapeHtml(r.status)}
+                    </span>
+                </td>
             `;
             tbody.appendChild(tr);
         });
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-rose-500">فشل في الاتصال</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-rose-500 font-semibold">فشل في الاتصال بالخادم</td></tr>';
     }
 }
 
 async function loadBookings() {
     const tbody = document.getElementById('bookings-table-body');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-slate-400">جاري التحميل...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-slate-400 text-xs font-semibold">جاري تحميل سجل الحجوزات...</td></tr>';
 
     try {
         const res = await fetch(`${API_BASE}/bookings`);
@@ -1227,33 +1309,43 @@ async function loadBookings() {
 
         const bookingsList = Array.isArray(data) ? data : (data.bookings || []);
         if (bookingsList.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-slate-400">لا توجد حجوزات مسجلة</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-slate-400 text-xs">لا توجد حجوزات مسجلة</td></tr>';
             return;
         }
 
         bookingsList.forEach(b => {
             const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition';
+            tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80';
 
             const status = b.status || 'Pending';
             let statusBadge = '';
             let actionBtn = '';
 
-            if (status === 'Confirmed' || status === 'Accepted') {
-                statusBadge = '<span class="px-2.5 py-1 text-xs bg-emerald-100 text-emerald-800 rounded-full font-bold">✅ مؤكد (أحد الركاب)</span>';
-                actionBtn = '<span class="text-xs text-emerald-600 font-bold">تمت الموافقة</span>';
+            const isPendingCancel = status === 'cancellation_pending' || Boolean(b.cancellationPending) || Boolean(b.cancellation_requested) || b.cancellation_status === 'pending';
+
+            if (isPendingCancel) {
+                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>طلب إلغاء معلق ⚠️</span>';
+                actionBtn = '<button onclick="switchTab(\'cancellations\')" class="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer">مراجعة الإلغاء</button>';
+            } else if (status === 'Confirmed' || status === 'Accepted') {
+                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>مؤكد ✓</span>';
+                actionBtn = '<span class="inline-flex items-center gap-1 text-xs text-emerald-700 font-semibold bg-emerald-50/60 px-2 py-0.5 rounded-md"><i class="fa-solid fa-check text-[10px]"></i> تمت الموافقة</span>';
+            } else if (status === 'Cancelled') {
+                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 border border-slate-200 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>ملغي</span>';
+                actionBtn = '<span class="text-xs text-slate-400 font-medium">ملغي</span>';
             } else if (status === 'Declined' || status === 'Rejected') {
-                statusBadge = '<span class="px-2.5 py-1 text-xs bg-rose-100 text-rose-800 rounded-full font-bold">❌ مرفوض</span>';
-                actionBtn = '<span class="text-xs text-slate-400 font-bold">مرفوض</span>';
+                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-rose-50 text-rose-700 border border-rose-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>مرفوض ✕</span>';
+                actionBtn = '<span class="text-xs text-slate-400 font-medium">مرفوض</span>';
             } else {
-                statusBadge = '<span class="px-2.5 py-1 text-xs bg-amber-100 text-amber-800 rounded-full font-bold animate-pulse">⏳ بانتظار موافقة السائق</span>';
+                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>قيد الانتظار ⏳</span>';
                 actionBtn = `
                     <div class="flex items-center justify-center gap-1.5">
-                        <button onclick="acceptBookingFromAdmin('${b.id || b.bookingId}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition shadow-sm">
-                            موافقة السائق ✅
+                        <button onclick="acceptBookingFromAdmin('${b.id || b.bookingId}')" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition shadow-xs flex items-center gap-1 cursor-pointer">
+                            <span>موافقة</span>
+                            <i class="fa-solid fa-check text-[10px]"></i>
                         </button>
-                        <button onclick="declineBookingFromAdmin('${b.id || b.bookingId}')" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition shadow-sm">
-                            رفض ❌
+                        <button onclick="declineBookingFromAdmin('${b.id || b.bookingId}')" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition shadow-xs flex items-center gap-1 cursor-pointer">
+                            <span>رفض</span>
+                            <i class="fa-solid fa-xmark text-[10px]"></i>
                         </button>
                     </div>
                 `;
@@ -1261,23 +1353,47 @@ async function loadBookings() {
 
             const pickup = b.pickupName || b.pickupLocation || 'نقطة الانطلاق';
             const dropoff = b.dropoffName || b.dropoffLocation || 'جامعة الكوفة';
-            const fare = Number(b.fareAmount || b.totalFare || b.fare || 0).toLocaleString();
+            const rawFare = Number(b.fareAmount || b.totalFare || b.fare || 0);
             const dateStr = b.bookingDate || (b.createdAt ? new Date(b.createdAt).toLocaleDateString('ar-IQ') : '-');
 
+            const customerPhoneHtml = b.customerPhone
+                ? `<a href="tel:${escapeHtml(b.customerPhone)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 font-mono text-xs mt-0.5 transition-colors" dir="ltr" title="اتصال بالراكب"><i class="fa-solid fa-phone text-[10px] text-slate-400"></i><span>${escapeHtml(b.customerPhone)}</span></a>`
+                : '';
+
+            const driverPhoneHtml = b.driverPhone
+                ? `<a href="tel:${escapeHtml(b.driverPhone)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 font-mono text-xs mt-0.5 transition-colors" dir="ltr" title="اتصال بالسائق"><i class="fa-solid fa-phone text-[10px] text-slate-400"></i><span>${escapeHtml(b.driverPhone)}</span></a>`
+                : '';
+
             tr.innerHTML = `
-                <td class="p-4 font-bold text-slate-900">${b.customerName || 'راكب'} <span class="text-slate-400 block font-mono text-xs">${b.customerPhone || ''}</span></td>
-                <td class="p-4 text-slate-700 text-xs font-semibold">${b.driverName || 'كابتن توصيله'}</td>
-                <td class="p-4 text-slate-600 text-xs">${pickup} ➔ ${dropoff}</td>
-                <td class="p-4 font-mono text-xs">${dateStr}</td>
-                <td class="p-4 font-bold text-center">${b.seatsBooked || 1}</td>
-                <td class="p-4 text-emerald-600 font-bold">${fare} د.ع</td>
-                <td class="p-4 text-center">${statusBadge}</td>
-                <td class="p-4 text-center">${actionBtn}</td>
+                <td class="py-3.5 px-4">
+                    <div class="font-bold text-slate-900">${escapeHtml(b.customerName || 'راكب')}</div>
+                    ${customerPhoneHtml}
+                </td>
+                <td class="py-3.5 px-4">
+                    <div class="font-bold text-slate-900 text-xs">${escapeHtml(b.driverName || 'كابتن توصيله')}</div>
+                    ${driverPhoneHtml}
+                </td>
+                <td class="py-3.5 px-4">
+                    <div class="text-xs text-slate-600 flex items-center gap-1.5">
+                        <span class="font-semibold text-slate-800">${escapeHtml(pickup)}</span>
+                        <i class="fa-solid fa-arrow-left text-[10px] text-slate-400"></i>
+                        <span class="font-semibold text-slate-800">${escapeHtml(dropoff)}</span>
+                    </div>
+                </td>
+                <td class="py-3.5 px-4 font-mono text-xs text-slate-500">${escapeHtml(dateStr)}</td>
+                <td class="py-3.5 px-4 text-center">
+                    <span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700">${b.seatsBooked || 1}</span>
+                </td>
+                <td class="py-3.5 px-4">
+                    <span class="font-bold text-slate-900">${rawFare.toLocaleString()}</span> <span class="text-xs font-normal text-slate-500 mr-0.5">د.ع</span>
+                </td>
+                <td class="py-3.5 px-4 text-center">${statusBadge}</td>
+                <td class="py-3.5 px-4 text-center">${actionBtn}</td>
             `;
             tbody.appendChild(tr);
         });
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-rose-500">فشل في الاتصال</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-rose-500 font-semibold">فشل في الاتصال بالخادم</td></tr>';
     }
 }
 
@@ -1333,17 +1449,24 @@ async function loadComplaints() {
 
         data.complaints.forEach(c => {
             const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition';
+            tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80 text-xs md:text-sm';
+
+            let statusBadge = '';
+            if (c.status === 'Resolved' || c.status === 'محلولة') {
+                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-emerald shadow-xs"><span class="badge-dot"></span><span>محلولة ✓</span></span>';
+            } else {
+                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-amber shadow-xs"><span class="badge-dot animate-pulse"></span><span>قيد المعالجة ⏳</span></span>';
+            }
 
             tr.innerHTML = `
-                <td class="p-4 font-bold text-slate-900">${c.complainantName}</td>
-                <td class="p-4 text-slate-700 text-xs">${c.respondentName}</td>
-                <td class="p-4 text-xs font-semibold text-rose-600">${c.category}</td>
-                <td class="p-4 text-xs text-slate-600 max-w-xs truncate">${c.description}</td>
-                <td class="p-4"><span class="px-2 py-0.5 text-xs bg-amber-100 text-amber-800 rounded font-bold">${c.status}</span></td>
-                <td class="p-4 font-mono text-xs">${new Date(c.createdAt).toLocaleDateString('ar-IQ')}</td>
-                <td class="p-4 text-center">
-                    <button onclick="resolveComplaint('${c.complaintId}')" class="px-3 py-1 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-500 transition">
+                <td class="py-3.5 px-4 font-bold text-slate-900">${escapeHtml(c.complainantName || '')}</td>
+                <td class="py-3.5 px-4 text-slate-700 text-xs">${escapeHtml(c.respondentName || '')}</td>
+                <td class="py-3.5 px-4 text-xs font-semibold text-rose-600">${escapeHtml(c.category || '')}</td>
+                <td class="py-3.5 px-4 text-xs text-slate-600 max-w-xs truncate" title="${escapeHtml(c.description || '')}">${escapeHtml(c.description || '')}</td>
+                <td class="py-3.5 px-4 text-center">${statusBadge}</td>
+                <td class="py-3.5 px-4 font-mono text-xs text-slate-500">${new Date(c.createdAt).toLocaleDateString('ar-IQ')}</td>
+                <td class="py-3.5 px-4 text-center">
+                    <button onclick="resolveComplaint('${c.complaintId}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium transition cursor-pointer shadow-xs">
                         حل الشكوى
                     </button>
                 </td>
@@ -1499,15 +1622,15 @@ async function loadAuditLogs() {
 
         data.logs.forEach(l => {
             const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition';
+            tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80 text-xs md:text-sm';
 
             tr.innerHTML = `
-                <td class="p-4 font-bold text-slate-900">${l.action}</td>
-                <td class="p-4 text-xs font-semibold text-slate-600">${l.entityName}</td>
-                <td class="p-4 font-mono text-xs text-slate-500">${l.entityId}</td>
-                <td class="p-4 text-xs font-mono max-w-xs truncate text-slate-700">${l.newValuesJson || '-'}</td>
-                <td class="p-4 font-mono text-xs text-slate-500">${l.ipAddress || '127.0.0.1'}</td>
-                <td class="p-4 font-mono text-xs">${new Date(l.createdAt).toLocaleString('ar-IQ')}</td>
+                <td class="py-3.5 px-4 font-bold text-slate-900">${escapeHtml(l.action || '')}</td>
+                <td class="py-3.5 px-4 text-xs font-semibold text-slate-600">${escapeHtml(l.entityName || '')}</td>
+                <td class="py-3.5 px-4 font-mono text-xs text-slate-500">${escapeHtml(l.entityId || '')}</td>
+                <td class="py-3.5 px-4 text-xs font-mono max-w-xs truncate text-slate-700" title="${escapeHtml(l.newValuesJson || '')}">${escapeHtml(l.newValuesJson || '-')}</td>
+                <td class="py-3.5 px-4 font-mono text-xs text-slate-500">${escapeHtml(l.ipAddress || '127.0.0.1')}</td>
+                <td class="py-3.5 px-4 font-mono text-xs text-slate-500">${new Date(l.createdAt).toLocaleString('ar-IQ')}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -3755,39 +3878,39 @@ async function loadCancellationRequests() {
 
         requests.forEach(r => {
             const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition border-b border-slate-100 text-xs md:text-sm';
+            tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80 text-xs md:text-sm';
 
             let statusBadge = '';
             if (r.status === 'Approved') {
-                statusBadge = '<span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full font-bold text-xs">تمت الموافقة والإلغاء ✅</span>';
+                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-emerald shadow-xs"><span class="badge-dot"></span><span>تم الاعتماد ✓</span></span>';
             } else if (r.status === 'Rejected') {
-                statusBadge = '<span class="px-2.5 py-1 bg-rose-100 text-rose-800 rounded-full font-bold text-xs">مرفوض ❌</span>';
+                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-rose shadow-xs"><span class="badge-dot"></span><span>مرفوض ✕</span></span>';
             } else {
-                statusBadge = '<span class="px-2.5 py-1 bg-amber-100 text-amber-800 rounded-full font-bold text-xs animate-pulse">⏳ قيد المراجعة</span>';
+                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-amber shadow-xs"><span class="badge-dot animate-pulse"></span><span>قيد المراجعة ⏳</span></span>';
             }
 
             let driverDecisionBadge = '';
             const dec = String(r.driverDecision || '').toLowerCase();
             if (dec === 'approved') {
-                driverDecisionBadge = '<span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-xs">موافقة ✅</span>';
+                driverDecisionBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-emerald shadow-xs"><span class="badge-dot"></span><span>موافقة ✓</span></span>';
             } else if (dec === 'rejected') {
-                driverDecisionBadge = '<span class="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg font-bold text-xs">رفض ❌</span>';
+                driverDecisionBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-rose shadow-xs"><span class="badge-dot"></span><span>رفض ✕</span></span>';
             } else {
-                driverDecisionBadge = '<span class="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg font-bold text-xs">قيد انتظار الرد ⏳</span>';
+                driverDecisionBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-amber shadow-xs"><span class="badge-dot animate-pulse"></span><span>في انتظار الرد ⏳</span></span>';
             }
 
             let actionButtons = '';
             if (r.status === 'Pending') {
                 actionButtons = `
-                    <div class="flex items-center justify-center gap-1.5 mt-1">
+                    <div class="flex items-center justify-center gap-1.5 mt-1.5">
                         <button onclick="approveCancellationRequest('${r.id || r.requestId}')" 
-                                class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs flex items-center gap-1 transition shadow-sm cursor-pointer" title="اعتماد الإلغاء وتحرير المقعد">
-                            <i class="fa-solid fa-check"></i>
+                                class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium text-xs flex items-center gap-1 transition shadow-xs cursor-pointer" title="اعتماد الإلغاء وتحرير المقعد">
+                            <i class="fa-solid fa-check text-[10px]"></i>
                             <span>اعتماد</span>
                         </button>
                         <button onclick="rejectCancellationRequest('${r.id || r.requestId}')" 
-                                class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg font-bold text-xs flex items-center gap-1 transition shadow-sm cursor-pointer" title="رفض طلب الإلغاء">
-                            <i class="fa-solid fa-xmark"></i>
+                                class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-medium text-xs flex items-center gap-1 transition shadow-xs cursor-pointer" title="رفض طلب الإلغاء">
+                            <i class="fa-solid fa-xmark text-[10px]"></i>
                             <span>رفض</span>
                         </button>
                     </div>
@@ -3795,27 +3918,35 @@ async function loadCancellationRequests() {
             }
 
             const pReason = r.passengerReason || r.reason || 'ظروف شخصية';
-            const pDetails = r.passengerDetails ? `<div class="text-xs text-slate-400 mt-0.5 max-w-xs truncate" title="${r.passengerDetails}">${r.passengerDetails}</div>` : '';
-            const drvReason = r.driverApprovalReason ? `<div class="text-xs font-medium text-slate-700 max-w-xs truncate" title="${r.driverApprovalReason}">${r.driverApprovalReason}</div>` : '<span class="text-slate-400 text-xs">—</span>';
+            const pDetails = r.passengerDetails ? `<div class="text-xs text-slate-400 mt-0.5 max-w-xs truncate" title="${escapeHtml(r.passengerDetails)}">${escapeHtml(r.passengerDetails)}</div>` : '';
+            const drvReason = r.driverApprovalReason ? `<div class="text-xs font-medium text-slate-700 max-w-xs truncate" title="${escapeHtml(r.driverApprovalReason)}">${escapeHtml(r.driverApprovalReason)}</div>` : '<span class="text-slate-400 text-xs">—</span>';
+
+            const custPhoneHtml = r.customerPhone
+                ? `<a href="tel:${escapeHtml(r.customerPhone)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 font-mono text-xs mt-0.5 transition-colors" dir="ltr" title="اتصال بالراكب"><i class="fa-solid fa-phone text-[10px] text-slate-400"></i><span>${escapeHtml(r.customerPhone)}</span></a>`
+                : '';
+
+            const drvPhoneHtml = r.driverPhone
+                ? `<a href="tel:${escapeHtml(r.driverPhone)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 font-mono text-xs mt-0.5 transition-colors" dir="ltr" title="اتصال بالسائق"><i class="fa-solid fa-phone text-[10px] text-slate-400"></i><span>${escapeHtml(r.driverPhone)}</span></a>`
+                : '';
 
             tr.innerHTML = `
-                <td class="p-4 font-mono font-bold text-slate-700 text-xs">${r.id || r.requestId || ''}</td>
-                <td class="p-4">
-                    <div class="font-bold text-slate-900">${r.customerName || 'الراكب'}</div>
-                    <div class="text-xs text-slate-500 font-mono" dir="ltr">${r.customerPhone || ''}</div>
+                <td class="py-3.5 px-4 font-mono font-bold text-slate-700 text-xs">${r.id || r.requestId || ''}</td>
+                <td class="py-3.5 px-4">
+                    <div class="font-bold text-slate-900">${escapeHtml(r.customerName || 'الراكب')}</div>
+                    ${custPhoneHtml}
                 </td>
-                <td class="p-4">
-                    <div class="font-bold text-slate-900">${r.driverName || 'الكابتن'}</div>
-                    <div class="text-xs text-slate-500 font-mono" dir="ltr">${r.driverPhone || ''}</div>
+                <td class="py-3.5 px-4">
+                    <div class="font-bold text-slate-900">${escapeHtml(r.driverName || 'الكابتن')}</div>
+                    ${drvPhoneHtml}
                 </td>
-                <td class="p-4 text-slate-700 font-semibold text-xs">${r.route || 'مسار الرحلة'}</td>
-                <td class="p-4">
-                    <div class="font-bold text-slate-800 text-xs">${pReason}</div>
+                <td class="py-3.5 px-4 text-slate-700 font-semibold text-xs">${escapeHtml(r.route || 'مسار الرحلة')}</td>
+                <td class="py-3.5 px-4">
+                    <div class="font-bold text-slate-800 text-xs">${escapeHtml(pReason)}</div>
                     ${pDetails}
                 </td>
-                <td class="p-4 text-center">${driverDecisionBadge}</td>
-                <td class="p-4">${drvReason}</td>
-                <td class="p-4 text-center">
+                <td class="py-3.5 px-4 text-center">${driverDecisionBadge}</td>
+                <td class="py-3.5 px-4">${drvReason}</td>
+                <td class="py-3.5 px-4 text-center">
                     <div>${statusBadge}</div>
                     ${actionButtons}
                 </td>
@@ -3908,15 +4039,15 @@ window.switchCustomSubTab = switchCustomSubTab;
 var DASHBOARD_PRESETS = {
     default: {
         dashBgColor: '#f8fafc',
-        dashSidebarBg: '#0f172a',
+        dashSidebarBg: '#ffffff',
         dashCardBg: '#ffffff',
-        dashHeaderBg: '#0f172a',
-        dashTextColor: '#475569',
+        dashHeaderBg: '#ffffff',
+        dashTextColor: '#334155',
         dashHeadingColor: '#0f172a',
-        dashPrimaryColor: '#f59e0b',
-        dashActiveColor: '#f59e0b',
+        dashPrimaryColor: '#1B4965',
+        dashActiveColor: '#1B4965',
         dashBorderColor: '#e2e8f0',
-        dashFontFamily: 'Cairo',
+        dashFontFamily: 'IBM Plex Sans Arabic',
         dashFontSize: '14px',
         dashFontStrokeColor: '#000000',
         dashFontStrokeWidth: '0px'
@@ -3931,7 +4062,7 @@ var DASHBOARD_PRESETS = {
         dashPrimaryColor: '#f59e0b',
         dashActiveColor: '#f59e0b',
         dashBorderColor: '#334155',
-        dashFontFamily: 'Cairo',
+        dashFontFamily: 'IBM Plex Sans Arabic',
         dashFontSize: '14px',
         dashFontStrokeColor: '#000000',
         dashFontStrokeWidth: '0px'
@@ -3943,10 +4074,10 @@ var DASHBOARD_PRESETS = {
         dashHeaderBg: '#ffffff',
         dashTextColor: '#334155',
         dashHeadingColor: '#0f172a',
-        dashPrimaryColor: '#2563eb',
-        dashActiveColor: '#2563eb',
+        dashPrimaryColor: '#1B4965',
+        dashActiveColor: '#1B4965',
         dashBorderColor: '#e2e8f0',
-        dashFontFamily: 'Cairo',
+        dashFontFamily: 'IBM Plex Sans Arabic',
         dashFontSize: '14px',
         dashFontStrokeColor: '#000000',
         dashFontStrokeWidth: '0px'
@@ -3961,7 +4092,7 @@ var DASHBOARD_PRESETS = {
         dashPrimaryColor: '#f59e0b',
         dashActiveColor: '#fbbf24',
         dashBorderColor: '#3f3f46',
-        dashFontFamily: 'Cairo',
+        dashFontFamily: 'IBM Plex Sans Arabic',
         dashFontSize: '14px',
         dashFontStrokeColor: '#000000',
         dashFontStrokeWidth: '0px'
@@ -4028,7 +4159,7 @@ function applyDashboardPreset(presetKey) {
     setColorPair('dash-font-stroke-color', 'dash-font-stroke-color-hex', p.dashFontStrokeColor || '#000000');
     
     var ffEl = document.getElementById('dash-font-family');
-    if (ffEl) ffEl.value = p.dashFontFamily || 'Cairo';
+    if (ffEl) ffEl.value = p.dashFontFamily || 'IBM Plex Sans Arabic';
     
     var fsEl = document.getElementById('dash-font-size');
     if (fsEl) fsEl.value = p.dashFontSize || '14px';
@@ -4068,17 +4199,17 @@ window.syncLiveDashboardColor = syncLiveDashboardColor;
 function syncLiveDashboardTheme() {
     var dt = {
         dashBgColor: getColorPairVal('dash-bg-color', 'dash-bg-color-hex', '#f8fafc'),
-        dashSidebarBg: getColorPairVal('dash-sidebar-bg', 'dash-sidebar-bg-hex', '#0f172a'),
+        dashSidebarBg: getColorPairVal('dash-sidebar-bg', 'dash-sidebar-bg-hex', '#ffffff'),
         dashCardBg: getColorPairVal('dash-card-bg', 'dash-card-bg-hex', '#ffffff'),
-        dashHeaderBg: getColorPairVal('dash-header-bg', 'dash-header-bg-hex', '#0f172a'),
-        dashTextColor: getColorPairVal('dash-text-color', 'dash-text-color-hex', '#475569'),
+        dashHeaderBg: getColorPairVal('dash-header-bg', 'dash-header-bg-hex', '#ffffff'),
+        dashTextColor: getColorPairVal('dash-text-color', 'dash-text-color-hex', '#334155'),
         dashHeadingColor: getColorPairVal('dash-heading-color', 'dash-heading-color-hex', '#0f172a'),
-        dashPrimaryColor: getColorPairVal('dash-primary-color', 'dash-primary-color-hex', '#f59e0b'),
-        dashActiveColor: getColorPairVal('dash-active-color', 'dash-active-color-hex', '#f59e0b'),
+        dashPrimaryColor: getColorPairVal('dash-primary-color', 'dash-primary-color-hex', '#1B4965'),
+        dashActiveColor: getColorPairVal('dash-active-color', 'dash-active-color-hex', '#1B4965'),
         dashBorderColor: getColorPairVal('dash-border-color', 'dash-border-color-hex', '#e2e8f0'),
         dashFontStrokeColor: getColorPairVal('dash-font-stroke-color', 'dash-font-stroke-color-hex', '#000000'),
         dashFontStrokeWidth: document.getElementById('dash-font-stroke-width') ? document.getElementById('dash-font-stroke-width').value : '0px',
-        dashFontFamily: document.getElementById('dash-font-family') ? document.getElementById('dash-font-family').value : 'Cairo',
+        dashFontFamily: document.getElementById('dash-font-family') ? document.getElementById('dash-font-family').value : 'IBM Plex Sans Arabic',
         dashFontSize: document.getElementById('dash-font-size') ? document.getElementById('dash-font-size').value : '14px'
     };
     applyDashboardTheme(dt);
@@ -4088,15 +4219,15 @@ window.syncLiveDashboardTheme = syncLiveDashboardTheme;
 function applyDashboardTheme(th) {
     if (!th) return;
     var bg = th.dashBgColor || '#f8fafc';
-    var sidebarBg = th.dashSidebarBg || '#0f172a';
+    var sidebarBg = th.dashSidebarBg || '#ffffff';
     var cardBg = th.dashCardBg || '#ffffff';
-    var headerBg = th.dashHeaderBg || '#0f172a';
-    var textColor = th.dashTextColor || '#475569';
+    var headerBg = th.dashHeaderBg || '#ffffff';
+    var textColor = th.dashTextColor || '#334155';
     var headingColor = th.dashHeadingColor || '#0f172a';
-    var primaryColor = th.dashPrimaryColor || '#f59e0b';
-    var activeColor = th.dashActiveColor || '#f59e0b';
+    var primaryColor = th.dashPrimaryColor || '#1B4965';
+    var activeColor = th.dashActiveColor || '#1B4965';
     var borderColor = th.dashBorderColor || '#e2e8f0';
-    var fontFamily = th.dashFontFamily || 'Cairo';
+    var fontFamily = th.dashFontFamily || 'IBM Plex Sans Arabic';
     var fontSize = th.dashFontSize || '14px';
     var strokeColor = th.dashFontStrokeColor || '#000000';
     var strokeWidth = th.dashFontStrokeWidth || '0px';
@@ -5093,7 +5224,7 @@ async function loadTripRatings(search = '') {
 
         ratings.forEach(r => {
             const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50 transition';
+            tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80 text-xs md:text-sm';
 
             // Find driver info if available
             const driver = window.driversMap ? (window.driversMap[r.driverId] || null) : null;
@@ -5115,7 +5246,7 @@ async function loadTripRatings(search = '') {
             let tagsHtml = '';
             if (Array.isArray(r.tags) && r.tags.length > 0) {
                 tagsHtml = r.tags.map(tag => 
-                    `<span class="px-2 py-0.5 text-[11px] font-bold rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200/80 mr-1 mb-1 inline-block">${escapeHtml(tag)}</span>`
+                    `<span class="px-2 py-0.5 text-[11px] font-semibold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/60 mr-1 mb-1 inline-block">${escapeHtml(tag)}</span>`
                 ).join('');
             } else {
                 tagsHtml = '<span class="text-xs text-slate-400">لا توجد وسوم</span>';
@@ -5130,25 +5261,34 @@ async function loadTripRatings(search = '') {
                 } catch(_) {}
             }
 
+            const drvPhoneHtml = driverPhone 
+                ? `<a href="tel:${escapeHtml(driverPhone)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 font-mono text-xs mt-0.5 transition-colors" dir="ltr" title="اتصال بالكابتن"><i class="fa-solid fa-phone text-[10px] text-slate-400"></i><span>${escapeHtml(driverPhone)}</span></a>`
+                : '';
+
+            const passPhone = r.passengerPhone || '';
+            const passPhoneHtml = passPhone 
+                ? `<a href="tel:${escapeHtml(passPhone)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 font-mono text-xs mt-0.5 transition-colors" dir="ltr" title="اتصال بالراكب"><i class="fa-solid fa-phone text-[10px] text-slate-400"></i><span>${escapeHtml(passPhone)}</span></a>`
+                : (r.passengerId ? `<span class="text-[11px] text-slate-400 font-mono block mt-0.5">${escapeHtml(r.passengerId)}</span>` : '');
+
             tr.innerHTML = `
-                <td class="p-4 text-xs font-mono text-slate-500">${escapeHtml(dateStr)}</td>
-                <td class="p-4">
+                <td class="py-3.5 px-4 text-xs font-mono text-slate-500">${escapeHtml(dateStr)}</td>
+                <td class="py-3.5 px-4">
                     <div class="font-bold text-slate-900">${escapeHtml(driverName)}</div>
-                    ${driverPhone ? `<a href="tel:${escapeHtml(driverPhone)}" class="text-xs text-slate-500 hover:text-amber-600 font-mono">${escapeHtml(driverPhone)}</a>` : ''}
+                    ${drvPhoneHtml}
                 </td>
-                <td class="p-4">
+                <td class="py-3.5 px-4">
                     <div class="font-bold text-slate-800">${escapeHtml(r.passengerName || 'الراكب')}</div>
-                    ${r.passengerId ? `<span class="text-[11px] text-slate-400 font-mono">${escapeHtml(r.passengerId)}</span>` : ''}
+                    ${passPhoneHtml}
                 </td>
-                <td class="p-4">
+                <td class="py-3.5 px-4">
                     <div class="flex items-center gap-1">${starsHtml} <span class="text-xs font-bold text-slate-700 mr-1">(${numStars}/5)</span></div>
                 </td>
-                <td class="p-4"><div class="flex flex-wrap">${tagsHtml}</div></td>
-                <td class="p-4 text-xs text-slate-700 max-w-[200px] truncate" title="${escapeHtml(r.comment || '')}">
+                <td class="py-3.5 px-4"><div class="flex flex-wrap">${tagsHtml}</div></td>
+                <td class="py-3.5 px-4 text-xs text-slate-700 max-w-[200px] truncate" title="${escapeHtml(r.comment || '')}">
                     ${r.comment ? escapeHtml(r.comment) : '<span class="text-slate-400 italic">بدون ملاحظات</span>'}
                 </td>
-                <td class="p-4 text-center">
-                    <span class="inline-flex items-center gap-1 px-3 py-1 bg-amber-100 text-amber-900 rounded-full font-black text-xs border border-amber-300">
+                <td class="py-3.5 px-4 text-center">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold badge-amber shadow-xs">
                         <span>+${r.pointsEarned || 50}</span>
                         <span>⭐</span>
                     </span>

@@ -33,23 +33,31 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;600;700;900&family=Almarai:wght@400;700;800&family=Cairo:wght@400;600;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Readex+Pro:wght@400;600;700&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/dashboard/style.css?v=20261003_v3">
+    <link rel="stylesheet" href="/dashboard/style.css?v=20261017_modern_saas">
     <script>
         try {
             var cachedDashTheme = localStorage.getItem('tawseela_dashboard_theme');
             if (cachedDashTheme) {
                 var th = JSON.parse(cachedDashTheme);
+                // Reset legacy dark/yellow preset if stored
+                if (th && (th.dashSidebarBg === '#0f172a' || th.dashHeaderBg === '#0f172a' || th.dashPrimaryColor === '#f59e0b')) {
+                    localStorage.removeItem('tawseela_dashboard_theme');
+                    cachedDashTheme = null;
+                }
+            }
+            if (cachedDashTheme) {
+                var th = JSON.parse(cachedDashTheme);
                 if (th && th.dashBgColor) {
                     var bg = th.dashBgColor || '#f8fafc';
-                    var sidebarBg = th.dashSidebarBg || '#0f172a';
+                    var sidebarBg = th.dashSidebarBg || '#ffffff';
                     var cardBg = th.dashCardBg || '#ffffff';
-                    var headerBg = th.dashHeaderBg || '#0f172a';
-                    var textColor = th.dashTextColor || '#475569';
+                    var headerBg = th.dashHeaderBg || '#ffffff';
+                    var textColor = th.dashTextColor || '#334155';
                     var headingColor = th.dashHeadingColor || '#0f172a';
-                    var primaryColor = th.dashPrimaryColor || '#f59e0b';
-                    var activeColor = th.dashActiveColor || '#f59e0b';
+                    var primaryColor = th.dashPrimaryColor || '#1B4965';
+                    var activeColor = th.dashActiveColor || '#1B4965';
                     var borderColor = th.dashBorderColor || '#e2e8f0';
-                    var fontFamily = th.dashFontFamily || 'Cairo';
+                    var fontFamily = th.dashFontFamily || 'IBM Plex Sans Arabic';
                     var strokeColor = th.dashFontStrokeColor || '#000000';
                     var strokeWidth = th.dashFontStrokeWidth || '0px';
                     var strokeCss = (strokeWidth && strokeWidth !== '0px' && strokeWidth !== '0')
@@ -58,7 +66,7 @@
 
                     var s = document.createElement('style');
                     s.id = 'dynamic-dashboard-theme-style';
-                    s.textContent = 'body, html, input, button, select, textarea, p, h1, h2, h3, h4, h5, h6, table, th, td, label, div, span:not([class*="fa"]):not([class*="badge"]) { font-family: "' + fontFamily + '", "Cairo", sans-serif !important; ' + strokeCss + ' } i, i[class*="fa"], .fa, .fas, .far, .fab, .fa-solid, .fa-regular, .fa-brands, [class^="fa-"], [class*=" fa-"] { font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands", "FontAwesome" !important; font-style: normal !important; -webkit-text-stroke: 0 !important; } body { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } main { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } #sidebar-drawer, aside { background-color: ' + sidebarBg + ' !important; border-color: ' + borderColor + ' !important; } header, header.bg-slate-900 { background-color: ' + headerBg + ' !important; border-color: ' + borderColor + ' !important; } .bg-white, .bg-slate-50, .bg-slate-100, .bg-slate-800, .bg-slate-850, .bg-slate-800\\/60, .bg-slate-900, .bg-slate-900\\/80, .bg-slate-950 { background-color: ' + cardBg + ' !important; border-color: ' + borderColor + ' !important; } .text-slate-900, .text-slate-800, .text-white, h1, h2, h3, h4, h5, h6, .font-black { color: ' + headingColor + ' !important; } .text-slate-700, .text-slate-600, .text-slate-500, .text-slate-400, .text-slate-300, p, label { color: ' + textColor + ' !important; } .border-slate-100, .border-slate-200, .border-slate-300, .border-slate-600, .border-slate-700, .border-slate-800, .border-slate-900 { border-color: ' + borderColor + ' !important; } .tab-btn.active { background-color: ' + activeColor + ' !important; color: #ffffff !important; border-color: ' + activeColor + ' !important; box-shadow: 0 4px 14px -2px ' + activeColor + '80 !important; } .tab-btn.active i, .tab-btn.active span { color: #ffffff !important; } .btn-theme-primary { background-color: ' + primaryColor + ' !important; border-color: ' + primaryColor + ' !important; color: #ffffff !important; }';
+                    s.textContent = 'body, html, input, button, select, textarea, p, h1, h2, h3, h4, h5, h6, table, th, td, label, div, span:not([class*="fa"]):not([class*="badge"]) { font-family: "' + fontFamily + '", "IBM Plex Sans Arabic", sans-serif !important; ' + strokeCss + ' } i, i[class*="fa"], .fa, .fas, .far, .fab, .fa-solid, .fa-regular, .fa-brands, [class^="fa-"], [class*=" fa-"] { font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands", "FontAwesome" !important; font-style: normal !important; -webkit-text-stroke: 0 !important; } body { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } main { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } #sidebar-drawer, aside { background-color: ' + sidebarBg + ' !important; border-color: ' + borderColor + ' !important; } header { background-color: ' + headerBg + ' !important; border-color: ' + borderColor + ' !important; } .bg-white, .bg-slate-50, .bg-slate-100 { background-color: ' + cardBg + ' !important; border-color: ' + borderColor + ' !important; } .text-slate-900, .text-slate-800, h1, h2, h3, h4, h5, h6, .font-black { color: ' + headingColor + ' !important; } .text-slate-700, .text-slate-600, .text-slate-500, p, label { color: ' + textColor + ' !important; } .border-slate-100, .border-slate-200 { border-color: ' + borderColor + ' !important; } .tab-btn.active { background-color: #f1f5f9 !important; color: ' + activeColor + ' !important; border-right-color: ' + activeColor + ' !important; } .tab-btn.active i { color: ' + activeColor + ' !important; } .btn-theme-primary { background-color: ' + primaryColor + ' !important; border-color: ' + primaryColor + ' !important; color: #ffffff !important; }';
                     document.head.appendChild(s);
                 }
             }
@@ -78,7 +86,7 @@
             }
         }
     </script>
-<body class="bg-slate-50 text-slate-800 font-['Cairo'] antialiased min-h-screen flex flex-col">
+<body class="bg-slate-50 text-slate-800 font-['IBM_Plex_Sans_Arabic',sans-serif] antialiased min-h-screen flex flex-col">
 
     <!-- ===================================================================== -->
     <!-- 0. ADMIN LOGIN OVERLAY (Gated Access: admin / 1122 or ١١٢٢)             -->
@@ -209,34 +217,50 @@
     </script>
 
     <!-- ===================================================================== -->
-    <!-- TOP NAVIGATION BAR (Responsive: Mobile + Desktop)                     -->
+    <!-- TOP NAVIGATION BAR (Clean SaaS Header: h-16, Backdrop Blur, Breadcrumbs) -->
     <!-- ===================================================================== -->
-    <header class="bg-slate-900 text-white sticky top-0 z-30 shadow-md border-b border-slate-800">
-        <div class="px-4 md:px-6 py-2.5 flex items-center justify-between">
-            <!-- Brand & Mobile Menu Toggle -->
-            <div class="flex items-center space-x-3 space-x-reverse">
-                <button onclick="toggleMobileSidebar()" class="md:hidden w-10 h-10 rounded-xl bg-slate-800 text-amber-400 flex items-center justify-center hover:bg-slate-700 transition">
-                    <i class="fa-solid fa-bars text-lg"></i>
+    <header class="h-16 bg-white/95 backdrop-blur-md text-slate-800 sticky top-0 z-30 shadow-xs border-b border-slate-200/80">
+        <div class="h-full px-4 md:px-6 flex items-center justify-between">
+            <!-- Brand & Mobile Menu Toggle & Breadcrumbs -->
+            <div class="flex items-center gap-3">
+                <button onclick="toggleMobileSidebar()" class="md:hidden w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-bars text-sm"></i>
                 </button>
 
-                <div class="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xl shadow-lg shadow-amber-500/20">
+                <div class="w-9 h-9 rounded-xl bg-[#1B4965] text-amber-400 flex items-center justify-center font-black text-lg shadow-sm flex-shrink-0">
                     🚖
                 </div>
                 <div>
-                    <h1 class="text-base md:text-lg font-black tracking-tight flex items-center gap-1">
+                    <h1 class="text-sm md:text-base font-black tracking-tight text-slate-900 flex items-center gap-1.5">
                         توصيله
-                        <span class="text-amber-400 font-bold text-xs bg-slate-800 px-2 py-0.5 rounded-full">الإدارة</span>
+                        <span class="text-slate-600 font-bold text-[10px] bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded-md">الإدارة السحابية</span>
                     </h1>
-                    <p class="text-[10px] md:text-xs text-slate-400 hidden sm:block">منصة النقل الذكي الموحدة - النجف الأشرف</p>
+                    <p class="text-[10px] text-slate-400 hidden sm:block">منصة النقل الذكي الموحدة - النجف الأشرف</p>
+                </div>
+
+                <!-- Breadcrumbs -->
+                <div class="hidden lg:flex items-center gap-1.5 text-xs text-slate-400 mr-4 pr-4 border-r border-slate-200">
+                    <i class="fa-solid fa-house text-slate-400 text-xs"></i>
+                    <span>الرئيسية</span>
+                    <i class="fa-solid fa-chevron-left text-[9px] text-slate-300"></i>
+                    <span id="breadcrumb-section" class="font-medium text-slate-600">نظرة عامة والمؤشرات</span>
+                    <span id="breadcrumb-divider" class="hidden text-slate-300 text-[9px]"><i class="fa-solid fa-chevron-left"></i></span>
+                    <span id="breadcrumb-sub" class="hidden font-bold text-[#1B4965]"></span>
                 </div>
             </div>
 
             <!-- Action Buttons -->
-            <div class="flex items-center space-x-2 md:space-x-3 space-x-reverse">
+            <div class="flex items-center gap-2 md:gap-3">
+                <!-- Live connection status -->
+                <div class="hidden md:inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-full text-xs font-semibold">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                    <span>سحابي متصل (Live)</span>
+                </div>
+
                 <!-- Main Website Button -->
                 <a href="/" target="_blank" title="فتح الموقع الرئيسي لمنصة توصيله"
-                   class="flex items-center px-2.5 md:px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 rounded-xl text-xs font-bold transition shadow-sm">
-                    <i class="fa-solid fa-globe ml-1.5 text-sm md:text-base"></i>
+                   class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200/80 rounded-xl text-xs font-bold transition shadow-xs">
+                    <i class="fa-solid fa-globe text-xs text-slate-500"></i>
                     <span class="hidden sm:inline">الموقع الرئيسي 🌐</span>
                     <span class="sm:hidden text-[11px]">الموقع</span>
                 </a>
@@ -244,42 +268,36 @@
                 <!-- Notification Bell & Dropdown -->
                 <div class="relative">
                     <button onclick="toggleNotificationsDropdown()" id="btn-notification-bell" title="مركز الإشعارات والتنبيهات"
-                            class="relative flex items-center justify-center w-9 h-9 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-xl transition shadow-sm border border-slate-700">
-                        <i class="fa-solid fa-bell text-sm md:text-base"></i>
-                        <span id="header-notif-badge" class="hidden absolute -top-1 -right-1 px-1.5 py-0.5 min-w-[18px] text-[10px] bg-rose-600 text-white rounded-full font-black text-center shadow animate-pulse">0</span>
+                            class="relative flex items-center justify-center w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl transition shadow-xs border border-slate-200/80">
+                        <i class="fa-regular fa-bell text-sm"></i>
+                        <span id="header-notif-badge" class="hidden absolute -top-1 -right-1 px-1.5 py-0.2 min-w-[16px] text-[10px] bg-rose-500 text-white rounded-full font-black text-center shadow-xs">0</span>
                     </button>
 
                     <!-- Notifications Dropdown Menu -->
-                    <div id="notifications-dropdown" class="hidden absolute left-0 mt-2 w-80 sm:w-96 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden text-right">
-                        <div class="p-3.5 bg-slate-850 border-b border-slate-800 flex items-center justify-between">
+                    <div id="notifications-dropdown" class="hidden absolute left-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden text-right">
+                        <div class="p-3.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                             <div class="flex items-center gap-2">
-                                <i class="fa-solid fa-bell text-amber-400"></i>
-                                <span class="text-xs font-bold text-white">مركز التنبيهات الآنية</span>
+                                <i class="fa-solid fa-bell text-amber-500"></i>
+                                <span class="text-xs font-bold text-slate-900">مركز التنبيهات الآنية</span>
                             </div>
-                            <span id="dropdown-notif-count" class="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">0 تنبيه</span>
+                            <span id="dropdown-notif-count" class="text-[10px] bg-amber-50 text-amber-700 border border-amber-200/60 px-2 py-0.5 rounded-full font-bold">0 تنبيه</span>
                         </div>
-                        <div id="notifications-list" class="max-h-80 overflow-y-auto divide-y divide-slate-800/60 p-1">
-                            <div class="p-4 text-center text-xs text-slate-500">لا توجد إشعارات جديدة</div>
+                        <div id="notifications-list" class="max-h-80 overflow-y-auto divide-y divide-slate-100 p-1">
+                            <div class="p-4 text-center text-xs text-slate-400">لا توجد إشعارات جديدة</div>
                         </div>
-                        <div class="p-2.5 bg-slate-950/80 border-t border-slate-800/80 text-center">
-                            <button onclick="switchTab('verifications'); toggleNotificationsDropdown(false);" class="text-xs text-amber-400 hover:underline font-bold">
+                        <div class="p-2.5 bg-slate-50/80 border-t border-slate-100 text-center">
+                            <button onclick="switchTab('verifications'); toggleNotificationsDropdown(false);" class="text-xs text-[#1B4965] hover:underline font-bold">
                                 الانتقال لطلبات التوثيق 🪪
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Connection status -->
-                <div class="hidden lg:flex items-center px-3 py-1 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-full text-xs font-semibold">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block ml-2 animate-pulse"></span>
-                    متصل (Live)
-                </div>
-
                 <!-- Admin Profile & Logout -->
-                <div class="flex items-center space-x-2 space-x-reverse border-r border-slate-700 pr-3">
-                    <span class="text-xs font-bold text-amber-400 hidden sm:inline">Admin</span>
+                <div class="flex items-center gap-2 border-r border-slate-200 pr-2 sm:pr-3">
+                    <span class="text-xs font-bold text-slate-700 hidden sm:inline">Admin</span>
                     <button onclick="logoutAdmin()" title="تسجيل الخروج"
-                            class="px-2.5 py-1.5 bg-slate-800 hover:bg-rose-900/80 text-slate-300 hover:text-white rounded-xl text-xs font-bold transition flex items-center gap-1">
+                            class="px-2.5 py-1.5 bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200/80 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
                         <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
                         <span class="hidden sm:inline">خروج</span>
                     </button>
@@ -295,124 +313,129 @@
 
         <!-- Mobile Drawer Backdrop -->
         <div id="mobile-sidebar-backdrop" onclick="toggleMobileSidebar(false)" style="display: none;"
-             class="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm hidden md:hidden transition-opacity pointer-events-none"></div>
+             class="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-xs hidden md:hidden transition-opacity pointer-events-none"></div>
 
         <!-- Sidebar Navigation (Desktop sticky, Mobile off-canvas drawer) -->
         <aside id="sidebar-drawer" 
-               class="fixed md:static inset-y-0 right-0 z-40 w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-l border-slate-800 transform translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out flex-shrink-0">
+               class="fixed md:static inset-y-0 right-0 z-40 w-64 bg-white text-slate-700 flex flex-col justify-between border-l border-slate-200/80 transform translate-x-full md:translate-x-0 transition-transform duration-200 ease-out flex-shrink-0 shadow-xs md:shadow-none">
             
-            <div class="py-4 md:py-6 px-4 space-y-1 overflow-y-auto">
-                <div class="flex items-center justify-between md:hidden pb-3 mb-2 border-b border-slate-800">
-                    <div class="flex items-center space-x-2 space-x-reverse font-bold text-white text-sm">
+            <div class="py-4 md:py-6 px-3 space-y-1 overflow-y-auto">
+                <div class="flex items-center justify-between md:hidden pb-3 mb-2 border-b border-slate-100 px-2">
+                    <div class="flex items-center space-x-2 space-x-reverse font-bold text-slate-900 text-sm">
                         <span>🚖</span>
                         <span>قائمة توصيله</span>
                     </div>
-                    <button onclick="toggleMobileSidebar(false)" class="text-slate-400 hover:text-white text-lg p-1">
+                    <button onclick="toggleMobileSidebar(false)" class="text-slate-400 hover:text-slate-700 text-lg p-1">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
 
-                <div class="text-[11px] font-bold text-slate-500 uppercase px-3 mb-2 tracking-wider">القائمة الرئيسية</div>
+                <div class="text-[11px] font-bold text-slate-400 uppercase px-3 pt-2 mb-1 tracking-wider">القائمة الرئيسية</div>
                 
                 <button onclick="switchTab('overview')" id="tab-btn-overview" class="tab-btn active w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
-                    <i class="fa-solid fa-chart-pie w-5 text-center text-amber-400"></i>
+                    <i class="fa-solid fa-chart-pie w-5 text-center text-slate-400"></i>
                     <span>نظرة عامة والمؤشرات</span>
                 </button>
 
                 <button onclick="switchTab('verifications')" id="tab-btn-verifications" class="tab-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition">
                     <div class="flex items-center space-x-3 space-x-reverse">
-                        <i class="fa-solid fa-id-card w-5 text-center text-amber-400"></i>
+                        <i class="fa-solid fa-id-card w-5 text-center text-slate-400"></i>
                         <span>توثيق السائقين</span>
                     </div>
-                    <span id="badge-verifications" class="hidden px-2 py-0.5 text-xs bg-rose-500 text-white rounded-full font-bold">0</span>
+                    <span id="badge-verifications" class="hidden px-2 py-0.5 text-[10px] bg-rose-50 text-rose-700 border border-rose-200/60 rounded-full font-bold">0</span>
                 </button>
 
                 <button onclick="switchTab('drivers')" id="tab-btn-drivers" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
-                    <i class="fa-solid fa-taxi w-5 text-center text-amber-400"></i>
+                    <i class="fa-solid fa-taxi w-5 text-center text-slate-400"></i>
                     <span>إدارة السائقين</span>
                 </button>
 
                 <button onclick="switchTab('customers')" id="tab-btn-customers" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
-                    <i class="fa-solid fa-users w-5 text-center text-amber-400"></i>
+                    <i class="fa-solid fa-users w-5 text-center text-slate-400"></i>
                     <span>إدارة الركاب</span>
                 </button>
 
                 <button onclick="switchTab('routes')" id="tab-btn-routes" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
-                    <i class="fa-solid fa-route w-5 text-center text-amber-400"></i>
+                    <i class="fa-solid fa-route w-5 text-center text-slate-400"></i>
                     <span>المسارات والحجوزات</span>
                 </button>
 
                 <button onclick="switchTab('cancellations')" id="tab-btn-cancellations" class="tab-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition">
                     <div class="flex items-center space-x-3 space-x-reverse">
-                        <i class="fa-solid fa-user-xmark w-5 text-center text-amber-400"></i>
+                        <i class="fa-solid fa-user-xmark w-5 text-center text-slate-400"></i>
                         <span>طلبات إلغاء الركاب</span>
                     </div>
-                    <span id="badge-cancellations" class="hidden px-2 py-0.5 text-xs bg-rose-500 text-white rounded-full font-bold">0</span>
+                    <span id="badge-cancellations" class="hidden px-2 py-0.5 text-[10px] bg-amber-50 text-amber-700 border border-amber-200/60 rounded-full font-bold">0</span>
                 </button>
 
                 <button onclick="switchTab('trip-ratings')" id="tab-btn-trip-ratings" class="tab-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition">
                     <div class="flex items-center space-x-3 space-x-reverse">
-                        <i class="fa-solid fa-star w-5 text-center text-amber-400"></i>
+                        <i class="fa-solid fa-star w-5 text-center text-slate-400"></i>
                         <span>تقييمات الرحلات والنقاط</span>
                     </div>
-                    <span id="badge-trip-ratings" class="hidden px-2 py-0.5 text-xs bg-amber-500 text-slate-950 rounded-full font-bold">0</span>
+                    <span id="badge-trip-ratings" class="hidden px-2 py-0.5 text-[10px] bg-amber-50 text-amber-700 border border-amber-200/60 rounded-full font-bold">0</span>
                 </button>
 
                 <button onclick="switchTab('fleet-map')" id="tab-btn-fleet-map" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
-                    <i class="fa-solid fa-map-location-dot w-5 text-center text-amber-400"></i>
+                    <i class="fa-solid fa-map-location-dot w-5 text-center text-slate-400"></i>
                     <span>متابعة الأسطول والمسارات</span>
                 </button>
 
                 <button onclick="switchTab('complaints')" id="tab-btn-complaints" class="tab-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition">
                     <div class="flex items-center space-x-3 space-x-reverse">
-                        <i class="fa-solid fa-shield-halved w-5 text-center text-amber-400"></i>
+                        <i class="fa-solid fa-shield-halved w-5 text-center text-slate-400"></i>
                         <span>الشكاوى والبلاغات</span>
                     </div>
-                    <span id="badge-complaints" class="hidden px-2 py-0.5 text-xs bg-amber-500 text-slate-900 rounded-full font-bold">0</span>
+                    <span id="badge-complaints" class="hidden px-2 py-0.5 text-[10px] bg-amber-50 text-amber-700 border border-amber-200/60 rounded-full font-bold">0</span>
                 </button>
 
-                <div class="text-[11px] font-bold text-slate-500 uppercase px-3 pt-4 mb-2 tracking-wider">الإعدادات والأمان</div>
+                <div class="text-[11px] font-bold text-slate-400 uppercase px-3 pt-4 mb-1 tracking-wider">الإعدادات والأمان</div>
 
                 <button onclick="switchTab('settings')" id="tab-btn-settings" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
-                    <i class="fa-solid fa-sliders w-5 text-center text-amber-400"></i>
+                    <i class="fa-solid fa-sliders w-5 text-center text-slate-400"></i>
                     <span>إعدادات التسعير والمطابقة</span>
                 </button>
 
                 <button onclick="switchTab('audit')" id="tab-btn-audit" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
-                    <i class="fa-solid fa-receipt w-5 text-center text-amber-400"></i>
+                    <i class="fa-solid fa-receipt w-5 text-center text-slate-400"></i>
                     <span>سجل التدقيق (Audit Logs)</span>
                 </button>
 
                 <button onclick="switchTab('backup')" id="tab-btn-backup" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
-                    <i class="fa-solid fa-database w-5 text-center text-amber-400"></i>
+                    <i class="fa-solid fa-database w-5 text-center text-slate-400"></i>
                     <span>النسخ الاحتياطي وقاعدة البيانات</span>
                 </button>
-            <button id="tab-btn-customization" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-right" onclick="switchTab('customization')" aria-label="التخصيص">
-                <i class="fa-solid fa-palette w-5 text-center"></i>
-                <span>التخصيص والمظهر</span>
-            </button>
-            <button id="tab-btn-ui-management" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-right" onclick="switchTab('ui-management')" aria-label="إدارة الواجهة">
-                <i class="fa-solid fa-shapes w-5 text-center text-amber-400"></i>
-                <span>إدارة الواجهة (الأزرار والإعلانات)</span>
-            </button>
-            <button id="tab-btn-custom-buttons" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-right" onclick="switchTab('custom-buttons')" aria-label="أزرار مخصصة">
-                <i class="fa-solid fa-square-plus w-5 text-center"></i>
-                <span>أزرار مخصصة</span>
-            </button>
-            <button id="tab-btn-advertisements" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-right" onclick="switchTab('advertisements')" aria-label="الإعلانات">
-                <i class="fa-solid fa-bullhorn w-5 text-center"></i>
-                <span>الإعلانات</span>
-            </button>
-            <button id="tab-btn-telegram" class="tab-btn w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-right" onclick="switchTab('telegram')" aria-label="بوت تيليجرام">
-                <i class="fa-brands fa-telegram w-5 text-center"></i>
-                <span>بوت تيليجرام</span>
-            </button>
+
+                <button id="tab-btn-customization" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition" onclick="switchTab('customization')" aria-label="التخصيص">
+                    <i class="fa-solid fa-palette w-5 text-center text-slate-400"></i>
+                    <span>التخصيص والمظهر</span>
+                </button>
+
+                <button id="tab-btn-ui-management" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition" onclick="switchTab('ui-management')" aria-label="إدارة الواجهة">
+                    <i class="fa-solid fa-shapes w-5 text-center text-slate-400"></i>
+                    <span>إدارة الواجهة (الأزرار والإعلانات)</span>
+                </button>
+
+                <button id="tab-btn-custom-buttons" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition" onclick="switchTab('custom-buttons')" aria-label="أزرار مخصصة">
+                    <i class="fa-solid fa-square-plus w-5 text-center text-slate-400"></i>
+                    <span>أزرار مخصصة</span>
+                </button>
+
+                <button id="tab-btn-advertisements" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition" onclick="switchTab('advertisements')" aria-label="الإعلانات">
+                    <i class="fa-solid fa-bullhorn w-5 text-center text-slate-400"></i>
+                    <span>الإعلانات</span>
+                </button>
+
+                <button id="tab-btn-telegram" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition" onclick="switchTab('telegram')" aria-label="بوت تيليجرام">
+                    <i class="fa-brands fa-telegram w-5 text-center text-slate-400"></i>
+                    <span>بوت تيليجرام</span>
+                </button>
             </div>
 
             <!-- Footer info -->
-            <div class="p-4 border-t border-slate-800 text-xs text-slate-400 text-center">
-                <p class="font-bold text-amber-400">توصيله v2.0</p>
-                <p class="text-[10px] text-slate-500 mt-0.5">النجف الأشرف • محرك PostgreSQL الذاتي</p>
+            <div class="p-4 border-t border-slate-100 text-xs text-slate-400 text-center bg-slate-50/50">
+                <p class="font-bold text-[#1B4965]">توصيله SaaS Dashboard</p>
+                <p class="text-[10px] text-slate-400 mt-0.5">النجف الأشرف • محرك PostgreSQL الذاتي</p>
             </div>
         </aside>
 
@@ -535,24 +558,24 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                         <h2 class="text-2xl font-black text-slate-900">توثيق مستمسكات السائقين</h2>
-                        <p class="text-xs md:text-sm text-slate-500">فحص الهويات، رخص القيادة، ومستمسكات السائقين مع تسجيل واعتماد الكباتن واعتماد المسارات</p>
+                        <p class="text-xs md:text-sm text-slate-500">فحص الهويات، رخص القيادة، ومستمسكات السائقين مع تسجيل واعتماد الكباتن والمسارات</p>
                     </div>
                     <div class="flex items-center space-x-2 space-x-reverse flex-wrap gap-2">
-                        <button type="button" id="btn-open-add-captain-verif" onclick="openAddCaptainModal(); return false;" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs md:text-sm transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 cursor-pointer">
+                        <button type="button" id="btn-open-add-captain-verif" onclick="openAddCaptainModal(); return false;" class="px-4 py-2 bg-[#1B4965] hover:bg-[#143a50] text-white font-bold rounded-xl text-xs md:text-sm transition flex items-center gap-1.5 shadow-xs cursor-pointer">
                             <i class="fa-solid fa-user-check"></i>
                             <span>+ تسجيل كابتن واعتماد الاستمارة والمستمسكات</span>
                         </button>
-                        <button onclick="loadVerifications()" class="self-start sm:self-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold flex items-center space-x-2 space-x-reverse transition cursor-pointer">
+                        <button onclick="loadVerifications()" class="self-start sm:self-auto px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs md:text-sm font-semibold flex items-center space-x-2 space-x-reverse transition cursor-pointer">
                             <i class="fa-solid fa-rotate"></i>
-                            <span>تحديث القائمة</span>
+                            <span>تحديث</span>
                         </button>
                     </div>
                 </div>
 
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
                     <div id="verifications-loading" class="p-8 text-center text-slate-500">
-                        <i class="fa-solid fa-circle-notch fa-spin text-2xl text-amber-500 mb-2"></i>
-                        <p>جاري تحميل طلبات التوثيق...</p>
+                        <i class="fa-solid fa-circle-notch fa-spin text-2xl text-[#1B4965] mb-2"></i>
+                        <p class="text-xs font-semibold">جاري تحميل طلبات التوثيق...</p>
                     </div>
                     <div id="verifications-empty" class="hidden p-12 text-center text-slate-400">
                         <i class="fa-solid fa-circle-check text-4xl text-emerald-500 mb-2"></i>
@@ -561,14 +584,14 @@
                     </div>
                     <div class="overflow-x-auto">
                         <table id="verifications-table" class="w-full text-right text-sm border-collapse hidden min-w-[700px]">
-                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                            <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
                                 <tr>
-                                    <th class="p-4">السائق</th>
-                                    <th class="p-4">رقم الهاتف</th>
-                                    <th class="p-4">رقم الرخصة</th>
-                                    <th class="p-4">المركبة</th>
-                                    <th class="p-4">المستمسكات المرفوعة</th>
-                                    <th class="p-4 text-center">الإجراء</th>
+                                    <th class="py-3.5 px-4 text-right">السائق</th>
+                                    <th class="py-3.5 px-4 text-right">رقم الهاتف</th>
+                                    <th class="py-3.5 px-4 text-right">رقم الرخصة</th>
+                                    <th class="py-3.5 px-4 text-right">المركبة</th>
+                                    <th class="py-3.5 px-4 text-right">المستمسكات المرفوعة</th>
+                                    <th class="py-3.5 px-4 text-center">الإجراء</th>
                                 </tr>
                             </thead>
                             <tbody id="verifications-body" class="divide-y divide-slate-100">
@@ -587,30 +610,30 @@
                         <p class="text-xs md:text-sm text-slate-500">قائمة السائقين المسجلين في النجف الأشرف، حالتهم الآنية ومستمسكاتهم</p>
                     </div>
                     <div class="flex items-center space-x-2 space-x-reverse flex-wrap gap-2">
-                        <button type="button" id="btn-open-add-captain" onclick="openAddCaptainModal(); return false;" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs md:text-sm transition flex items-center gap-1.5 shadow-md shadow-amber-500/20 cursor-pointer">
+                        <button type="button" id="btn-open-add-captain" onclick="openAddCaptainModal(); return false;" class="px-4 py-2 bg-[#1B4965] hover:bg-[#143a50] text-white font-bold rounded-xl text-xs md:text-sm transition flex items-center gap-1.5 shadow-xs cursor-pointer">
                             <i class="fa-solid fa-user-plus"></i>
                             <span>+ تسجيل كابتن واعتماد مساره</span>
                         </button>
-                        <input type="text" id="drivers-search-input" placeholder="بحث بالاسم أو الهاتف..." class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" oninput="debounceDriverSearch()">
-                        <button onclick="loadDrivers()" class="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer">
+                        <input type="text" id="drivers-search-input" placeholder="بحث بالاسم أو الهاتف..." class="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs md:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1B4965]/20 focus:border-[#1B4965]" oninput="debounceDriverSearch()">
+                        <button onclick="loadDrivers()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer">
                             <i class="fa-solid fa-rotate"></i>
                         </button>
                     </div>
                 </div>
 
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-right text-sm border-collapse min-w-[850px]">
-                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                            <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
                                 <tr>
-                                    <th class="p-4">الكابتن</th>
-                                    <th class="p-4">رقم الهاتف</th>
-                                    <th class="p-4">المسار</th>
-                                    <th class="p-4">كلمة المرور</th>
-                                    <th class="p-4">نقاط الكابتن 🌟</th>
-                                    <th class="p-4">الحالة الآنية</th>
-                                    <th class="p-4">التوثيق</th>
-                                    <th class="p-4 text-center">الإجراءات والتحكم</th>
+                                    <th class="py-3.5 px-4 text-right">الكابتن</th>
+                                    <th class="py-3.5 px-4 text-right">رقم الهاتف</th>
+                                    <th class="py-3.5 px-4 text-right">المسار والنوع</th>
+                                    <th class="py-3.5 px-4 text-right">كلمة المرور</th>
+                                    <th class="py-3.5 px-4 text-right">نقاط الكابتن 🌟</th>
+                                    <th class="py-3.5 px-4 text-center">الحالة الآنية</th>
+                                    <th class="py-3.5 px-4 text-center">التوثيق</th>
+                                    <th class="py-3.5 px-4 text-center">الإجراءات والتحكم</th>
                                 </tr>
                             </thead>
                             <tbody id="drivers-table-body" class="divide-y divide-slate-100">
@@ -629,30 +652,30 @@
                         <p class="text-xs md:text-sm text-slate-500">قائمة المستخدمين والركاب المسجلين، خطوط السير، والعناوين وكلمات المرور</p>
                     </div>
                     <div class="flex items-center space-x-2 space-x-reverse">
-                        <input type="text" id="customers-search-input" placeholder="بحث بالاسم أو الهاتف..." class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" oninput="debounceCustomerSearch()">
-                        <button onclick="openAddCustomerModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer">
+                        <input type="text" id="customers-search-input" placeholder="بحث بالاسم أو الهاتف..." class="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs md:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1B4965]/20 focus:border-[#1B4965]" oninput="debounceCustomerSearch()">
+                        <button onclick="openAddCustomerModal()" class="px-4 py-2 bg-[#1B4965] hover:bg-[#143a50] text-white rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer">
                             <i class="fa-solid fa-user-plus"></i>
                             <span>إضافة راكب جديد</span>
                         </button>
-                        <button onclick="loadCustomers()" class="self-start sm:self-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold transition">
+                        <button onclick="loadCustomers()" class="self-start sm:self-auto px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs md:text-sm font-semibold transition">
                             <i class="fa-solid fa-rotate"></i>
                             <span>تحديث</span>
                         </button>
                     </div>
                 </div>
 
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-right text-sm border-collapse min-w-[850px]">
-                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                            <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
                                 <tr>
-                                    <th class="p-4">الراكب</th>
-                                    <th class="p-4">رقم الهاتف</th>
-                                    <th class="p-4">المسار</th>
-                                    <th class="p-4">العنوان</th>
-                                    <th class="p-4">كلمة المرور</th>
-                                    <th class="p-4">حالة الحساب</th>
-                                    <th class="p-4 text-center">الإجراءات والتحكم</th>
+                                    <th class="py-3.5 px-4 text-right">الراكب</th>
+                                    <th class="py-3.5 px-4 text-right">رقم الهاتف</th>
+                                    <th class="py-3.5 px-4 text-right">المسار</th>
+                                    <th class="py-3.5 px-4 text-right">العنوان</th>
+                                    <th class="py-3.5 px-4 text-right">كلمة المرور</th>
+                                    <th class="py-3.5 px-4 text-center">حالة الحساب</th>
+                                    <th class="py-3.5 px-4 text-center">الإجراءات والتحكم</th>
                                 </tr>
                             </thead>
                             <tbody id="customers-table-body" class="divide-y divide-slate-100">
@@ -670,24 +693,24 @@
                         <h2 class="text-2xl font-black text-slate-900">المسارات والحجوزات</h2>
                         <p class="text-xs md:text-sm text-slate-500">متابعة خطوط السير المنتظمة، المقاعد المتاحة، والحجوزات المؤكدة</p>
                     </div>
-                    <div class="flex items-center space-x-2 space-x-reverse">
-                        <button onclick="switchSubRouteTab('routes-list')" id="sub-btn-routes" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 text-slate-900">خطوط السير</button>
-                        <button onclick="switchSubRouteTab('bookings-list')" id="sub-btn-bookings" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-200 text-slate-700">سجل الحجوزات</button>
+                    <div class="flex items-center space-x-2 space-x-reverse bg-slate-100 p-1 rounded-xl border border-slate-200/60">
+                        <button onclick="switchSubRouteTab('routes-list')" id="sub-btn-routes" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#1B4965] text-white shadow-xs transition-all">خطوط السير</button>
+                        <button onclick="switchSubRouteTab('bookings-list')" id="sub-btn-bookings" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all">سجل الحجوزات</button>
                     </div>
                 </div>
 
-                <div id="sub-view-routes" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div id="sub-view-routes" class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-right text-sm border-collapse min-w-[700px]">
-                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                            <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
                                 <tr>
-                                    <th class="p-4">اسم المسار</th>
-                                    <th class="p-4">السائق</th>
-                                    <th class="p-4">نقطة البداية والنهاية</th>
-                                    <th class="p-4">وقت الانطلاق</th>
-                                    <th class="p-4">المقاعد المتوفرة</th>
-                                    <th class="p-4">سعر المقعد</th>
-                                    <th class="p-4">الحالة</th>
+                                    <th class="py-3.5 px-4 text-right">اسم المسار</th>
+                                    <th class="py-3.5 px-4 text-right">السائق</th>
+                                    <th class="py-3.5 px-4 text-right">نقطة البداية والنهاية</th>
+                                    <th class="py-3.5 px-4 text-right">وقت الانطلاق</th>
+                                    <th class="py-3.5 px-4 text-center">المقاعد المتوفرة</th>
+                                    <th class="py-3.5 px-4 text-right">سعر المقعد</th>
+                                    <th class="py-3.5 px-4 text-center">الحالة</th>
                                 </tr>
                             </thead>
                             <tbody id="routes-table-body" class="divide-y divide-slate-100">
@@ -697,19 +720,19 @@
                     </div>
                 </div>
 
-                <div id="sub-view-bookings" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden hidden">
+                <div id="sub-view-bookings" class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-right text-sm border-collapse min-w-[700px]">
-                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                            <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
                                 <tr>
-                                    <th class="p-4">الراكب</th>
-                                    <th class="p-4">السائق / الخط</th>
-                                    <th class="p-4">نقطة الصعود والنزول</th>
-                                    <th class="p-4">تاريخ الحجز</th>
-                                    <th class="p-4">المقاعد</th>
-                                    <th class="p-4">الأجرة</th>
-                                    <th class="p-4 text-center">حالة الحجز</th>
-                                    <th class="p-4 text-center">موافقة السائق / الإجراء</th>
+                                    <th class="py-3.5 px-4 text-right">الراكب</th>
+                                    <th class="py-3.5 px-4 text-right">السائق / الخط</th>
+                                    <th class="py-3.5 px-4 text-right">نقطة الصعود والنزول</th>
+                                    <th class="py-3.5 px-4 text-right">تاريخ الحجز</th>
+                                    <th class="py-3.5 px-4 text-center">المقاعد</th>
+                                    <th class="py-3.5 px-4 text-right">الأجرة</th>
+                                    <th class="py-3.5 px-4 text-center">حالة الحجز</th>
+                                    <th class="py-3.5 px-4 text-center">موافقة السائق / الإجراء</th>
                                 </tr>
                             </thead>
                             <tbody id="bookings-table-body" class="divide-y divide-slate-100">
@@ -731,17 +754,17 @@
                         <p class="text-xs md:text-sm text-slate-500">مراجعة واعتماد طلبات إلغاء اشتراك الركاب مع تحرير المقاعد في المسارات فورياً للموافقة على ركاب جدد</p>
                     </div>
                     <div>
-                        <button onclick="loadCancellationRequests()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold flex items-center space-x-2 space-x-reverse transition cursor-pointer">
+                        <button onclick="loadCancellationRequests()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs md:text-sm font-semibold flex items-center space-x-2 space-x-reverse transition cursor-pointer">
                             <i class="fa-solid fa-rotate"></i>
                             <span>تحديث الطلبات</span>
                         </button>
                     </div>
                 </div>
 
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
                     <div id="cancellations-loading" class="p-8 text-center text-slate-500">
-                        <i class="fa-solid fa-circle-notch fa-spin text-2xl text-amber-500 mb-2"></i>
-                        <p>جاري تحميل طلبات الإلغاء...</p>
+                        <i class="fa-solid fa-circle-notch fa-spin text-2xl text-[#1B4965] mb-2"></i>
+                        <p class="text-xs font-semibold">جاري تحميل طلبات الإلغاء...</p>
                     </div>
                     <div id="cancellations-empty" class="hidden p-12 text-center text-slate-400">
                         <i class="fa-solid fa-circle-check text-4xl text-emerald-500 mb-2"></i>
@@ -750,16 +773,16 @@
                     </div>
                     <div class="overflow-x-auto">
                         <table id="cancellations-table" class="w-full text-right text-sm border-collapse hidden min-w-[800px]">
-                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                            <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
                                 <tr>
-                                    <th class="p-4">رقم الطلب</th>
-                                    <th class="p-4">الراكب</th>
-                                    <th class="p-4">السائق (الكابتن)</th>
-                                    <th class="p-4">المسار / الخط</th>
-                                    <th class="p-4">سبب طلب الإلغاء (الراكب)</th>
-                                    <th class="p-4 text-center">قرار الكابتن</th>
-                                    <th class="p-4">ملاحظات / سبب الكابتن</th>
-                                    <th class="p-4 text-center">حالة الطلب والإجراء</th>
+                                    <th class="py-3.5 px-4 text-right">رقم الطلب</th>
+                                    <th class="py-3.5 px-4 text-right">الراكب</th>
+                                    <th class="py-3.5 px-4 text-right">السائق (الكابتن)</th>
+                                    <th class="py-3.5 px-4 text-right">المسار / الخط</th>
+                                    <th class="py-3.5 px-4 text-right">سبب طلب الإلغاء (الراكب)</th>
+                                    <th class="py-3.5 px-4 text-center">قرار الكابتن</th>
+                                    <th class="py-3.5 px-4 text-right">ملاحظات / سبب الكابتن</th>
+                                    <th class="py-3.5 px-4 text-center">حالة الطلب والإجراء</th>
                                 </tr>
                             </thead>
                             <tbody id="cancellations-body" class="divide-y divide-slate-100">
@@ -781,14 +804,14 @@
                         <p class="text-xs md:text-sm text-slate-500">سجل تقييمات الركاب للكباتن بعد انتهاء المشاوير، النقاط الممنوحة لحساب السائق، وملاحظات الخدمة المباشرة</p>
                     </div>
                     <div class="flex items-center space-x-2 space-x-reverse flex-wrap gap-2">
-                        <input type="text" id="trip-ratings-search-input" placeholder="بحث بالاسم أو الكابتن أو الملاحظات..." class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" oninput="debounceTripRatingsSearch()">
-                        <button onclick="loadTripRatings()" class="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer">
+                        <input type="text" id="trip-ratings-search-input" placeholder="بحث بالاسم أو الكابتن أو الملاحظات..." class="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs md:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1B4965]/20 focus:border-[#1B4965]" oninput="debounceTripRatingsSearch()">
+                        <button onclick="loadTripRatings()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer">
                             <i class="fa-solid fa-rotate"></i>
                         </button>
                     </div>
                 </div>
 
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
                     <div id="trip-ratings-empty" class="hidden p-12 text-center text-slate-400">
                         <i class="fa-solid fa-star text-4xl text-amber-400 mb-2"></i>
                         <p class="font-bold text-slate-700">لا توجد تقييمات مسجلة حتى الآن</p>
@@ -796,15 +819,15 @@
                     </div>
                     <div class="overflow-x-auto">
                         <table id="trip-ratings-table" class="w-full text-right text-sm border-collapse min-w-[850px]">
-                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                            <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
                                 <tr>
-                                    <th class="p-4">تاريخ المشوار</th>
-                                    <th class="p-4">الكابتن (المقيَّم)</th>
-                                    <th class="p-4">الراكب (المقيِّم)</th>
-                                    <th class="p-4">التقييم ⭐</th>
-                                    <th class="p-4">وسوم الخدمة</th>
-                                    <th class="p-4">ملاحظات الراكب</th>
-                                    <th class="p-4 text-center">النقاط المكتسبة للكابتن 🌟</th>
+                                    <th class="py-3.5 px-4 text-right">تاريخ المشوار</th>
+                                    <th class="py-3.5 px-4 text-right">الكابتن (المقيَّم)</th>
+                                    <th class="py-3.5 px-4 text-right">الراكب (المقيِّم)</th>
+                                    <th class="py-3.5 px-4 text-right">التقييم ⭐</th>
+                                    <th class="py-3.5 px-4 text-right">وسوم الخدمة</th>
+                                    <th class="py-3.5 px-4 text-right">ملاحظات الراكب</th>
+                                    <th class="py-3.5 px-4 text-center">النقاط المكتسبة للكابتن 🌟</th>
                                 </tr>
                             </thead>
                             <tbody id="trip-ratings-table-body" class="divide-y divide-slate-100">
@@ -973,15 +996,15 @@
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-right text-xs border-collapse min-w-[700px]">
-                            <thead class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                            <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
                                 <tr>
-                                    <th class="p-3">النوع</th>
-                                    <th class="p-3">الراكب / المصدر</th>
-                                    <th class="p-3">السائق</th>
-                                    <th class="p-3">من</th>
-                                    <th class="p-3">إلى</th>
-                                    <th class="p-3">الحالة</th>
-                                    <th class="p-3">الوقت</th>
+                                    <th class="py-3.5 px-4 text-right">النوع</th>
+                                    <th class="py-3.5 px-4 text-right">الراكب / المصدر</th>
+                                    <th class="py-3.5 px-4 text-right">السائق</th>
+                                    <th class="py-3.5 px-4 text-right">من</th>
+                                    <th class="py-3.5 px-4 text-right">إلى</th>
+                                    <th class="py-3.5 px-4 text-center">الحالة</th>
+                                    <th class="py-3.5 px-4 text-right">الوقت</th>
                                 </tr>
                             </thead>
                             <tbody id="fleet-ops-log-body" class="divide-y divide-slate-100">
@@ -1016,24 +1039,24 @@
                         <h2 class="text-2xl font-black text-slate-900">إدارة الشكاوى والبلاغات</h2>
                         <p class="text-xs md:text-sm text-slate-500">التحقيق في بلاغات الركاب والسائقين وحل النزاعات</p>
                     </div>
-                    <button onclick="loadComplaints()" class="self-start sm:self-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold transition">
+                    <button onclick="loadComplaints()" class="self-start sm:self-auto px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs md:text-sm font-semibold transition flex items-center gap-1.5 cursor-pointer">
                         <i class="fa-solid fa-rotate"></i>
                         <span>تحديث</span>
                     </button>
                 </div>
 
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-right text-sm border-collapse min-w-[750px]">
-                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                            <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
                                 <tr>
-                                    <th class="p-4">مقدم الشكوى</th>
-                                    <th class="p-4">المشتكى عليه</th>
-                                    <th class="p-4">التصنيف</th>
-                                    <th class="p-4">نص الشكوى</th>
-                                    <th class="p-4">الحالة</th>
-                                    <th class="p-4">تاريخ الشكوى</th>
-                                    <th class="p-4 text-center">الإجراء</th>
+                                    <th class="py-3.5 px-4 text-right">مقدم الشكوى</th>
+                                    <th class="py-3.5 px-4 text-right">المشتكى عليه</th>
+                                    <th class="py-3.5 px-4 text-right">التصنيف</th>
+                                    <th class="py-3.5 px-4 text-right">نص الشكوى</th>
+                                    <th class="py-3.5 px-4 text-center">الحالة</th>
+                                    <th class="py-3.5 px-4 text-right">تاريخ الشكوى</th>
+                                    <th class="py-3.5 px-4 text-center">الإجراء</th>
                                 </tr>
                             </thead>
                             <tbody id="complaints-table-body" class="divide-y divide-slate-100">
@@ -1123,23 +1146,23 @@
                         <h2 class="text-2xl font-black text-slate-900">سجل التدقيق الأمني (Audit Logs)</h2>
                         <p class="text-xs md:text-sm text-slate-500">تسجيل كامل للعمليات الحساسة، التعديلات الإدارية، وتوقيتاتها</p>
                     </div>
-                    <button onclick="loadAuditLogs()" class="self-start sm:self-auto px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold transition">
+                    <button onclick="loadAuditLogs()" class="self-start sm:self-auto px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs md:text-sm font-semibold transition flex items-center gap-1.5 cursor-pointer">
                         <i class="fa-solid fa-rotate"></i>
                         <span>تحديث السجل</span>
                     </button>
                 </div>
 
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-right text-sm border-collapse min-w-[750px]">
-                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                            <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
                                 <tr>
-                                    <th class="p-4">العملية الإجرائية</th>
-                                    <th class="p-4">الكيان المستهدف</th>
-                                    <th class="p-4">المعرف (Entity ID)</th>
-                                    <th class="p-4">التفاصيل / القيم الجديدة</th>
-                                    <th class="p-4">عنوان IP</th>
-                                    <th class="p-4">التوقيت UTC</th>
+                                    <th class="py-3.5 px-4 text-right">العملية الإجرائية</th>
+                                    <th class="py-3.5 px-4 text-right">الكيان المستهدف</th>
+                                    <th class="py-3.5 px-4 text-right">المعرف (Entity ID)</th>
+                                    <th class="py-3.5 px-4 text-right">التفاصيل / القيم الجديدة</th>
+                                    <th class="py-3.5 px-4 text-right">عنوان IP</th>
+                                    <th class="py-3.5 px-4 text-right">التوقيت UTC</th>
                                 </tr>
                             </thead>
                             <tbody id="audit-table-body" class="divide-y divide-slate-100">
