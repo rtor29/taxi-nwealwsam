@@ -12,6 +12,7 @@ const adminController = require('./modules/admin/adminController');
 const whatsappService = require('./modules/whatsapp/whatsappService');
 const telegramBot = require('./modules/telegram/telegramBot');
 const pricingService = require('./modules/pricing/pricingService');
+const complaintService = require('./modules/complaint/complaintService');
 
 // ---[ Rate Limiter: in-memory, per IP ]---
 const _rateLimitMap = new Map(); // ip -> { count, resetAt }
@@ -1385,17 +1386,36 @@ async function startServer() {
             return sendJson({ success: true, total: result.total, bookings: result.bookings });
         }
 
-        // Complaints
-        if (pathname === '/api/admin/complaints' && method === 'GET') {
-            const result = await adminController.getComplaints();
-            return sendJson(result.complaints);
+        // Complaints & Reports Management
+        if ((pathname === '/api/complaints/submit' || pathname === '/api/complaints') && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const result = await complaintService.submitComplaint(body, clientIp);
+            return sendJson(result);
+        }
+
+        if ((pathname === '/api/admin/complaints' || pathname === '/api/complaints') && method === 'GET') {
+            const status = parsedUrl.searchParams.get('status') || '';
+            const category = parsedUrl.searchParams.get('category') || '';
+            const search = parsedUrl.searchParams.get('search') || '';
+            const limit = parseInt(parsedUrl.searchParams.get('limit') || '100', 10);
+            const offset = parseInt(parsedUrl.searchParams.get('offset') || '0', 10);
+            const result = await complaintService.getComplaints({ status, category, search, limit, offset });
+            return sendJson(result);
+        }
+
+        if ((pathname === '/api/admin/complaints/resolve' || (pathname.startsWith('/api/complaints/') && pathname.endsWith('/resolve'))) && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const parts = pathname.split('/');
+            const complaintId = body.id || body.complaintId || (parts.length >= 4 ? parts[parts.length - 2] : null);
+            const result = await complaintService.resolveComplaint(complaintId, body, 'المشرف العام (Admin)', clientIp);
+            return sendJson(result);
         }
 
         if (pathname.startsWith('/api/admin/complaints/') && pathname.endsWith('/status') && method === 'POST') {
             const parts = pathname.split('/');
             const complaintId = parts[parts.length - 2];
             const body = await parseJsonBody(req);
-            const result = await adminController.updateComplaint(complaintId, body.status, body.resolutionNotes);
+            const result = await complaintService.resolveComplaint(complaintId, { status: body.status, adminNotes: body.resolutionNotes, actionTaken: body.actionTaken }, 'المشرف العام (Admin)', clientIp);
             return sendJson(result);
         }
 
@@ -2280,6 +2300,27 @@ async function startServer() {
                     comment: (comment || '').slice(0, 500),
                     pointsEarned
                 });
+
+                // Auto-escalate low ratings (1 or 2 stars) as a complaint
+                if (numRating <= 2) {
+                    try {
+                        const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
+                        const reasonText = comment ? `تقييم سلبي منخفض (${numRating} نجوم): ${comment}` : `تقييم سلبي منخفض (${numRating} نجوم) بدون تفاصيل إضافية`;
+                        await complaintService.submitComplaint({
+                            complainantId: customerId || r.customerId || 'passenger',
+                            complainantName: r.customerName || 'الراكب',
+                            complainantPhone: r.customerPhone || '',
+                            accusedId: realDriverId,
+                            accusedName: driverName,
+                            accusedPhone: driver ? (driver.phone || driver.phoneNumber || '') : '',
+                            category: 'تقييم سلبي منخفض',
+                            complaintText: reasonText,
+                            rideId: rideId
+                        }, clientIp);
+                    } catch (eComplaint) {
+                        console.warn('[Auto-Escalate Rating to Complaint Error]:', eComplaint.message);
+                    }
+                }
 
                 return sendJson({
                     success: true,

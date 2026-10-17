@@ -1034,33 +1034,74 @@
 
             <!-- 6. COMPLAINTS TAB -->
             <section id="tab-complaints" class="tab-content hidden space-y-6">
+                <!-- Header -->
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                        <h2 class="text-2xl font-black text-slate-900">إدارة الشكاوى والبلاغات</h2>
-                        <p class="text-xs md:text-sm text-slate-500">التحقيق في بلاغات الركاب والسائقين وحل النزاعات</p>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse"></span>
+                            <h2 class="text-2xl font-black text-slate-900">إدارة الشكاوى والبلاغات</h2>
+                            <span id="complaints-counter-badge" class="px-2.5 py-0.5 bg-red-50 text-red-700 font-bold text-xs rounded-full border border-red-200">
+                                0 بلاغ
+                            </span>
+                        </div>
+                        <p class="text-xs md:text-sm text-slate-500">التحقيق في بلاغات الركاب والسائقين، متابعة التقييمات السلبية، وحل النزاعات وفرض العقوبات</p>
                     </div>
-                    <button onclick="loadComplaints()" class="self-start sm:self-auto px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs md:text-sm font-semibold transition flex items-center gap-1.5 cursor-pointer">
-                        <i class="fa-solid fa-rotate"></i>
-                        <span>تحديث</span>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button onclick="loadComplaints()" class="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-2 shadow-xs transition cursor-pointer">
+                            <i class="fa-solid fa-arrows-rotate text-red-500"></i>
+                            <span>تحديث البلاغات</span>
+                        </button>
+                    </div>
                 </div>
 
+                <!-- Filter & Search Toolbar -->
+                <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <!-- Filter Pills -->
+                    <div class="flex flex-wrap items-center gap-2" id="complaints-filter-group">
+                        <button type="button" onclick="setComplaintsFilter('all')" id="complaint-pill-all" class="complaint-filter-pill active px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-[#1B4965] text-white">
+                            الكل
+                        </button>
+                        <button type="button" onclick="setComplaintsFilter('pending')" id="complaint-pill-pending" class="complaint-filter-pill px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700">
+                            قيد المراجعة ⏳
+                        </button>
+                        <button type="button" onclick="setComplaintsFilter('resolved')" id="complaint-pill-resolved" class="complaint-filter-pill px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700">
+                            تم الحل ✅
+                        </button>
+                        <button type="button" onclick="setComplaintsFilter('low_rating')" id="complaint-pill-low-rating" class="complaint-filter-pill px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700">
+                            بلاغات التقييمات السلبية ⭐
+                        </button>
+                    </div>
+
+                    <!-- Search Input -->
+                    <div class="relative w-full md:w-72">
+                        <i class="fa-solid fa-magnifying-glass absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input
+                            type="text"
+                            id="complaints-search-input"
+                            oninput="filterComplaintsLocally()"
+                            placeholder="بحث برقم الهاتف، المعرف، أو النص..."
+                            class="w-full pl-3 pr-9 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#1B4965] focus:bg-white text-slate-800 placeholder-slate-400"
+                        />
+                    </div>
+                </div>
+
+                <!-- Modern SaaS Complaints Table -->
                 <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-right text-sm border-collapse min-w-[750px]">
+                        <table class="w-full text-right text-sm border-collapse min-w-[950px]">
                             <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
                                 <tr>
+                                    <th class="py-3.5 px-4 text-right">المعرف والتوقيت</th>
                                     <th class="py-3.5 px-4 text-right">مقدم الشكوى</th>
-                                    <th class="py-3.5 px-4 text-right">المشتكى عليه</th>
+                                    <th class="py-3.5 px-4 text-right">المشتكى عليه والرحلة</th>
                                     <th class="py-3.5 px-4 text-right">التصنيف</th>
-                                    <th class="py-3.5 px-4 text-right">نص الشكوى</th>
+                                    <th class="py-3.5 px-4 text-right">نص البلاغ</th>
                                     <th class="py-3.5 px-4 text-center">الحالة</th>
-                                    <th class="py-3.5 px-4 text-right">تاريخ الشكوى</th>
-                                    <th class="py-3.5 px-4 text-center">الإجراء</th>
+                                    <th class="py-3.5 px-4 text-center">الإجراءات</th>
                                 </tr>
                             </thead>
                             <tbody id="complaints-table-body" class="divide-y divide-slate-100">
-                                <!-- Dynamic Complaints -->
+                                <!-- Dynamic Complaints Rows -->
                             </tbody>
                         </table>
                     </div>
@@ -2951,6 +2992,144 @@
                 <button type="button" onclick="closeAuditPayloadModal()" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer">
                     إغلاق
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL: RESOLVE COMPLAINT & DISCIPLINARY ACTIONS                       -->
+    <!-- ===================================================================== -->
+    <div id="modal-resolve-complaint" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-xl w-full overflow-hidden border border-slate-200 animate-scale-up flex flex-col max-h-[92vh]">
+            <!-- Header -->
+            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="w-10 h-10 rounded-2xl bg-red-600 text-white flex items-center justify-center font-black text-xl shadow-xs">
+                        <i class="fa-solid fa-gavel"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-base leading-tight">معالجة الشكوى والتحقيق ⚙️</h3>
+                        <p id="resolve-modal-subtitle" class="text-[11px] text-amber-400 font-mono">بلاغ #--</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeResolveComplaintModal()" class="text-slate-400 hover:text-white transition text-3xl font-bold p-1 leading-none cursor-pointer">
+                    &times;
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-6 space-y-4 bg-slate-50 flex-1 overflow-y-auto text-right" dir="rtl">
+                <!-- Summary Card -->
+                <div class="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                        <div>
+                            <span class="text-[11px] font-bold text-slate-400 block">التصنيف:</span>
+                            <span id="resolve-modal-category" class="font-bold text-xs text-slate-800">--</span>
+                        </div>
+                        <div class="text-left">
+                            <span class="text-[11px] font-bold text-slate-400 block">رقم الرحلة:</span>
+                            <span id="resolve-modal-ride-id" class="font-mono text-xs font-bold text-blue-600">--</span>
+                        </div>
+                    </div>
+
+                    <!-- Parties Grid -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                            <span class="text-[10px] font-bold text-slate-400 block">مقدم الشكوى:</span>
+                            <span id="resolve-modal-complainant" class="font-bold text-xs text-slate-800 block">--</span>
+                            <a id="resolve-modal-complainant-call" href="#" class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 hover:underline mt-1 font-mono" dir="ltr">
+                                <i class="fa-solid fa-phone"></i>
+                                <span id="resolve-modal-complainant-phone">--</span>
+                            </a>
+                        </div>
+                        <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                            <span class="text-[10px] font-bold text-slate-400 block">المشتكى عليه:</span>
+                            <span id="resolve-modal-accused" class="font-bold text-xs text-slate-800 block">--</span>
+                            <a id="resolve-modal-accused-call" href="#" class="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline mt-1 font-mono" dir="ltr">
+                                <i class="fa-solid fa-phone"></i>
+                                <span id="resolve-modal-accused-phone">--</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Complaint Text Full -->
+                    <div class="bg-amber-50/70 border border-amber-200/70 rounded-xl p-3">
+                        <span class="text-[11px] font-bold text-amber-800 block mb-1">تفاصيل البلاغ:</span>
+                        <p id="resolve-modal-text" class="text-xs text-slate-800 leading-relaxed font-medium">--</p>
+                    </div>
+                </div>
+
+                <!-- Form Controls -->
+                <form id="form-resolve-complaint" onsubmit="submitResolveComplaint(event)" class="space-y-4">
+                    <input type="hidden" id="resolve-complaint-id" value="" />
+
+                    <!-- Status Selection -->
+                    <div>
+                        <label class="text-xs font-bold text-slate-800 block mb-1.5">حالة الشكوى:</label>
+                        <select id="resolve-complaint-status" class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1B4965] cursor-pointer">
+                            <option value="pending">قيد المراجعة ⏳</option>
+                            <option value="investigating">جاري التحقيق 🔍</option>
+                            <option value="resolved">تم الحل والصلح ✅</option>
+                            <option value="action_taken">تم اتخاذ إجراء وعقوبة ⚠️</option>
+                            <option value="dismissed">مرفوضة / كيدية ✕</option>
+                        </select>
+                    </div>
+
+                    <!-- Disciplinary Action Option -->
+                    <div class="bg-white p-3.5 rounded-2xl border border-slate-200 space-y-3">
+                        <label class="text-xs font-bold text-slate-800 block">إجراء عقابي فوري على الكابتن (اختياري):</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <label class="flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100">
+                                <input type="radio" name="disciplinary_action" value="none" checked class="accent-[#1B4965]" />
+                                <span>بدون عقوبة</span>
+                            </label>
+                            <label class="flex items-center gap-2 text-xs font-bold text-amber-700 bg-amber-50/60 p-2.5 rounded-xl border border-amber-200 cursor-pointer hover:bg-amber-100/60">
+                                <input type="radio" name="disciplinary_action" value="warning" class="accent-amber-600" />
+                                <span>توجيه إنذار ⚠️</span>
+                            </label>
+                            <label class="flex items-center gap-2 text-xs font-bold text-red-700 bg-red-50/60 p-2.5 rounded-xl border border-red-200 cursor-pointer hover:bg-red-100/60">
+                                <input type="radio" name="disciplinary_action" value="block" class="accent-red-600" />
+                                <span>حظر الكابتن 🚫</span>
+                            </label>
+                        </div>
+
+                        <!-- Points Deduction -->
+                        <div class="pt-1 flex items-center justify-between border-t border-slate-100">
+                            <span class="text-xs font-bold text-slate-700">خصم نقاط من رصيد الكابتن:</span>
+                            <input
+                                type="number"
+                                id="resolve-penalty-points"
+                                min="0"
+                                max="1000"
+                                value="0"
+                                class="w-24 text-center font-mono font-bold text-xs bg-slate-50 border border-slate-200 rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-red-500"
+                                placeholder="0 نقطة"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Admin Notes -->
+                    <div>
+                        <label class="text-xs font-bold text-slate-800 block mb-1.5">ملاحظات المشرف وإجراءات التسوية:</label>
+                        <textarea
+                            id="resolve-complaint-notes"
+                            rows="3"
+                            placeholder="اكتب نتيجة التحقيق والتسوية مع الأطراف المعنية..."
+                            class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1B4965]"
+                        ></textarea>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex items-center justify-end gap-2 pt-2">
+                        <button type="button" onclick="closeResolveComplaintModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer">
+                            إلغاء
+                        </button>
+                        <button type="submit" id="btn-save-complaint-resolve" class="px-5 py-2 bg-[#1B4965] hover:bg-[#14364A] text-white font-bold rounded-xl text-xs shadow-xs transition cursor-pointer flex items-center gap-1.5">
+                            <i class="fa-solid fa-check"></i>
+                            <span>حفظ الإجراء والمعالجة</span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

@@ -2,6 +2,7 @@ const db = require('../../db');
 const backupService = require('../backup/backupService');
 const auditService = require('../audit/auditService');
 const pricingService = require('../pricing/pricingService');
+const complaintService = require('../complaint/complaintService');
 
 class AdminController {
     // 1. Dynamic Stats (Calculated on the fly from current active records)
@@ -837,32 +838,17 @@ class AdminController {
         return { success: true, booking };
     }
 
-    // 7. Complaints
-    async getComplaints() {
-        return {
-            success: true,
-            total: db.memoryState.complaints.length,
-            complaints: db.memoryState.complaints
-        };
+    // 7. Complaints & Reports
+    async getComplaints(params = {}) {
+        return await complaintService.getComplaints(params);
     }
 
-    async updateComplaint(complaintId, status, resolutionNotes = null) {
-        const complaint = db.memoryState.complaints.find(c => c.id === complaintId);
-        if (!complaint) return { success: false, error: 'الشكوى غير موجودة' };
+    async resolveComplaint(complaintId, updates = {}, actor = 'المشرف العام (Admin)', ip = '127.0.0.1') {
+        return await complaintService.resolveComplaint(complaintId, updates, actor, ip);
+    }
 
-        complaint.status = status;
-        if (resolutionNotes) complaint.resolutionNotes = resolutionNotes;
-
-        if (db.isPostgresConnected && db.pool) {
-            try {
-                await db.pool.query(`
-                    UPDATE complaints SET status = $1, resolution_notes = $2, updated_at = NOW() WHERE id = $3
-                `, [status, resolutionNotes, complaintId]);
-            } catch (e) {}
-        }
-
-        db.saveStateSnapshot();
-        return { success: true, complaint };
+    async updateComplaint(complaintId, status, resolutionNotes = null, ip = '127.0.0.1') {
+        return await complaintService.resolveComplaint(complaintId, { status, adminNotes: resolutionNotes }, 'المشرف العام (Admin)', ip);
     }
 
     // 8. Settings

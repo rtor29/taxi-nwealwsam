@@ -325,6 +325,26 @@ class DatabaseManager {
                     );
                     CREATE INDEX IF NOT EXISTS idx_trip_ratings_driver ON trip_ratings(driver_id);
                     CREATE INDEX IF NOT EXISTS idx_trip_ratings_ride ON trip_ratings(ride_id);
+
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS complainant_id VARCHAR(64);
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS complainant_name VARCHAR(150);
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS complainant_phone VARCHAR(50);
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS accused_id VARCHAR(64);
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS accused_name VARCHAR(150);
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS accused_phone VARCHAR(50);
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS category VARCHAR(100);
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS complaint_text TEXT;
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS admin_notes TEXT;
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS action_taken VARCHAR(100);
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS ride_id VARCHAR(64);
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+                    ALTER TABLE complaints ALTER COLUMN subject DROP NOT NULL;
+                    ALTER TABLE complaints ALTER COLUMN details DROP NOT NULL;
+                    ALTER TABLE complaints DROP CONSTRAINT IF EXISTS complaints_user_id_fkey;
+                    CREATE INDEX IF NOT EXISTS idx_complaints_category ON complaints(category);
+                    CREATE INDEX IF NOT EXISTS idx_complaints_complainant ON complaints(complainant_phone);
+                    CREATE INDEX IF NOT EXISTS idx_complaints_accused ON complaints(accused_phone);
                 `);
             } catch (_) {}
 
@@ -609,6 +629,30 @@ class DatabaseManager {
                 status: r.status || 'Active',
                 createdAt: r.created_at
             }));
+
+            try {
+                const cmpRes = await client.query('SELECT * FROM complaints ORDER BY created_at DESC');
+                if (cmpRes.rows.length > 0) {
+                    this.memoryState.complaints = cmpRes.rows.map(r => ({
+                        id: r.id,
+                        complainantId: r.complainant_id || r.user_id,
+                        complainantName: r.complainant_name || r.user_name || 'راكب',
+                        complainantPhone: r.complainant_phone || '',
+                        accusedId: r.accused_id || r.target_id || '',
+                        accusedName: r.accused_name || r.target_name || '',
+                        accusedPhone: r.accused_phone || '',
+                        category: r.category || r.subject || 'أخرى',
+                        complaintText: r.complaint_text || r.details || '',
+                        priority: r.priority || 'Normal',
+                        status: r.status || 'pending',
+                        adminNotes: r.admin_notes || r.resolution_notes || '',
+                        actionTaken: r.action_taken || '',
+                        rideId: r.ride_id || '',
+                        createdAt: r.created_at,
+                        resolvedAt: r.resolved_at
+                    }));
+                }
+            } catch (_) {}
 
             this.saveStateSnapshot();
         } catch (e) {

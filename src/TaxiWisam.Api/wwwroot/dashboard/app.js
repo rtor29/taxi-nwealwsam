@@ -1455,64 +1455,315 @@ async function declineBookingFromAdmin(bookingId) {
 }
 
 // -----------------------------------------------------------------------------
-// 6. Complaints & Reports
+// 6. Complaints & Reports Management (Modern SaaS System)
 // -----------------------------------------------------------------------------
+window._allComplaintsList = [];
+window._currentComplaintsFilter = 'all';
+
 async function loadComplaints() {
     const tbody = document.getElementById('complaints-table-body');
+    const badge = document.getElementById('complaints-counter-badge');
+    const sideBadge = document.getElementById('badge-complaints');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400">جاري التحميل...</td></tr>';
+
+    tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400 font-bold"><i class="fa-solid fa-spinner fa-spin text-red-500 text-lg mb-2 block"></i>جاري تحميل سجل البلاغات والشكاوى...</td></tr>';
 
     try {
-        const res = await fetch(`${API_BASE}/complaints`);
+        const res = await fetch(`${API_BASE}/complaints?limit=200`);
         const data = await res.json();
-        tbody.innerHTML = '';
 
-        if (!data.complaints || data.complaints.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400">لا توجد شكاوى أو بلاغات</td></tr>';
+        if (!data || !data.complaints) {
+            tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-rose-500 font-bold">تعذر تحميل بيانات البلاغات</td></tr>';
             return;
         }
 
-        data.complaints.forEach(c => {
-            const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80 text-xs md:text-sm';
+        window._allComplaintsList = data.complaints;
 
-            let statusBadge = '';
-            if (c.status === 'Resolved' || c.status === 'محلولة') {
-                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-emerald shadow-xs"><span class="badge-dot"></span><span>محلولة ✓</span></span>';
+        // Update badges
+        const pendingCount = data.pendingCount !== undefined ? data.pendingCount : window._allComplaintsList.filter(c => c.status === 'pending' || c.status === 'investigating').length;
+        if (badge) {
+            badge.innerText = `${window._allComplaintsList.length} بلاغ (${pendingCount} معلق)`;
+        }
+        if (sideBadge) {
+            if (pendingCount > 0) {
+                sideBadge.innerText = pendingCount;
+                sideBadge.classList.remove('hidden');
             } else {
-                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-amber shadow-xs"><span class="badge-dot animate-pulse"></span><span>قيد المعالجة ⏳</span></span>';
+                sideBadge.classList.add('hidden');
             }
+        }
 
-            tr.innerHTML = `
-                <td class="py-3.5 px-4 font-bold text-slate-900">${escapeHtml(c.complainantName || '')}</td>
-                <td class="py-3.5 px-4 text-slate-700 text-xs">${escapeHtml(c.respondentName || '')}</td>
-                <td class="py-3.5 px-4 text-xs font-semibold text-rose-600">${escapeHtml(c.category || '')}</td>
-                <td class="py-3.5 px-4 text-xs text-slate-600 max-w-xs truncate" title="${escapeHtml(c.description || '')}">${escapeHtml(c.description || '')}</td>
-                <td class="py-3.5 px-4 text-center">${statusBadge}</td>
-                <td class="py-3.5 px-4 font-mono text-xs text-slate-500">${new Date(c.createdAt).toLocaleDateString('ar-IQ')}</td>
-                <td class="py-3.5 px-4 text-center">
-                    <button onclick="resolveComplaint('${c.complaintId}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-medium transition cursor-pointer shadow-xs">
-                        حل الشكوى
-                    </button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
+        filterComplaintsLocally();
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-rose-500">فشل في الاتصال</td></tr>';
+        console.error('Error loading complaints:', err);
+        tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-rose-500 font-bold">خطأ في الاتصال بالخادم</td></tr>';
     }
 }
 
-async function resolveComplaint(id) {
+function setComplaintsFilter(filter) {
+    window._currentComplaintsFilter = filter;
+
+    // Update pill styles
+    const pills = document.querySelectorAll('.complaint-filter-pill');
+    pills.forEach(p => {
+        p.classList.remove('bg-[#1B4965]', 'text-white', 'active');
+        p.classList.add('bg-slate-100', 'text-slate-700');
+    });
+
+    const activeBtn = document.getElementById(`complaint-pill-${filter === 'low_rating' ? 'low-rating' : filter}`);
+    if (activeBtn) {
+        activeBtn.classList.remove('bg-slate-100', 'text-slate-700');
+        activeBtn.classList.add('bg-[#1B4965]', 'text-white', 'active');
+    }
+
+    filterComplaintsLocally();
+}
+
+function filterComplaintsLocally() {
+    const tbody = document.getElementById('complaints-table-body');
+    if (!tbody) return;
+
+    const query = (document.getElementById('complaints-search-input')?.value || '').trim().toLowerCase();
+    const filter = window._currentComplaintsFilter || 'all';
+
+    let filtered = window._allComplaintsList || [];
+
+    // Filter by Tab
+    if (filter === 'pending') {
+        filtered = filtered.filter(c => c.status === 'pending' || c.status === 'investigating' || !c.status);
+    } else if (filter === 'resolved') {
+        filtered = filtered.filter(c => c.status === 'resolved' || c.status === 'action_taken' || c.status === 'Resolved' || c.status === 'محلولة');
+    } else if (filter === 'low_rating') {
+        filtered = filtered.filter(c => {
+            const cat = String(c.category || c.subject || '');
+            const txt = String(c.complaint_text || c.complaintText || c.details || '');
+            return cat.includes('تقييم') || txt.includes('تقييم');
+        });
+    }
+
+    // Filter by Search Query
+    if (query) {
+        filtered = filtered.filter(c => {
+            const id = String(c.id || c.complaintId || '').toLowerCase();
+            const cName = String(c.complainant_name || c.complainantName || c.user_name || '').toLowerCase();
+            const cPhone = String(c.complainant_phone || c.complainantPhone || '').toLowerCase();
+            const aName = String(c.accused_name || c.accusedName || c.target_name || '').toLowerCase();
+            const aPhone = String(c.accused_phone || c.accusedPhone || '').toLowerCase();
+            const text = String(c.complaint_text || c.complaintText || c.details || c.description || '').toLowerCase();
+            const rideId = String(c.ride_id || c.rideId || '').toLowerCase();
+
+            return id.includes(query) || cName.includes(query) || cPhone.includes(query) ||
+                   aName.includes(query) || aPhone.includes(query) || text.includes(query) || rideId.includes(query);
+        });
+    }
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400 font-bold">لا توجد شكاوى مطابقة للبحث أو الفلتر المحدد</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '';
+    filtered.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100 text-xs text-slate-700';
+
+        const id = c.id || c.complaintId || '';
+        const rawCreatedAt = c.created_at || c.createdAt;
+        let formattedDate = '--';
+        try {
+            if (rawCreatedAt) {
+                const d = new Date(rawCreatedAt);
+                formattedDate = d.toLocaleString('ar-IQ', {
+                    timeZone: 'Asia/Baghdad',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                });
+            }
+        } catch (_) { formattedDate = rawCreatedAt; }
+
+        const cName = c.complainant_name || c.complainantName || c.user_name || 'راكب';
+        const cPhone = c.complainant_phone || c.complainantPhone || '';
+        const aName = c.accused_name || c.accusedName || c.target_name || 'سائق / كابتن';
+        const aPhone = c.accused_phone || c.accusedPhone || '';
+        const rideId = c.ride_id || c.rideId || '';
+        const category = c.category || c.subject || 'عام';
+        const text = c.complaint_text || c.complaintText || c.details || c.description || 'لا توجد تفاصيل';
+        const status = c.status || 'pending';
+
+        // Status badge
+        let statusBadge = '';
+        if (status === 'resolved' || status === 'Resolved' || status === 'محلولة') {
+            statusBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>تم الحل ✅</span>';
+        } else if (status === 'action_taken') {
+            statusBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200"><span class="w-1.5 h-1.5 rounded-full bg-rose-600"></span>إجراء وعقوبة ⚠️</span>';
+        } else if (status === 'investigating') {
+            statusBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>جاري التحقيق 🔍</span>';
+        } else if (status === 'dismissed') {
+            statusBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">مرفوضة / كيدية ✕</span>';
+        } else {
+            statusBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>قيد المراجعة ⏳</span>';
+        }
+
+        // Category badge
+        let catBadge = '';
+        if (category.includes('تقييم')) {
+            catBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-black bg-red-100 text-red-800 border border-red-200"><i class="fa-solid fa-star text-amber-500"></i> ${escapeHtml(category)}</span>`;
+        } else if (category.includes('سلوك') || category.includes('القيادة المتهورة')) {
+            catBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-red-50 text-red-700 border border-red-200"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(category)}</span>`;
+        } else if (category.includes('سير') || category.includes('مسار')) {
+            catBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200"><i class="fa-solid fa-route"></i> ${escapeHtml(category)}</span>`;
+        } else if (category.includes('أجرة') || category.includes('مبالغ')) {
+            catBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200"><i class="fa-solid fa-money-bill-wave"></i> ${escapeHtml(category)}</span>`;
+        } else {
+            catBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">${escapeHtml(category)}</span>`;
+        }
+
+        tr.innerHTML = `
+            <td class="py-3 px-4 font-mono text-[11px] text-slate-600">
+                <span class="font-bold text-slate-900 block font-sans">${escapeHtml(id)}</span>
+                <span class="text-slate-400 block">${formattedDate}</span>
+            </td>
+            <td class="py-3 px-4">
+                <span class="font-bold text-slate-900 block">${escapeHtml(cName)}</span>
+                ${cPhone ? `<a href="tel:${escapeHtml(cPhone)}" class="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-emerald-600 hover:underline mt-0.5" dir="ltr"><i class="fa-solid fa-phone text-[9px]"></i>${escapeHtml(cPhone)}</a>` : '<span class="text-[10px] text-slate-400">بدون هاتف</span>'}
+            </td>
+            <td class="py-3 px-4">
+                <span class="font-bold text-slate-900 block">${escapeHtml(aName)}</span>
+                <div class="flex items-center gap-2 mt-0.5">
+                    ${aPhone ? `<a href="tel:${escapeHtml(aPhone)}" class="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-blue-600 hover:underline" dir="ltr"><i class="fa-solid fa-phone text-[9px]"></i>${escapeHtml(aPhone)}</a>` : ''}
+                    ${rideId ? `<span class="font-mono text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded" title="رقم المشوار">#${escapeHtml(rideId.slice(0, 8))}</span>` : ''}
+                </div>
+            </td>
+            <td class="py-3 px-4">${catBadge}</td>
+            <td class="py-3 px-4 max-w-xs">
+                <p class="text-xs text-slate-700 line-clamp-2 leading-relaxed" title="${escapeHtml(text)}">${escapeHtml(text)}</p>
+                ${c.admin_notes || c.adminNotes ? `<span class="inline-block mt-1 text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">📝 تم الرد: ${escapeHtml(c.admin_notes || c.adminNotes)}</span>` : ''}
+            </td>
+            <td class="py-3 px-4 text-center">${statusBadge}</td>
+            <td class="py-3 px-4 text-center">
+                <button onclick="openResolveComplaintModal('${escapeHtml(id)}')" class="px-3 py-1.5 bg-[#1B4965] hover:bg-[#14364A] text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs inline-flex items-center gap-1">
+                    <i class="fa-solid fa-gear text-amber-400"></i>
+                    <span>معالجة</span>
+                </button>
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+}
+
+function openResolveComplaintModal(complaintId) {
+    const complaint = (window._allComplaintsList || []).find(c => (c.id === complaintId || c.complaintId === complaintId));
+    if (!complaint) {
+        showToast('تعذر العثور على بيانات الشكوى', true);
+        return;
+    }
+
+    const modal = document.getElementById('modal-resolve-complaint');
+    if (!modal) return;
+
+    document.getElementById('resolve-complaint-id').value = complaint.id || complaint.complaintId || '';
+    document.getElementById('resolve-modal-subtitle').innerText = `بلاغ #${complaint.id || complaint.complaintId || ''}`;
+    document.getElementById('resolve-modal-category').innerText = complaint.category || complaint.subject || 'عام';
+    document.getElementById('resolve-modal-ride-id').innerText = complaint.ride_id || complaint.rideId || 'بدون مشوار محدد';
+
+    const cName = complaint.complainant_name || complaint.complainantName || complaint.user_name || 'الراكب';
+    const cPhone = complaint.complainant_phone || complaint.complainantPhone || 'لا يوجد';
+    document.getElementById('resolve-modal-complainant').innerText = cName;
+    document.getElementById('resolve-modal-complainant-phone').innerText = cPhone;
+    const cCall = document.getElementById('resolve-modal-complainant-call');
+    if (cCall) cCall.href = cPhone && cPhone !== 'لا يوجد' ? `tel:${cPhone}` : '#';
+
+    const aName = complaint.accused_name || complaint.accusedName || complaint.target_name || 'الكابتن';
+    const aPhone = complaint.accused_phone || complaint.accusedPhone || 'لا يوجد';
+    document.getElementById('resolve-modal-accused').innerText = aName;
+    document.getElementById('resolve-modal-accused-phone').innerText = aPhone;
+    const aCall = document.getElementById('resolve-modal-accused-call');
+    if (aCall) aCall.href = aPhone && aPhone !== 'لا يوجد' ? `tel:${aPhone}` : '#';
+
+    document.getElementById('resolve-modal-text').innerText = complaint.complaint_text || complaint.complaintText || complaint.details || complaint.description || 'لا توجد تفاصيل';
+
+    const statusSelect = document.getElementById('resolve-complaint-status');
+    if (statusSelect) {
+        statusSelect.value = complaint.status || 'pending';
+    }
+
+    const notesInput = document.getElementById('resolve-complaint-notes');
+    if (notesInput) {
+        notesInput.value = complaint.admin_notes || complaint.adminNotes || '';
+    }
+
+    // Reset disciplinary inputs
+    const penaltyInput = document.getElementById('resolve-penalty-points');
+    if (penaltyInput) penaltyInput.value = '0';
+
+    const radioNone = document.querySelector('input[name="disciplinary_action"][value="none"]');
+    if (radioNone) radioNone.checked = true;
+
+    modal.style.display = 'flex';
+}
+
+function closeResolveComplaintModal() {
+    const modal = document.getElementById('modal-resolve-complaint');
+    if (modal) modal.style.display = 'none';
+}
+
+async function submitResolveComplaint(event) {
+    if (event) event.preventDefault();
+
+    const id = document.getElementById('resolve-complaint-id')?.value;
+    const status = document.getElementById('resolve-complaint-status')?.value;
+    const adminNotes = document.getElementById('resolve-complaint-notes')?.value;
+    const penaltyPoints = parseInt(document.getElementById('resolve-penalty-points')?.value || '0', 10);
+    const actionRadio = document.querySelector('input[name="disciplinary_action"]:checked')?.value || 'none';
+
+    if (!id) {
+        showToast('معرف الشكوى غير صحيح', true);
+        return;
+    }
+
+    const btn = document.getElementById('btn-save-complaint-resolve');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>جاري الحفظ...</span>';
+    }
+
     try {
-        const res = await fetch(`${API_BASE}/complaints/${id}/resolve`, { method: 'POST' });
-        if (res.ok) {
-            showToast('تم إغلاق وحل الشكوى بنجاح ✅');
+        const payload = {
+            id,
+            status,
+            adminNotes,
+            actionTaken: actionRadio !== 'none' ? actionRadio : undefined,
+            penaltyPoints: penaltyPoints > 0 ? penaltyPoints : undefined,
+            actor: 'المشرف العام (Admin)'
+        };
+
+        const res = await fetch(`${API_BASE}/complaints/resolve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (data.success) {
+            showToast('تم حفظ إجراء ومعالجة الشكوى بنجاح ✅');
+            closeResolveComplaintModal();
             loadComplaints();
             loadDashboardStats();
+        } else {
+            showToast(data.error || 'فشل في حفظ معالجة الشكوى', true);
         }
-    } catch (e) {
-        showToast('فشل في حل الشكوى', true);
+    } catch (err) {
+        console.error('Error submitting complaint resolution:', err);
+        showToast('خطأ في الاتصال بالخادم', true);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-check"></i><span>حفظ الإجراء والمعالجة</span>';
+        }
     }
 }
 
