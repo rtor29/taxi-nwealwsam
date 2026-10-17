@@ -1377,6 +1377,46 @@ class AdminController {
             return isCust && isDrv && b.status !== 'Cancelled';
         });
 
+        // If not found in memory, query PostgreSQL
+        if (!booking && db.isPostgresConnected && db.pool) {
+            try {
+                let pgRes = null;
+                if (bookingId) {
+                    pgRes = await db.pool.query('SELECT * FROM bookings WHERE id = $1 AND status != $2 LIMIT 1', [bookingId, 'Cancelled']);
+                }
+                if ((!pgRes || !pgRes.rows || pgRes.rows.length === 0) && (candidateCustomerId || candidatePhone)) {
+                    pgRes = await db.pool.query(`
+                        SELECT * FROM bookings 
+                        WHERE (customer_id = $1 OR (customer_phone IS NOT NULL AND RIGHT(REGEXP_REPLACE(customer_phone, '[^0-9]', '', 'g'), 8) = RIGHT($2, 8)))
+                          AND (driver_id = $3 OR driver_id = $4 OR $3 = '' OR $3 IS NULL)
+                          AND status != 'Cancelled'
+                        ORDER BY created_at DESC LIMIT 1
+                    `, [candidateCustomerId || '___', candidatePhone || '___', targetDriverId || '', targetDriverId || '']);
+                }
+                if (pgRes && pgRes.rows && pgRes.rows.length > 0) {
+                    const r = pgRes.rows[0];
+                    booking = {
+                        id: r.id,
+                        bookingId: r.id,
+                        routeId: r.route_id,
+                        driverId: r.driver_id,
+                        driverName: r.driver_name,
+                        customerId: r.customer_id,
+                        customerName: r.customer_name,
+                        customerPhone: r.customer_phone,
+                        pickupLocation: r.pickup_name,
+                        dropoffLocation: r.dropoff_name,
+                        seatsBooked: r.seats_booked || 1,
+                        status: r.status,
+                        createdAt: r.created_at
+                    };
+                    db.memoryState.bookings.unshift(booking);
+                }
+            } catch (pgErr) {
+                console.error('[AdminController] PG find booking error:', pgErr.message);
+            }
+        }
+
         if (!booking) {
             return { success: false, error: 'لم يتم العثور على حجز نشط لهذا الراكب' };
         }
@@ -1387,8 +1427,13 @@ class AdminController {
         booking.status = 'cancellation_pending';
         booking.cancellationPending = true;
         booking.cancellationRequested = true;
+        booking.cancellation_requested = true;
+        booking.cancellationStatus = 'pending';
+        booking.cancellation_status = 'pending';
         booking.cancellationReason = reason;
+        booking.cancellation_reason = reason;
         booking.cancellationDetails = details;
+        booking.cancellation_details = details;
         booking.cancellationRequestedAt = new Date().toISOString();
 
         const requestId = 'cnl-' + Math.random().toString(36).substr(2, 9);
@@ -1425,18 +1470,34 @@ class AdminController {
                 await db.pool.query(`
                     UPDATE bookings 
                     SET status = 'cancellation_pending', 
+                        cancellation_requested = true,
+                        cancellation_status = 'pending',
                         cancellation_reason = $1,
+                        cancellation_details = $2,
                         updated_at = NOW() 
-                    WHERE id = $2
-                `, [reason + (details ? ' - ' + details : ''), booking.id]);
+                    WHERE id = $3
+                `, [reason, details, booking.id || booking.bookingId]);
 
                 await db.pool.query(`
                     INSERT INTO cancellation_requests (id, booking_id, customer_id, customer_name, customer_phone, driver_id, driver_name, driver_phone, route_id, route_name, passenger_reason, passenger_details, driver_decision, status, created_at)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', 'Pending', NOW())
-                    ON CONFLICT (id) DO NOTHING
-                `, [requestId, booking.id, newRequest.customerId, newRequest.customerName, newRequest.customerPhone, newRequest.driverId, newRequest.driverName, newRequest.driverPhone, newRequest.routeId, newRequest.route, reason, details]);
+                    ON CONFLICT (id) DO UPDATE SET passenger_reason = EXCLUDED.passenger_reason, passenger_details = EXCLUDED.passenger_details, status = 'Pending'
+                `, [requestId, booking.id || booking.bookingId, newRequest.customerId, newRequest.customerName, newRequest.customerPhone, newRequest.driverId, newRequest.driverName, newRequest.driverPhone, newRequest.routeId, newRequest.route, reason, details]);
             } catch (pgErr) {
                 console.error('[AdminController] PG requestRouteCancellation error:', pgErr.message);
+                try {
+                    await db.pool.query(`
+                        UPDATE bookings 
+                        SET status = 'cancellation_pending', 
+                            cancellation_requested = true,
+                            cancellation_status = 'pending',
+                            cancellation_reason = $1,
+                            cancellation_details = $2
+                        WHERE id = $3
+                    `, [reason, details, booking.id || booking.bookingId]);
+                } catch (fallbackErr) {
+                    console.error('[AdminController] PG fallback update error:', fallbackErr.message);
+                }
             }
         }
 
@@ -1456,6 +1517,33 @@ class AdminController {
         const driverApprovalReason = data.driverApprovalReason || (action === 'approve' ? 'تم التراضي مع الراكب' : 'رفض الكابتن');
 
         let booking = (db.memoryState.bookings || []).find(b => b.id === bookingId || b.bookingId === bookingId);
+        if (!booking && db.isPostgresConnected && db.pool) {
+            try {
+                const pgRes = await db.pool.query('SELECT * FROM bookings WHERE id = $1 LIMIT 1', [bookingId]);
+                if (pgRes.rows && pgRes.rows.length > 0) {
+                    const r = pgRes.rows[0];
+                    booking = {
+                        id: r.id,
+                        bookingId: r.id,
+                        routeId: r.route_id,
+                        driverId: r.driver_id,
+                        driverName: r.driver_name,
+                        customerId: r.customer_id,
+                        customerName: r.customer_name,
+                        customerPhone: r.customer_phone,
+                        pickupLocation: r.pickup_name,
+                        dropoffLocation: r.dropoff_name,
+                        seatsBooked: r.seats_booked || 1,
+                        status: r.status,
+                        createdAt: r.created_at
+                    };
+                    db.memoryState.bookings.unshift(booking);
+                }
+            } catch (pgErr) {
+                console.error('[AdminController] PG find booking error in respond:', pgErr.message);
+            }
+        }
+
         if (!booking) {
             return { success: false, error: 'الحجز غير موجود' };
         }
@@ -1465,8 +1553,11 @@ class AdminController {
         if (action === 'approve') {
             booking.status = 'Cancelled';
             booking.cancellationPending = false;
+            booking.cancellation_requested = false;
+            booking.cancellation_status = 'approved';
             booking.cancellationApproved = true;
             booking.driverApprovalReason = driverApprovalReason;
+            booking.driver_approval_reason = driverApprovalReason;
             booking.cancelledAt = new Date().toISOString();
 
             // Free seat in route
@@ -1497,6 +1588,8 @@ class AdminController {
                     await db.pool.query(`
                         UPDATE bookings 
                         SET status = 'Cancelled', 
+                            cancellation_requested = false,
+                            cancellation_status = 'approved',
                             cancellation_reason = COALESCE(cancellation_reason, '') || ' | موافقة السائق: ' || $1,
                             driver_approval_reason = $1,
                             updated_at = NOW() 
@@ -1526,6 +1619,8 @@ class AdminController {
         } else {
             booking.status = 'Confirmed';
             booking.cancellationPending = false;
+            booking.cancellation_requested = false;
+            booking.cancellation_status = 'rejected';
             booking.cancellationRejected = true;
             booking.cancellationRejectedAt = new Date().toISOString();
 
@@ -1541,6 +1636,8 @@ class AdminController {
                     await db.pool.query(`
                         UPDATE bookings 
                         SET status = 'Confirmed', 
+                            cancellation_requested = false,
+                            cancellation_status = 'rejected',
                             updated_at = NOW() 
                         WHERE id = $1
                     `, [booking.id || bookingId]);

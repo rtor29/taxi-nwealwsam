@@ -2676,8 +2676,8 @@ async function startServer() {
             });
         }
 
-        // Driver Bookings (All bookings for this driver: Pending requests & Confirmed passengers)
-        if ((pathname.startsWith('/api/driver/') || pathname.startsWith('/driver/')) && pathname.endsWith('/bookings') && method === 'GET') {
+        // Driver Bookings & Subscribers List (All bookings for this driver: Pending requests & Confirmed passengers)
+        if ((pathname.startsWith('/api/driver/') || pathname.startsWith('/driver/')) && (pathname.endsWith('/bookings') || pathname.endsWith('/subscribers')) && method === 'GET') {
             const parts = pathname.split('/');
             const driverId = parts[parts.length - 2];
             let driverBookings = [];
@@ -2689,6 +2689,7 @@ async function startServer() {
             );
             const actualDriverId = targetDriver ? targetDriver.driverId : driverId;
             const actualDriverPhone = targetDriver ? (targetDriver.phoneNumber || targetDriver.phone) : driverId;
+            const cleanPhone = String(actualDriverPhone || driverId || '').replace(/[^0-9]/g, '');
             const driverName = targetDriver?.fullName;
 
             // RLS Check: Drivers can only access their own bookings. Admins have full access.
@@ -2704,12 +2705,15 @@ async function startServer() {
                 try {
                     const pgRes = await db.pool.query(`
                         SELECT * FROM bookings 
-                        WHERE driver_id = $1 
+                        WHERE (driver_id = $1 
                            OR driver_id = $2
-                           OR (driver_name IS NOT NULL AND LOWER(driver_name) = LOWER($3))
-                           OR driver_id = 'drv-sample'
+                           OR driver_id = $3
+                           OR (driver_phone IS NOT NULL AND RIGHT(REGEXP_REPLACE(driver_phone, '[^0-9]', '', 'g'), 8) = RIGHT($4, 8))
+                           OR (driver_name IS NOT NULL AND LOWER(driver_name) = LOWER($5))
+                           OR driver_id = 'drv-sample')
+                          AND status IN ('Pending', 'Confirmed', 'Active', 'cancellation_pending')
                         ORDER BY created_at DESC
-                    `, [driverId, actualDriverId, driverName || '']);
+                    `, [driverId, actualDriverId, cleanPhone, cleanPhone.length >= 7 ? cleanPhone : '_____', driverName || '']);
                     if (pgRes.rows && pgRes.rows.length > 0) {
                         driverBookings = pgRes.rows.map(r => ({
                             id: r.id,
@@ -2727,10 +2731,15 @@ async function startServer() {
                             seatsBooked: r.seats_booked || 1,
                             status: r.status || 'Pending',
                             totalFare: r.total_fare,
-                            cancellationPending: r.status === 'cancellation_pending' || r.cancellation_requested === true || !!r.cancellation_reason,
+                            cancellationPending: r.status === 'cancellation_pending' || r.cancellation_requested === true || r.cancellation_status === 'pending' || !!r.cancellation_reason,
+                            cancellation_requested: r.status === 'cancellation_pending' || r.cancellation_requested === true || r.cancellation_status === 'pending' || !!r.cancellation_reason,
+                            cancellation_status: r.status === 'cancellation_pending' ? 'pending' : (r.cancellation_status || null),
                             cancellationReason: r.cancellation_reason || '',
+                            cancellation_reason: r.cancellation_reason || '',
                             cancellationDetails: r.cancellation_details || '',
+                            cancellation_details: r.cancellation_details || '',
                             driverApprovalReason: r.driver_approval_reason || '',
+                            driver_approval_reason: r.driver_approval_reason || '',
                             createdAt: r.created_at
                         }));
                     }
@@ -2749,12 +2758,18 @@ async function startServer() {
             );
             for (const mb of memBookings) {
                 if (!driverBookings.some(dbk => (dbk.id === mb.id || dbk.bookingId === mb.bookingId))) {
+                    const isPendingCancel = mb.status === 'cancellation_pending' || mb.cancellationPending === true || mb.cancellationRequested === true || mb.cancellation_requested === true || mb.cancellation_status === 'pending' || !!mb.cancellationReason || !!mb.cancellation_reason;
                     driverBookings.push({
                         ...mb,
-                        cancellationPending: mb.status === 'cancellation_pending' || mb.cancellationPending === true || mb.cancellationRequested === true || !!mb.cancellationReason,
-                        cancellationReason: mb.cancellationReason || '',
-                        cancellationDetails: mb.cancellationDetails || '',
-                        driverApprovalReason: mb.driverApprovalReason || ''
+                        cancellationPending: isPendingCancel,
+                        cancellation_requested: isPendingCancel,
+                        cancellation_status: isPendingCancel ? 'pending' : null,
+                        cancellationReason: mb.cancellationReason || mb.cancellation_reason || '',
+                        cancellation_reason: mb.cancellationReason || mb.cancellation_reason || '',
+                        cancellationDetails: mb.cancellationDetails || mb.cancellation_details || '',
+                        cancellation_details: mb.cancellationDetails || mb.cancellation_details || '',
+                        driverApprovalReason: mb.driverApprovalReason || mb.driver_approval_reason || '',
+                        driver_approval_reason: mb.driverApprovalReason || mb.driver_approval_reason || ''
                     });
                 }
             }

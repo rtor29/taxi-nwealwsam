@@ -144,8 +144,10 @@ CREATE TABLE IF NOT EXISTS bookings (
     cancellation_reason TEXT,
     cancellation_details TEXT,
     cancellation_requested BOOLEAN DEFAULT false,
+    cancellation_status VARCHAR(30) DEFAULT NULL,
     driver_approval_reason TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_bookings_customer_id ON bookings(customer_id);
