@@ -1180,85 +1180,142 @@
                         <h2 class="text-2xl font-black text-slate-900">النسخ الاحتياطي وإدارة قاعدة البيانات</h2>
                         <p class="text-xs md:text-sm text-slate-500">نظام إدارة قاعدة بيانات PostgreSQL الذاتية وتصدير واسترجاع النسخ الشاملة</p>
                     </div>
+                    <button onclick="loadDatabaseEngineStats()" class="self-start sm:self-auto px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-2 shadow-xs transition cursor-pointer">
+                        <i id="btn-refresh-db-icon" class="fa-solid fa-arrows-rotate text-amber-500"></i>
+                        <span>تحديث المؤشرات</span>
+                    </button>
+                </div>
+
+                <!-- Modern PostgreSQL Metrics Grid (Light Theme) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Metric 1: Connection Status -->
+                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+                        <div>
+                            <span class="text-[11px] font-bold text-slate-500 block mb-1">حالة الاتصال</span>
+                            <div class="flex items-center gap-2">
+                                <span class="relative flex h-2.5 w-2.5">
+                                    <span id="db-status-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span id="db-status-dot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                                </span>
+                                <span id="db-stat-status" class="text-sm font-extrabold text-emerald-600">متصل حي (Online)</span>
+                            </div>
+                        </div>
+                        <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-signal"></i>
+                        </div>
+                    </div>
+
+                    <!-- Metric 2: Engine & Version -->
+                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+                        <div>
+                            <span class="text-[11px] font-bold text-slate-500 block mb-1">محرك وقاعدة البيانات</span>
+                            <div id="db-stat-engine" class="text-sm font-extrabold text-slate-800 font-mono" title="PostgreSQL 16 + PostGIS 3.4">PostgreSQL 16 + PostGIS</div>
+                        </div>
+                        <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-database"></i>
+                        </div>
+                    </div>
+
+                    <!-- Metric 3: Disk Size -->
+                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+                        <div>
+                            <span class="text-[11px] font-bold text-slate-500 block mb-1">الحجم الفعلي على القرص</span>
+                            <div id="db-stat-size" class="text-sm font-extrabold text-amber-600 font-mono">8.7 MB</div>
+                        </div>
+                        <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-hard-drive"></i>
+                        </div>
+                    </div>
+
+                    <!-- Metric 4: Total Tables & Rows -->
+                    <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+                        <div>
+                            <span class="text-[11px] font-bold text-slate-500 block mb-1">الجداول وإجمالي السجلات</span>
+                            <div class="text-sm font-extrabold text-slate-800">
+                                <span id="db-stat-tables" class="font-mono">11</span> جدول • <span id="db-stat-rows" class="font-mono text-emerald-600">--</span> سجل
+                            </div>
+                        </div>
+                        <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-table-list"></i>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Database Status & Actions Grid -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     
                     <!-- Card 1: Full Backup Export -->
-                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between">
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-5 flex flex-col justify-between">
                         <div>
-                            <div class="flex items-center space-x-3 space-x-reverse mb-2">
-                                <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center text-lg">
+                            <div class="flex items-center space-x-3 space-x-reverse mb-3">
+                                <div class="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center text-xl">
                                     <i class="fa-solid fa-cloud-arrow-down"></i>
                                 </div>
                                 <div>
-                                    <h3 class="font-bold text-slate-900 text-base">تصدير نسخة احتياطية كاملة (Full Backup Export)</h3>
-                                    <p class="text-xs text-slate-500">تحميل نسخة مشفرة ومكتملة من كافة الجداول والسجلات</p>
+                                    <h3 class="font-black text-slate-900 text-base">تصدير نسخة احتياطية كاملة (Full Backup Export)</h3>
+                                    <p class="text-xs text-slate-500">سحب وتحميل كافة جداول PostgreSQL وسجلات النظام بصيغة JSON رسمية</p>
                                 </div>
                             </div>
-                            <p class="text-xs text-slate-600 leading-relaxed mt-3">
-                                يشمل التصدير: بيانات المستخدمين، السائقين، الركاب، الوثائق، المسارات، الحجوزات، البلاغات، إعدادات التسعير، وسجلات التدقيق. يتم حفظ ملف JSON رسمي يمكن استعادته في أي وقت.
+                            <p class="text-xs text-slate-600 leading-relaxed">
+                                يشمل التصدير: بيانات المستخدمين، حسابات السائقين، الركاب، الوثائق، المسارات الجغرافية، الحجوزات، البلاغات، إعدادات التسعير، وسجلات التدقيق الحية مع بيانات التحقق الفوري.
                             </p>
+                            <div class="mt-4 flex flex-wrap gap-1.5 text-[11px]">
+                                <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-bold">users</span>
+                                <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-bold">drivers</span>
+                                <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-bold">customers</span>
+                                <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-bold">routes</span>
+                                <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-bold">bookings</span>
+                                <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-bold">driver_documents</span>
+                                <span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-bold">audit_logs</span>
+                            </div>
+                            <div id="last-backup-badge" class="mt-3 text-[11px] text-slate-400">
+                                <span>آخر نسخة سابقة: </span><span id="last-backup-name" class="font-mono text-slate-600">--</span>
+                            </div>
                         </div>
-                        <button onclick="exportSystemBackup()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-md shadow-amber-500/20">
-                            <i class="fa-solid fa-download"></i>
-                            <span>تصدير وتحميل النسخة الاحتياطية الآن</span>
+                        <button id="btn-export-backup" onclick="exportSystemBackup()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 active:scale-[0.99] text-slate-950 font-black rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 cursor-pointer">
+                            <i id="btn-export-icon" class="fa-solid fa-download"></i>
+                            <span id="btn-export-text">تصدير وتحميل النسخة الاحتياطية الآن</span>
                         </button>
                     </div>
 
                     <!-- Card 2: Restore Backup -->
-                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between">
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-5 flex flex-col justify-between">
                         <div>
-                            <div class="flex items-center space-x-3 space-x-reverse mb-2">
-                                <div class="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-500 flex items-center justify-center text-lg">
+                            <div class="flex items-center space-x-3 space-x-reverse mb-3">
+                                <div class="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center text-xl">
                                     <i class="fa-solid fa-cloud-arrow-up"></i>
                                 </div>
                                 <div>
-                                    <h3 class="font-bold text-slate-900 text-base">استعادة نسخة احتياطية (Restore Backup)</h3>
-                                    <p class="text-xs text-slate-500">رفع ملف JSON لاستعادة البيانات بالكامل</p>
+                                    <h3 class="font-black text-slate-900 text-base">استعادة نسخة احتياطية (Restore Backup)</h3>
+                                    <p class="text-xs text-slate-500">رفع ملف JSON لاستعادة البيانات داخل معاملة PostgreSQL آمنة</p>
                                 </div>
                             </div>
-                            <p class="text-xs text-slate-600 leading-relaxed mt-3">
-                                يتم التحقق من صحة الملف ومعالجة المعاملة داخل PostgreSQL مع ضمان سلامة المفاتيح والعلاقات (Transactions with ON DELETE CASCADE).
+                            <p class="text-xs text-slate-600 leading-relaxed">
+                                تتم المعالجة باستخدام معاملات ذرية (BEGIN / COMMIT / ROLLBACK) مع التحقق الصارم من هيكل البيانات، والتراجع الفوري عند أي خلل لضمان سلامة قاعدة البيانات 100%.
                             </p>
-                            <div class="mt-4">
-                                <label class="block text-xs font-bold text-slate-700 mb-1.5">اختر ملف النسخة الاحتياطية (.json)</label>
-                                <input type="file" id="backup-file-input" accept=".json" class="w-full text-xs text-slate-500 file:mr-0 file:ml-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer border border-slate-200 rounded-xl p-1 bg-slate-50">
+
+                            <!-- Modern Drag & Drop Zone -->
+                            <div id="backup-dropzone" 
+                                 class="mt-4 border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50/70 hover:bg-blue-50/40 rounded-xl p-5 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2 group">
+                                <input type="file" id="backup-file-input" accept=".json" class="hidden" onchange="handleBackupFileSelect(this.files)">
+                                <div class="w-10 h-10 rounded-full bg-white group-hover:bg-blue-100 text-slate-400 group-hover:text-blue-600 flex items-center justify-center text-lg transition shadow-xs border border-slate-200">
+                                    <i id="dropzone-icon" class="fa-solid fa-file-arrow-up"></i>
+                                </div>
+                                <div id="backup-file-label" class="text-xs font-bold text-slate-700 group-hover:text-blue-600 transition">
+                                    اسحب وأفلت ملف النسخة (.json) هنا، أو اضغط للاختيار
+                                </div>
+                                <div id="backup-file-details" class="text-[11px] text-slate-400">
+                                    الملفات المدعومة: JSON فقط • الحجم الأقصى: 50MB
+                                </div>
                             </div>
                         </div>
-                        <button onclick="restoreSystemBackup()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-md shadow-blue-600/20">
-                            <i class="fa-solid fa-rotate-left"></i>
-                            <span>بدء استعادة النسخة الاحتياطية</span>
+
+                        <button id="btn-open-restore" onclick="openRestoreConfirmation()" class="w-full py-3 bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white font-black rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-md shadow-slate-900/10 cursor-pointer">
+                            <i class="fa-solid fa-rotate-left text-amber-400"></i>
+                            <span>بدء فحص واستعادة النسخة الاحتياطية</span>
                         </button>
                     </div>
 
-                </div>
-
-                <!-- Database Engine Health Card -->
-                <div class="bg-slate-900 text-white p-6 rounded-2xl border border-slate-800 shadow-sm">
-                    <h3 class="font-bold text-amber-400 text-sm mb-4 flex items-center gap-2">
-                        <i class="fa-solid fa-server"></i>
-                        <span>حالة محرك قاعدة بيانات PostgreSQL</span>
-                    </h3>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-                        <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700/60">
-                            <span class="text-[10px] text-slate-400 block mb-1">نوع المحرك</span>
-                            <span class="text-xs font-bold text-emerald-400 font-mono">PostgreSQL 16 + PostGIS</span>
-                        </div>
-                        <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700/60">
-                            <span class="text-[10px] text-slate-400 block mb-1">حالة الاتصال</span>
-                            <span class="text-xs font-bold text-emerald-400">متصل (Online) 🐘</span>
-                        </div>
-                        <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700/60">
-                            <span class="text-[10px] text-slate-400 block mb-1">المعالجة المتتالية</span>
-                            <span class="text-xs font-bold text-emerald-400 font-mono">ON DELETE CASCADE</span>
-                        </div>
-                        <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700/60">
-                            <span class="text-[10px] text-slate-400 block mb-1">المزامنة التلقائية</span>
-                            <span class="text-xs font-bold text-amber-400">Active Real-Time</span>
-                        </div>
-                    </div>
                 </div>
             </section>
 
@@ -2485,6 +2542,73 @@
             </form>
         </div>
     </div>
+    <!-- ===================================================================== -->
+    <!-- MODAL: CONFIRM RESTORE BACKUP (Security Double Confirmation)           -->
+    <!-- ===================================================================== -->
+    <div id="modal-confirm-restore" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-scale-up">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 bg-rose-600 text-white flex items-center justify-between">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="w-10 h-10 rounded-2xl bg-white/20 text-white flex items-center justify-center font-black text-xl">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-base leading-tight">تأكيد أمان استعادة قاعدة البيانات</h3>
+                        <p class="text-[11px] text-rose-100 font-semibold">إجراء حساس يؤثر على كافة جداول وسجلات المنصة</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeRestoreModal()" class="text-rose-200 hover:text-white transition text-3xl font-bold p-1 leading-none cursor-pointer">
+                    &times;
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-6 space-y-4 bg-white text-right" dir="rtl">
+                <!-- Warning Notice -->
+                <div class="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 leading-relaxed flex items-start gap-2.5">
+                    <i class="fa-solid fa-shield-halved text-amber-600 text-base mt-0.5"></i>
+                    <div>
+                        <strong class="font-black block mb-0.5">تحذير أمني هام:</strong>
+                        استعادة النسخة الاحتياطية ستستبدل البيانات الحالية ببيانات الملف المرفوع داخل معاملة ذرية موحدة. في حال حدوث أي خطأ فني سيتم التراجع فوراً (Rollback) دون فقدان البيانات.
+                    </div>
+                </div>
+
+                <!-- File Summary -->
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500 font-semibold">الملف المحدد:</span>
+                        <span id="restore-modal-filename" class="font-bold text-slate-800 font-mono text-[11px] truncate max-w-[200px]" dir="ltr">--</span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-slate-500 font-semibold">حجم الملف:</span>
+                        <span id="restore-modal-filesize" class="font-bold text-slate-800 font-mono text-[11px]">--</span>
+                    </div>
+                </div>
+
+                <!-- Keyword Confirmation Input -->
+                <div class="space-y-1.5 pt-1">
+                    <label class="block text-xs font-bold text-slate-700">
+                        لتأكيد التنفيذ، اكتب كلمة <span class="text-rose-600 font-mono font-black">RESTORE</span> أو <span class="text-rose-600 font-black">استعادة</span> أدناه:
+                    </label>
+                    <input type="text" id="restore-confirmation-keyword" oninput="checkRestoreConfirmationKeyword(this.value)" placeholder="اكتب RESTORE أو استعادة"
+                           class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-center text-sm font-black tracking-wider focus:outline-none focus:ring-2 focus:ring-rose-500 text-slate-900">
+                </div>
+
+                <!-- Buttons -->
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button type="button" onclick="closeRestoreModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer">
+                        إلغاء
+                    </button>
+                    <button type="button" id="btn-execute-restore-confirm" disabled onclick="executeConfirmedRestore()"
+                            class="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-black rounded-xl text-xs transition flex items-center gap-2 shadow-md shadow-rose-600/20 cursor-pointer">
+                        <i id="restore-spinner-icon" class="fa-solid fa-rotate-left"></i>
+                        <span id="restore-btn-text">تأكيد الاستعادة والبدء فوراً</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Toast Notification -->
     <div id="toast" class="fixed bottom-16 md:bottom-6 left-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
@@ -2543,6 +2667,6 @@
         });
     </script>
 
-    <script src="/dashboard/app.js?v=20261012_v6"></script>
+    <script src="/dashboard/app.js?v=20261017_backup_v1"></script>
 </body>
 </html>

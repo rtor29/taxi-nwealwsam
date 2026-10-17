@@ -908,6 +908,10 @@ class AdminController {
     }
 
     // 10. Backup & Restore
+    async getDatabaseStats() {
+        return await backupService.getDatabaseStats();
+    }
+
     async exportBackup() {
         return await backupService.exportBackup();
     }

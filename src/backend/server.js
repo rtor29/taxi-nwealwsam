@@ -1420,6 +1420,15 @@ async function startServer() {
         // ---------------------------------------------------------------------
         // 3. BACKUP & RESTORE API
         // ---------------------------------------------------------------------
+        if ((pathname === '/api/admin/backup/stats' || pathname === '/api/admin/database/stats') && method === 'GET') {
+            try {
+                const stats = await adminController.getDatabaseStats();
+                return sendJson(stats);
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
         if ((pathname === '/api/admin/backup' || pathname === '/api/admin/backup/export') && (method === 'GET' || method === 'POST')) {
             try {
                 const backup = await adminController.exportBackup();

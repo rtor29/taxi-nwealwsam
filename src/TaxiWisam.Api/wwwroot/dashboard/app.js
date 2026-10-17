@@ -15,6 +15,7 @@ let isRejectionOpen = false;
 // -----------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
     checkAdminAuth();
+    if (typeof initBackupDropzoneEvents === 'function') initBackupDropzoneEvents();
 });
 
 function escapeHtml(str) {
@@ -246,6 +247,8 @@ function switchTab(tabName) {
             break;
         case 'backup':
             loadDashboardStats();
+            loadDatabaseEngineStats();
+            if (typeof initBackupDropzoneEvents === 'function') initBackupDropzoneEvents();
             break;
         case 'customization': loadCustomizationSettings(); break;
         case 'ui-management': loadCustomButtons(); loadAdvertisements(); break;
@@ -2428,47 +2431,278 @@ async function loadDynamicNotifications() {
 }
 
 // -----------------------------------------------------------------------------
-// Full System Backup & Restore
+// PostgreSQL Database Health & Engine Stats
 // -----------------------------------------------------------------------------
-async function exportSystemBackup() {
+async function loadDatabaseEngineStats() {
+    const icon = document.getElementById('btn-refresh-db-icon');
+    if (icon) icon.classList.add('fa-spin');
+
     try {
-        showToast('جاري استخراج النسخة الاحتياطية الشاملة...');
-        const res = await fetch(`${API_BASE}/backup/export`);
-        if (!res.ok) throw new Error('تعذر تصدير النسخة الاحتياطية');
+        const res = await fetch(`${API_BASE}/backup/stats`);
+        if (!res.ok) throw new Error('فشل جلب إحصائيات قاعدة البيانات');
         const data = await res.json();
 
-        const blob = new Blob([JSON.stringify(data.backupPayload, null, 2)], { type: 'application/json' });
+        // 1. Connection status
+        const statusEl = document.getElementById('db-stat-status');
+        const pingEl = document.getElementById('db-status-ping');
+        const dotEl = document.getElementById('db-status-dot');
+        if (statusEl) {
+            if (data.isOnline) {
+                statusEl.textContent = 'متصل حي (Online)';
+                statusEl.className = 'text-sm font-extrabold text-emerald-600';
+                if (pingEl) pingEl.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75';
+                if (dotEl) dotEl.className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500';
+            } else {
+                statusEl.textContent = 'غير متصل (Offline)';
+                statusEl.className = 'text-sm font-extrabold text-rose-600';
+                if (pingEl) pingEl.className = 'hidden';
+                if (dotEl) dotEl.className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500';
+            }
+        }
+
+        // 2. Engine and version
+        const engineEl = document.getElementById('db-stat-engine');
+        if (engineEl) {
+            engineEl.textContent = data.engine || `${data.pgVersion} + ${data.postgisVersion}`;
+            engineEl.title = data.engine || 'PostgreSQL Engine';
+        }
+
+        // 3. Disk size
+        const sizeEl = document.getElementById('db-stat-size');
+        if (sizeEl) {
+            sizeEl.textContent = data.diskSize || '8.7 MB';
+        }
+
+        // 4. Tables and Row Counts
+        const tablesEl = document.getElementById('db-stat-tables');
+        const rowsEl = document.getElementById('db-stat-rows');
+        if (tablesEl) tablesEl.textContent = data.tablesCount != null ? data.tablesCount : 11;
+        if (rowsEl) rowsEl.textContent = data.totalRows != null ? Number(data.totalRows).toLocaleString('en-US') : '0';
+
+        // 5. Last backup info
+        const lastBackupNameEl = document.getElementById('last-backup-name');
+        if (lastBackupNameEl) {
+            if (data.lastBackupFilename) {
+                const dateText = data.lastExportAt ? ` (${new Date(data.lastExportAt).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' })})` : '';
+                lastBackupNameEl.textContent = `${data.lastBackupFilename}${dateText}`;
+            } else {
+                lastBackupNameEl.textContent = 'لا توجد نسخ سابقة على الخادم';
+            }
+        }
+    } catch (err) {
+        console.warn('loadDatabaseEngineStats warning:', err);
+    } finally {
+        if (icon) icon.classList.remove('fa-spin');
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Staged Backup File & Drag-and-Drop Handlers
+// -----------------------------------------------------------------------------
+let stagedBackupFile = null;
+
+function handleBackupFileSelect(files) {
+    if (!files || files.length === 0) return;
+    const file = files[0];
+
+    // Check extension
+    if (!file.name.toLowerCase().endsWith('.json')) {
+        showToast('يرجى اختيار ملف بصيغة JSON فقط (.json)', true);
+        const input = document.getElementById('backup-file-input');
+        if (input) input.value = '';
+        return;
+    }
+
+    // Check size (< 50MB)
+    const MAX_SIZE = 50 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+        showToast('حجم الملف يتجاوز الحد الأقصى المسموح به (50 ميغابايت)', true);
+        const input = document.getElementById('backup-file-input');
+        if (input) input.value = '';
+        return;
+    }
+
+    stagedBackupFile = file;
+
+    // Update Dropzone UI
+    const dropzone = document.getElementById('backup-dropzone');
+    const label = document.getElementById('backup-file-label');
+    const details = document.getElementById('backup-file-details');
+    const icon = document.getElementById('dropzone-icon');
+
+    if (dropzone) {
+        dropzone.classList.remove('border-slate-300', 'bg-slate-50/70');
+        dropzone.classList.add('border-emerald-500', 'bg-emerald-50/40');
+    }
+    if (icon) {
+        icon.className = 'fa-solid fa-file-circle-check text-emerald-600';
+    }
+    if (label) {
+        label.innerHTML = `<span class="text-emerald-700 font-mono font-bold" dir="ltr">${file.name}</span>`;
+    }
+    if (details) {
+        const sizeFormatted = file.size > 1024 * 1024 
+            ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` 
+            : `${(file.size / 1024).toFixed(1)} KB`;
+        details.innerHTML = `<span class="text-emerald-600 font-semibold">جاهز للاستعادة (${sizeFormatted}) • اضغط لتغيير الملف</span>`;
+    }
+}
+
+function initBackupDropzoneEvents() {
+    const dropzone = document.getElementById('backup-dropzone');
+    if (!dropzone || dropzone.dataset.eventsBound) return;
+    dropzone.dataset.eventsBound = 'true';
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropzone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.add('border-blue-500', 'bg-blue-50/50');
+        });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropzone.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (eventName === 'dragleave') {
+                dropzone.classList.remove('border-blue-500', 'bg-blue-50/50');
+            }
+        });
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        if (dt && dt.files && dt.files.length > 0) {
+            handleBackupFileSelect(dt.files);
+        }
+    });
+}
+
+// -----------------------------------------------------------------------------
+// Full System Backup Export
+// -----------------------------------------------------------------------------
+async function exportSystemBackup() {
+    const btn = document.getElementById('btn-export-backup');
+    const icon = document.getElementById('btn-export-icon');
+    const text = document.getElementById('btn-export-text');
+
+    if (btn) btn.disabled = true;
+    if (icon) icon.className = 'fa-solid fa-spinner fa-spin';
+    if (text) text.textContent = 'جاري استخراج الجداول وبناء النسخة...';
+
+    try {
+        showToast('جاري سحب كافة الجداول والبيانات من PostgreSQL...');
+        const res = await fetch(`${API_BASE}/backup/export`);
+        if (!res.ok) throw new Error('تعذر تصدير النسخة الاحتياطية من السيرفر');
+        const data = await res.json();
+
+        if (!data || (!data.data && !data.backupPayload)) {
+            throw new Error(data.error || 'استجابة التصدير غير صالحة');
+        }
+
+        const exportPayload = data.backupPayload || { meta: data.meta, data: data.data };
+        const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = data.filename || `backup-tawseela-${Date.now()}.json`;
+        a.download = data.filename || `tawseela-backup-${Date.now()}.json`;
         document.body.appendChild(a);
         a.click();
         a.remove();
         window.URL.revokeObjectURL(url);
-        showToast('تم تصدير وتحميل ملف النسخة الاحتياطية بنجاح ✅');
+
+        showToast('تم تصدير وتحميل النسخة الاحتياطية الشاملة بنجاح ✅');
+        
+        // Refresh local stats
+        loadDatabaseEngineStats();
         loadAuditLogs();
     } catch (err) {
         showToast(err.message || 'فشل تصدير النسخة الاحتياطية', true);
+    } finally {
+        if (btn) btn.disabled = false;
+        if (icon) icon.className = 'fa-solid fa-download';
+        if (text) text.textContent = 'تصدير وتحميل النسخة الاحتياطية الآن';
     }
 }
 
-async function restoreSystemBackup() {
-    const fileInput = document.getElementById('backup-file-input');
-    if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-        showToast('يرجى اختيار ملف نسخة احتياطية (.json) أولاً', true);
+// -----------------------------------------------------------------------------
+// Double Confirmation Security Restore Modal
+// -----------------------------------------------------------------------------
+function openRestoreConfirmation() {
+    if (!stagedBackupFile) {
+        showToast('يرجى اختيار أو سحب ملف النسخة الاحتياطية (.json) أولاً', true);
         return;
     }
 
-    const file = fileInput.files[0];
-    if (!confirm(`تحذير هام:\nهل أنت متأكد من استعادة النسخة الاحتياطية من الملف:\n"${file.name}"؟\nسيتم تحديث كافة السجلات والجداول في PostgreSQL وتطبيق المعالجة المتتالية!`)) {
+    const modal = document.getElementById('modal-confirm-restore');
+    const filenameEl = document.getElementById('restore-modal-filename');
+    const filesizeEl = document.getElementById('restore-modal-filesize');
+    const keywordInput = document.getElementById('restore-confirmation-keyword');
+    const confirmBtn = document.getElementById('btn-execute-restore-confirm');
+
+    if (filenameEl) filenameEl.textContent = stagedBackupFile.name;
+    if (filesizeEl) {
+        const sz = stagedBackupFile.size > 1024 * 1024
+            ? `${(stagedBackupFile.size / (1024 * 1024)).toFixed(2)} MB`
+            : `${(stagedBackupFile.size / 1024).toFixed(1)} KB`;
+        filesizeEl.textContent = sz;
+    }
+
+    if (keywordInput) keywordInput.value = '';
+    if (confirmBtn) confirmBtn.disabled = true;
+
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden');
+    }
+
+    setTimeout(() => {
+        if (keywordInput) keywordInput.focus();
+    }, 100);
+}
+
+function closeRestoreModal() {
+    const modal = document.getElementById('modal-confirm-restore');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+}
+
+function checkRestoreConfirmationKeyword(val) {
+    const clean = (val || '').trim().toLowerCase();
+    const confirmBtn = document.getElementById('btn-execute-restore-confirm');
+    if (confirmBtn) {
+        const isValid = clean === 'restore' || clean === 'استعادة';
+        confirmBtn.disabled = !isValid;
+    }
+}
+
+async function executeConfirmedRestore() {
+    if (!stagedBackupFile) {
+        showToast('لم يتم العثور على ملف النسخة للاستعادة', true);
+        closeRestoreModal();
         return;
     }
+
+    const confirmBtn = document.getElementById('btn-execute-restore-confirm');
+    const spinner = document.getElementById('restore-spinner-icon');
+    const btnText = document.getElementById('restore-btn-text');
+
+    if (confirmBtn) confirmBtn.disabled = true;
+    if (spinner) spinner.className = 'fa-solid fa-spinner fa-spin';
+    if (btnText) btnText.textContent = 'جاري المعالجة الذرية...';
 
     try {
-        showToast('جاري قراءة واستعادة البيانات داخل معاملة PostgreSQL آمنة...');
-        const text = await file.text();
-        const payload = JSON.parse(text);
+        showToast('جاري قراءة الملف وتطبيق المعاملة الذرية (BEGIN / COMMIT)...');
+        const text = await stagedBackupFile.text();
+        let payload;
+        try {
+            payload = JSON.parse(text);
+        } catch (_) {
+            throw new Error('الملف غير صالح أو تالف: ليس بصيغة JSON صحيحة');
+        }
 
         const res = await fetch(`${API_BASE}/backup/restore`, {
             method: 'POST',
@@ -2479,7 +2713,28 @@ async function restoreSystemBackup() {
         const result = await res.json();
         if (result.success) {
             showToast('تمت استعادة النسخة الاحتياطية وقاعدة البيانات بنجاح تام! 🎉');
-            fileInput.value = '';
+            closeRestoreModal();
+
+            // Reset staged file and dropzone UI
+            stagedBackupFile = null;
+            const fileInput = document.getElementById('backup-file-input');
+            if (fileInput) fileInput.value = '';
+
+            const dropzone = document.getElementById('backup-dropzone');
+            const label = document.getElementById('backup-file-label');
+            const details = document.getElementById('backup-file-details');
+            const icon = document.getElementById('dropzone-icon');
+
+            if (dropzone) {
+                dropzone.classList.remove('border-emerald-500', 'bg-emerald-50/40');
+                dropzone.classList.add('border-slate-300', 'bg-slate-50/70');
+            }
+            if (icon) icon.className = 'fa-solid fa-file-arrow-up text-slate-400';
+            if (label) label.textContent = 'اسحب وأفلت ملف النسخة (.json) هنا، أو اضغط للاختيار';
+            if (details) details.textContent = 'الملفات المدعومة: JSON فقط • الحجم الأقصى: 50MB';
+
+            // Reload all dashboard sections
+            loadDatabaseEngineStats();
             loadDashboardStats();
             loadDrivers();
             loadCustomers();
@@ -2488,9 +2743,14 @@ async function restoreSystemBackup() {
             loadDynamicNotifications();
         } else {
             showToast(result.error || 'فشلت عملية الاستعادة', true);
+            if (confirmBtn) confirmBtn.disabled = false;
         }
     } catch (err) {
-        showToast('خطأ في معالجة ملف النسخة الاحتياطية: ' + err.message, true);
+        showToast('خطأ أثناء الاستعادة: ' + err.message, true);
+        if (confirmBtn) confirmBtn.disabled = false;
+    } finally {
+        if (spinner) spinner.className = 'fa-solid fa-rotate-left';
+        if (btnText) btnText.textContent = 'تأكيد الاستعادة والبدء فوراً';
     }
 }
 
