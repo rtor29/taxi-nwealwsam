@@ -193,6 +193,18 @@ function switchTab(tabName) {
         content.style.display = 'block';
     }
 
+    // Toggle full-canvas layout for fleet radar map
+    const mainArea = document.getElementById('main-content-area') || document.querySelector('main');
+    if (mainArea) {
+        if (tabName === 'fleet-map') {
+            mainArea.classList.remove('overflow-y-auto', 'p-4', 'md:p-8', 'pb-24', 'md:pb-8');
+            mainArea.classList.add('overflow-hidden', 'p-0');
+        } else {
+            mainArea.classList.remove('overflow-hidden', 'p-0');
+            mainArea.classList.add('overflow-y-auto', 'p-4', 'md:p-8', 'pb-24', 'md:pb-8');
+        }
+    }
+
     // Update Breadcrumbs
     const tabTitles = {
         'overview': 'نظرة عامة والمؤشرات',
@@ -255,8 +267,6 @@ function switchTab(tabName) {
             break;
         case 'fleet-map':
             initFleetMapbox();
-            loadFleetOperationsLog();
-            loadJoinRequests();
             break;
         case 'complaints':
             loadComplaints();
@@ -2563,13 +2573,13 @@ function ensureMapboxRTL() {
     }
 }
 
+// =============================================================================
+// 5.5 Full-Canvas Fleet Radar & Live Tracking Engine (Human-Crafted SaaS)
+// =============================================================================
 let fleetMap = null;
 let fleetMarkers = {};
-let drawnWaypoints = [];
-let drawnRouteCoordinates = [];
-let drawnWaypointMarkers = [];
-let bookingMarkers = [];
-let registeredRouteMarkers = [];
+let radarDriversList = [];
+let radarCurrentFilter = 'all';
 let fleetPollingInterval = null;
 
 function initFleetMapbox() {
@@ -2587,549 +2597,374 @@ function initFleetMapbox() {
     if (!fleetMap) {
         fleetMap = new mapboxgl.Map({
             container: 'mapbox-fleet-map',
-            style: 'mapbox://styles/mapbox/navigation-night-v1', // High-contrast navigation style
+            style: 'mapbox://styles/mapbox/streets-v12', // Clean, crisp vector map with muted roads
             center: [44.3168, 31.9961], // Najaf Center [lon, lat]
-            zoom: 13,
-            pitch: 35
+            zoom: 13.5,
+            pitch: 0,
+            attributionControl: false
         });
 
-        fleetMap.addControl(new mapboxgl.NavigationControl(), 'top-left');
+        // Add subtle navigation controls to bottom-left
+        fleetMap.addControl(new mapboxgl.NavigationControl({ showCompass: true }), 'bottom-left');
 
         fleetMap.on('load', () => {
-            // Source for drawn route line
-            fleetMap.addSource('admin-drawn-route', {
-                type: 'geojson',
-                data: {
-                    type: 'Feature',
-                    properties: {},
-                    geometry: {
-                        type: 'LineString',
-                        coordinates: []
-                    }
-                }
-            });
-
-            // Glowing casing for route
-            fleetMap.addLayer({
-                id: 'admin-drawn-route-casing',
-                type: 'line',
-                source: 'admin-drawn-route',
-                layout: {
-                    'line-join': 'round',
-                    'line-cap': 'round'
-                },
-                paint: {
-                    'line-color': '#1e3a8a',
-                    'line-width': 8,
-                    'line-opacity': 0.6
-                }
-            });
-
-            // Primary route line
-            fleetMap.addLayer({
-                id: 'admin-drawn-route-line',
-                type: 'line',
-                source: 'admin-drawn-route',
-                layout: {
-                    'line-join': 'round',
-                    'line-cap': 'round'
-                },
-                paint: {
-                    'line-color': '#f59e0b',
-                    'line-width': 5,
-                    'line-opacity': 0.95
-                }
-            });
-
+            setTimeout(() => { if (fleetMap) fleetMap.resize(); }, 50);
             refreshFleetLocations();
         });
-
-        // Click map to drop interactive waypoints
-        fleetMap.on('click', (e) => {
-            const coords = [e.lngLat.lng, e.lngLat.lat];
-            addDrawnWaypoint(coords);
-        });
     } else {
-        setTimeout(() => fleetMap.resize(), 100);
+        setTimeout(() => { if (fleetMap) fleetMap.resize(); }, 100);
         refreshFleetLocations();
     }
 
+    // Set polling interval every 3 seconds for real-time tracking
     if (!fleetPollingInterval) {
         fleetPollingInterval = setInterval(() => {
             const fleetTab = document.getElementById('tab-fleet-map');
             if (fleetTab && !fleetTab.classList.contains('hidden')) {
                 refreshFleetLocations();
             }
-        }, 8000);
+        }, 3000);
     }
+}
+
+function isDriverOnline(driver) {
+    if (!driver) return false;
+    const s = String(driver.status || '').toLowerCase();
+    return s === 'online' || s === 'on_trip' || s === 'available' || s === 'active' || s === 'in_ride';
 }
 
 async function refreshFleetLocations() {
     try {
-        const res = await fetch('/api/admin/fleet/live');
-        if (!res.ok) return;
-        const fleet = await res.json();
-
-        let activeCount = 0;
-        let onTripCount = 0;
-
-        fleet.forEach(driver => {
-            if (driver.status !== 'offline') activeCount++;
-            if (driver.status === 'on_trip') onTripCount++;
-
-            updateFleetDriverMarker(driver);
-        });
-
-        const activeEl = document.getElementById('fleet-active-count');
-        const onTripEl = document.getElementById('fleet-ontrip-count');
-        if (activeEl) activeEl.innerText = activeCount;
-        if (onTripEl) onTripEl.innerText = onTripCount;
-
-        refreshRoutesAndBookingsOnMap();
-
-    } catch (err) {
-        console.warn('Error refreshing fleet live coordinates:', err);
-    }
-}
-
-async function refreshRoutesAndBookingsOnMap() {
-    if (!fleetMap) return;
-    try {
-        const [routesRes, bookingsRes, customersRes, permRoutesRes] = await Promise.all([
-            fetch('/api/admin/routes').then(r => r.json()).catch(() => []),
-            fetch('/api/bookings').then(r => r.json()).catch(() => []),
-            fetch('/api/admin/customers').then(r => r.json()).catch(() => ({ customers: [] })),
-            fetch('/api/routes/permanent').then(r => r.json()).catch(() => ({ routes: [] }))
+        const [liveRes, allDriversRes] = await Promise.all([
+            fetch('/api/admin/fleet/live').then(r => r.ok ? r.json() : []).catch(() => []),
+            fetch('/api/admin/drivers').then(r => r.ok ? r.json() : { drivers: [] }).catch(() => ({ drivers: [] }))
         ]);
 
-        const routes = Array.isArray(routesRes) ? routesRes : (routesRes.routes || []);
-        const bookings = Array.isArray(bookingsRes) ? bookingsRes : (bookingsRes.bookings || []);
-        const customers = Array.isArray(customersRes) ? customersRes : (customersRes.customers || []);
+        const liveList = Array.isArray(liveRes) ? liveRes : [];
+        const allDrivers = allDriversRes.drivers || [];
 
-        // Clear existing booking/passenger markers
-        bookingMarkers.forEach(m => m.remove());
-        bookingMarkers = [];
+        // Build unified radar driver map
+        const unifiedMap = new Map();
 
-        let totalPassengersOnMap = 0;
-
-        // 1. Plot registered passengers on map
-        customers.slice(0, 30).forEach((c, idx) => {
-            totalPassengersOnMap++;
-            const el = document.createElement('div');
-            el.className = 'customer-map-marker cursor-pointer flex flex-col items-center';
-            el.innerHTML = `
-                <div style="background-color:#0f172a; border:1.5px solid #6366f1; color:#c7d2fe; padding:2px 7px; border-radius:9999px; font-size:10px; font-weight:bold; white-space:nowrap; box-shadow:0 3px 6px rgba(0,0,0,0.4); margin-bottom:2px;">
-                    👤 ${c.fullName || 'راكب'}
-                </div>
-                <div style="background-color:#4f46e5; color:white; width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid white; box-shadow:0 0 10px rgba(79,70,229,0.7); font-size:13px;">
-                    <i class="fa-solid fa-user"></i>
-                </div>
-            `;
-
-            const baseLat = 31.9961;
-            const baseLon = 44.3168;
-            const lat = c.permanentLat || c.pickupLat || (baseLat + ((idx % 5 - 2) * 0.005) + (Math.sin(idx) * 0.004));
-            const lon = c.permanentLon || c.pickupLon || (baseLon + (((idx + 1) % 5 - 2) * 0.005) + (Math.cos(idx) * 0.004));
-
-            const popup = new mapboxgl.Popup({ offset: 20 }).setHTML(`
-                <div style="direction:rtl; font-family:Cairo, sans-serif; font-size:11px; padding:4px;">
-                    <strong style="color:#4f46e5; font-size:13px;">👤 راكب مثبت المسار</strong><br/>
-                    <b>الاسم:</b> ${c.fullName || 'راكب'}<br/>
-                    <b>الهاتف:</b> ${c.phoneNumber || 'غير محدد'}<br/>
-                    <b>الانطلاق الدائمي:</b> ${c.permanentLocationName || c.address || 'النجف الأشرف'}<br/>
-                    <b>الوصول الدائمي:</b> ${c.permanentDropoffName || c.route || 'مركز النجف'}<br/>
-                    <b>الحالة:</b> <span style="color:#059669; font-weight:bold;">${c.isBlocked ? 'محظور' : 'نشط'}</span>
-                </div>
-            `);
-
-            const marker = new mapboxgl.Marker(el)
-                .setLngLat([lon, lat])
-                .setPopup(popup)
-                .addTo(fleetMap);
-
-            bookingMarkers.push(marker);
-        });
-
-        // 2. Plot live bookings with passenger pickup pins
-        bookings.slice(0, 20).forEach(b => {
-            totalPassengersOnMap++;
-            const el = document.createElement('div');
-            el.className = 'booking-passenger-marker cursor-pointer flex flex-col items-center';
-            el.innerHTML = `
-                <div style="background-color:#0f172a; border:2px solid #3b82f6; color:#93c5fd; padding:1px 6px; border-radius:9999px; font-size:9px; font-weight:bold; white-space:nowrap; box-shadow:0 2px 4px rgba(0,0,0,0.5); margin-bottom:2px;">
-                    🚖 طلب: ${b.customerName || 'حجز راكب'}
-                </div>
-                <div style="background-color:#2563eb; color:white; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid white; box-shadow:0 0 8px rgba(37,99,235,0.7); font-size:12px;">
-                    📍
-                </div>
-            `;
-
-            const lat = b.pickupLat || (31.9961 + (Math.random() * 0.02 - 0.01));
-            const lon = b.pickupLon || (44.3168 + (Math.random() * 0.02 - 0.01));
-
-            const popup = new mapboxgl.Popup({ offset: 20 }).setHTML(`
-                <div style="direction:rtl; font-family:Cairo, sans-serif; font-size:11px; padding:4px;">
-                    <strong style="color:#2563eb; font-size:12px;">حجز راكب مباشر</strong><br/>
-                    <b>الاسم:</b> ${b.customerName || 'راكب'}<br/>
-                    <b>الهاتف:</b> ${b.customerPhone || 'غير محدد'}<br/>
-                    <b>نقطة الركوب:</b> ${b.pickupLocation || 'النجف'}<br/>
-                    <b>الوجهة:</b> ${b.dropoffLocation || 'جامعة الكوفة'}<br/>
-                    <b>الحالة:</b> <span style="color:#059669; font-weight:bold;">${b.status || 'مؤكد'}</span>
-                </div>
-            `);
-
-            const marker = new mapboxgl.Marker(el)
-                .setLngLat([lon, lat])
-                .setPopup(popup)
-                .addTo(fleetMap);
-
-            bookingMarkers.push(marker);
-        });
-
-        // 3. Plot Permanent Lines on Mapbox with Status-Based Colors
-        try {
-            const permRoutes = Array.isArray(permRoutesRes) ? permRoutesRes : (permRoutesRes.routes || []);
-            const permFeatures = [];
-
-            permRoutes.forEach(pr => {
-                if (!pr.startLat || !pr.startLon || !pr.endLat || !pr.endLon) return;
-                let coords = [];
-                if (pr.geometry && pr.geometry.coordinates && Array.isArray(pr.geometry.coordinates)) {
-                    coords = pr.geometry.coordinates;
-                } else {
-                    coords = [[pr.startLon, pr.startLat], [pr.endLon, pr.endLat]];
-                }
-
-                permFeatures.push({
-                    type: 'Feature',
-                    properties: {
-                        id: pr.id,
-                        customerName: pr.customerName || 'راكب خط دائم',
-                        startName: pr.startName || 'الانطلاق',
-                        endName: pr.endName || 'الوصول',
-                        status: pr.status || 'Active',
-                        days: Array.isArray(pr.days) ? pr.days.join('، ') : (pr.days || 'يومي'),
-                        departureTime: pr.departureTime || '07:30 ص',
-                        fare: pr.fare || 3000
-                    },
-                    geometry: {
-                        type: 'LineString',
-                        coordinates: coords
-                    }
-                });
-
-                // Pickup Pin
-                const pEl = document.createElement('div');
-                const stColor = pr.status === 'Completed' ? '#3B82F6' : (pr.status === 'Pending' || pr.status === 'Paused' ? '#F59E0B' : '#10B981');
-                pEl.innerHTML = `<div style="background:${stColor};color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4);font-size:11px;">🔄</div>`;
-                const pPopup = new mapboxgl.Popup({ offset: 15 }).setHTML(`
-                    <div style="direction:rtl;font-family:Cairo,sans-serif;font-size:11px;padding:4px;">
-                        <b style="color:${stColor}">🔄 خط دائم: ${pr.customerName}</b><br/>
-                        <b>الانطلاق:</b> ${pr.startName}<br/>
-                        <b>الوصول:</b> ${pr.endName}<br/>
-                        <b>الأيام:</b> ${Array.isArray(pr.days) ? pr.days.join('، ') : pr.days}<br/>
-                        <b>الوقت:</b> ${pr.departureTime}<br/>
-                        <b>الحالة:</b> <span style="font-weight:bold;color:${stColor}">${pr.status === 'Active' ? 'نشط' : (pr.status === 'Completed' ? 'مكتمل' : 'معلق')}</span>
-                    </div>
-                `);
-                const pMarker = new mapboxgl.Marker(pEl).setLngLat([pr.startLon, pr.startLat]).setPopup(pPopup).addTo(fleetMap);
-                bookingMarkers.push(pMarker);
+        // 1. Add all approved drivers from registry
+        allDrivers.forEach(d => {
+            const id = d.driverId || d.id;
+            if (!id) return;
+            const vMake = d.vehicleMake || '';
+            const vModel = d.vehicleModel || '';
+            const vPlate = d.vehiclePlate || 'النجف';
+            unifiedMap.set(id, {
+                driverId: id,
+                driverName: d.fullName || 'كابتن توصيله',
+                phone: d.phoneNumber || '07800000000',
+                carModel: `${vMake} ${vModel}`.trim() || 'مركبة كابتن',
+                plateNumber: vPlate,
+                latitude: d.latitude || 31.9961,
+                longitude: d.longitude || 44.3168,
+                heading: d.heading || 0,
+                status: 'offline', // default offline until detected in live
+                serviceType: d.serviceType || 'Both',
+                workMode: d.workMode || 'مشوار قصير',
+                speedKmh: 0,
+                rating: d.ratingAverage || 5.0
             });
+        });
 
-            if (fleetMap.getSource('admin-perm-routes-source')) {
-                fleetMap.getSource('admin-perm-routes-source').setData({
-                    type: 'FeatureCollection',
-                    features: permFeatures
-                });
-            } else {
-                fleetMap.addSource('admin-perm-routes-source', {
-                    type: 'geojson',
-                    data: {
-                        type: 'FeatureCollection',
-                        features: permFeatures
-                    }
-                });
+        // 2. Overlay live coordinates & active statuses
+        liveList.forEach(ld => {
+            const id = ld.driverId;
+            if (!id) return;
+            const existing = unifiedMap.get(id) || {};
+            unifiedMap.set(id, {
+                ...existing,
+                ...ld,
+                driverId: id,
+                driverName: ld.driverName || ld.fullName || existing.driverName || 'كابتن توصيله',
+                phone: ld.phone || ld.phoneNumber || existing.phone || '07800000000',
+                carModel: ld.carModel || ld.vehicleInfo || existing.carModel || 'مركبة كابتن',
+                plateNumber: ld.plateNumber || existing.plateNumber || 'النجف',
+                latitude: ld.latitude,
+                longitude: ld.longitude,
+                heading: ld.heading !== undefined ? ld.heading : (existing.heading || 0),
+                status: ld.status || 'Online',
+                serviceType: ld.serviceType || existing.serviceType || 'Both',
+                workMode: ld.work_mode || ld.workMode || existing.workMode || 'مشوار قصير',
+                speedKmh: ld.speedKmh || 0
+            });
+        });
 
-                // Casing
-                fleetMap.addLayer({
-                    id: 'admin-perm-routes-casing',
-                    type: 'line',
-                    source: 'admin-perm-routes-source',
-                    layout: { 'line-join': 'round', 'line-cap': 'round' },
-                    paint: { 'line-color': '#0f172a', 'line-width': 6, 'line-opacity': 0.7 }
-                });
+        radarDriversList = Array.from(unifiedMap.values());
 
-                // Colored line by status: Active = Green (#10B981), Pending/Paused = Amber (#F59E0B), Completed = Blue (#3B82F6)
-                fleetMap.addLayer({
-                    id: 'admin-perm-routes-lines',
-                    type: 'line',
-                    source: 'admin-perm-routes-source',
-                    layout: { 'line-join': 'round', 'line-cap': 'round' },
-                    paint: {
-                        'line-width': 4,
-                        'line-opacity': 0.9,
-                        'line-color': [
-                            'match',
-                            ['get', 'status'],
-                            'Active', '#10B981',
-                            'Pending', '#F59E0B',
-                            'Paused', '#F59E0B',
-                            'Completed', '#3B82F6',
-                            '#10B981'
-                        ]
-                    }
-                });
-            }
-        } catch (_) {}
+        // Update live counter badge
+        const onlineCount = radarDriversList.filter(d => isDriverOnline(d)).length;
+        const countBadge = document.getElementById('radar-drivers-count');
+        if (countBadge) {
+            countBadge.innerText = `${onlineCount} متصل (${radarDriversList.length} كلي)`;
+        }
 
-        const onTripEl = document.getElementById('fleet-ontrip-count');
-        if (onTripEl) onTripEl.innerText = totalPassengersOnMap;
-
+        renderRadarMarkers();
     } catch (err) {
-        console.warn('Error refreshing routes and bookings on map:', err);
+        console.warn('Error refreshing radar fleet locations:', err);
     }
 }
 
-function updateFleetDriverMarker(driver) {
+function renderRadarMarkers() {
     if (!fleetMap) return;
 
-    const driverId = driver.driverId;
-    const lngLat = [driver.longitude, driver.latitude];
+    const query = (document.getElementById('fleet-radar-search-input')?.value || '').trim().toLowerCase();
+    const filter = radarCurrentFilter;
 
-    const driverName = driver.driverName || driver.fullName || 'كابتن توصيله';
-    const driverPhone = driver.phone || driver.phoneNumber || '07800000000';
-    const carModel = driver.carModel || driver.vehicleInfo || 'تويوتا كورولا';
-    const plateNumber = driver.plateNumber || 'النجف';
-
-    if (fleetMarkers[driverId]) {
-        // Move existing marker
-        fleetMarkers[driverId].setLngLat(lngLat);
-        const el = fleetMarkers[driverId].getElement();
-        const iconCar = el.querySelector('.marker-car-icon');
-        if (iconCar) {
-            iconCar.style.transform = `rotate(${driver.heading || 0}deg)`;
+    // Filter drivers according to active filter pill and search query
+    const visibleDrivers = radarDriversList.filter(d => {
+        // Tab Filter
+        if (filter === 'taxi_available') {
+            if (!isDriverOnline(d) || d.status === 'on_trip' || d.status === 'in_ride') return false;
+            const wm = String(d.workMode || d.serviceType || '');
+            if (wm === 'خط دائمي' || wm === 'PermanentLine') return false;
+        } else if (filter === 'permanent') {
+            const wm = String(d.workMode || d.serviceType || '');
+            const isPerm = wm === 'خط دائمي' || wm === 'Both' || wm === 'PermanentLine' || (d.route && d.route.length > 0);
+            if (!isPerm) return false;
+        } else if (filter === 'on_trip') {
+            if (d.status !== 'on_trip' && d.status !== 'in_ride') return false;
+        } else if (filter === 'offline') {
+            if (isDriverOnline(d)) return false;
         }
-        const labelEl = el.querySelector('.fleet-driver-name');
-        if (labelEl) labelEl.innerText = driverName;
-    } else {
-        // Create custom HTML marker element
-        const el = document.createElement('div');
-        el.className = 'fleet-marker-container cursor-pointer';
-        el.style.display = 'flex';
-        el.style.flexDirection = 'column';
-        el.style.alignItems = 'center';
 
-        const statusColor = driver.status === 'on_trip' ? '#3b82f6' : '#10b981';
+        // Search Query Filter
+        if (query) {
+            const name = String(d.driverName || '').toLowerCase();
+            const phone = String(d.phone || '').toLowerCase();
+            const plate = String(d.plateNumber || '').toLowerCase();
+            const car = String(d.carModel || '').toLowerCase();
+            if (!name.includes(query) && !phone.includes(query) && !plate.includes(query) && !car.includes(query)) {
+                return false;
+            }
+        }
 
-        el.innerHTML = `
-            <div class="fleet-driver-name" style="background-color: #0f172a; border: 2px solid ${statusColor}; color: white; padding: 2px 7px; border-radius: 9999px; font-size: 10px; font-weight: bold; white-space: nowrap; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.4); margin-bottom: 2px;">
-                ${driverName}
-            </div>
-            <div class="marker-car-icon" style="background-color: ${statusColor}; color: white; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px ${statusColor}; transform: rotate(${driver.heading || 0}deg); transition: transform 0.4s ease;">
-                <i class="fa-solid fa-taxi" style="font-size: 15px;"></i>
+        return true;
+    });
+
+    const activeIds = new Set(visibleDrivers.map(d => d.driverId));
+
+    // Remove markers that are no longer visible
+    Object.keys(fleetMarkers).forEach(id => {
+        if (!activeIds.has(id)) {
+            fleetMarkers[id].remove();
+            delete fleetMarkers[id];
+        }
+    });
+
+    // Add or update markers for visible drivers
+    visibleDrivers.forEach(driver => {
+        const id = driver.driverId;
+        const lat = parseFloat(driver.latitude);
+        const lon = parseFloat(driver.longitude);
+        if (isNaN(lat) || isNaN(lon)) return;
+
+        const lngLat = [lon, lat];
+        const heading = Number(driver.heading) || 0;
+
+        // Visual theme based on status
+        let accentColor = '#059669'; // Emerald (Taxi Available)
+        let statusText = 'متاح للطلب';
+        let statusPillClass = 'bg-emerald-50 text-emerald-700 border border-emerald-200';
+
+        if (driver.status === 'on_trip' || driver.status === 'in_ride') {
+            accentColor = '#2563eb'; // Blue (In Trip)
+            statusText = 'في رحلة 🟢';
+            statusPillClass = 'bg-blue-50 text-blue-700 border border-blue-200';
+        } else if (driver.workMode === 'خط دائمي' || driver.serviceType === 'PermanentLine') {
+            accentColor = '#d97706'; // Amber (Permanent Line)
+            statusText = 'خط دائمي 🚐';
+            statusPillClass = 'bg-amber-50 text-amber-700 border border-amber-200';
+        } else if (!isDriverOnline(driver)) {
+            accentColor = '#94a3b8'; // Slate (Offline)
+            statusText = 'غير متصل ⚪';
+            statusPillClass = 'bg-slate-100 text-slate-600 border border-slate-200';
+        }
+
+        // Clean Minimal Human-Crafted Popup
+        const popupHtml = `
+            <div class="p-3 text-right font-sans" dir="rtl" style="min-width: 195px;">
+                <div class="flex items-center justify-between gap-3 pb-2 border-b border-slate-100">
+                    <div>
+                        <h4 class="font-bold text-xs text-slate-900 leading-tight">${escapeHtml(driver.driverName)}</h4>
+                        <p class="text-[11px] text-slate-500 mt-0.5">${escapeHtml(driver.carModel)} • <span class="font-mono">${escapeHtml(driver.plateNumber)}</span></p>
+                    </div>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${statusPillClass}">
+                        ${statusText}
+                    </span>
+                </div>
+                <div class="pt-2 flex items-center justify-between text-xs">
+                    <a href="tel:${escapeHtml(driver.phone)}" class="inline-flex items-center gap-1.5 font-mono text-[11px] font-bold text-emerald-600 hover:text-emerald-700 hover:underline" dir="ltr">
+                        <i class="fa-solid fa-phone text-[9px]"></i>
+                        <span>${escapeHtml(driver.phone)}</span>
+                    </a>
+                    ${driver.speedKmh ? `<span class="text-[10px] text-slate-400 font-mono">${Math.round(driver.speedKmh)} كم/س</span>` : ''}
+                </div>
             </div>
         `;
 
-        const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
-            <div style="direction: rtl; font-family: Cairo, sans-serif; padding: 4px;">
-                <h4 style="font-weight: 800; font-size: 13px; margin: 0 0 4px 0; color: #0f172a;">🚖 ${driverName}</h4>
-                <div style="font-size: 11px; color: #475569; margin-bottom: 2px;">📞 ${driverPhone}</div>
-                <div style="font-size: 11px; color: #475569; margin-bottom: 2px;">🚗 ${carModel} (${plateNumber})</div>
-                <div style="font-size: 11px; color: #059669; font-weight: bold;">⚡ السرعة: ${Math.round(driver.speedKmh || 30)} كم/ساعة</div>
-                <div style="font-size: 10px; color: #94a3b8; margin-top: 4px;">الحالة: ${driver.status === 'on_trip' ? 'مشوار نشط' : 'متاح للطلب'}</div>
-            </div>
-        `);
-
-        const marker = new mapboxgl.Marker(el)
-            .setLngLat(lngLat)
-            .setPopup(popup)
-            .addTo(fleetMap);
-
-        fleetMarkers[driverId] = marker;
-    }
-}
-
-function addDrawnWaypoint(lngLat) {
-    if (drawnWaypoints.length >= 25) {
-        showToast('الحد الأقصى لنقاط المسار هو 25 نقطة', true);
-        return;
-    }
-
-    drawnWaypoints.push(lngLat);
-
-    const ptIndex = drawnWaypoints.length;
-    const isStart = ptIndex === 1;
-
-    // Create marker on map
-    const el = document.createElement('div');
-    el.style.width = '24px';
-    el.style.height = '24px';
-    el.style.borderRadius = '50%';
-    el.style.backgroundColor = isStart ? '#10b981' : '#f59e0b';
-    el.style.border = '2px solid white';
-    el.style.color = 'white';
-    el.style.display = 'flex';
-    el.style.alignItems = 'center';
-    el.style.justifyContent = 'center';
-    el.style.fontSize = '11px';
-    el.style.fontWeight = 'bold';
-    el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
-    el.innerText = ptIndex.toString();
-
-    const marker = new mapboxgl.Marker(el)
-        .setLngLat(lngLat)
-        .addTo(fleetMap);
-
-    drawnWaypointMarkers.push(marker);
-
-    updateDrawnRouteUI();
-
-    if (drawnWaypoints.length >= 2) {
-        calculateDrawnRouteWithMapbox();
-    }
-}
-
-async function calculateDrawnRouteWithMapbox() {
-    if (drawnWaypoints.length < 2) {
-        showToast('يرجى النقر على الخريطة لتحديد نقطتين على الأقل (انطلاق ووجهة)', true);
-        return;
-    }
-
-    // Format coordinates: lon,lat;lon,lat...
-    const coordsString = drawnWaypoints.map(pt => `${pt[0].toFixed(6)},${pt[1].toFixed(6)}`).join(';');
-    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordsString}?geometries=geojson&overview=full&steps=true&access_token=${MAPBOX_PUBLIC_TOKEN}`;
-
-    try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`Mapbox API status: ${res.status}`);
-        const data = await res.json();
-
-        if (data.routes && data.routes.length > 0) {
-            const primaryRoute = data.routes[0];
-            drawnRouteCoordinates = primaryRoute.geometry.coordinates;
-
-            const distanceKm = (primaryRoute.distance / 1000).toFixed(1);
-            const durationMin = Math.ceil(primaryRoute.duration / 60);
-
-            // Update UI
-            const distBadge = document.getElementById('drawn-distance-badge');
-            const durBadge = document.getElementById('drawn-duration-badge');
-            const routeDistRibbon = document.getElementById('fleet-route-distance');
-
-            if (distBadge) distBadge.innerText = `${distanceKm} كم`;
-            if (durBadge) durBadge.innerText = `${durationMin} دقيقة`;
-            if (routeDistRibbon) routeDistRibbon.innerText = `${distanceKm} كم`;
-
-            // Update Map Source
-            if (fleetMap && fleetMap.getSource('admin-drawn-route')) {
-                fleetMap.getSource('admin-drawn-route').setData({
-                    type: 'Feature',
-                    properties: {},
-                    geometry: {
-                        type: 'LineString',
-                        coordinates: drawnRouteCoordinates
-                    }
-                });
+        if (fleetMarkers[id]) {
+            // Update existing marker smoothly
+            fleetMarkers[id].setLngLat(lngLat);
+            const el = fleetMarkers[id].getElement();
+            const iconWrap = el.querySelector('.radar-car-icon-wrap');
+            if (iconWrap) {
+                iconWrap.style.transform = `rotate(${heading}deg)`;
+                iconWrap.style.backgroundColor = accentColor;
             }
-            showToast(`تم حساب وتوليد المسار: ${distanceKm} كم (${durationMin} دقيقة)`);
-        }
-    } catch (err) {
-        console.warn('Mapbox Directions fallback to straight polyline:', err);
-        drawnRouteCoordinates = drawnWaypoints;
-        if (fleetMap && fleetMap.getSource('admin-drawn-route')) {
-            fleetMap.getSource('admin-drawn-route').setData({
-                type: 'Feature',
-                properties: {},
-                geometry: {
-                    type: 'LineString',
-                    coordinates: drawnWaypoints
-                }
-            });
-        }
-    }
-}
+            const labelEl = el.querySelector('.radar-driver-label');
+            if (labelEl) labelEl.innerText = driver.driverName;
 
-async function broadcastDrawnRoute() {
-    if (drawnRouteCoordinates.length < 2) {
-        showToast('يرجى تحديد مسار صالح قبل التعميم', true);
-        return;
-    }
-
-    const titleInput = document.getElementById('fleet-route-title');
-    const driverSelect = document.getElementById('fleet-target-driver');
-
-    const routeName = titleInput ? titleInput.value.trim() : 'مسار طارئ معتمد';
-    const targetDriver = driverSelect ? driverSelect.value : 'all';
-
-    const distText = (document.getElementById('drawn-distance-badge') || {}).innerText || '0';
-    const distMeters = parseFloat(distText) * 1000;
-
-    const payload = {
-        routeId: `rt-admin-${Date.now()}`,
-        driverId: targetDriver,
-        routeName: routeName || 'مسار غرفة العمليات',
-        coordinates: drawnRouteCoordinates,
-        waypoints: drawnWaypoints,
-        totalDistanceMeters: distMeters,
-        estimatedDurationSeconds: Math.round(distMeters / 10)
-    };
-
-    try {
-        const res = await fetch('/api/admin/routes/broadcast', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (res.ok) {
-            showToast('🚀 تم تعميم وبث المسار بنجاح لجميع أجهزة السائقين والركاب!');
+            const existingPopup = fleetMarkers[id].getPopup();
+            if (existingPopup) {
+                existingPopup.setHTML(popupHtml);
+            }
         } else {
-            showToast('حدث خطأ أثناء تعميم المسار', true);
+            // Create fresh minimal SVG car marker
+            const el = document.createElement('div');
+            el.className = 'radar-car-marker cursor-pointer flex flex-col items-center group transition-transform duration-150';
+            el.innerHTML = `
+                <div class="radar-car-icon-wrap w-8 h-8 rounded-full flex items-center justify-center shadow-xs border-2 border-white transition-all duration-300"
+                     style="background-color: ${accentColor}; transform: rotate(${heading}deg);">
+                    <svg viewBox="0 0 32 32" width="20" height="20" fill="white">
+                        <rect x="9" y="4" width="14" height="24" rx="4" ry="4"/>
+                        <path d="M11 9 h10 v4 c0 1 -1 2 -2 2 h-6 c-1 0 -2 -1 -2 -2 z" fill="rgba(255,255,255,0.9)"/>
+                        <path d="M12 21 h8 v2 c0 1 -1 1.5 -1.5 1.5 h-5 c-.5 0-1.5 -.5 -1.5 -1.5 z" fill="rgba(255,255,255,0.8)"/>
+                        <rect x="10.5" y="14" width="11" height="5" rx="1" fill="rgba(255,255,255,0.4)"/>
+                        <rect x="10" y="3.5" width="2.5" height="1.5" rx="0.5" fill="#fef08a"/>
+                        <rect x="19.5" y="3.5" width="2.5" height="1.5" rx="0.5" fill="#fef08a"/>
+                    </svg>
+                </div>
+                <div class="radar-driver-label bg-white/95 text-slate-800 text-[10px] font-bold px-2 py-0.5 rounded-md border border-slate-200/80 shadow-2xs whitespace-nowrap mt-1 pointer-events-none">
+                    ${escapeHtml(driver.driverName)}
+                </div>
+            `;
+
+            const popup = new mapboxgl.Popup({ offset: 18, closeButton: true, focusAfterOpen: false })
+                .setHTML(popupHtml);
+
+            const marker = new mapboxgl.Marker({ element: el })
+                .setLngLat(lngLat)
+                .setPopup(popup)
+                .addTo(fleetMap);
+
+            fleetMarkers[id] = marker;
         }
-    } catch (err) {
-        showToast('تعذر الاتصال بالخادم لتعميم المسار', true);
-    }
+    });
 }
 
-function clearDrawnRoute() {
-    drawnWaypoints = [];
-    drawnRouteCoordinates = [];
+function setRadarFilter(filter) {
+    radarCurrentFilter = filter;
 
-    // Remove waypoint markers
-    drawnWaypointMarkers.forEach(m => m.remove());
-    drawnWaypointMarkers = [];
+    const pills = document.querySelectorAll('.radar-pill');
+    pills.forEach(p => {
+        p.classList.remove('bg-[#1B4965]/10', 'text-[#1B4965]', 'border-[#1B4965]/30', 'shadow-2xs', 'active');
+        p.classList.add('bg-slate-100', 'text-slate-600', 'border-slate-200/50');
+    });
 
-    // Clear line from map
-    if (fleetMap && fleetMap.getSource('admin-drawn-route')) {
-        fleetMap.getSource('admin-drawn-route').setData({
-            type: 'Feature',
-            properties: {},
-            geometry: {
-                type: 'LineString',
-                coordinates: []
-            }
-        });
+    const activePill = document.getElementById({
+        'all': 'radar-pill-all',
+        'taxi_available': 'radar-pill-taxi',
+        'permanent': 'radar-pill-perm',
+        'on_trip': 'radar-pill-trip',
+        'offline': 'radar-pill-offline'
+    }[filter]);
+
+    if (activePill) {
+        activePill.classList.remove('bg-slate-100', 'text-slate-600', 'border-slate-200/50');
+        activePill.classList.add('bg-[#1B4965]/10', 'text-[#1B4965]', 'border-[#1B4965]/30', 'shadow-2xs', 'active');
     }
 
-    updateDrawnRouteUI();
-    showToast('تم مسح نقاط المسار');
+    renderRadarMarkers();
 }
 
-function updateDrawnRouteUI() {
-    const ptsCount = drawnWaypoints.length;
-    const badge = document.getElementById('drawn-points-badge');
-    const ribbonPts = document.getElementById('fleet-waypoints-count');
-    const distBadge = document.getElementById('drawn-distance-badge');
-    const durBadge = document.getElementById('drawn-duration-badge');
-    const routeDistRibbon = document.getElementById('fleet-route-distance');
+function handleRadarSearchInput(val) {
+    const clearBtn = document.getElementById('btn-clear-radar-search');
+    const resultsContainer = document.getElementById('radar-search-results');
+    const q = (val || '').trim().toLowerCase();
 
-    if (badge) badge.innerText = ptsCount.toString();
-    if (ribbonPts) ribbonPts.innerText = ptsCount.toString();
+    if (clearBtn) {
+        if (q) clearBtn.classList.remove('hidden');
+        else clearBtn.classList.add('hidden');
+    }
 
-    if (ptsCount === 0) {
-        if (distBadge) distBadge.innerText = '0.0 كم';
-        if (durBadge) durBadge.innerText = '0 دقيقة';
-        if (routeDistRibbon) routeDistRibbon.innerText = '0 كم';
+    if (!q) {
+        if (resultsContainer) resultsContainer.classList.add('hidden');
+        renderRadarMarkers();
+        return;
+    }
+
+    // Filter matching drivers
+    const matches = radarDriversList.filter(d => {
+        const name = String(d.driverName || '').toLowerCase();
+        const phone = String(d.phone || '').toLowerCase();
+        const plate = String(d.plateNumber || '').toLowerCase();
+        const car = String(d.carModel || '').toLowerCase();
+        return name.includes(q) || phone.includes(q) || plate.includes(q) || car.includes(q);
+    });
+
+    if (resultsContainer) {
+        if (matches.length === 0) {
+            resultsContainer.innerHTML = '<div class="p-3 text-center text-xs text-slate-400 font-medium">لا يوجد كابتن مطابق للبحث</div>';
+            resultsContainer.classList.remove('hidden');
+        } else {
+            resultsContainer.innerHTML = matches.slice(0, 8).map(d => `
+                <div onclick="focusDriverOnRadar('${escapeHtml(d.driverId)}')" class="p-2.5 hover:bg-slate-50 transition cursor-pointer flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-slate-800 block">${escapeHtml(d.driverName)}</span>
+                        <span class="text-[11px] text-slate-500 font-mono block">${escapeHtml(d.carModel)} • ${escapeHtml(d.plateNumber)}</span>
+                    </div>
+                    <div class="text-left">
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${isDriverOnline(d) ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}">
+                            ${isDriverOnline(d) ? (d.status === 'on_trip' ? 'في رحلة 🟢' : 'متصل 🚕') : 'غير متصل ⚪'}
+                        </span>
+                        <span class="text-[10px] text-slate-400 font-mono block mt-0.5" dir="ltr">${escapeHtml(d.phone)}</span>
+                    </div>
+                </div>
+            `).join('');
+            resultsContainer.classList.remove('hidden');
+        }
+    }
+
+    renderRadarMarkers();
+}
+
+function clearRadarSearch() {
+    const input = document.getElementById('fleet-radar-search-input');
+    const resultsContainer = document.getElementById('radar-search-results');
+    const clearBtn = document.getElementById('btn-clear-radar-search');
+    if (input) input.value = '';
+    if (resultsContainer) resultsContainer.classList.add('hidden');
+    if (clearBtn) clearBtn.classList.add('hidden');
+    renderRadarMarkers();
+}
+
+function focusDriverOnRadar(driverId) {
+    const driver = radarDriversList.find(d => d.driverId === driverId);
+    if (!driver || !fleetMap) return;
+
+    const resultsContainer = document.getElementById('radar-search-results');
+    if (resultsContainer) resultsContainer.classList.add('hidden');
+
+    const lat = parseFloat(driver.latitude);
+    const lon = parseFloat(driver.longitude);
+    if (isNaN(lat) || isNaN(lon)) return;
+
+    fleetMap.flyTo({
+        center: [lon, lat],
+        zoom: 16.5,
+        speed: 1.4,
+        curve: 1.2,
+        essential: true
+    });
+
+    // Open popup for this driver
+    const marker = fleetMarkers[driverId];
+    if (marker) {
+        marker.togglePopup();
     }
 }
 

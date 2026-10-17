@@ -440,7 +440,7 @@
         </aside>
 
         <!-- Main Content Area -->
-        <main class="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8">
+        <main id="main-content-area" class="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8 relative">
 
             <!-- 1. OVERVIEW TAB -->
             <section id="tab-overview" class="tab-content space-y-6">
@@ -838,196 +838,102 @@
                 </div>
             </section>
 
-            <!-- 5.5 FLEET TRACKING & INTERACTIVE ROUTE DRAWING (MAPBOX GL JS) -->
-            <section id="tab-fleet-map" class="tab-content hidden space-y-6">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                        <h2 class="text-2xl font-black text-slate-900 flex items-center gap-2">
-                            <span>خريطة الأسطول ورسم المسارات المباشرة</span>
-                            <span class="text-xs bg-emerald-500/20 text-emerald-700 px-2.5 py-1 rounded-full font-bold">تتبع حي ومباشر</span>
-                        </h2>
-                        <p class="text-xs md:text-sm text-slate-500">متابعة تحركات الكباتن الحية ومواقع الركاب والطلبات ورسم وتعديل المسارات وتعميمها فورياً للمركبات والركاب</p>
-                    </div>
-                    <div class="flex items-center space-x-2 space-x-reverse">
-                        <button onclick="refreshFleetLocations()" class="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-amber-400 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
-                            <i class="fa-solid fa-arrows-rotate"></i>
-                            <span>تحديث الأسطول والركاب</span>
-                        </button>
-                    </div>
-                </div>
+            <!-- 5.5 FLEET RADAR & LIVE TRACKING (FULL CANVAS RADAR SCREEN) -->
+            <section id="tab-fleet-map" class="tab-content hidden absolute inset-0 w-full h-full bg-slate-100 overflow-hidden z-10">
+                <!-- Mapbox Full Canvas (100% width and height) -->
+                <div id="mapbox-fleet-map" class="w-full h-full"></div>
 
-                <!-- Stats ribbon -->
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3 space-x-reverse">
-                        <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-lg">
-                            <i class="fa-solid fa-taxi"></i>
-                        </div>
-                        <div>
-                            <div class="text-[11px] text-slate-500 font-semibold">كباتن متصلين</div>
-                            <div id="fleet-active-count" class="text-lg font-black text-slate-900">0</div>
-                        </div>
-                    </div>
-                    <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3 space-x-reverse">
-                        <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-lg">
-                            <i class="fa-solid fa-user-group"></i>
-                        </div>
-                        <div>
-                            <div class="text-[11px] text-slate-500 font-semibold">ركاب على الخريطة</div>
-                            <div id="fleet-ontrip-count" class="text-lg font-black text-slate-900">0</div>
-                        </div>
-                    </div>
-                    <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3 space-x-reverse">
-                        <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-lg">
-                            <i class="fa-solid fa-draw-polygon"></i>
-                        </div>
-                        <div>
-                            <div class="text-[11px] text-slate-500 font-semibold">نقاط المسار المحدد</div>
-                            <div id="fleet-waypoints-count" class="text-lg font-black text-slate-900">0</div>
-                        </div>
-                    </div>
-                    <div class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3 space-x-reverse">
-                        <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center text-lg">
-                            <i class="fa-solid fa-route"></i>
-                        </div>
-                        <div>
-                            <div class="text-[11px] text-slate-500 font-semibold">المسافة المقدرة</div>
-                            <div id="fleet-route-distance" class="text-lg font-black text-slate-900">0 كم</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Map & Drawing Controls Grid -->
-                <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                    <!-- Map Canvas Container (3 cols) -->
-                    <div class="lg:col-span-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
-                        <div class="flex items-center justify-between p-2 border-b border-slate-100 text-xs font-bold text-slate-700">
-                            <div class="flex items-center gap-2">
-                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                <span>خريطة النجف الأشرف التفاعلية المباشرة (تتبع الأسطول والركاب)</span>
-                            </div>
-                            <span class="text-[11px] text-slate-500 font-normal">البحث محدد في محافظة النجف الأشرف حصراً 📍</span>
-                        </div>
-                        
-                        <!-- Instant Map Search in Najaf from 1st Character -->
-                        <div class="relative px-1 pt-2 z-20">
-                            <div class="relative flex items-center">
-                                <i class="fa-solid fa-magnifying-glass absolute right-3 text-amber-500 text-xs"></i>
-                                <input type="text" id="fleet-map-search-input" oninput="searchFleetMapPlace(this.value)" placeholder="ابحث في الخريطة عن أي شارع، حي، أو معلم في النجف (من أول حرف)..."
-                                       class="w-full pr-8 pl-8 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 transition">
-                                <button type="button" onclick="clearFleetMapSearch()" id="btn-clear-fleet-search" class="absolute left-2.5 text-slate-400 hover:text-slate-600 hidden text-sm font-bold">&times;</button>
-                            </div>
-                            <div id="fleet-map-search-results" class="absolute right-1 left-1 top-full mt-1 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 max-h-64 overflow-y-auto hidden divide-y divide-slate-100"></div>
-                        </div>
-
-                        <div id="mapbox-fleet-map" class="w-full h-[520px] rounded-xl overflow-hidden mt-2 relative"></div>
-                    </div>
-
-                    <!-- Interactive Drawing & Broadcast Panel (1 col) -->
-                    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-4 flex flex-col justify-between">
-                        <div class="space-y-3">
-                            <div class="flex items-center space-x-2 space-x-reverse font-bold text-slate-900 text-sm">
-                                <i class="fa-solid fa-pen-nib text-amber-500"></i>
-                                <span>أداة رسم المسارات المباشرة</span>
-                            </div>
-                            <p class="text-xs text-slate-500">انقر على الخريطة لتحديد محطات التوقف أو نقطة الانطلاق والوجهة.</p>
-
-                            <div class="space-y-2 pt-2">
-                                <label class="block text-xs font-semibold text-slate-700">تخصيص الكابتن المستهدف:</label>
-                                <select id="fleet-target-driver" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500">
-                                    <option value="all">📢 تعميم لجميع الكباتن في النجف</option>
-                                    <option value="drv-njf-1">كابتن حيدر النجفي (كيا أوبتيما)</option>
-                                    <option value="drv-njf-2">كابتن علي الغري (تويوتا كورولا)</option>
-                                    <option value="drv-njf-3">كابتن سجاد الكوفي (هيونداي إلنترا)</option>
-                                </select>
+                <!-- Floating Glass Console (Clean, Minimalist, Human-Designed SaaS) -->
+                <div class="absolute top-4 right-4 z-20 w-[calc(100%-2rem)] sm:w-[580px] pointer-events-auto flex flex-col gap-2">
+                    <!-- Search & Filter Card -->
+                    <div class="bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-sm p-2 transition-all duration-150">
+                        <div class="flex items-center gap-2">
+                            <!-- Search Field -->
+                            <div class="relative flex-1 flex items-center pr-1">
+                                <i class="fa-solid fa-magnifying-glass text-slate-400 text-xs mr-2"></i>
+                                <input
+                                    type="text"
+                                    id="fleet-radar-search-input"
+                                    oninput="handleRadarSearchInput(this.value)"
+                                    placeholder="بحث عن كابتن: بالاسم، رقم الهاتف، أو رقم اللوحة..."
+                                    class="w-full bg-transparent border-none text-xs text-slate-800 placeholder-slate-400 focus:outline-none font-medium px-2 py-1"
+                                />
+                                <button
+                                    type="button"
+                                    id="btn-clear-radar-search"
+                                    onclick="clearRadarSearch()"
+                                    class="hidden text-slate-400 hover:text-slate-600 text-sm font-bold px-1.5 cursor-pointer leading-none"
+                                >
+                                    &times;
+                                </button>
                             </div>
 
-                            <div class="space-y-2">
-                                <label class="block text-xs font-semibold text-slate-700">اسم المسار / الوصف:</label>
-                                <input type="text" id="fleet-route-title" placeholder="مثلاً: خط الجامعة الكوفة السريع" 
-                                       value="مسار طارئ - تحويلة شارع الكوفة"
-                                       class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500">
-                            </div>
-
-                            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100 text-xs space-y-1.5">
-                                <div class="flex justify-between text-slate-600">
-                                    <span>عدد النقاط المحددة:</span>
-                                    <span id="drawn-points-badge" class="font-bold text-amber-600">0</span>
-                                </div>
-                                <div class="flex justify-between text-slate-600">
-                                    <span>المسافة الإجمالية:</span>
-                                    <span id="drawn-distance-badge" class="font-bold text-slate-900">0.0 كم</span>
-                                </div>
-                                <div class="flex justify-between text-slate-600">
-                                    <span>المدة التقديرية:</span>
-                                    <span id="drawn-duration-badge" class="font-bold text-slate-900">0 دقيقة</span>
-                                </div>
+                            <!-- Live Counter Pill & Refresh -->
+                            <div class="flex items-center gap-1.5 pl-1 border-r border-slate-200/80 pr-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <span id="radar-drivers-count" class="text-[11px] font-bold text-slate-700 whitespace-nowrap">0 متصل</span>
+                                <button
+                                    type="button"
+                                    onclick="refreshFleetLocations()"
+                                    title="تحديث رادار الأسطول"
+                                    class="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer text-xs"
+                                >
+                                    <i class="fa-solid fa-arrows-rotate"></i>
+                                </button>
                             </div>
                         </div>
 
-                        <div class="space-y-2 pt-3 border-t border-slate-100">
-                            <button onclick="calculateDrawnRouteWithMapbox()" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-sm">
-                                <i class="fa-solid fa-wand-magic-sparkles"></i>
-                                <span>توليد مسار القيادة (Directions)</span>
+                        <!-- Filter Pills (مدمجة بنقرة واحدة) -->
+                        <div class="flex items-center gap-1.5 pt-2 mt-1.5 border-t border-slate-100/90 overflow-x-auto no-scrollbar" id="radar-filter-pills">
+                            <button
+                                type="button"
+                                onclick="setRadarFilter('all')"
+                                id="radar-pill-all"
+                                class="radar-pill active px-3 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer bg-[#1B4965]/10 text-[#1B4965] border border-[#1B4965]/30 shadow-2xs whitespace-nowrap"
+                            >
+                                الكل
                             </button>
-
-                            <button onclick="broadcastDrawnRoute()" class="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20">
-                                <i class="fa-solid fa-tower-broadcast"></i>
-                                <span>تعميم المسار فورياً للسائقين</span>
+                            <button
+                                type="button"
+                                onclick="setRadarFilter('taxi_available')"
+                                id="radar-pill-taxi"
+                                class="radar-pill px-3 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer bg-slate-100 hover:bg-slate-200/80 text-slate-600 border border-slate-200/50 whitespace-nowrap"
+                            >
+                                تكسي متاح 🚕
                             </button>
-
-                            <button onclick="clearDrawnRoute()" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold rounded-xl text-xs transition flex items-center justify-center gap-1">
-                                <i class="fa-solid fa-trash-can"></i>
-                                <span>مسح النقاط المحددة</span>
+                            <button
+                                type="button"
+                                onclick="setRadarFilter('permanent')"
+                                id="radar-pill-perm"
+                                class="radar-pill px-3 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer bg-slate-100 hover:bg-slate-200/80 text-slate-600 border border-slate-200/50 whitespace-nowrap"
+                            >
+                                خط دائمي 🚐
+                            </button>
+                            <button
+                                type="button"
+                                onclick="setRadarFilter('on_trip')"
+                                id="radar-pill-trip"
+                                class="radar-pill px-3 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer bg-slate-100 hover:bg-slate-200/80 text-slate-600 border border-slate-200/50 whitespace-nowrap"
+                            >
+                                في رحلة 🟢
+                            </button>
+                            <button
+                                type="button"
+                                onclick="setRadarFilter('offline')"
+                                id="radar-pill-offline"
+                                class="radar-pill px-3 py-1 rounded-xl text-[11px] font-bold transition cursor-pointer bg-slate-100 hover:bg-slate-200/80 text-slate-600 border border-slate-200/50 whitespace-nowrap"
+                            >
+                                خامل / غير متصل ⚪
                             </button>
                         </div>
                     </div>
-                </div>
 
-                <!-- Operations Log (Feature 8) -->
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mt-4">
-                    <div class="flex items-center justify-between p-4 border-b border-slate-100">
-                        <div class="font-bold text-slate-900 flex items-center gap-2">
-                            <i class="fa-solid fa-clipboard-list text-amber-500"></i>
-                            <span>سجل العمليات والمسارات</span>
-                        </div>
-                        <button onclick="loadFleetOperationsLog()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1">
-                            <i class="fa-solid fa-rotate"></i> تحديث
-                        </button>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-right text-xs border-collapse min-w-[700px]">
-                            <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
-                                <tr>
-                                    <th class="py-3.5 px-4 text-right">النوع</th>
-                                    <th class="py-3.5 px-4 text-right">الراكب / المصدر</th>
-                                    <th class="py-3.5 px-4 text-right">السائق</th>
-                                    <th class="py-3.5 px-4 text-right">من</th>
-                                    <th class="py-3.5 px-4 text-right">إلى</th>
-                                    <th class="py-3.5 px-4 text-center">الحالة</th>
-                                    <th class="py-3.5 px-4 text-right">الوقت</th>
-                                </tr>
-                            </thead>
-                            <tbody id="fleet-ops-log-body" class="divide-y divide-slate-100">
-                                <tr><td colspan="7" class="p-6 text-center text-slate-400 text-sm">اضغط تحديث لتحميل السجل</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Join Requests Panel (Feature 8) -->
-                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mt-4">
-                    <div class="flex items-center justify-between p-4 border-b border-slate-100">
-                        <div class="font-bold text-slate-900 flex items-center gap-2">
-                            <i class="fa-solid fa-handshake text-blue-500"></i>
-                            <span>طلبات الانضمام المعلقة</span>
-                            <span id="join-requests-badge" class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-bold hidden">0</span>
-                        </div>
-                        <button onclick="loadJoinRequests()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1">
-                            <i class="fa-solid fa-rotate"></i> تحديث
-                        </button>
-                    </div>
-                    <div id="join-requests-container" class="p-4 space-y-3">
-                        <p class="text-center text-slate-400 text-sm">اضغط تحديث لتحميل الطلبات</p>
+                    <!-- Instant Search Results Dropdown (قائمة مصغرة وسريعة) -->
+                    <div
+                        id="radar-search-results"
+                        class="hidden bg-white/98 backdrop-blur-md rounded-2xl border border-slate-200/80 shadow-md max-h-60 overflow-y-auto divide-y divide-slate-100 text-right"
+                    >
+                        <!-- Dynamic search results injected here -->
                     </div>
                 </div>
             </section>
