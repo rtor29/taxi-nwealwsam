@@ -270,6 +270,7 @@ function switchTab(tabName) {
             window._cancelTabInterval = setInterval(() => { try { loadCancellationRequests(); } catch(e) {} }, 15000);
             break;
         case 'trip-ratings':
+            loadTripRatingsLeaderboard();
             loadTripRatings();
             break;
         case 'fleet-map':
@@ -5868,8 +5869,136 @@ async function adminRejectJoin(requestId) {
 
 
 // -----------------------------------------------------------------------------
-// Trip Ratings & Driver Points Management
+// Trip Ratings & Driver Points Management (Leaderboard & Feedback)
 // -----------------------------------------------------------------------------
+async function loadTripRatingsLeaderboard() {
+    const tbody = document.getElementById('leaderboard-table-body');
+    const countBadge = document.getElementById('leaderboard-count-badge');
+    const topDriverNameEl = document.getElementById('leaderboard-top-driver-name');
+    const topDriverSubEl = document.getElementById('leaderboard-top-driver-sub');
+    const totalPointsEl = document.getElementById('leaderboard-total-points');
+    const avgRatingEl = document.getElementById('leaderboard-avg-rating');
+    const totalReviewsEl = document.getElementById('leaderboard-total-reviews');
+
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-400 text-xs"><i class="fa-solid fa-circle-notch fa-spin text-amber-500 text-lg mb-2 block"></i>جاري تحميل لوحة الصدارة...</td></tr>';
+    }
+
+    try {
+        const res = await fetch('/api/admin/drivers/ratings-leaderboard', { headers: authHeaders() });
+        const data = await res.json();
+        const drivers = data.leaderboard || [];
+
+        if (countBadge) countBadge.textContent = `${drivers.length} سائق`;
+
+        if (drivers.length > 0) {
+            const top = drivers[0];
+            if (topDriverNameEl) topDriverNameEl.textContent = top.fullName;
+            if (topDriverSubEl) topDriverSubEl.textContent = `${top.points.toLocaleString('ar-IQ')} نقطة • ⭐ ${top.ratingAverage}`;
+
+            const totalPoints = drivers.reduce((sum, d) => sum + (d.points || 0), 0);
+            if (totalPointsEl) totalPointsEl.textContent = `${totalPoints.toLocaleString('ar-IQ')} نقطة`;
+
+            const totalRatedTrips = drivers.reduce((sum, d) => sum + (d.ratedTripsCount || 0), 0);
+            const overallAvg = drivers.length > 0 
+                ? (drivers.reduce((sum, d) => sum + (d.ratingAverage || 5.0), 0) / drivers.length).toFixed(1)
+                : '5.0';
+            if (avgRatingEl) avgRatingEl.textContent = `⭐ ${overallAvg} / 5.0`;
+            if (totalReviewsEl) totalReviewsEl.textContent = `${totalRatedTrips} تقييم مسجل`;
+        }
+
+        if (!tbody) return;
+
+        if (drivers.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-400 text-xs">لا يوجد سائقون مسجلون في لوحة الصدارة حالياً</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = drivers.map((d, idx) => {
+            const rank = idx + 1;
+            let rankBadge = '';
+            let rowHighlight = '';
+
+            if (rank === 1) {
+                rankBadge = `<span class="w-8 h-8 rounded-full bg-amber-100 text-amber-800 font-black text-xs inline-flex items-center justify-center border border-amber-300/80 shadow-2xs">🥇 1</span>`;
+                rowHighlight = 'bg-amber-50/20';
+            } else if (rank === 2) {
+                rankBadge = `<span class="w-7 h-7 rounded-full bg-slate-200 text-slate-700 font-bold text-xs inline-flex items-center justify-center border border-slate-300/80">🥈 2</span>`;
+            } else if (rank === 3) {
+                rankBadge = `<span class="w-7 h-7 rounded-full bg-amber-900/10 text-amber-900 font-bold text-xs inline-flex items-center justify-center border border-amber-900/20">🥉 3</span>`;
+            } else {
+                rankBadge = `<span class="w-7 h-7 rounded-full bg-slate-100 text-slate-500 font-mono text-xs inline-flex items-center justify-center">${rank}</span>`;
+            }
+
+            const isTop = rank === 1;
+            const topBadge = isTop
+                ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80 shadow-2xs mr-2">الكابتن المتميز 🥇</span>`
+                : '';
+
+            const phoneLink = d.phoneNumber 
+                ? `<a href="tel:${escapeHtml(d.phoneNumber)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-emerald-600 font-mono text-xs mt-0.5 transition-colors" dir="ltr" title="اتصال بالكابتن"><i class="fa-solid fa-phone text-[9px] text-slate-400"></i><span>${escapeHtml(d.phoneNumber)}</span></a>`
+                : '<span class="text-[11px] text-slate-400">بدون هاتف</span>';
+
+            const starVal = Number(d.ratingAverage || 5.0).toFixed(1);
+            const satisfaction = Math.min(100, Math.max(0, parseInt(d.satisfactionRate || 95, 10)));
+
+            return `
+                <tr class="hover:bg-slate-50/80 transition-colors ${rowHighlight}">
+                    <td class="py-3.5 px-4 text-center">${rankBadge}</td>
+                    <td class="py-3.5 px-4">
+                        <div class="flex items-center">
+                            <span class="font-bold text-slate-900 text-sm">${escapeHtml(d.fullName)}</span>
+                            ${topBadge}
+                        </div>
+                        <div class="flex items-center gap-2 mt-0.5">
+                            <span class="text-[11px] text-slate-500 font-mono">${escapeHtml(d.carModel)} • ${escapeHtml(d.plateNumber)}</span>
+                            <span class="text-slate-300">•</span>
+                            ${phoneLink}
+                        </div>
+                    </td>
+                    <td class="py-3.5 px-4">
+                        <div class="inline-flex items-center gap-1 font-bold text-slate-800 text-xs">
+                            <i class="fa-solid fa-star text-amber-400 text-xs"></i>
+                            <span>${starVal} من 5</span>
+                        </div>
+                        <span class="text-[11px] text-slate-400 block mt-0.5">(${d.ratedTripsCount || 0} مشوار مقيَّم)</span>
+                    </td>
+                    <td class="py-3.5 px-4">
+                        <span class="text-sm font-black text-slate-900 font-mono tracking-tight block">${(d.points || 0).toLocaleString('ar-IQ')}</span>
+                        <span class="text-[10px] text-amber-600 font-bold">نقطة تميز</span>
+                    </td>
+                    <td class="py-3.5 px-4">
+                        <div class="flex items-center gap-2">
+                            <div class="w-16 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                <div class="bg-emerald-500 h-1.5 rounded-full" style="width: ${satisfaction}%;"></div>
+                            </div>
+                            <span class="text-xs font-bold text-slate-700 font-mono">${satisfaction}%</span>
+                        </div>
+                        <span class="text-[10px] text-slate-400 mt-0.5 block">${d.totalTrips || 0} مشوار كلي</span>
+                    </td>
+                    <td class="py-3.5 px-4 text-center">
+                        <button onclick="filterFeedbackByDriver('${escapeHtml(d.fullName)}')" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition cursor-pointer inline-flex items-center gap-1 shadow-2xs">
+                            <i class="fa-solid fa-comments text-[10px] text-slate-500"></i>
+                            <span>التقييمات</span>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-rose-500 text-xs font-bold">تعذر تحميل لوحة الصدارة. تحقق من الاتصال.</td></tr>';
+    }
+}
+
+function filterFeedbackByDriver(driverName) {
+    const input = document.getElementById('trip-ratings-search-input');
+    if (input) {
+        input.value = driverName;
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        loadTripRatings(driverName);
+    }
+}
+
 let tripRatingsDebounceTimeout = null;
 function debounceTripRatingsSearch() {
     clearTimeout(tripRatingsDebounceTimeout);

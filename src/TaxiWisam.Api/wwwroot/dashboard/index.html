@@ -795,39 +795,143 @@
 
             <!-- 5.2 TRIP RATINGS & DRIVER FEEDBACK TAB -->
             <section id="tab-trip-ratings" class="tab-content hidden space-y-6">
+                <!-- Header -->
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                         <h2 class="text-2xl font-black text-slate-900 flex items-center gap-2">
-                            <span>تقييمات الركاب للكباتن</span>
-                            <span class="text-amber-500 text-xl">🌟</span>
+                            <span>تقييمات الرحلات ولوحة صدارة النقاط</span>
+                            <span class="text-amber-500 text-xl">🏆</span>
                         </h2>
-                        <p class="text-xs md:text-sm text-slate-500">سجل تقييمات الركاب للكباتن بعد انتهاء المشاوير، النقاط الممنوحة لحساب السائق، وملاحظات الخدمة المباشرة</p>
+                        <p class="text-xs md:text-sm text-slate-500">لوحة صدارة السائقين التنازلية، رصيد النقاط المحتسب، وملاحظات الركاب بعد اكتمال المشاوير</p>
                     </div>
-                    <div class="flex items-center space-x-2 space-x-reverse flex-wrap gap-2">
-                        <input type="text" id="trip-ratings-search-input" placeholder="بحث بالاسم أو الكابتن أو الملاحظات..." class="px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs md:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1B4965]/20 focus:border-[#1B4965]" oninput="debounceTripRatingsSearch()">
-                        <button onclick="loadTripRatings()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer">
-                            <i class="fa-solid fa-rotate"></i>
+                    <div class="flex items-center space-x-2 space-x-reverse gap-2">
+                        <button onclick="loadTripRatingsLeaderboard()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer flex items-center gap-1.5 shadow-2xs">
+                            <i class="fa-solid fa-rotate text-xs"></i>
+                            <span>تحديث البيانات</span>
                         </button>
                     </div>
                 </div>
 
-                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-                    <div id="trip-ratings-empty" class="hidden p-12 text-center text-slate-400">
-                        <i class="fa-solid fa-star text-4xl text-amber-400 mb-2"></i>
-                        <p class="font-bold text-slate-700">لا توجد تقييمات مسجلة حتى الآن</p>
-                        <p class="text-xs text-slate-400 mt-1">ستظهر التقييمات ومكافآت النقاط هنا فور قيام الركاب بتقييم الكباتن بعد انتهاء المشاوير.</p>
+                <!-- Metric Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-2xs flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-xl bg-amber-50 border border-amber-200/60 flex items-center justify-center text-amber-600 text-lg flex-shrink-0">
+                            <i class="fa-solid fa-trophy"></i>
+                        </div>
+                        <div>
+                            <span class="text-[11px] font-bold text-slate-400 block">الكابتن المتصدر حالياً 🥇</span>
+                            <span id="leaderboard-top-driver-name" class="text-sm font-black text-slate-900 block truncate">--</span>
+                            <span id="leaderboard-top-driver-sub" class="text-[11px] text-amber-600 font-mono font-bold block">0 نقطة</span>
+                        </div>
                     </div>
+
+                    <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-2xs flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-200/60 flex items-center justify-center text-emerald-600 text-lg flex-shrink-0">
+                            <i class="fa-solid fa-coins"></i>
+                        </div>
+                        <div>
+                            <span class="text-[11px] font-bold text-slate-400 block">إجمالي النقاط الممنوحة</span>
+                            <span id="leaderboard-total-points" class="text-base font-black text-slate-900 block">0 نقطة</span>
+                            <span class="text-[11px] text-slate-400 block">رصيد تراكمي نشط</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-2xs flex items-center gap-3">
+                        <div class="w-11 h-11 rounded-xl bg-blue-50 border border-blue-200/60 flex items-center justify-center text-[#1B4965] text-lg flex-shrink-0">
+                            <i class="fa-solid fa-star"></i>
+                        </div>
+                        <div>
+                            <span class="text-[11px] font-bold text-slate-400 block">متوسط تقييم الأسطول</span>
+                            <span id="leaderboard-avg-rating" class="text-base font-black text-slate-900 block">⭐ 5.0 / 5.0</span>
+                            <span id="leaderboard-total-reviews" class="text-[11px] text-slate-400 block">0 تقييم مسجل</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 1. Top Drivers Leaderboard (لوحة صدارة السائقين التنازلية) -->
+                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+                    <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-700 flex items-center justify-center text-sm font-bold">
+                                🏅
+                            </div>
+                            <div>
+                                <h3 class="font-black text-sm text-slate-900">لوحة صدارة السائقين (Top Drivers Leaderboard)</h3>
+                                <p class="text-[11px] text-slate-500">ترتيب تنازلي تلقائي للسائقين حسب رصيد النقاط المحتسب ومتوسط التقييمات</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span id="leaderboard-count-badge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200/60">0 سائق</span>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right text-sm border-collapse min-w-[780px]">
+                            <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
+                                <tr>
+                                    <th class="py-3 px-4 text-center w-16">الترتيب</th>
+                                    <th class="py-3 px-4 text-right">الكابتن</th>
+                                    <th class="py-3 px-4 text-right">متوسط التقييم ⭐</th>
+                                    <th class="py-3 px-4 text-right">رصيد النقاط 🌟</th>
+                                    <th class="py-3 px-4 text-right">نسبة الرضا والمشاوير</th>
+                                    <th class="py-3 px-4 text-center w-28">الإجراء</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leaderboard-table-body" class="divide-y divide-slate-100">
+                                <tr>
+                                    <td colspan="6" class="p-8 text-center text-slate-400 text-xs">
+                                        <i class="fa-solid fa-circle-notch fa-spin text-amber-500 text-lg mb-2 block"></i>
+                                        جاري تحميل لوحة الصدارة...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 2. Recent Passenger Feedback (سجل الملاحظات والتقييمات الأخيرة) -->
+                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+                    <div class="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-700 flex items-center justify-center text-sm font-bold">
+                                💬
+                            </div>
+                            <div>
+                                <h3 class="font-black text-sm text-slate-900">سجل الملاحظات والتقييمات الأخيرة (Recent Feedback)</h3>
+                                <p class="text-[11px] text-slate-500">أحدث آراء الركاب المكتوبة وملاحظاتهم بعد انتهاء الرحلات</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="relative">
+                                <i class="fa-solid fa-magnifying-glass absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none"></i>
+                                <input
+                                    type="text"
+                                    id="trip-ratings-search-input"
+                                    placeholder="بحث بالكابتن، الراكب أو الملاحظة..."
+                                    class="pr-8 pl-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1B4965]/20 focus:border-[#1B4965] w-64"
+                                    oninput="debounceTripRatingsSearch()"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="trip-ratings-empty" class="hidden p-10 text-center text-slate-400">
+                        <i class="fa-solid fa-comment-dots text-3xl text-slate-300 mb-2 block"></i>
+                        <p class="font-bold text-slate-700 text-sm">لا توجد ملاحظات ركاب مسجلة حتى الآن</p>
+                        <p class="text-xs text-slate-400 mt-1">تظهر هنا الملاحظات النصية فور كتابة الركاب لتعليقاتهم على المشاوير.</p>
+                    </div>
+
                     <div class="overflow-x-auto">
                         <table id="trip-ratings-table" class="w-full text-right text-sm border-collapse min-w-[850px]">
                             <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
                                 <tr>
-                                    <th class="py-3.5 px-4 text-right">تاريخ المشوار</th>
-                                    <th class="py-3.5 px-4 text-right">الكابتن (المقيَّم)</th>
-                                    <th class="py-3.5 px-4 text-right">الراكب (المقيِّم)</th>
-                                    <th class="py-3.5 px-4 text-right">التقييم ⭐</th>
-                                    <th class="py-3.5 px-4 text-right">وسوم الخدمة</th>
-                                    <th class="py-3.5 px-4 text-right">ملاحظات الراكب</th>
-                                    <th class="py-3.5 px-4 text-center">النقاط المكتسبة للكابتن 🌟</th>
+                                    <th class="py-3 px-4 text-right">تاريخ المشوار</th>
+                                    <th class="py-3 px-4 text-right">الكابتن (المقيَّم)</th>
+                                    <th class="py-3 px-4 text-right">الراكب (المقيِّم)</th>
+                                    <th class="py-3 px-4 text-right">التقييم ⭐</th>
+                                    <th class="py-3 px-4 text-right">وسوم الخدمة</th>
+                                    <th class="py-3 px-4 text-right">ملاحظات الراكب</th>
+                                    <th class="py-3 px-4 text-center">النقاط 🌟</th>
                                 </tr>
                             </thead>
                             <tbody id="trip-ratings-table-body" class="divide-y divide-slate-100">

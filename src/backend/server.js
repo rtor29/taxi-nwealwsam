@@ -1299,8 +1299,106 @@ async function startServer() {
             return sendJson(result);
         }
 
+        // Top Drivers Leaderboard: GET /api/admin/drivers/ratings-leaderboard
+        if ((pathname === '/api/admin/drivers/ratings-leaderboard' || pathname === '/api/drivers/ratings-leaderboard') && method === 'GET') {
+            try {
+                let leaderboard = [];
+                if (db.isPostgresConnected && db.pool) {
+                    try {
+                        const pgRes = await db.pool.query(`
+                            SELECT 
+                                d.driver_id,
+                                d.full_name,
+                                d.phone_number,
+                                d.vehicle_make,
+                                d.vehicle_model,
+                                d.vehicle_plate,
+                                d.status,
+                                COALESCE(d.points, 0) AS total_points,
+                                COALESCE(d.total_trips, 0) AS total_trips,
+                                COALESCE(d.rating_average, 5.0) AS average_rating,
+                                COUNT(tr.id) AS rated_trips_count,
+                                ROUND(COALESCE(AVG(tr.rating), d.rating_average, 5.0)::numeric, 1) AS computed_rating,
+                                ROUND(
+                                    COALESCE(
+                                        (COUNT(CASE WHEN tr.rating >= 4 THEN 1 END)::numeric / NULLIF(COUNT(tr.id), 0)) * 100,
+                                        CASE WHEN COALESCE(d.rating_average, 5.0) >= 4.0 THEN 98.0 ELSE 75.0 END
+                                    )::numeric, 0
+                                ) AS satisfaction_rate
+                            FROM drivers d
+                            LEFT JOIN trip_ratings tr ON d.driver_id = tr.driver_id OR d.phone_number = tr.driver_id
+                            GROUP BY d.driver_id, d.full_name, d.phone_number, d.vehicle_make, d.vehicle_model, d.vehicle_plate, d.status, d.points, d.total_trips, d.rating_average
+                            ORDER BY COALESCE(d.points, 0) DESC, COALESCE(d.rating_average, 0) DESC, COALESCE(d.total_trips, 0) DESC;
+                        `);
+                        leaderboard = (pgRes.rows || []).map((r, idx) => ({
+                            rank: idx + 1,
+                            driverId: r.driver_id,
+                            fullName: r.full_name || 'كابتن توصيله',
+                            phoneNumber: r.phone_number || '',
+                            carModel: `${r.vehicle_make || ''} ${r.vehicle_model || ''}`.trim() || 'مركبة كابتن',
+                            plateNumber: r.vehicle_plate || 'النجف',
+                            points: parseInt(r.total_points || 0, 10),
+                            ratingAverage: parseFloat(r.computed_rating || r.average_rating || 5.0),
+                            ratedTripsCount: parseInt(r.rated_trips_count || 0, 10),
+                            totalTrips: parseInt(r.total_trips || 0, 10),
+                            satisfactionRate: parseInt(r.satisfaction_rate || 95, 10),
+                            status: r.status || 'Active',
+                            isTopDriver: idx === 0
+                        }));
+                    } catch (pgErr) {
+                        console.warn('[Leaderboard] Postgres query fallback:', pgErr.message);
+                    }
+                }
+
+                // Fallback to memoryState if database query empty or failed
+                if (leaderboard.length === 0) {
+                    const memDrivers = [...(db.memoryState.drivers || [])];
+                    const ratings = db.memoryState.tripRatings || [];
+                    memDrivers.sort((a, b) => {
+                        const ptsDiff = (b.points || b.rewardScore || 0) - (a.points || a.rewardScore || 0);
+                        if (ptsDiff !== 0) return ptsDiff;
+                        return (b.ratingAverage || 5.0) - (a.ratingAverage || 5.0);
+                    });
+
+                    leaderboard = memDrivers.map((d, idx) => {
+                        const drvRatings = ratings.filter(r => r.driverId === d.driverId);
+                        const ratedCount = drvRatings.length;
+                        const avgRating = ratedCount > 0 ? (drvRatings.reduce((sum, r) => sum + (parseInt(r.rating, 10) || 5), 0) / ratedCount) : (d.ratingAverage || 5.0);
+                        const posCount = drvRatings.filter(r => (parseInt(r.rating, 10) || 5) >= 4).length;
+                        const satRate = ratedCount > 0 ? Math.round((posCount / ratedCount) * 100) : (avgRating >= 4 ? 98 : 75);
+
+                        return {
+                            rank: idx + 1,
+                            driverId: d.driverId,
+                            fullName: d.fullName || 'كابتن توصيله',
+                            phoneNumber: d.phoneNumber || '',
+                            carModel: `${d.vehicleMake || ''} ${d.vehicleModel || ''}`.trim() || 'مركبة كابتن',
+                            plateNumber: d.vehiclePlate || 'النجف',
+                            points: parseInt(d.points || d.rewardScore || 0, 10),
+                            ratingAverage: Math.round(avgRating * 10) / 10,
+                            ratedTripsCount: ratedCount,
+                            totalTrips: parseInt(d.totalTrips || 0, 10),
+                            satisfactionRate: satRate,
+                            status: d.status || 'Active',
+                            isTopDriver: idx === 0
+                        };
+                    });
+                }
+
+                res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+                return sendJson({
+                    success: true,
+                    total: leaderboard.length,
+                    leaderboard
+                });
+            } catch (err) {
+                console.error('[Leaderboard] Error:', err);
+                return sendJson({ success: false, leaderboard: [], total: 0 });
+            }
+        }
+
         // Driver Get By ID: GET /api/admin/drivers/:id or /api/drivers/:id
-        if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/')) && method === 'GET' && !pathname.includes('/block') && !pathname.includes('/status') && !pathname.includes('/nearby')) {
+        if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/')) && method === 'GET' && !pathname.includes('/block') && !pathname.includes('/status') && !pathname.includes('/nearby') && !pathname.includes('/ratings-leaderboard') && !pathname.includes('/leaderboard')) {
             const driverId = pathname.replace('/api/admin/drivers/', '').replace('/api/drivers/', '').trim();
             const result = await adminController.getDriverById(driverId);
             if (!result.success && result.error) {
@@ -2449,12 +2547,61 @@ async function startServer() {
 
         // Admin Trip Ratings & Driver Feedback
         if ((pathname === '/api/admin/trip-ratings' || pathname === '/api/trip-ratings') && method === 'GET') {
-            const ratings = db.memoryState.tripRatings || [];
-            return sendJson({
-                success: true,
-                total: ratings.length,
-                ratings
-            });
+            try {
+                let ratings = [];
+                if (db.isPostgresConnected && db.pool) {
+                    try {
+                        const pgRes = await db.pool.query(`
+                            SELECT 
+                                tr.id,
+                                tr.ride_id,
+                                tr.driver_id,
+                                tr.passenger_id,
+                                tr.passenger_name,
+                                tr.rating,
+                                tr.tags,
+                                tr.comment,
+                                tr.points_earned,
+                                tr.created_at,
+                                COALESCE(d.full_name, tr.driver_id) AS driver_name,
+                                d.phone_number AS driver_phone
+                            FROM trip_ratings tr
+                            LEFT JOIN drivers d ON tr.driver_id = d.driver_id OR tr.driver_id = d.phone_number
+                            ORDER BY tr.created_at DESC
+                            LIMIT 200;
+                        `);
+                        ratings = (pgRes.rows || []).map(r => ({
+                            id: r.id,
+                            rideId: r.ride_id,
+                            driverId: r.driver_id,
+                            driverName: r.driver_name,
+                            driverPhone: r.driver_phone,
+                            passengerId: r.passenger_id,
+                            passengerName: r.passenger_name || 'الراكب',
+                            rating: parseInt(r.rating || 5, 10),
+                            tags: Array.isArray(r.tags) ? r.tags : (typeof r.tags === 'string' ? JSON.parse(r.tags || '[]') : []),
+                            comment: r.comment || '',
+                            pointsEarned: parseInt(r.points_earned || 50, 10),
+                            createdAt: r.created_at
+                        }));
+                    } catch (pgErr) {
+                        console.warn('[TripRatings] Postgres query fallback:', pgErr.message);
+                    }
+                }
+
+                if (ratings.length === 0) {
+                    ratings = db.memoryState.tripRatings || [];
+                }
+
+                res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+                return sendJson({
+                    success: true,
+                    total: ratings.length,
+                    ratings
+                });
+            } catch (err) {
+                return sendJson({ success: false, ratings: [], total: 0 });
+            }
         }
 
         // Admin Rides History
