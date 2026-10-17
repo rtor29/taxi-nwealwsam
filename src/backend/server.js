@@ -2731,9 +2731,9 @@ async function startServer() {
                             seatsBooked: r.seats_booked || 1,
                             status: r.status || 'Pending',
                             totalFare: r.total_fare,
-                            cancellationPending: r.status === 'cancellation_pending' || r.cancellation_requested === true || r.cancellation_status === 'pending' || !!r.cancellation_reason,
-                            cancellation_requested: r.status === 'cancellation_pending' || r.cancellation_requested === true || r.cancellation_status === 'pending' || !!r.cancellation_reason,
-                            cancellation_status: r.status === 'cancellation_pending' ? 'pending' : (r.cancellation_status || null),
+                            cancellationPending: r.status !== 'Cancelled' && (r.status === 'cancellation_pending' || r.cancellation_requested === true || r.cancellation_status === 'pending'),
+                            cancellation_requested: r.status !== 'Cancelled' && (r.status === 'cancellation_pending' || r.cancellation_requested === true || r.cancellation_status === 'pending'),
+                            cancellation_status: r.status === 'Cancelled' ? 'approved' : (r.status === 'cancellation_pending' ? 'pending' : (r.cancellation_status || null)),
                             cancellationReason: r.cancellation_reason || '',
                             cancellation_reason: r.cancellation_reason || '',
                             cancellationDetails: r.cancellation_details || '',
@@ -2748,22 +2748,23 @@ async function startServer() {
                 }
             }
 
-            // 2. Fetch bookings from memory for this driver
+            // 2. Fetch bookings from memory for this driver (exclude Cancelled bookings)
             const memBookings = (db.memoryState.bookings || []).filter(b => 
-                b.driverId === driverId || 
+                b.status !== 'Cancelled' &&
+                (b.driverId === driverId || 
                 b.driverId === actualDriverId ||
                 (actualDriverPhone && (b.driverPhone === actualDriverPhone || b.driverId === actualDriverPhone)) ||
                 (driverName && b.driverName && b.driverName.trim() === driverName.trim()) ||
-                (b.driverId === 'drv-sample')
+                (b.driverId === 'drv-sample'))
             );
             for (const mb of memBookings) {
                 if (!driverBookings.some(dbk => (dbk.id === mb.id || dbk.bookingId === mb.bookingId))) {
-                    const isPendingCancel = mb.status === 'cancellation_pending' || mb.cancellationPending === true || mb.cancellationRequested === true || mb.cancellation_requested === true || mb.cancellation_status === 'pending' || !!mb.cancellationReason || !!mb.cancellation_reason;
+                    const isPendingCancel = mb.status !== 'Cancelled' && (mb.status === 'cancellation_pending' || mb.cancellationPending === true || mb.cancellationRequested === true || mb.cancellation_requested === true || mb.cancellation_status === 'pending');
                     driverBookings.push({
                         ...mb,
                         cancellationPending: isPendingCancel,
                         cancellation_requested: isPendingCancel,
-                        cancellation_status: isPendingCancel ? 'pending' : null,
+                        cancellation_status: isPendingCancel ? 'pending' : (mb.cancellation_status || null),
                         cancellationReason: mb.cancellationReason || mb.cancellation_reason || '',
                         cancellation_reason: mb.cancellationReason || mb.cancellation_reason || '',
                         cancellationDetails: mb.cancellationDetails || mb.cancellation_details || '',
