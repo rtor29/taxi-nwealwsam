@@ -22,7 +22,7 @@ const config = {
         database: process.env.PGDATABASE || 'taxiwisam',
         user: process.env.PGUSER || 'postgres',
         password: process.env.PGPASSWORD || 'postgres',
-        max: 20,
+        max: 100,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 4000,
     },

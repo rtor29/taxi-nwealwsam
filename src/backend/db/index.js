@@ -288,6 +288,7 @@ class DatabaseManager {
             const connectionString = process.env.DATABASE_URL || `postgresql://${config.pg.user}:${config.pg.password}@${config.pg.host}:${config.pg.port}/${config.pg.database}`;
             this.pool = new Pool({
                 connectionString,
+                max: config.pg?.max || 100,
                 connectionTimeoutMillis: 3000,
                 idleTimeoutMillis: 10000
             });
