@@ -139,8 +139,12 @@ CREATE TABLE IF NOT EXISTS bookings (
     dropoff_lon NUMERIC(10, 7),
     total_fare NUMERIC(10, 2) NOT NULL DEFAULT 0,
     seats_booked INT NOT NULL DEFAULT 1,
-    status VARCHAR(30) NOT NULL DEFAULT 'Pending', -- 'Pending', 'Confirmed', 'Completed', 'Cancelled'
+    status VARCHAR(30) NOT NULL DEFAULT 'Pending', -- 'Pending', 'Confirmed', 'Completed', 'Cancelled', 'cancellation_pending'
     booking_date VARCHAR(50),
+    cancellation_reason TEXT,
+    cancellation_details TEXT,
+    cancellation_requested BOOLEAN DEFAULT false,
+    driver_approval_reason TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -148,6 +152,31 @@ CREATE INDEX IF NOT EXISTS idx_bookings_customer_id ON bookings(customer_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_driver_id ON bookings(driver_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_booking ON bookings (driver_id, customer_id) WHERE status IN ('Pending', 'Confirmed', 'Active');
+
+-- 6.1 Route Cancellation Requests
+CREATE TABLE IF NOT EXISTS cancellation_requests (
+    id VARCHAR(64) PRIMARY KEY,
+    booking_id VARCHAR(64) REFERENCES bookings(id) ON DELETE CASCADE,
+    customer_id VARCHAR(64),
+    customer_name VARCHAR(150),
+    customer_phone VARCHAR(30),
+    driver_id VARCHAR(64),
+    driver_name VARCHAR(150),
+    driver_phone VARCHAR(30),
+    route_id VARCHAR(64),
+    route_name TEXT,
+    passenger_reason TEXT,
+    passenger_details TEXT,
+    driver_decision VARCHAR(30) DEFAULT 'pending',
+    driver_approval_reason TEXT,
+    status VARCHAR(30) DEFAULT 'Pending', -- 'Pending', 'Approved', 'Rejected'
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    resolved_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_cancellation_requests_booking ON cancellation_requests(booking_id);
+CREATE INDEX IF NOT EXISTS idx_cancellation_requests_driver ON cancellation_requests(driver_id);
+CREATE INDEX IF NOT EXISTS idx_cancellation_requests_status ON cancellation_requests(status);
 
 -- 7. Complaints
 CREATE TABLE IF NOT EXISTS complaints (

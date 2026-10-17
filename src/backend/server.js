@@ -2253,13 +2253,55 @@ async function startServer() {
             const parts = pathname.split('/');
             const customerId = decodeURIComponent(parts[parts.length - 2]);
             const cleanPhone = customerId.replace(/[^0-9]/g, '');
-            const userBookings = (db.memoryState.bookings || []).filter(b => {
+
+            let userBookings = [];
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    const pgRes = await db.pool.query(`
+                        SELECT * FROM bookings 
+                        WHERE (customer_id = $1 OR customer_id = $2 OR (customer_phone IS NOT NULL AND RIGHT(REGEXP_REPLACE(customer_phone, '[^0-9]', '', 'g'), 8) = RIGHT($3, 8)))
+                          AND status IN ('Pending', 'Confirmed', 'Active', 'cancellation_pending')
+                        ORDER BY created_at DESC
+                    `, [customerId, cleanPhone, cleanPhone.length >= 7 ? cleanPhone : '_____']);
+                    if (pgRes.rows && pgRes.rows.length > 0) {
+                        userBookings = pgRes.rows.map(r => ({
+                            id: r.id,
+                            bookingId: r.id,
+                            driverId: r.driver_id,
+                            driverName: r.driver_name,
+                            customerId: r.customer_id,
+                            customerName: r.customer_name,
+                            customerPhone: r.customer_phone,
+                            routeId: r.route_id,
+                            pickupLocation: r.pickup_name,
+                            dropoffLocation: r.dropoff_name,
+                            seatsBooked: r.seats_booked || 1,
+                            status: r.status,
+                            cancellationPending: r.status === 'cancellation_pending' || r.cancellation_requested === true,
+                            cancellationReason: r.cancellation_reason || '',
+                            cancellationDetails: r.cancellation_details || '',
+                            createdAt: r.created_at
+                        }));
+                    }
+                } catch (pgErr) {
+                    console.error('[Customer] PG bookings fetch error:', pgErr.message);
+                }
+            }
+
+            const memBookings = (db.memoryState.bookings || []).filter(b => {
                 const bCustId = String(b.customerId || b.passengerId || '');
                 const bPhone = String(b.customerPhone || b.phone || '').replace(/[^0-9]/g, '');
                 const isMatch = (customerId && bCustId === customerId) || (cleanPhone.length >= 7 && bPhone.length >= 7 && (bPhone.endsWith(cleanPhone.slice(-8)) || cleanPhone.endsWith(bPhone.slice(-8))));
-                const isActive = b.status === 'Confirmed' || b.status === 'Pending' || b.status === 'Active' || !b.status;
+                const isActive = b.status === 'Confirmed' || b.status === 'Pending' || b.status === 'Active' || b.status === 'cancellation_pending' || !b.status;
                 return isMatch && isActive;
             });
+
+            for (const mb of memBookings) {
+                if (!userBookings.some(ub => ub.id === mb.id || ub.bookingId === mb.bookingId)) {
+                    userBookings.push(mb);
+                }
+            }
+
             return sendJson({ success: true, bookings: userBookings });
         }
 
@@ -2685,6 +2727,10 @@ async function startServer() {
                             seatsBooked: r.seats_booked || 1,
                             status: r.status || 'Pending',
                             totalFare: r.total_fare,
+                            cancellationPending: r.status === 'cancellation_pending' || r.cancellation_requested === true || !!r.cancellation_reason,
+                            cancellationReason: r.cancellation_reason || '',
+                            cancellationDetails: r.cancellation_details || '',
+                            driverApprovalReason: r.driver_approval_reason || '',
                             createdAt: r.created_at
                         }));
                     }
@@ -2703,7 +2749,13 @@ async function startServer() {
             );
             for (const mb of memBookings) {
                 if (!driverBookings.some(dbk => (dbk.id === mb.id || dbk.bookingId === mb.bookingId))) {
-                    driverBookings.push(mb);
+                    driverBookings.push({
+                        ...mb,
+                        cancellationPending: mb.status === 'cancellation_pending' || mb.cancellationPending === true || mb.cancellationRequested === true || !!mb.cancellationReason,
+                        cancellationReason: mb.cancellationReason || '',
+                        cancellationDetails: mb.cancellationDetails || '',
+                        driverApprovalReason: mb.driverApprovalReason || ''
+                    });
                 }
             }
 
@@ -2727,7 +2779,10 @@ async function startServer() {
                         dropoffLat: parseFloat(ac.dropoffLat || 32.0321),
                         dropoffLon: parseFloat(ac.dropoffLon || 44.3725),
                         seatsBooked: 1,
-                        status: ac.bookingConfirmed ? 'Confirmed' : 'Pending'
+                        status: ac.bookingConfirmed ? 'Confirmed' : 'Pending',
+                        cancellationPending: false,
+                        cancellationReason: '',
+                        cancellationDetails: ''
                     });
                 }
             }
@@ -2735,6 +2790,13 @@ async function startServer() {
             if (authUser && authUser.role === 'Customer') {
                 driverBookings = driverBookings.filter(b => b.customerId === authUser.id || (authUser.phone && (b.customerPhone === authUser.phone || b.phone === authUser.phone)));
             }
+
+            // Prioritize pending cancellations before deduplicating
+            driverBookings.sort((a, b) => {
+                if (a.cancellationPending && !b.cancellationPending) return -1;
+                if (!a.cancellationPending && b.cancellationPending) return 1;
+                return 0;
+            });
 
             // Deduplicate driver bookings by customer to ensure no duplicate cards appear for the driver
             const seenCustKeys = new Set();
@@ -3134,6 +3196,20 @@ async function startServer() {
             const body = await parseJsonBody(req).catch(() => ({}));
             if (bookingId && !body.bookingId) body.bookingId = bookingId;
             const result = await adminController.createCancellationRequest(body);
+            return sendJson(result, result.success ? 200 : 400);
+        }
+
+        // Customer Request Route Cancellation
+        if ((pathname === '/api/customer/request-route-cancellation' || pathname === '/customer/request-route-cancellation') && method === 'POST') {
+            const body = await parseJsonBody(req).catch(() => ({}));
+            const result = await adminController.requestRouteCancellation(body);
+            return sendJson(result, result.success ? 200 : 400);
+        }
+
+        // Driver Respond Route Cancellation (Approve or Reject)
+        if ((pathname === '/api/driver/respond-route-cancellation' || pathname === '/driver/respond-route-cancellation') && method === 'POST') {
+            const body = await parseJsonBody(req).catch(() => ({}));
+            const result = await adminController.respondRouteCancellation(body);
             return sendJson(result, result.success ? 200 : 400);
         }
 

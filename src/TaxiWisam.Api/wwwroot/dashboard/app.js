@@ -3766,40 +3766,59 @@ async function loadCancellationRequests() {
                 statusBadge = '<span class="px-2.5 py-1 bg-amber-100 text-amber-800 rounded-full font-bold text-xs animate-pulse">⏳ قيد المراجعة</span>';
             }
 
+            let driverDecisionBadge = '';
+            const dec = String(r.driverDecision || '').toLowerCase();
+            if (dec === 'approved') {
+                driverDecisionBadge = '<span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-xs">موافقة ✅</span>';
+            } else if (dec === 'rejected') {
+                driverDecisionBadge = '<span class="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg font-bold text-xs">رفض ❌</span>';
+            } else {
+                driverDecisionBadge = '<span class="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg font-bold text-xs">قيد انتظار الرد ⏳</span>';
+            }
+
             let actionButtons = '';
             if (r.status === 'Pending') {
                 actionButtons = `
-                    <div class="flex items-center justify-center gap-2">
+                    <div class="flex items-center justify-center gap-1.5 mt-1">
                         <button onclick="approveCancellationRequest('${r.id || r.requestId}')" 
-                                class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center gap-1 transition shadow cursor-pointer">
+                                class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold text-xs flex items-center gap-1 transition shadow-sm cursor-pointer" title="اعتماد الإلغاء وتحرير المقعد">
                             <i class="fa-solid fa-check"></i>
-                            <span>قبول وتحرير المقعد</span>
+                            <span>اعتماد</span>
                         </button>
                         <button onclick="rejectCancellationRequest('${r.id || r.requestId}')" 
-                                class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-bold text-xs flex items-center gap-1 transition shadow cursor-pointer">
+                                class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg font-bold text-xs flex items-center gap-1 transition shadow-sm cursor-pointer" title="رفض طلب الإلغاء">
                             <i class="fa-solid fa-xmark"></i>
                             <span>رفض</span>
                         </button>
                     </div>
                 `;
-            } else {
-                actionButtons = `<span class="text-xs text-slate-400 font-semibold">مكتمل (${r.status})</span>`;
             }
 
+            const pReason = r.passengerReason || r.reason || 'ظروف شخصية';
+            const pDetails = r.passengerDetails ? `<div class="text-xs text-slate-400 mt-0.5 max-w-xs truncate" title="${r.passengerDetails}">${r.passengerDetails}</div>` : '';
+            const drvReason = r.driverApprovalReason ? `<div class="text-xs font-medium text-slate-700 max-w-xs truncate" title="${r.driverApprovalReason}">${r.driverApprovalReason}</div>` : '<span class="text-slate-400 text-xs">—</span>';
+
             tr.innerHTML = `
-                <td class="p-4 font-mono font-bold text-slate-700">${r.id || r.requestId || ''}</td>
-                <td class="p-4">
-                    <div class="font-bold text-slate-900">${r.driverName || 'الكابتن'}</div>
-                    <div class="text-xs text-slate-500 font-mono" dir="ltr">${r.driverPhone || ''}</div>
-                </td>
+                <td class="p-4 font-mono font-bold text-slate-700 text-xs">${r.id || r.requestId || ''}</td>
                 <td class="p-4">
                     <div class="font-bold text-slate-900">${r.customerName || 'الراكب'}</div>
                     <div class="text-xs text-slate-500 font-mono" dir="ltr">${r.customerPhone || ''}</div>
                 </td>
-                <td class="p-4 text-slate-700 font-semibold">${r.route || 'مسار الرحلة'}</td>
-                <td class="p-4 text-slate-600 max-w-xs truncate" title="${r.reason || ''}">${r.reason || 'طلب إلغاء من الكابتن'}</td>
-                <td class="p-4 text-center">${statusBadge}</td>
-                <td class="p-4 text-center">${actionButtons}</td>
+                <td class="p-4">
+                    <div class="font-bold text-slate-900">${r.driverName || 'الكابتن'}</div>
+                    <div class="text-xs text-slate-500 font-mono" dir="ltr">${r.driverPhone || ''}</div>
+                </td>
+                <td class="p-4 text-slate-700 font-semibold text-xs">${r.route || 'مسار الرحلة'}</td>
+                <td class="p-4">
+                    <div class="font-bold text-slate-800 text-xs">${pReason}</div>
+                    ${pDetails}
+                </td>
+                <td class="p-4 text-center">${driverDecisionBadge}</td>
+                <td class="p-4">${drvReason}</td>
+                <td class="p-4 text-center">
+                    <div>${statusBadge}</div>
+                    ${actionButtons}
+                </td>
             `;
             body.appendChild(tr);
         });
