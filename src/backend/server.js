@@ -1404,17 +1404,82 @@ async function startServer() {
             return sendJson(result.settings);
         }
 
-        if (pathname.startsWith('/api/admin/settings/') && method === 'POST') {
+        if (pathname.startsWith('/api/admin/settings/') && (method === 'POST' || method === 'PUT')) {
             const key = pathname.replace('/api/admin/settings/', '').trim();
             const body = await parseJsonBody(req);
-            const result = await adminController.updateSetting(key, body.valueJson || body);
+            const result = await adminController.updateSetting(key, body.valueJson || body, clientIp);
             return sendJson(result);
         }
 
-        // Audit Logs
-        if (pathname === '/api/admin/audit-logs') {
-            const result = await adminController.getAuditLogs();
-            return sendJson(result.logs);
+        // Audit Logs (Query & Filter)
+        if ((pathname === '/api/admin/audit-logs' || pathname === '/api/audit-logs') && method === 'GET') {
+            const limit = parseInt(parsedUrl.searchParams.get('limit') || '200', 10);
+            const offset = parseInt(parsedUrl.searchParams.get('offset') || '0', 10);
+            const action = parsedUrl.searchParams.get('action') || '';
+            const search = parsedUrl.searchParams.get('search') || '';
+            const result = await adminController.getAuditLogs({ limit, offset, action, search });
+            return sendJson(result);
+        }
+
+        // Audit Logs (Manual Logging Endpoint)
+        if ((pathname === '/api/admin/audit-logs' || pathname === '/api/audit-logs') && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const log = await adminController.logAuditEvent({
+                action: body.action || 'CustomAdminAction',
+                entityType: body.entityType || body.entityName || 'System',
+                entityId: body.entityId || 'N/A',
+                actor: body.actor || 'المشرف العام (Admin)',
+                details: body.details || body.newValuesJson || {},
+                ip: clientIp,
+                userAgent: req.headers['user-agent'] || ''
+            });
+            return sendJson({ success: true, log });
+        }
+
+        // Admin Authentication & Session Auditing
+        if (pathname === '/api/admin/auth/login' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const username = (body.username || '').trim().toLowerCase();
+            const password = (body.password || '').trim();
+            const isUserValid = (username === 'admin' || username === 'admin@taxiwisam.com' || username === 'مدير' || username === 'الادارة');
+            const isPassValid = (password === '1122' || password === '١١٢٢');
+
+            if (isUserValid && isPassValid) {
+                await adminController.logAuditEvent({
+                    action: 'AdminLoginSuccess',
+                    entityType: 'AdminAuth',
+                    entityId: username || 'admin',
+                    actor: 'المشرف العام (Admin)',
+                    details: { username, status: 'Authorized', timestamp: new Date().toISOString() },
+                    ip: clientIp,
+                    userAgent: req.headers['user-agent'] || ''
+                });
+                return sendJson({ success: true, message: 'تم التحقق وتسجيل الدخول بنجاح' });
+            } else {
+                await adminController.logAuditEvent({
+                    action: 'AdminLoginFailed',
+                    entityType: 'SecurityAlert',
+                    entityId: username || 'Unknown',
+                    actor: 'مجهول (Unauthorized)',
+                    details: { attemptedUsername: username, status: 'Rejected', timestamp: new Date().toISOString() },
+                    ip: clientIp,
+                    userAgent: req.headers['user-agent'] || ''
+                });
+                return sendJson({ success: false, error: 'بيانات الدخول غير صحيحة' }, 401);
+            }
+        }
+
+        if (pathname === '/api/admin/auth/logout' && method === 'POST') {
+            await adminController.logAuditEvent({
+                action: 'AdminLogout',
+                entityType: 'AdminAuth',
+                entityId: 'admin',
+                actor: 'المشرف العام (Admin)',
+                details: { status: 'LoggedOut', timestamp: new Date().toISOString() },
+                ip: clientIp,
+                userAgent: req.headers['user-agent'] || ''
+            });
+            return sendJson({ success: true, message: 'تم تسجيل الخروج بنجاح' });
         }
 
         // ---------------------------------------------------------------------

@@ -1,5 +1,6 @@
 const db = require('../../db');
 const backupService = require('../backup/backupService');
+const auditService = require('../audit/auditService');
 
 class AdminController {
     // 1. Dynamic Stats (Calculated on the fly from current active records)
@@ -871,7 +872,7 @@ class AdminController {
         };
     }
 
-    async updateSetting(key, valueJson) {
+    async updateSetting(key, valueJson, ip = '127.0.0.1') {
         let setting = db.memoryState.settings.find(s => s.key === key);
         if (setting) {
             setting.valueJson = typeof valueJson === 'string' ? valueJson : JSON.stringify(valueJson);
@@ -895,16 +896,30 @@ class AdminController {
         }
 
         db.saveStateSnapshot();
+
+        // Automated Audit Logging for settings & pricing changes
+        try {
+            const isPricing = key === 'PricingParameters' || key.toLowerCase().includes('price') || key.toLowerCase().includes('fare');
+            await auditService.logAuditEvent({
+                action: isPricing ? 'PricingParametersUpdated' : 'SystemSettingUpdated',
+                entityType: 'SystemSetting',
+                entityId: key,
+                actor: 'المشرف العام (Admin)',
+                details: { key, updatedSetting: setting.valueJson },
+                ip
+            });
+        } catch (_) {}
+
         return { success: true, setting };
     }
 
     // 9. Audit Logs
-    async getAuditLogs() {
-        return {
-            success: true,
-            total: db.memoryState.auditLogs.length,
-            logs: db.memoryState.auditLogs
-        };
+    async getAuditLogs(params = {}) {
+        return await auditService.getAuditLogs(params);
+    }
+
+    async logAuditEvent(data) {
+        return await auditService.logAuditEvent(data);
     }
 
     // 10. Backup & Restore

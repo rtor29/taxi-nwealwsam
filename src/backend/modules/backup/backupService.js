@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const db = require('../../db');
 const config = require('../../config');
+const auditService = require('../audit/auditService');
 
 class BackupService {
     /**
@@ -234,13 +235,29 @@ class BackupService {
                 console.warn('[BackupService] Could not write server-side backup copy:', fsErr.message);
             }
 
-            db.addAuditLog('SystemBackupExported', 'System', 'FullDatabase', {
-                filename,
-                totalRows,
-                driverCount: drivers.length,
-                customerCount: customers.length,
-                exportedAt: timestamp
-            });
+            try {
+                await auditService.logAuditEvent({
+                    action: 'SystemBackupExported',
+                    entityType: 'FullDatabase',
+                    entityId: filename,
+                    actor: 'المشرف العام (Admin)',
+                    details: {
+                        filename,
+                        totalRows,
+                        driverCount: drivers.length,
+                        customerCount: customers.length,
+                        exportedAt: timestamp
+                    }
+                });
+            } catch (_) {
+                db.addAuditLog('SystemBackupExported', 'System', 'FullDatabase', {
+                    filename,
+                    totalRows,
+                    driverCount: drivers.length,
+                    customerCount: customers.length,
+                    exportedAt: timestamp
+                });
+            }
 
             return {
                 success: true,
@@ -644,6 +661,26 @@ class BackupService {
 
         db.cleanOrphanRecords();
         db.saveStateSnapshot();
+
+        try {
+            await auditService.logAuditEvent({
+                action: 'SystemDatabaseRestored',
+                entityType: 'FullDatabase',
+                entityId: 'PostgreSQL-taxiwisam',
+                actor: 'المشرف العام (Admin)',
+                details: {
+                    usersRestored: users.length,
+                    driversRestored: drivers.length,
+                    customersRestored: customers.length,
+                    routesRestored: routes.length,
+                    bookingsRestored: bookings.length,
+                    documentsRestored: driver_documents.length,
+                    complaintsRestored: complaints.length,
+                    settingsRestored: system_settings.length,
+                    restoredAt: new Date().toISOString()
+                }
+            });
+        } catch (_) {}
 
         return {
             success: true,

@@ -93,6 +93,16 @@ function handleAdminLogin(event) {
             overlay.classList.add('hidden');
         }
         showToast('مرحباً بك في لوحة تحكم منصة توصيله! 🚖');
+
+        // Audit login on server
+        try {
+            fetch(`${API_BASE}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            }).catch(() => {});
+        } catch (_) {}
+
         try { loadDashboardStats(); } catch(e) { console.warn(e); }
         try { loadDrivers(); } catch(e) { console.warn(e); }
         try { loadCustomers(); } catch(e) { console.warn(e); }
@@ -101,6 +111,15 @@ function handleAdminLogin(event) {
         try { loadMatchingSettings(); } catch(e) { console.warn(e); }
         try { loadCustomizationSettings(); } catch(e) { console.warn(e); }
     } else {
+        // Audit failed login attempt on server
+        try {
+            fetch(`${API_BASE}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            }).catch(() => {});
+        } catch (_) {}
+
         if (errorBox) {
             errorBox.innerText = 'بيانات الدخول غير صحيحة! يرجى إدخال اسم المستخدم admin وكلمة المرور 1122 أو ١١٢٢';
             errorBox.classList.remove('hidden');
@@ -109,7 +128,10 @@ function handleAdminLogin(event) {
     }
 }
 
-function logoutAdmin() {
+async function logoutAdmin() {
+    try {
+        await fetch(`${API_BASE}/auth/logout`, { method: 'POST' }).catch(() => {});
+    } catch (_) {}
     localStorage.removeItem('tawseela_admin_auth');
     location.reload();
 }
@@ -1606,39 +1628,386 @@ async function savePricingSettings() {
 }
 
 // -----------------------------------------------------------------------------
-// 8. Audit Logs
+// 8. Audit Logs (Enterprise Security Monitoring)
 // -----------------------------------------------------------------------------
+let currentAuditCategory = 'all';
+let currentAuditSearch = '';
+let auditSearchDebounceTimer = null;
+let currentAuditLogsCache = [];
+
+function setAuditCategoryFilter(category, btn) {
+    currentAuditCategory = category;
+    const container = document.getElementById('audit-category-filters');
+    if (container) {
+        const pills = container.querySelectorAll('.audit-filter-pill');
+        pills.forEach(p => {
+            p.className = 'audit-filter-pill px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer';
+        });
+    }
+    if (btn) {
+        btn.className = 'audit-filter-pill px-3 py-1.5 rounded-xl text-xs font-bold transition bg-amber-500 text-slate-950 shadow-xs cursor-pointer';
+    }
+    loadAuditLogs();
+}
+
+function debounceAuditSearch(val) {
+    if (auditSearchDebounceTimer) clearTimeout(auditSearchDebounceTimer);
+    auditSearchDebounceTimer = setTimeout(() => {
+        currentAuditSearch = (val || '').trim();
+        loadAuditLogs();
+    }, 250);
+}
+
+function getAuditActionBadge(action) {
+    const act = (action || '').trim();
+
+    // 1. Red / Rose: Deletions, Bans, Database Restores, Failed Attempts
+    if (/restored/i.test(act) || /delete/i.test(act) || /ban|block/i.test(act) || /failed|rejected/i.test(act) || /decline/i.test(act)) {
+        let label = act;
+        let icon = 'fa-solid fa-triangle-exclamation';
+        if (act === 'SystemDatabaseRestored') { label = 'استعادة قاعدة البيانات ⚠️'; icon = 'fa-solid fa-rotate-left'; }
+        else if (act === 'DriverBanned' || act === 'DriverBlocked') { label = 'حظر كابتن'; icon = 'fa-solid fa-ban'; }
+        else if (act === 'DriverRejected') { label = 'رفض كابتن'; icon = 'fa-solid fa-user-xmark'; }
+        else if (act === 'DriverDocumentRejected') { label = 'رفض وثيقة رسمية'; icon = 'fa-solid fa-file-circle-xmark'; }
+        else if (act === 'DriverDeletedPermanently') { label = 'حذف كابتن نهائياً'; icon = 'fa-solid fa-trash-can'; }
+        else if (act === 'CustomerBanned' || act === 'CustomerBlocked') { label = 'حظر راكب'; icon = 'fa-solid fa-user-slash'; }
+        else if (act === 'CustomerDeletedPermanently') { label = 'حذف راكب نهائياً'; icon = 'fa-solid fa-trash-can'; }
+        else if (act === 'AdminLoginFailed') { label = 'محاولة دخول فاشلة ⚠️'; icon = 'fa-solid fa-shield-halved'; }
+        else if (act === 'RouteCancellationRejected') { label = 'رفض إلغاء الخط'; icon = 'fa-solid fa-circle-xmark'; }
+        else if (act === 'RouteCancellationDeclinedByDriver' || act === 'BookingDeclined') { label = 'اعتذار عن الطلب'; icon = 'fa-solid fa-thumbs-down'; }
+
+        return `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs">
+                <i class="${icon} text-[11px]"></i>
+                <span>${escapeHtml(label)}</span>
+            </span>
+            <span class="block font-mono text-[10px] text-slate-400 mt-0.5" dir="ltr">${escapeHtml(act)}</span>
+        `;
+    }
+
+    // 2. Amber: Pricing, Settings, Changes, Suspensions, Pending Requests
+    if (/price|pricing|setting|status|suspend|request/i.test(act)) {
+        let label = act;
+        let icon = 'fa-solid fa-sliders';
+        if (act === 'PricingParametersUpdated') { label = 'تعديل أسعار المشاوير'; icon = 'fa-solid fa-money-bill-wave'; }
+        else if (act === 'SystemSettingUpdated') { label = 'تعديل إعدادات النظام'; icon = 'fa-solid fa-gear'; }
+        else if (act === 'DriverStatusChanged') { label = 'تغيير حالة الكابتن'; icon = 'fa-solid fa-user-pen'; }
+        else if (act === 'DriverSuspended') { label = 'تعليق حساب كابتن'; icon = 'fa-solid fa-pause'; }
+        else if (act === 'RouteCancellationRequested') { label = 'طلب إلغاء اشتراك'; icon = 'fa-solid fa-file-circle-exclamation'; }
+
+        return `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
+                <i class="${icon} text-[11px] text-amber-600"></i>
+                <span>${escapeHtml(label)}</span>
+            </span>
+            <span class="block font-mono text-[10px] text-slate-400 mt-0.5" dir="ltr">${escapeHtml(act)}</span>
+        `;
+    }
+
+    // 3. Emerald: Approvals, Verifications, Successful Logins, Positive Confirmations
+    if (/approved|verified|success|accepted/i.test(act)) {
+        let label = act;
+        let icon = 'fa-solid fa-check';
+        if (act === 'DriverApproved') { label = 'اعتماد وتفعيل كابتن'; icon = 'fa-solid fa-circle-check'; }
+        else if (act === 'DriverVerified') { label = 'توثيق وثائق الكابتن'; icon = 'fa-solid fa-id-card'; }
+        else if (act === 'DriverDocumentApproved') { label = 'قبول وثيقة رسمية'; icon = 'fa-solid fa-file-circle-check'; }
+        else if (act === 'AdminLoginSuccess') { label = 'دخول ناجح للمشرف'; icon = 'fa-solid fa-key'; }
+        else if (act === 'RouteCancellationApproved' || act === 'PassengerCancellationApproved') { label = 'الموافقة على إلغاء الخط'; icon = 'fa-solid fa-circle-check'; }
+        else if (act === 'RouteCancellationAcceptedByDriver' || act === 'BookingAccepted') { label = 'قبول طلب الحجز'; icon = 'fa-solid fa-thumbs-up'; }
+
+        return `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+                <i class="${icon} text-[11px] text-emerald-600"></i>
+                <span>${escapeHtml(label)}</span>
+            </span>
+            <span class="block font-mono text-[10px] text-slate-400 mt-0.5" dir="ltr">${escapeHtml(act)}</span>
+        `;
+    }
+
+    // 4. Indigo / Slate / Default: Registrations, Bookings, Exports, Logouts
+    let label = act;
+    let icon = 'fa-solid fa-receipt';
+    if (act === 'SystemBackupExported') { label = 'تصدير نسخة احتياطية'; icon = 'fa-solid fa-cloud-arrow-down'; }
+    else if (act === 'AdminCreatedDriver' || act === 'DriverRegisteredByAdmin') { label = 'تسجيل كابتن من الإدارة'; icon = 'fa-solid fa-user-plus'; }
+    else if (act === 'DriverRegistered') { label = 'تسجيل كابتن جديد'; icon = 'fa-solid fa-car-side'; }
+    else if (act === 'PassengerRegistered' || act === 'CustomerCreatedByAdmin') { label = 'تسجيل راكب جديد'; icon = 'fa-solid fa-user-check'; }
+    else if (act === 'SeatBooked') { label = 'حجز مقعد في خط'; icon = 'fa-solid fa-ticket'; }
+    else if (act === 'AdminLogout') { label = 'تسجيل خروج المشرف'; icon = 'fa-solid fa-right-from-bracket'; }
+
+    return `
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs">
+            <i class="${icon} text-[11px] text-slate-500"></i>
+            <span>${escapeHtml(label)}</span>
+        </span>
+        <span class="block font-mono text-[10px] text-slate-400 mt-0.5" dir="ltr">${escapeHtml(act)}</span>
+    `;
+}
+
+function copyTextToClipboard(text) {
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text)
+            .then(() => showToast(`تم النسخ: ${text}`))
+            .catch(() => showToast(`تعذر النسخ`, true));
+    } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        showToast(`تم النسخ: ${text}`);
+    }
+}
+
 async function loadAuditLogs() {
     const tbody = document.getElementById('audit-table-body');
-    if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-400">جاري التحميل...</td></tr>';
+    const refreshIcon = document.getElementById('audit-refresh-icon');
+    const totalBadge = document.getElementById('audit-total-badge');
+
+    if (refreshIcon) refreshIcon.classList.add('fa-spin');
+    if (tbody) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="p-8 text-center text-slate-400">
+                    <div class="flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-spinner fa-spin text-amber-500"></i>
+                        <span>جاري قراءة سجلات التدقيق الأمني من PostgreSQL...</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
 
     try {
-        const res = await fetch(`${API_BASE}/audit-logs`);
+        const queryParams = new URLSearchParams({
+            action: currentAuditCategory || 'all',
+            search: currentAuditSearch || '',
+            limit: '200'
+        });
+
+        const res = await fetch(`${API_BASE}/audit-logs?${queryParams.toString()}`);
+        if (!res.ok) throw new Error('تعذر جلب سجلات التدقيق');
         const data = await res.json();
+
+        const logs = Array.isArray(data) ? data : (data.logs || []);
+        currentAuditLogsCache = logs;
+
+        if (totalBadge) {
+            const count = data.total != null ? data.total : logs.length;
+            totalBadge.textContent = `${Number(count).toLocaleString('en-US')} سجل`;
+        }
+
+        if (!tbody) return;
         tbody.innerHTML = '';
 
-        if (!data.logs || data.logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-400">لا توجد سجلات تدقيق</td></tr>';
+        if (logs.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="p-8 text-center text-slate-400">
+                        <i class="fa-solid fa-clipboard-check text-3xl mb-2 text-slate-300 block"></i>
+                        لا توجد سجلات تدقيق مطابقة لمعايير البحث الحالية
+                    </td>
+                </tr>
+            `;
             return;
         }
 
-        data.logs.forEach(l => {
+        logs.forEach((l, idx) => {
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80 text-xs md:text-sm';
 
+            // 1. Iraqi Local Time Formatting (Day, Date, Exact Time with Seconds)
+            const rawTime = l.createdAt || l.created_at || l.timestamp;
+            let dateStr = '--';
+            let timeStr = '--';
+            if (rawTime) {
+                const dateObj = new Date(rawTime);
+                try {
+                    dateStr = dateObj.toLocaleDateString('ar-IQ', {
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        timeZone: 'Asia/Baghdad'
+                    });
+                    timeStr = dateObj.toLocaleTimeString('ar-IQ', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: true,
+                        timeZone: 'Asia/Baghdad'
+                    });
+                } catch (_) {
+                    dateStr = dateObj.toLocaleDateString();
+                    timeStr = dateObj.toLocaleTimeString();
+                }
+            }
+
+            // 2. Parse Payload & Actor
+            let payload = {};
+            let payloadSummary = '-';
+            const rawPayload = l.newValuesJson || l.new_values_json;
+            if (rawPayload) {
+                try {
+                    payload = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload;
+                    const keys = Object.keys(payload).filter(k => k !== 'actor' && k !== 'userAgent' && k !== 'timestamp');
+                    if (keys.length > 0) {
+                        payloadSummary = keys.slice(0, 3).map(k => {
+                            const val = typeof payload[k] === 'object' ? JSON.stringify(payload[k]) : String(payload[k]);
+                            return `${k}: ${val}`;
+                        }).join(' | ');
+                    } else if (payload.filename) {
+                        payloadSummary = `الملف: ${payload.filename}`;
+                    } else {
+                        payloadSummary = JSON.stringify(payload);
+                    }
+                } catch (_) {
+                    payloadSummary = String(rawPayload);
+                }
+            }
+
+            // Actor
+            let actorName = payload.actor;
+            if (!actorName) {
+                const ent = l.entityName || l.entity_name;
+                if (ent === 'Admin' || (l.action && l.action.startsWith('Admin'))) actorName = 'المشرف العام (Admin)';
+                else if (ent === 'Driver') actorName = 'كابتن';
+                else if (ent === 'Customer') actorName = 'راكب';
+                else actorName = 'النظام الآلي (System)';
+            }
+
+            // 3. Action badge
+            const actionBadge = getAuditActionBadge(l.action);
+
+            // 4. Entity & ID
+            const entityName = l.entityName || l.entity_name || 'System';
+            const entityId = l.entityId || l.entity_id || '-';
+
+            // 5. IP Address
+            const ip = l.ipAddress || l.ip_address || '127.0.0.1';
+
             tr.innerHTML = `
-                <td class="py-3.5 px-4 font-bold text-slate-900">${escapeHtml(l.action || '')}</td>
-                <td class="py-3.5 px-4 text-xs font-semibold text-slate-600">${escapeHtml(l.entityName || '')}</td>
-                <td class="py-3.5 px-4 font-mono text-xs text-slate-500">${escapeHtml(l.entityId || '')}</td>
-                <td class="py-3.5 px-4 text-xs font-mono max-w-xs truncate text-slate-700" title="${escapeHtml(l.newValuesJson || '')}">${escapeHtml(l.newValuesJson || '-')}</td>
-                <td class="py-3.5 px-4 font-mono text-xs text-slate-500">${escapeHtml(l.ipAddress || '127.0.0.1')}</td>
-                <td class="py-3.5 px-4 font-mono text-xs text-slate-500">${new Date(l.createdAt).toLocaleString('ar-IQ')}</td>
+                <td class="py-3 px-4 whitespace-nowrap">
+                    <div class="font-bold text-slate-800 text-xs">${escapeHtml(dateStr)}</div>
+                    <div class="font-mono text-[11px] text-slate-500 flex items-center gap-1 mt-0.5" dir="ltr">
+                        <i class="fa-regular fa-clock text-amber-500 text-[10px]"></i>
+                        <span>${escapeHtml(timeStr)}</span>
+                    </div>
+                </td>
+                <td class="py-3 px-4 whitespace-nowrap">
+                    <div class="flex items-center gap-1.5 font-bold text-slate-800 text-xs">
+                        <div class="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 text-xs">
+                            <i class="fa-solid fa-user-shield"></i>
+                        </div>
+                        <span>${escapeHtml(actorName)}</span>
+                    </div>
+                </td>
+                <td class="py-3 px-4">
+                    ${actionBadge}
+                </td>
+                <td class="py-3 px-4">
+                    <div class="font-bold text-slate-800 text-xs">${escapeHtml(entityName)}</div>
+                    <div class="font-mono text-[11px] text-slate-500 max-w-[140px] truncate" dir="ltr" title="${escapeHtml(entityId)}">
+                        ${escapeHtml(entityId)}
+                    </div>
+                </td>
+                <td class="py-3 px-4">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-slate-600 truncate max-w-[180px] lg:max-w-[260px] block" title="${escapeHtml(payloadSummary)}">
+                            ${escapeHtml(payloadSummary)}
+                        </span>
+                        <button type="button" onclick="openAuditPayloadModal(${idx})" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[11px] flex items-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0">
+                            <i class="fa-solid fa-code text-amber-500"></i>
+                            <span>التفاصيل</span>
+                        </button>
+                    </div>
+                </td>
+                <td class="py-3 px-4 whitespace-nowrap">
+                    <div class="inline-flex items-center gap-1.5 bg-slate-100/80 px-2 py-1 rounded-lg border border-slate-200/80">
+                        <span class="font-mono text-xs text-slate-700" dir="ltr">${escapeHtml(ip)}</span>
+                        <button type="button" onclick="copyTextToClipboard('${escapeHtml(ip)}')" title="نسخ عنوان IP" class="text-slate-400 hover:text-slate-800 transition cursor-pointer">
+                            <i class="fa-regular fa-copy text-xs"></i>
+                        </button>
+                    </div>
+                </td>
             `;
+
             tbody.appendChild(tr);
         });
+
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-rose-500">فشل في الاتصال</td></tr>';
+        console.warn('loadAuditLogs error:', err);
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="p-8 text-center text-rose-500">
+                        <i class="fa-solid fa-circle-exclamation text-2xl mb-1 block"></i>
+                        فشل في الاتصال بجلب سجلات التدقيق: ${escapeHtml(err.message)}
+                    </td>
+                </tr>
+            `;
+        }
+    } finally {
+        if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Audit Log Payload Details Modal
+// -----------------------------------------------------------------------------
+let activeAuditLogModalPayload = null;
+
+function openAuditPayloadModal(idx) {
+    const log = currentAuditLogsCache[idx];
+    if (!log) return;
+
+    const modal = document.getElementById('modal-audit-payload');
+    const title = document.getElementById('audit-modal-title');
+    const subtitle = document.getElementById('audit-modal-subtitle');
+    const actorEl = document.getElementById('audit-modal-actor');
+    const ipEl = document.getElementById('audit-modal-ip');
+    const jsonContainer = document.getElementById('audit-modal-json');
+
+    const rawPayload = log.newValuesJson || log.new_values_json;
+    let parsedPayload = {};
+    try {
+        parsedPayload = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : (rawPayload || {});
+    } catch (_) {
+        parsedPayload = { raw: rawPayload };
+    }
+    activeAuditLogModalPayload = parsedPayload;
+
+    if (title) title.textContent = `تفاصيل: ${log.action}`;
+    if (subtitle) subtitle.textContent = `${log.entityName || log.entity_name} (ID: ${log.entityId || log.entity_id})`;
+    if (actorEl) actorEl.textContent = parsedPayload.actor || 'المشرف العام (Admin)';
+    if (ipEl) ipEl.textContent = log.ipAddress || log.ip_address || '127.0.0.1';
+    if (jsonContainer) {
+        jsonContainer.textContent = JSON.stringify(parsedPayload, null, 2);
+    }
+
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden');
+    }
+}
+
+function closeAuditPayloadModal() {
+    const modal = document.getElementById('modal-audit-payload');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.add('hidden');
+    }
+}
+
+function copyAuditPayloadToClipboard() {
+    if (!activeAuditLogModalPayload) return;
+    const text = JSON.stringify(activeAuditLogModalPayload, null, 2);
+    copyTextToClipboard(text);
+    const copyText = document.getElementById('audit-copy-text');
+    if (copyText) {
+        copyText.textContent = 'تم النسخ بنجاح! ✅';
+        setTimeout(() => { copyText.textContent = 'نسخ البيانات'; }, 2000);
     }
 }
 

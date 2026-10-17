@@ -397,8 +397,8 @@
                 </button>
 
                 <button onclick="switchTab('audit')" id="tab-btn-audit" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
-                    <i class="fa-solid fa-receipt w-5 text-center text-slate-400"></i>
-                    <span>سجل التدقيق (Audit Logs)</span>
+                    <i class="fa-solid fa-shield-halved w-5 text-center text-slate-400"></i>
+                    <span>سجل التدقيق الأمني</span>
                 </button>
 
                 <button onclick="switchTab('backup')" id="tab-btn-backup" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
@@ -1140,29 +1140,69 @@
             </section>
 
             <!-- 8. AUDIT LOGS TAB -->
-            <section id="tab-audit" class="tab-content hidden space-y-6">
+            <section id="tab-audit" class="tab-content hidden space-y-5">
+                <!-- Header -->
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                        <h2 class="text-2xl font-black text-slate-900">سجل التدقيق الأمني (Audit Logs)</h2>
-                        <p class="text-xs md:text-sm text-slate-500">تسجيل كامل للعمليات الحساسة، التعديلات الإدارية، وتوقيتاتها</p>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <h2 class="text-2xl font-black text-slate-900">سجل التدقيق الأمني</h2>
+                            <span id="audit-total-badge" class="px-2.5 py-0.5 bg-slate-100 text-slate-700 font-mono font-bold text-xs rounded-full border border-slate-200">-- سجل</span>
+                        </div>
+                        <p class="text-xs md:text-sm text-slate-500">منظومة رقابة أمنية ترصد العمليات الحساسة، التعديلات الإدارية، وعناوين الـ IP بدقة</p>
                     </div>
-                    <button onclick="loadAuditLogs()" class="self-start sm:self-auto px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs md:text-sm font-semibold transition flex items-center gap-1.5 cursor-pointer">
-                        <i class="fa-solid fa-rotate"></i>
-                        <span>تحديث السجل</span>
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button id="btn-refresh-audit" onclick="loadAuditLogs()" class="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-2 shadow-xs transition cursor-pointer">
+                            <i id="audit-refresh-icon" class="fa-solid fa-arrows-rotate text-amber-500"></i>
+                            <span>تحديث السجل</span>
+                        </button>
+                    </div>
                 </div>
 
+                <!-- Filter & Search Toolbar -->
+                <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col lg:flex-row gap-3 items-stretch lg:items-center justify-between">
+                    <!-- Category Pills -->
+                    <div class="flex flex-wrap items-center gap-1.5" id="audit-category-filters">
+                        <button type="button" onclick="setAuditCategoryFilter('all', this)" class="audit-filter-pill px-3 py-1.5 rounded-xl text-xs font-bold transition bg-amber-500 text-slate-950 shadow-xs cursor-pointer">
+                            الكل
+                        </button>
+                        <button type="button" onclick="setAuditCategoryFilter('pricing', this)" class="audit-filter-pill px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
+                            💰 تعديل أسعار
+                        </button>
+                        <button type="button" onclick="setAuditCategoryFilter('driver_verification', this)" class="audit-filter-pill px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
+                            🚖 توثيق كابتن
+                        </button>
+                        <button type="button" onclick="setAuditCategoryFilter('cancellation', this)" class="audit-filter-pill px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
+                            🛑 إلغاء اشتراك
+                        </button>
+                        <button type="button" onclick="setAuditCategoryFilter('database', this)" class="audit-filter-pill px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
+                            🐘 إدارة قاعدة البيانات
+                        </button>
+                        <button type="button" onclick="setAuditCategoryFilter('auth', this)" class="audit-filter-pill px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">
+                            🛡️ أمان النظام
+                        </button>
+                    </div>
+
+                    <!-- Search Input -->
+                    <div class="relative min-w-[260px]">
+                        <input type="text" id="audit-search-input" oninput="debounceAuditSearch(this.value)" placeholder="🔍 بحث بالمعرف (ID) أو عنوان IP..." 
+                               class="w-full px-3.5 py-2 pr-9 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 placeholder:text-slate-400">
+                        <i class="fa-solid fa-magnifying-glass absolute right-3 top-2.5 text-slate-400 text-xs"></i>
+                    </div>
+                </div>
+
+                <!-- Audit Logs Table -->
                 <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
                     <div class="overflow-x-auto">
-                        <table class="w-full text-right text-sm border-collapse min-w-[750px]">
-                            <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
+                        <table class="w-full text-right text-xs md:text-sm border-collapse min-w-[850px]">
+                            <thead class="bg-slate-50/90 text-slate-500 font-bold text-xs tracking-wider border-b border-slate-200/80">
                                 <tr>
-                                    <th class="py-3.5 px-4 text-right">العملية الإجرائية</th>
-                                    <th class="py-3.5 px-4 text-right">الكيان المستهدف</th>
-                                    <th class="py-3.5 px-4 text-right">المعرف (Entity ID)</th>
-                                    <th class="py-3.5 px-4 text-right">التفاصيل / القيم الجديدة</th>
+                                    <th class="py-3.5 px-4 text-right">التوقيت المحلي (العراق)</th>
+                                    <th class="py-3.5 px-4 text-right">المنفّذ (Actor)</th>
+                                    <th class="py-3.5 px-4 text-right">نوع العملية</th>
+                                    <th class="py-3.5 px-4 text-right">الكيان والمعرف</th>
+                                    <th class="py-3.5 px-4 text-right">التفاصيل / التغيير</th>
                                     <th class="py-3.5 px-4 text-right">عنوان IP</th>
-                                    <th class="py-3.5 px-4 text-right">التوقيت UTC</th>
                                 </tr>
                             </thead>
                             <tbody id="audit-table-body" class="divide-y divide-slate-100">
@@ -2610,6 +2650,63 @@
         </div>
     </div>
 
+    <!-- ===================================================================== -->
+    <!-- MODAL: AUDIT LOG PAYLOAD / DIFF VIEWER                                -->
+    <!-- ===================================================================== -->
+    <div id="modal-audit-payload" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 animate-scale-up flex flex-col max-h-[90vh]">
+            <!-- Header -->
+            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+                <div class="flex items-center space-x-3 space-x-reverse">
+                    <div class="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xl shadow-xs">
+                        <i class="fa-solid fa-code"></i>
+                    </div>
+                    <div>
+                        <h3 id="audit-modal-title" class="font-bold text-base leading-tight">تفاصيل العملية الإجرائية</h3>
+                        <p id="audit-modal-subtitle" class="text-[11px] text-amber-400 font-mono">--</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeAuditPayloadModal()" class="text-slate-400 hover:text-white transition text-3xl font-bold p-1 leading-none cursor-pointer">
+                    &times;
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-6 space-y-3 bg-slate-50 flex-1 overflow-y-auto text-right" dir="rtl">
+                <!-- Metadata Grid -->
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="bg-white p-3 rounded-xl border border-slate-200">
+                        <span class="text-slate-400 block text-[10px] mb-0.5">المنفّذ (Actor):</span>
+                        <span id="audit-modal-actor" class="font-bold text-slate-800">--</span>
+                    </div>
+                    <div class="bg-white p-3 rounded-xl border border-slate-200">
+                        <span class="text-slate-400 block text-[10px] mb-0.5">عنوان IP:</span>
+                        <span id="audit-modal-ip" class="font-mono font-bold text-slate-800">--</span>
+                    </div>
+                </div>
+
+                <!-- Formatted JSON Code Container -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs font-bold text-slate-700">بيانات الحمولة (JSON Payload):</label>
+                        <button type="button" onclick="copyAuditPayloadToClipboard()" class="text-xs font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 cursor-pointer">
+                            <i class="fa-regular fa-copy"></i>
+                            <span id="audit-copy-text">نسخ البيانات</span>
+                        </button>
+                    </div>
+                    <pre id="audit-modal-json" class="w-full p-4 bg-slate-900 text-emerald-400 rounded-2xl text-xs font-mono overflow-x-auto max-h-72 border border-slate-800 leading-relaxed text-left" dir="ltr"></pre>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="p-4 bg-white border-t border-slate-100 flex justify-end">
+                <button type="button" onclick="closeAuditPayloadModal()" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer">
+                    إغلاق
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div id="toast" class="fixed bottom-16 md:bottom-6 left-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
         <div id="toast-inner" class="px-5 py-3 rounded-2xl text-white font-semibold text-sm shadow-xl flex items-center space-x-2 space-x-reverse bg-slate-900">
@@ -2667,6 +2764,6 @@
         });
     </script>
 
-    <script src="/dashboard/app.js?v=20261017_backup_v1"></script>
+    <script src="/dashboard/app.js?v=20261017_audit_v2"></script>
 </body>
 </html>
