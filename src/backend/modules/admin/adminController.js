@@ -36,7 +36,8 @@ class AdminController {
             return {
                 ...d,
                 route: routeName,
-                password: d.plainPassword || (d.passwordHash ? '••••••••' : '123456')
+                password: d.plainPassword || (d.passwordHash ? '••••••••' : '123456'),
+                points: parseInt(d.points || d.rewardScore || 0, 10)
             };
         });
 

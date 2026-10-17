@@ -191,6 +191,9 @@ function switchTab(tabName) {
             // Live-refresh every 15s while tab is open
             window._cancelTabInterval = setInterval(() => { try { loadCancellationRequests(); } catch(e) {} }, 15000);
             break;
+        case 'trip-ratings':
+            loadTripRatings();
+            break;
         case 'fleet-map':
             initFleetMapbox();
             loadFleetOperationsLog();
@@ -850,7 +853,7 @@ async function rejectCurrentDocument() {
 async function loadDrivers(search = '') {
     const tbody = document.getElementById('drivers-table-body');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-slate-400">جاري التحميل...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-slate-400">جاري التحميل...</td></tr>';
 
     try {
         const res = await fetch(`${API_BASE}/drivers?search=${encodeURIComponent(search)}`);
@@ -858,7 +861,7 @@ async function loadDrivers(search = '') {
         tbody.innerHTML = '';
 
         if (!data.drivers || data.drivers.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-slate-400">لا يوجد سائقون مطابقون</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-slate-400">لا يوجد سائقون مطابقون</td></tr>';
             return;
         }
 
@@ -942,6 +945,12 @@ async function loadDrivers(search = '') {
                 <td class="p-4 text-slate-600 font-mono text-xs"><a href="tel:${escapeHtml(d.phoneNumber)}" class="hover:text-amber-600 underline">${escapeHtml(d.phoneNumber)}</a></td>
                 <td class="p-4"><span class="px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg text-xs font-bold">${escapeHtml(d.workMode || 'مشوار قصير')}</span> <span class="px-2 py-1 text-xs rounded-lg font-bold ${d.vehicleType === 'vip' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}">${d.vehicleType === 'vip' ? '👑 VIP' : '🚕 توفير'}</span></td>
                 <td class="p-4"><span class="px-2 py-1 bg-slate-100 text-slate-800 font-mono text-xs rounded border border-slate-200 font-bold select-all" title="كلمة المرور">${escapeHtml(d.password || '••••••••')}</span></td>
+                <td class="p-4">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs">
+                        <i class="fa-solid fa-star text-amber-500"></i>
+                        <span>${d.points || d.rewardScore || 0}</span>
+                    </span>
+                </td>
                 <td class="p-4"><span class="px-2.5 py-1 text-xs rounded-full font-bold ${statusClass}">${statusLabel}</span></td>
                 <td class="p-4">${verifBadge}${approveBadge}</td>
                 <td class="p-4">
@@ -5003,4 +5012,134 @@ async function saveDriverPermanentLocation() {
         } else showToast(data.error || 'خطأ', 'error');
     } catch(e) { showToast('خطأ في الاتصال', 'error'); }
 }
+
+// -----------------------------------------------------------------------------
+// Trip Ratings & Driver Points Management
+// -----------------------------------------------------------------------------
+let tripRatingsDebounceTimeout = null;
+function debounceTripRatingsSearch() {
+    clearTimeout(tripRatingsDebounceTimeout);
+    tripRatingsDebounceTimeout = setTimeout(() => {
+        const input = document.getElementById('trip-ratings-search-input');
+        loadTripRatings(input ? input.value : '');
+    }, 300);
+}
+
+async function loadTripRatings(search = '') {
+    const tbody = document.getElementById('trip-ratings-table-body');
+    const table = document.getElementById('trip-ratings-table');
+    const emptyBox = document.getElementById('trip-ratings-empty');
+    const countBadge = document.getElementById('badge-trip-ratings');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400">جاري تحميل تقييمات الرحلات...</td></tr>';
+    if (emptyBox) emptyBox.classList.add('hidden');
+    if (table) table.classList.remove('hidden');
+
+    try {
+        const res = await fetch(`${API_BASE}/admin/trip-ratings`, { headers: authHeaders() });
+        const data = await res.json();
+        let ratings = data.ratings || [];
+
+        if (countBadge) {
+            if (ratings.length > 0) {
+                countBadge.textContent = ratings.length;
+                countBadge.classList.remove('hidden');
+            } else {
+                countBadge.classList.add('hidden');
+            }
+        }
+
+        if (search) {
+            const q = search.trim().toLowerCase();
+            ratings = ratings.filter(r => 
+                (r.driverId && r.driverId.toLowerCase().includes(q)) ||
+                (r.passengerName && r.passengerName.toLowerCase().includes(q)) ||
+                (r.passengerId && String(r.passengerId).toLowerCase().includes(q)) ||
+                (r.comment && r.comment.toLowerCase().includes(q)) ||
+                (Array.isArray(r.tags) && r.tags.some(t => String(t).toLowerCase().includes(q)))
+            );
+        }
+
+        tbody.innerHTML = '';
+
+        if (!ratings || ratings.length === 0) {
+            if (emptyBox) emptyBox.classList.remove('hidden');
+            if (table) table.classList.add('hidden');
+            return;
+        }
+
+        if (emptyBox) emptyBox.classList.add('hidden');
+        if (table) table.classList.remove('hidden');
+
+        ratings.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-50 transition';
+
+            // Find driver info if available
+            const driver = window.driversMap ? (window.driversMap[r.driverId] || null) : null;
+            const driverName = driver ? driver.fullName : (r.driverName || r.driverId || 'الكابتن');
+            const driverPhone = driver ? driver.phoneNumber : '';
+
+            // Stars
+            const numStars = Math.min(5, Math.max(1, parseInt(r.rating, 10) || 5));
+            let starsHtml = '';
+            for (let i = 1; i <= 5; i++) {
+                if (i <= numStars) {
+                    starsHtml += '<i class="fa-solid fa-star text-amber-400 text-xs ml-0.5"></i>';
+                } else {
+                    starsHtml += '<i class="fa-regular fa-star text-slate-300 text-xs ml-0.5"></i>';
+                }
+            }
+
+            // Tags
+            let tagsHtml = '';
+            if (Array.isArray(r.tags) && r.tags.length > 0) {
+                tagsHtml = r.tags.map(tag => 
+                    `<span class="px-2 py-0.5 text-[11px] font-bold rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200/80 mr-1 mb-1 inline-block">${escapeHtml(tag)}</span>`
+                ).join('');
+            } else {
+                tagsHtml = '<span class="text-xs text-slate-400">لا توجد وسوم</span>';
+            }
+
+            // Date
+            let dateStr = 'الآن';
+            if (r.createdAt) {
+                try {
+                    const d = new Date(r.createdAt);
+                    dateStr = d.toLocaleDateString('ar-IQ', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                } catch(_) {}
+            }
+
+            tr.innerHTML = `
+                <td class="p-4 text-xs font-mono text-slate-500">${escapeHtml(dateStr)}</td>
+                <td class="p-4">
+                    <div class="font-bold text-slate-900">${escapeHtml(driverName)}</div>
+                    ${driverPhone ? `<a href="tel:${escapeHtml(driverPhone)}" class="text-xs text-slate-500 hover:text-amber-600 font-mono">${escapeHtml(driverPhone)}</a>` : ''}
+                </td>
+                <td class="p-4">
+                    <div class="font-bold text-slate-800">${escapeHtml(r.passengerName || 'الراكب')}</div>
+                    ${r.passengerId ? `<span class="text-[11px] text-slate-400 font-mono">${escapeHtml(r.passengerId)}</span>` : ''}
+                </td>
+                <td class="p-4">
+                    <div class="flex items-center gap-1">${starsHtml} <span class="text-xs font-bold text-slate-700 mr-1">(${numStars}/5)</span></div>
+                </td>
+                <td class="p-4"><div class="flex flex-wrap">${tagsHtml}</div></td>
+                <td class="p-4 text-xs text-slate-700 max-w-[200px] truncate" title="${escapeHtml(r.comment || '')}">
+                    ${r.comment ? escapeHtml(r.comment) : '<span class="text-slate-400 italic">بدون ملاحظات</span>'}
+                </td>
+                <td class="p-4 text-center">
+                    <span class="inline-flex items-center gap-1 px-3 py-1 bg-amber-100 text-amber-900 rounded-full font-black text-xs border border-amber-300">
+                        <span>+${r.pointsEarned || 50}</span>
+                        <span>⭐</span>
+                    </span>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-rose-500 font-bold">تعذر تحميل التقييمات. تأكد من اتصال الخادم.</td></tr>';
+    }
+}
+
 

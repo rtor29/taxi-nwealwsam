@@ -945,7 +945,9 @@ async function startServer() {
                     permanentLocationName: user.permanentLocationName || '',
                     permanentDropoffLat: user.permanentDropoffLat || null,
                     permanentDropoffLon: user.permanentDropoffLon || null,
-                    permanentDropoffName: user.permanentDropoffName || ''
+                    permanentDropoffName: user.permanentDropoffName || '',
+                    points: parseInt(user.points || user.rewardScore || 0, 10),
+                    totalTrips: parseInt(user.totalTrips || 0, 10)
                 }
             });
         }
@@ -2123,6 +2125,107 @@ async function startServer() {
             } catch (err) {
                 return sendJson({ success: false, error: err.message }, 500);
             }
+        }
+
+        // Driver Rate Trip & Earn Points (Baly Style Rating & Points System)
+        if ((pathname === '/api/driver/rate-trip' || pathname === '/api/driver/rate' || pathname === '/api/ride/rate-trip') && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const { rideId, driverId, passengerId, rating, tags, comment } = body;
+
+                if (!rideId) {
+                    return sendJson({ success: false, error: 'معرّف المشوار (rideId) مطلوب للتقييم' }, 400);
+                }
+                if (!driverId) {
+                    return sendJson({ success: false, error: 'معرّف الكابتن (driverId) مطلوب' }, 400);
+                }
+
+                const requests = db.memoryState.rideRequests || [];
+                const r = requests.find(item => item.id === rideId);
+                if (!r) {
+                    return sendJson({ success: false, error: 'الرحلة المطلوبة غير موجودة' }, 404);
+                }
+
+                // Security Check: Caller must be the assigned/accepted driver for this ride
+                const driver = db.findDriver(driverId);
+                const realDriverId = driver ? (driver.driverId || driver.id) : driverId;
+                const isAssigned = (r.acceptedDriverId && (r.acceptedDriverId === driverId || r.acceptedDriverId === realDriverId)) ||
+                                   (r.assignedDriverId && (r.assignedDriverId === driverId || r.assignedDriverId === realDriverId)) ||
+                                   (driver && driver.phoneNumber && r.assignedDriverPhone && driver.phoneNumber.includes(r.assignedDriverPhone));
+
+                if (!isAssigned) {
+                    return sendJson({ success: false, error: 'غير مصرح: لا يمكنك تقييم مشوار لم تكن الكابتن المنفذ له' }, 403);
+                }
+
+                // Prevent duplicate rating point abuse
+                if (r.isRatedByDriver) {
+                    return sendJson({
+                        success: true,
+                        alreadyRated: true,
+                        message: 'تم تسجيل تقييم هذا المشوار مسبقاً',
+                        pointsEarned: 0,
+                        totalPoints: driver ? (driver.points || 0) : 0,
+                        rating: r.ratingByDriver
+                    });
+                }
+
+                // Points calculation: 50 base points + 10 bonus points for 5-star rating
+                const numRating = Math.max(1, Math.min(5, Number(rating) || 5));
+                const pointsEarned = 50 + (numRating >= 5 ? 10 : 0);
+
+                const result = await db.recordTripRating({
+                    rideId,
+                    driverId: realDriverId,
+                    passengerId: passengerId || r.customerId,
+                    passengerName: r.customerName || 'الراكب',
+                    rating: numRating,
+                    tags: Array.isArray(tags) ? tags : [],
+                    comment: (comment || '').slice(0, 500),
+                    pointsEarned
+                });
+
+                return sendJson({
+                    success: true,
+                    message: `تم تسجيل تقييم المشوار ومنحك +${pointsEarned} نقطة بنجاح 🌟`,
+                    pointsEarned,
+                    totalPoints: result.driverTotalPoints,
+                    rating: result.record
+                });
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        // Driver Points & Stats Lookup
+        if (pathname.startsWith('/api/driver/') && pathname.endsWith('/points') && method === 'GET') {
+            const parts = pathname.split('/');
+            const rawParam = decodeURIComponent(parts[parts.length - 2]);
+            const driver = db.findDriver(rawParam);
+            return sendJson({
+                success: true,
+                points: driver ? (driver.points || driver.rewardScore || 0) : 0,
+                totalTrips: driver ? (driver.totalTrips || 0) : 0
+            });
+        }
+
+        // Admin Trip Ratings & Driver Feedback
+        if ((pathname === '/api/admin/trip-ratings' || pathname === '/api/trip-ratings') && method === 'GET') {
+            const ratings = db.memoryState.tripRatings || [];
+            return sendJson({
+                success: true,
+                total: ratings.length,
+                ratings
+            });
+        }
+
+        // Admin Rides History
+        if ((pathname === '/api/admin/rides' || pathname === '/api/rides') && method === 'GET') {
+            const requests = db.memoryState.rideRequests || [];
+            return sendJson({
+                success: true,
+                total: requests.length,
+                rides: requests
+            });
         }
 
         // Customer Current Active Ride (Persist across refreshes/reconnects)

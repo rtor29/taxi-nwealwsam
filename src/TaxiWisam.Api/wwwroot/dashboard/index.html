@@ -350,6 +350,14 @@
                     <span id="badge-cancellations" class="hidden px-2 py-0.5 text-xs bg-rose-500 text-white rounded-full font-bold">0</span>
                 </button>
 
+                <button onclick="switchTab('trip-ratings')" id="tab-btn-trip-ratings" class="tab-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition">
+                    <div class="flex items-center space-x-3 space-x-reverse">
+                        <i class="fa-solid fa-star w-5 text-center text-amber-400"></i>
+                        <span>تقييمات الرحلات والنقاط</span>
+                    </div>
+                    <span id="badge-trip-ratings" class="hidden px-2 py-0.5 text-xs bg-amber-500 text-slate-950 rounded-full font-bold">0</span>
+                </button>
+
                 <button onclick="switchTab('fleet-map')" id="tab-btn-fleet-map" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
                     <i class="fa-solid fa-map-location-dot w-5 text-center text-amber-400"></i>
                     <span>متابعة الأسطول والمسارات</span>
@@ -599,6 +607,7 @@
                                     <th class="p-4">رقم الهاتف</th>
                                     <th class="p-4">المسار</th>
                                     <th class="p-4">كلمة المرور</th>
+                                    <th class="p-4">نقاط الكابتن 🌟</th>
                                     <th class="p-4">الحالة الآنية</th>
                                     <th class="p-4">التوثيق</th>
                                     <th class="p-4 text-center">الإجراءات والتحكم</th>
@@ -754,6 +763,51 @@
                             </thead>
                             <tbody id="cancellations-body" class="divide-y divide-slate-100">
                                 <!-- Dynamic rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5.2 TRIP RATINGS & DRIVER FEEDBACK TAB -->
+            <section id="tab-trip-ratings" class="tab-content hidden space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-2xl font-black text-slate-900 flex items-center gap-2">
+                            <span>تقييمات الرحلات وملاحظات الكباتن</span>
+                            <span class="text-amber-500 text-xl">🌟</span>
+                        </h2>
+                        <p class="text-xs md:text-sm text-slate-500">سجل تقييمات المشاوير، النقاط الممنوحة للكباتن، وملاحظات سلوك الركاب المباشرة</p>
+                    </div>
+                    <div class="flex items-center space-x-2 space-x-reverse flex-wrap gap-2">
+                        <input type="text" id="trip-ratings-search-input" placeholder="بحث بالاسم أو الكابتن أو الملاحظات..." class="px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" oninput="debounceTripRatingsSearch()">
+                        <button onclick="loadTripRatings()" class="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-semibold transition cursor-pointer">
+                            <i class="fa-solid fa-rotate"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div id="trip-ratings-empty" class="hidden p-12 text-center text-slate-400">
+                        <i class="fa-solid fa-star text-4xl text-amber-400 mb-2"></i>
+                        <p class="font-bold text-slate-700">لا توجد تقييمات مشاوير مسجلة حتى الآن</p>
+                        <p class="text-xs text-slate-400 mt-1">ستظهر التقييمات ومكافآت النقاط هنا فور إكمال الكباتن للمشاوير وتقييم الركاب.</p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table id="trip-ratings-table" class="w-full text-right text-sm border-collapse min-w-[850px]">
+                            <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-4">تاريخ المشوار</th>
+                                    <th class="p-4">الكابتن</th>
+                                    <th class="p-4">الراكب</th>
+                                    <th class="p-4">التقييم ⭐</th>
+                                    <th class="p-4">وسوم المشوار</th>
+                                    <th class="p-4">ملاحظات الكابتن</th>
+                                    <th class="p-4 text-center">النقاط المكتسبة 🌟</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trip-ratings-table-body" class="divide-y divide-slate-100">
+                                <!-- Dynamic Trip Ratings -->
                             </tbody>
                         </table>
                     </div>

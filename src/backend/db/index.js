@@ -172,7 +172,8 @@ class DatabaseManager {
             ],
             auditLogs: [],
             notifications: [],
-            cancellationRequests: []
+            cancellationRequests: [],
+            tripRatings: []
         };
 
         // Load existing state.json if present to guarantee ZERO DATA LOSS
@@ -190,7 +191,9 @@ class DatabaseManager {
                 if (parsed.auditLogs) this.memoryState.auditLogs = parsed.auditLogs;
                 if (parsed.notifications) this.memoryState.notifications = parsed.notifications;
                 if (parsed.cancellationRequests) this.memoryState.cancellationRequests = parsed.cancellationRequests;
-                console.log(`[Database] Loaded ${this.memoryState.drivers.length} drivers, ${this.memoryState.customers.length} customers from state snapshot`);
+                if (parsed.tripRatings) this.memoryState.tripRatings = parsed.tripRatings;
+                if (parsed.rideRequests) this.memoryState.rideRequests = parsed.rideRequests;
+                console.log(`[Database] Loaded ${this.memoryState.drivers.length} drivers, ${this.memoryState.customers.length} customers, ${(this.memoryState.tripRatings || []).length} trip ratings from state snapshot`);
             }
         } catch (e) {
             console.warn(`[Database] Error reading state snapshot: ${e.message}`);
@@ -288,6 +291,21 @@ class DatabaseManager {
                     ALTER TABLE customers ADD COLUMN IF NOT EXISTS plain_password TEXT;
                     ALTER TABLE drivers ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT false;
                     ALTER TABLE drivers ADD COLUMN IF NOT EXISTS work_mode VARCHAR(50) DEFAULT 'مشوار قصير';
+                    ALTER TABLE drivers ADD COLUMN IF NOT EXISTS points INT DEFAULT 0;
+                    CREATE TABLE IF NOT EXISTS trip_ratings (
+                        id SERIAL PRIMARY KEY,
+                        ride_id VARCHAR(100),
+                        driver_id VARCHAR(100),
+                        passenger_id VARCHAR(100),
+                        passenger_name VARCHAR(150),
+                        rating INT DEFAULT 5,
+                        tags JSONB DEFAULT '[]'::jsonb,
+                        comment TEXT,
+                        points_earned INT DEFAULT 50,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_trip_ratings_driver ON trip_ratings(driver_id);
+                    CREATE INDEX IF NOT EXISTS idx_trip_ratings_ride ON trip_ratings(ride_id);
                 `);
             } catch (_) {}
 
@@ -435,6 +453,8 @@ class DatabaseManager {
                     rejectionReason: r.rejection_reason,
                     ratingAverage: parseFloat(r.rating_average || 5.0),
                     totalTrips: r.total_trips || 0,
+                    points: parseInt(r.points || 0, 10),
+                    rewardScore: parseInt(r.points || 0, 10),
                     permanentLat: r.permanent_lat ? parseFloat(r.permanent_lat) : null,
                     permanentLon: r.permanent_lon ? parseFloat(r.permanent_lon) : null,
                     permanentLocationName: r.permanent_location_name || '',
@@ -445,6 +465,24 @@ class DatabaseManager {
                     createdAt: r.created_at
                 }));
             }
+
+            try {
+                const ratingsRes = await client.query('SELECT * FROM trip_ratings ORDER BY created_at DESC LIMIT 500');
+                if (ratingsRes.rows && ratingsRes.rows.length > 0) {
+                    this.memoryState.tripRatings = ratingsRes.rows.map(r => ({
+                        id: r.id,
+                        rideId: r.ride_id,
+                        driverId: r.driver_id,
+                        passengerId: r.passenger_id,
+                        passengerName: r.passenger_name || 'الراكب',
+                        rating: parseInt(r.rating || 5, 10),
+                        tags: r.tags || [],
+                        comment: r.comment || '',
+                        pointsEarned: parseInt(r.points_earned || 50, 10),
+                        createdAt: r.created_at
+                    }));
+                }
+            } catch (_) {}
 
             const customersRes = await client.query('SELECT * FROM customers ORDER BY created_at DESC');
             this.memoryState.customers = customersRes.rows.map(r => ({
@@ -628,6 +666,73 @@ class DatabaseManager {
             const col = role === 'Driver' ? 'driver_id' : 'customer_id';
             await this.pool.query(`UPDATE ${table} SET telegram_chat_id = $1 WHERE ${col} = $2`, [String(chatId), id]);
         } catch (e) { console.warn('[Database] persistTelegramChatId error:', e.message); }
+    }
+
+    // Record trip rating by driver, award points, and persist safely
+    async recordTripRating(data) {
+        const { rideId, driverId, passengerId, passengerName, rating, tags, comment, pointsEarned } = data;
+        const pts = Number(pointsEarned) || 50;
+        const numRating = Number(rating) || 5;
+
+        // 1. Memory State Record
+        this.memoryState.tripRatings = this.memoryState.tripRatings || [];
+        const record = {
+            id: 'rating_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+            rideId,
+            driverId,
+            passengerId: passengerId || null,
+            passengerName: passengerName || 'الراكب',
+            rating: numRating,
+            tags: Array.isArray(tags) ? tags : [],
+            comment: (comment || '').trim(),
+            pointsEarned: pts,
+            createdAt: new Date().toISOString()
+        };
+        this.memoryState.tripRatings.unshift(record);
+
+        // 2. Update driver in memory
+        const driver = this.findDriver(driverId);
+        if (driver) {
+            driver.points = (parseInt(driver.points, 10) || 0) + pts;
+            driver.rewardScore = driver.points;
+            driver.totalTrips = (parseInt(driver.totalTrips, 10) || 0) + 1;
+        }
+
+        // 3. Mark on rideRequest in memory
+        const ride = (this.memoryState.rideRequests || []).find(r => r.id === rideId);
+        if (ride) {
+            ride.ratingByDriver = record;
+            ride.isRatedByDriver = true;
+        }
+
+        // 4. PostgreSQL Persistence
+        if (this.pool && this.isPostgresConnected) {
+            try {
+                await this.pool.query(
+                    `INSERT INTO trip_ratings (ride_id, driver_id, passenger_id, passenger_name, rating, tags, comment, points_earned, created_at)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+                    [rideId, driverId, passengerId || null, passengerName || 'الراكب', numRating, JSON.stringify(record.tags), record.comment, pts]
+                );
+                await this.pool.query(
+                    `UPDATE drivers 
+                     SET points = COALESCE(points, 0) + $1,
+                         total_trips = COALESCE(total_trips, 0) + 1,
+                         updated_at = NOW()
+                     WHERE driver_id = $2`,
+                    [pts, driverId]
+                );
+            } catch (pgErr) {
+                console.warn('[Database] recordTripRating PG error:', pgErr.message);
+            }
+        }
+
+        // 5. Atomic state snapshot save
+        this.saveStateSnapshot();
+
+        return {
+            record,
+            driverTotalPoints: driver ? driver.points : pts
+        };
     }
 
     // -------------------------------------------------------------------------
