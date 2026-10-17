@@ -4806,6 +4806,29 @@ window.declineBookingFromAdmin = declineBookingFromAdmin;
 // -----------------------------------------------------------------------------
 // Passenger Cancellation Requests (Driver -> Admin Approval)
 // -----------------------------------------------------------------------------
+let currentCancellationRequests = [];
+let currentCancelFilter = 'all';
+
+function formatIraqDateTime(isoStr) {
+    if (!isoStr) return '—';
+    try {
+        const d = new Date(isoStr);
+        if (isNaN(d.getTime())) return isoStr;
+        return d.toLocaleString('ar-IQ', {
+            timeZone: 'Asia/Baghdad',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+        });
+    } catch (_) {
+        return isoStr;
+    }
+}
+
 async function loadCancellationRequests() {
     const loading = document.getElementById('cancellations-loading');
     const empty = document.getElementById('cancellations-empty');
@@ -4819,15 +4842,43 @@ async function loadCancellationRequests() {
     if (body) body.innerHTML = '';
 
     try {
-        const res = await fetch(`${API_BASE}/cancellation-requests`);
+        const res = await fetch(`${API_BASE}/cancellation-requests`, {
+            headers: typeof authHeaders === 'function' ? authHeaders() : {}
+        });
         const data = await res.json();
-        const requests = (data && data.requests) ? data.requests : [];
+        const requests = (data && data.requests) ? data.requests : (Array.isArray(data) ? data : []);
+        currentCancellationRequests = requests;
 
         if (loading) loading.classList.add('hidden');
 
-        if (badge) badge.innerText = `${requests.length} طلب`;
+        // Update top metrics
+        const totalCount = requests.length;
+        const pendingCount = requests.filter(r => (r.status || 'Pending').toLowerCase() === 'pending').length;
+        const approvedCount = requests.filter(r => (r.status || '').toLowerCase() === 'approved').length;
+        const rejectedCount = requests.filter(r => (r.status || '').toLowerCase() === 'rejected').length;
 
-        const pendingCount = requests.filter(r => r.status === 'Pending').length;
+        if (badge) badge.innerText = `${pendingCount} معلق`;
+
+        const elTotal = document.getElementById('cancel-metric-total');
+        if (elTotal) elTotal.innerText = totalCount;
+        const elPending = document.getElementById('cancel-metric-pending');
+        if (elPending) elPending.innerText = pendingCount;
+        const elApproved = document.getElementById('cancel-metric-approved');
+        if (elApproved) elApproved.innerText = approvedCount;
+        const elRejected = document.getElementById('cancel-metric-rejected');
+        if (elRejected) elRejected.innerText = rejectedCount;
+
+        // Update filter pills count
+        const pillAll = document.getElementById('pill-count-all');
+        if (pillAll) pillAll.innerText = totalCount;
+        const pillPending = document.getElementById('pill-count-pending');
+        if (pillPending) pillPending.innerText = pendingCount;
+        const pillApproved = document.getElementById('pill-count-approved');
+        if (pillApproved) pillApproved.innerText = approvedCount;
+        const pillRejected = document.getElementById('pill-count-rejected');
+        if (pillRejected) pillRejected.innerText = rejectedCount;
+
+        // Nav badge
         const navBadge = document.getElementById('badge-cancellations');
         if (navBadge) {
             if (pendingCount > 0) {
@@ -4838,144 +4889,275 @@ async function loadCancellationRequests() {
             }
         }
 
-        if (requests.length === 0) {
-            if (empty) empty.classList.remove('hidden');
-            return;
-        }
-
-        if (table) table.classList.remove('hidden');
-
-        requests.forEach(r => {
-            const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80 text-xs md:text-sm';
-
-            let statusBadge = '';
-            if (r.status === 'Approved') {
-                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-emerald shadow-xs"><span class="badge-dot"></span><span>تم الاعتماد ✓</span></span>';
-            } else if (r.status === 'Rejected') {
-                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-rose shadow-xs"><span class="badge-dot"></span><span>مرفوض ✕</span></span>';
-            } else {
-                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-amber shadow-xs"><span class="badge-dot animate-pulse"></span><span>قيد المراجعة ⏳</span></span>';
-            }
-
-            let driverDecisionBadge = '';
-            const dec = String(r.driverDecision || '').toLowerCase();
-            if (dec === 'approved') {
-                driverDecisionBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-emerald shadow-xs"><span class="badge-dot"></span><span>موافقة ✓</span></span>';
-            } else if (dec === 'rejected') {
-                driverDecisionBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-rose shadow-xs"><span class="badge-dot"></span><span>رفض ✕</span></span>';
-            } else {
-                driverDecisionBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold badge-amber shadow-xs"><span class="badge-dot animate-pulse"></span><span>في انتظار الرد ⏳</span></span>';
-            }
-
-            let actionButtons = '';
-            if (r.status === 'Pending') {
-                actionButtons = `
-                    <div class="flex items-center justify-center gap-1.5 mt-1.5">
-                        <button onclick="approveCancellationRequest('${r.id || r.requestId}')" 
-                                class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium text-xs flex items-center gap-1 transition shadow-xs cursor-pointer" title="اعتماد الإلغاء وتحرير المقعد">
-                            <i class="fa-solid fa-check text-[10px]"></i>
-                            <span>اعتماد</span>
-                        </button>
-                        <button onclick="rejectCancellationRequest('${r.id || r.requestId}')" 
-                                class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-medium text-xs flex items-center gap-1 transition shadow-xs cursor-pointer" title="رفض طلب الإلغاء">
-                            <i class="fa-solid fa-xmark text-[10px]"></i>
-                            <span>رفض</span>
-                        </button>
-                    </div>
-                `;
-            }
-
-            const pReason = r.passengerReason || r.reason || 'ظروف شخصية';
-            const pDetails = r.passengerDetails ? `<div class="text-xs text-slate-400 mt-0.5 max-w-xs truncate" title="${escapeHtml(r.passengerDetails)}">${escapeHtml(r.passengerDetails)}</div>` : '';
-            const drvReason = r.driverApprovalReason ? `<div class="text-xs font-medium text-slate-700 max-w-xs truncate" title="${escapeHtml(r.driverApprovalReason)}">${escapeHtml(r.driverApprovalReason)}</div>` : '<span class="text-slate-400 text-xs">—</span>';
-
-            const custPhoneHtml = r.customerPhone
-                ? `<a href="tel:${escapeHtml(r.customerPhone)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 font-mono text-xs mt-0.5 transition-colors" dir="ltr" title="اتصال بالراكب"><i class="fa-solid fa-phone text-[10px] text-slate-400"></i><span>${escapeHtml(r.customerPhone)}</span></a>`
-                : '';
-
-            const drvPhoneHtml = r.driverPhone
-                ? `<a href="tel:${escapeHtml(r.driverPhone)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 font-mono text-xs mt-0.5 transition-colors" dir="ltr" title="اتصال بالسائق"><i class="fa-solid fa-phone text-[10px] text-slate-400"></i><span>${escapeHtml(r.driverPhone)}</span></a>`
-                : '';
-
-            tr.innerHTML = `
-                <td class="py-3.5 px-4 font-mono font-bold text-slate-700 text-xs">${r.id || r.requestId || ''}</td>
-                <td class="py-3.5 px-4">
-                    <div class="font-bold text-slate-900">${escapeHtml(r.customerName || 'الراكب')}</div>
-                    ${custPhoneHtml}
-                </td>
-                <td class="py-3.5 px-4">
-                    <div class="font-bold text-slate-900">${escapeHtml(r.driverName || 'الكابتن')}</div>
-                    ${drvPhoneHtml}
-                </td>
-                <td class="py-3.5 px-4 text-slate-700 font-semibold text-xs">${escapeHtml(r.route || 'مسار الرحلة')}</td>
-                <td class="py-3.5 px-4">
-                    <div class="font-bold text-slate-800 text-xs">${escapeHtml(pReason)}</div>
-                    ${pDetails}
-                </td>
-                <td class="py-3.5 px-4 text-center">${driverDecisionBadge}</td>
-                <td class="py-3.5 px-4">${drvReason}</td>
-                <td class="py-3.5 px-4 text-center">
-                    <div>${statusBadge}</div>
-                    ${actionButtons}
-                </td>
-            `;
-            body.appendChild(tr);
-        });
+        renderCancellationRows();
 
     } catch (e) {
+        console.error('Error loading cancellation requests:', e);
         if (loading) loading.classList.add('hidden');
         if (empty) {
-            empty.innerText = 'حدث خطأ أثناء تحميل طلبات الإلغاء';
+            empty.innerHTML = `
+                <div class="text-rose-500 font-bold text-sm mb-1">فشل في الاتصال بالخادم</div>
+                <p class="text-xs text-slate-400">تعذر تحميل بيانات طلبات الإلغاء، يرجى المحاولة لاحقاً.</p>
+            `;
             empty.classList.remove('hidden');
         }
     }
 }
 
+function setCancelFilter(filterType, btnElement) {
+    currentCancelFilter = filterType;
+    document.querySelectorAll('.cancel-filter-btn').forEach(btn => {
+        btn.classList.remove('bg-slate-900', 'text-white');
+        btn.classList.add('bg-slate-100', 'text-slate-600');
+    });
+    if (btnElement) {
+        btnElement.classList.remove('bg-slate-100', 'text-slate-600');
+        btnElement.classList.add('bg-slate-900', 'text-white');
+    }
+    renderCancellationRows();
+}
+
+function filterCancellationRows() {
+    renderCancellationRows();
+}
+
+function renderCancellationRows() {
+    const table = document.getElementById('cancellations-table');
+    const empty = document.getElementById('cancellations-empty');
+    const body = document.getElementById('cancellations-body');
+    const searchInput = document.getElementById('cancellations-search-input');
+    const query = (searchInput ? searchInput.value : '').trim().toLowerCase();
+
+    if (!body) return;
+    body.innerHTML = '';
+
+    let filtered = currentCancellationRequests.filter(r => {
+        // Status filter
+        if (currentCancelFilter !== 'all') {
+            if ((r.status || 'Pending').toLowerCase() !== currentCancelFilter.toLowerCase()) return false;
+        }
+        // Search filter
+        if (query) {
+            const pName = (r.passengerName || r.customerName || '').toLowerCase();
+            const pPhone = (r.passengerPhone || r.customerPhone || '').toLowerCase();
+            const route = (r.routeName || r.route || '').toLowerCase();
+            const reason = (r.reasonCategory || r.passengerReason || '').toLowerCase();
+            const msg = (r.userMessage || r.passengerDetails || '').toLowerCase();
+            const match = pName.includes(query) || pPhone.includes(query) || route.includes(query) || reason.includes(query) || msg.includes(query);
+            if (!match) return false;
+        }
+        return true;
+    });
+
+    if (filtered.length === 0) {
+        if (table) table.classList.add('hidden');
+        if (empty) empty.classList.remove('hidden');
+        return;
+    }
+
+    if (empty) empty.classList.add('hidden');
+    if (table) table.classList.remove('hidden');
+
+    filtered.forEach(r => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50/70 transition-colors border-b border-slate-100/80 text-xs md:text-sm';
+
+        const reqId = r.id || r.requestId;
+        const pName = r.passengerName || r.customerName || 'الراكب';
+        const pPhone = r.passengerPhone || r.customerPhone || '';
+        const routeName = r.routeName || r.route || 'مسار الرحلة';
+        const reasonCat = r.reasonCategory || r.passengerReason || 'ظروف خاصة';
+        const userMsg = r.userMessage || r.passengerDetails || '';
+        const status = (r.status || 'Pending');
+
+        // Category Badge Style
+        let catClass = 'bg-slate-100 text-slate-700 border border-slate-200/80';
+        if (reasonCat.includes('دوام') || reasonCat.includes('وقت')) {
+            catClass = 'bg-blue-50 text-blue-700 border border-blue-200/70';
+        } else if (reasonCat.includes('خاصة') || reasonCat.includes('شخصية')) {
+            catClass = 'bg-purple-50 text-purple-700 border border-purple-200/70';
+        } else if (reasonCat.includes('التزام') || reasonCat.includes('تأخير')) {
+            catClass = 'bg-amber-50 text-amber-700 border border-amber-200/70';
+        } else if (reasonCat.includes('مركبة') || reasonCat.includes('سائق')) {
+            catClass = 'bg-orange-50 text-orange-700 border border-orange-200/70';
+        }
+
+        // Status Badge Style
+        let statusBadge = '';
+        if (status.toLowerCase() === 'approved') {
+            statusBadge = `
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70 shadow-2xs">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                    <span>تم الاعتماد وتحرير المقعد ✅</span>
+                </span>
+            `;
+        } else if (status.toLowerCase() === 'rejected') {
+            statusBadge = `
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/70 shadow-2xs">
+                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                    <span>مرفوض ✕</span>
+                </span>
+            `;
+        } else {
+            statusBadge = `
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/70 shadow-2xs">
+                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                    <span>معلق ⏳</span>
+                </span>
+            `;
+        }
+
+        // Actions Column
+        let actionButtons = '';
+        if (status.toLowerCase() === 'pending') {
+            actionButtons = `
+                <div class="flex items-center justify-center gap-1.5">
+                    <button onclick="approveCancellationRequest('${reqId}')" 
+                            class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-xs flex items-center gap-1.5 transition shadow-2xs cursor-pointer" 
+                            title="إلغاء الحجز رسمياً وتحرير المقعد للكابتن فوراً">
+                        <i class="fa-solid fa-check text-[10px]"></i>
+                        <span>موافقة واعتماد</span>
+                    </button>
+                    <button onclick="rejectCancellationRequest('${reqId}')" 
+                            class="px-2.5 py-1.5 bg-white hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200/80 rounded-lg font-semibold text-xs flex items-center gap-1 transition shadow-2xs cursor-pointer" 
+                            title="رفض طلب الإلغاء واستمرار اشتراك الراكب">
+                        <i class="fa-solid fa-xmark text-[10px]"></i>
+                        <span>رفض</span>
+                    </button>
+                </div>
+            `;
+        } else if (status.toLowerCase() === 'approved') {
+            actionButtons = `
+                <div class="text-center text-xs text-slate-400">
+                    <span class="inline-flex items-center gap-1 text-emerald-600 font-medium">
+                        <i class="fa-solid fa-check-double text-[10px]"></i>
+                        <span>المقعد متاح لراكب بديل</span>
+                    </span>
+                </div>
+            `;
+        } else {
+            const rejReason = r.driverApprovalReason ? escapeHtml(r.driverApprovalReason) : 'تم الرفض واستمرار الاشتراك';
+            actionButtons = `
+                <div class="text-center text-xs text-slate-400" title="${rejReason}">
+                    <span class="inline-flex items-center gap-1 text-slate-500 font-medium">
+                        <i class="fa-solid fa-ban text-[10px]"></i>
+                        <span>مستمر بالاشتراك</span>
+                    </span>
+                </div>
+            `;
+        }
+
+        const phoneHtml = pPhone ? `
+            <a href="tel:${escapeHtml(pPhone)}" class="inline-flex items-center gap-1 px-2 py-0.5 mt-1 bg-slate-50 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200/60 rounded-md font-mono text-xs transition-colors" dir="ltr" title="اتصال مباشر بالراكب">
+                <i class="fa-solid fa-phone text-[9px] text-emerald-600"></i>
+                <span>${escapeHtml(pPhone)}</span>
+            </a>
+        ` : '<span class="text-slate-400 text-xs">—</span>';
+
+        tr.innerHTML = `
+            <td class="py-3.5 px-4 align-middle">
+                <div class="font-bold text-slate-900">${escapeHtml(pName)}</div>
+                ${phoneHtml}
+            </td>
+            <td class="py-3.5 px-4 align-middle">
+                <div class="flex items-center gap-1.5 font-semibold text-slate-800 text-xs md:text-sm">
+                    <i class="fa-solid fa-route text-slate-400 text-xs"></i>
+                    <span>${escapeHtml(routeName)}</span>
+                </div>
+                ${r.driverName ? `<div class="text-xs text-slate-400 mt-0.5">الكابتن: ${escapeHtml(r.driverName)}</div>` : ''}
+            </td>
+            <td class="py-3.5 px-4 align-middle max-w-xs">
+                <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${catClass}">${escapeHtml(reasonCat)}</span>
+                ${userMsg ? `<p class="text-xs text-slate-600 mt-1 leading-relaxed bg-slate-50 p-2 rounded-lg border border-slate-100">${escapeHtml(userMsg)}</p>` : ''}
+            </td>
+            <td class="py-3.5 px-4 text-center align-middle font-mono text-xs text-slate-600" dir="ltr">
+                ${formatIraqDateTime(r.createdAt || r.created_at)}
+            </td>
+            <td class="py-3.5 px-4 text-center align-middle">
+                ${statusBadge}
+            </td>
+            <td class="py-3.5 px-4 text-center align-middle">
+                ${actionButtons}
+            </td>
+        `;
+        body.appendChild(tr);
+    });
+}
+
 async function approveCancellationRequest(requestId) {
-    if (!confirm('هل أنت متأكد من قبول طلب الإلغاء؟ سيتم إلغاء حجز الراكب وتحرير المقعد فورياً للمسار.')) return;
+    if (!requestId) return;
+    if (!confirm('هل أنت متأكد من اعتماد طلب الإلغاء؟\nسيتم إلغاء حجز الراكب رسمياً وتحرير المقعد في المسار فوراً لاستقبال راكب بديل.')) return;
+
     try {
         const res = await fetch(`${API_BASE}/cancellation-requests/${requestId}/approve`, {
-            method: 'POST'
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(typeof authHeaders === 'function' ? authHeaders() : {})
+            },
+            body: JSON.stringify({ id: requestId, requestId })
         });
         const data = await res.json();
         if (res.ok && data.success) {
-            alert('تم قبول طلب الإلغاء بنجاح وتحرير المقعد!');
+            if (typeof showToast === 'function') {
+                showToast('تم اعتماد الإلغاء بنجاح وتحرير المقعد في المسار ✅');
+            } else {
+                alert('تم اعتماد الإلغاء بنجاح وتحرير المقعد في المسار ✅');
+            }
             loadCancellationRequests();
-            loadDashboardStats();
-            loadRoutes();
+            if (typeof loadDashboardStats === 'function') loadDashboardStats();
+            if (typeof loadRoutes === 'function') loadRoutes();
         } else {
-            alert(data.error || 'فشل قبول طلب الإلغاء');
+            const err = data.error || 'فشل اعتماد طلب الإلغاء';
+            if (typeof showToast === 'function') showToast(err, true);
+            else alert(err);
         }
     } catch (err) {
-        alert('حدث خطأ في الاتصال بالخادم');
+        console.error('Approve cancel error:', err);
+        if (typeof showToast === 'function') showToast('حدث خطأ في الاتصال بالخادم', true);
+        else alert('حدث خطأ في الاتصال بالخادم');
     }
 }
 
 async function rejectCancellationRequest(requestId) {
-    const reason = prompt('يرجى إدخال سبب رفض طلب الإلغاء:') || 'مرفوض من الإدارة';
+    if (!requestId) return;
+    const reason = prompt('يرجى كتابة سبب رفض طلب الإلغاء لتوضيحه للراكب والكابتن:') || 'مرفوض من قبل الإدارة واستمرار الاشتراك';
+
     try {
         const res = await fetch(`${API_BASE}/cancellation-requests/${requestId}/reject`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reason })
+            headers: {
+                'Content-Type': 'application/json',
+                ...(typeof authHeaders === 'function' ? authHeaders() : {})
+            },
+            body: JSON.stringify({ id: requestId, requestId, reason })
         });
         const data = await res.json();
         if (res.ok && data.success) {
-            alert('تم رفض طلب الإلغاء');
+            if (typeof showToast === 'function') {
+                showToast('تم رفض طلب الإلغاء واستمرار اشتراك الراكب');
+            } else {
+                alert('تم رفض طلب الإلغاء واستمرار اشتراك الراكب');
+            }
             loadCancellationRequests();
-            loadDashboardStats();
+            if (typeof loadDashboardStats === 'function') loadDashboardStats();
         } else {
-            alert(data.error || 'فشل رفض طلب الإلغاء');
+            const err = data.error || 'فشل رفض طلب الإلغاء';
+            if (typeof showToast === 'function') showToast(err, true);
+            else alert(err);
         }
     } catch (err) {
-        alert('حدث خطأ في الاتصال بالخادم');
+        console.error('Reject cancel error:', err);
+        if (typeof showToast === 'function') showToast('حدث خطأ في الاتصال بالخادم', true);
+        else alert('حدث خطأ في الاتصال بالخادم');
     }
 }
 
 window.loadCancellationRequests = loadCancellationRequests;
 window.approveCancellationRequest = approveCancellationRequest;
 window.rejectCancellationRequest = rejectCancellationRequest;
+window.setCancelFilter = setCancelFilter;
+window.filterCancellationRows = filterCancellationRows;
 
 
 // ===== Unified Theme & Customization Management (Clean Modern SaaS) =====

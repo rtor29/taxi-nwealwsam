@@ -3651,24 +3651,27 @@ async function startServer() {
         }
 
         // Admin Passenger Cancellation Requests List
-        if (pathname === '/api/admin/cancellation-requests' && method === 'GET') {
+        if ((pathname === '/api/admin/cancellation-requests' || pathname === '/api/cancellation-requests') && method === 'GET') {
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
             const result = await adminController.getCancellationRequests();
             return sendJson(result);
         }
 
-        // Admin Approve Cancellation Request
-        const approveCancelMatch = pathname.match(/^\/?(?:api\/)?admin\/cancellation-requests\/([^\/]+)\/approve$/i);
-        if (approveCancelMatch && method === 'POST') {
-            const requestId = approveCancelMatch[1];
-            const result = await adminController.approveCancellation(requestId);
+        // Admin Approve Cancellation Request (supports POST /api/admin/cancellation-requests/approve with body OR :id/approve)
+        const approveCancelMatch = pathname.match(/^\/?(?:api\/)?(?:admin\/)?cancellation-requests\/([^\/]+)\/approve$/i);
+        if ((pathname === '/api/admin/cancellation-requests/approve' || pathname === '/api/cancellation-requests/approve' || approveCancelMatch) && method === 'POST') {
+            const body = await parseJsonBody(req).catch(() => ({}));
+            const requestId = (approveCancelMatch ? approveCancelMatch[1] : (body.id || body.requestId))?.trim();
+            const result = await adminController.approveCancellation(requestId, body);
             return sendJson(result, result.success ? 200 : 400);
         }
 
-        // Admin Reject Cancellation Request
-        const rejectCancelMatch = pathname.match(/^\/?(?:api\/)?admin\/cancellation-requests\/([^\/]+)\/reject$/i);
-        if (rejectCancelMatch && method === 'POST') {
-            const requestId = rejectCancelMatch[1];
-            const result = await adminController.rejectCancellation(requestId);
+        // Admin Reject Cancellation Request (supports POST /api/admin/cancellation-requests/reject with body OR :id/reject)
+        const rejectCancelMatch = pathname.match(/^\/?(?:api\/)?(?:admin\/)?cancellation-requests\/([^\/]+)\/reject$/i);
+        if ((pathname === '/api/admin/cancellation-requests/reject' || pathname === '/api/cancellation-requests/reject' || rejectCancelMatch) && method === 'POST') {
+            const body = await parseJsonBody(req).catch(() => ({}));
+            const requestId = (rejectCancelMatch ? rejectCancelMatch[1] : (body.id || body.requestId))?.trim();
+            const result = await adminController.rejectCancellation(requestId, body);
             return sendJson(result, result.success ? 200 : 400);
         }
 

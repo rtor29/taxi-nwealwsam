@@ -745,44 +745,127 @@
 
             <!-- 5.1 PASSENGER CANCELLATION REQUESTS -->
             <section id="tab-cancellations" class="tab-content hidden space-y-6">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <!-- Top Header -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
-                        <h2 class="text-2xl font-black text-slate-900 flex items-center gap-2">
-                            <span>طلبات إلغاء اشتراك الركاب</span>
-                            <span id="cancellations-count-badge" class="text-xs bg-amber-500/20 text-amber-700 px-2.5 py-1 rounded-full font-bold">0 طلب</span>
-                        </h2>
-                        <p class="text-xs md:text-sm text-slate-500">مراجعة واعتماد طلبات إلغاء اشتراك الركاب مع تحرير المقاعد في المسارات فورياً للموافقة على ركاب جدد</p>
+                        <div class="flex items-center gap-2.5">
+                            <h2 class="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">طلبات إلغاء الركاب</h2>
+                            <span id="cancellations-count-badge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200/60 shadow-2xs">0 طلب</span>
+                        </div>
+                        <p class="text-xs md:text-sm text-slate-500 mt-1">مراجعة واعتماد طلبات إلغاء اشتراكات الركاب، وتحرير المقاعد في مسارات الخطوط تلقائياً</p>
                     </div>
-                    <div>
-                        <button onclick="loadCancellationRequests()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs md:text-sm font-semibold flex items-center space-x-2 space-x-reverse transition cursor-pointer">
-                            <i class="fa-solid fa-rotate"></i>
-                            <span>تحديث الطلبات</span>
+                    <div class="flex items-center gap-2">
+                        <button onclick="loadCancellationRequests()" class="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/80 rounded-xl text-xs md:text-sm font-semibold flex items-center gap-2 transition shadow-2xs cursor-pointer">
+                            <i class="fa-solid fa-rotate text-slate-400"></i>
+                            <span>تحديث</span>
                         </button>
                     </div>
                 </div>
 
-                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-                    <div id="cancellations-loading" class="p-8 text-center text-slate-500">
-                        <i class="fa-solid fa-circle-notch fa-spin text-2xl text-[#1B4965] mb-2"></i>
-                        <p class="text-xs font-semibold">جاري تحميل طلبات الإلغاء...</p>
+                <!-- Metric Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-white rounded-xl border border-slate-200/80 p-4 shadow-2xs">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-medium text-slate-500">إجمالي الطلبات</span>
+                            <div class="w-8 h-8 rounded-lg bg-slate-50 border border-slate-200/60 flex items-center justify-center text-slate-600">
+                                <i class="fa-solid fa-clipboard-list text-xs"></i>
+                            </div>
+                        </div>
+                        <div class="mt-2 flex items-baseline gap-2">
+                            <span id="cancel-metric-total" class="text-2xl font-bold text-slate-900">0</span>
+                            <span class="text-xs text-slate-400">طلب مسجل</span>
+                        </div>
                     </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200/80 p-4 shadow-2xs">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-medium text-slate-500">بانتظار الاعتماد</span>
+                            <div class="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200/60 flex items-center justify-center text-amber-600">
+                                <i class="fa-solid fa-hourglass-half text-xs"></i>
+                            </div>
+                        </div>
+                        <div class="mt-2 flex items-baseline gap-2">
+                            <span id="cancel-metric-pending" class="text-2xl font-bold text-amber-600">0</span>
+                            <span class="text-xs text-amber-700/80 font-medium">معلق ⏳</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200/80 p-4 shadow-2xs">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-medium text-slate-500">تم الاعتماد وتحرير المقعد</span>
+                            <div class="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200/60 flex items-center justify-center text-emerald-600">
+                                <i class="fa-solid fa-chair text-xs"></i>
+                            </div>
+                        </div>
+                        <div class="mt-2 flex items-baseline gap-2">
+                            <span id="cancel-metric-approved" class="text-2xl font-bold text-emerald-600">0</span>
+                            <span class="text-xs text-emerald-700/80 font-medium">مقعد محرر ✅</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl border border-slate-200/80 p-4 shadow-2xs">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-medium text-slate-500">طلبات مرفوضة</span>
+                            <div class="w-8 h-8 rounded-lg bg-rose-50 border border-rose-200/60 flex items-center justify-center text-rose-600">
+                                <i class="fa-solid fa-ban text-xs"></i>
+                            </div>
+                        </div>
+                        <div class="mt-2 flex items-baseline gap-2">
+                            <span id="cancel-metric-rejected" class="text-2xl font-bold text-rose-600">0</span>
+                            <span class="text-xs text-rose-700/80 font-medium">مستمر بالخط ✕</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table Container with Filter Toolbar -->
+                <div class="bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-hidden">
+                    <div class="p-4 border-b border-slate-100 flex flex-col md:flex-row items-center justify-between gap-3">
+                        <!-- Search Box -->
+                        <div class="relative w-full md:w-80">
+                            <i class="fa-solid fa-magnifying-glass absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                            <input type="text" id="cancellations-search-input" oninput="filterCancellationRows()" placeholder="بحث باسم الراكب، رقم الهاتف، أو خط السير..." class="w-full pl-3 pr-9 py-2 bg-slate-50/80 hover:bg-slate-50 focus:bg-white text-xs md:text-sm text-slate-800 border border-slate-200/80 rounded-xl focus:outline-none focus:border-amber-500 transition placeholder:text-slate-400">
+                        </div>
+
+                        <!-- Status Filter Pills -->
+                        <div class="flex items-center gap-1.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0" id="cancellations-status-pills">
+                            <button onclick="setCancelFilter('all', this)" class="cancel-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white transition cursor-pointer">
+                                الكل (<span id="pill-count-all">0</span>)
+                            </button>
+                            <button onclick="setCancelFilter('Pending', this)" class="cancel-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 transition cursor-pointer">
+                                معلق ⏳ (<span id="pill-count-pending">0</span>)
+                            </button>
+                            <button onclick="setCancelFilter('Approved', this)" class="cancel-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 transition cursor-pointer">
+                                تم الاعتماد ✅ (<span id="pill-count-approved">0</span>)
+                            </button>
+                            <button onclick="setCancelFilter('Rejected', this)" class="cancel-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 transition cursor-pointer">
+                                مرفوض ✕ (<span id="pill-count-rejected">0</span>)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="cancellations-loading" class="p-12 text-center text-slate-500">
+                        <i class="fa-solid fa-circle-notch fa-spin text-2xl text-amber-600 mb-2"></i>
+                        <p class="text-xs font-semibold text-slate-600">جاري تحميل طلبات الإلغاء...</p>
+                    </div>
+
                     <div id="cancellations-empty" class="hidden p-12 text-center text-slate-400">
-                        <i class="fa-solid fa-circle-check text-4xl text-emerald-500 mb-2"></i>
-                        <p class="font-bold text-slate-700">لا توجد طلبات إلغاء حالياً!</p>
-                        <p class="text-xs text-slate-400 mt-1">كافة الحجوزات والمسارات مستقرة ونشطة.</p>
+                        <div class="w-12 h-12 mx-auto rounded-full bg-slate-50 border border-slate-200/60 flex items-center justify-center text-slate-400 mb-3">
+                            <i class="fa-solid fa-check text-lg text-emerald-500"></i>
+                        </div>
+                        <p class="font-bold text-slate-700 text-sm">لا توجد طلبات إلغاء تطابق المعايير</p>
+                        <p class="text-xs text-slate-400 mt-1">كافة الحجوزات والمسارات تعمل بشكل طبيعي ومستقر.</p>
                     </div>
+
                     <div class="overflow-x-auto">
-                        <table id="cancellations-table" class="w-full text-right text-sm border-collapse hidden min-w-[800px]">
-                            <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
+                        <table id="cancellations-table" class="w-full text-right text-sm border-collapse hidden min-w-[950px]">
+                            <thead class="bg-slate-50/75 text-slate-500 font-semibold text-xs tracking-wider border-b border-slate-200/80">
                                 <tr>
-                                    <th class="py-3.5 px-4 text-right">رقم الطلب</th>
-                                    <th class="py-3.5 px-4 text-right">الراكب</th>
-                                    <th class="py-3.5 px-4 text-right">السائق (الكابتن)</th>
-                                    <th class="py-3.5 px-4 text-right">المسار / الخط</th>
-                                    <th class="py-3.5 px-4 text-right">سبب طلب الإلغاء (الراكب)</th>
-                                    <th class="py-3.5 px-4 text-center">قرار الكابتن</th>
-                                    <th class="py-3.5 px-4 text-right">ملاحظات / سبب الكابتن</th>
-                                    <th class="py-3.5 px-4 text-center">حالة الطلب والإجراء</th>
+                                    <th class="py-3 px-4 text-right">الراكب ورقم الهاتف</th>
+                                    <th class="py-3 px-4 text-right">خط السير / المسار</th>
+                                    <th class="py-3 px-4 text-right">سبب الإلغاء ورسالة الراكب</th>
+                                    <th class="py-3 px-4 text-center">توقيت الطلب</th>
+                                    <th class="py-3 px-4 text-center">الحالة الحالية</th>
+                                    <th class="py-3 px-4 text-center">الإجراءات الإدارية</th>
                                 </tr>
                             </thead>
                             <tbody id="cancellations-body" class="divide-y divide-slate-100">
