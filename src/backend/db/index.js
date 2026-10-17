@@ -339,9 +339,16 @@ class DatabaseManager {
                     ALTER TABLE complaints ADD COLUMN IF NOT EXISTS ride_id VARCHAR(64);
                     ALTER TABLE complaints ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
                     ALTER TABLE complaints ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
-                    ALTER TABLE complaints ALTER COLUMN subject DROP NOT NULL;
-                    ALTER TABLE complaints ALTER COLUMN details DROP NOT NULL;
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS user_name VARCHAR(150);
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS target_id VARCHAR(64);
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS target_name VARCHAR(150);
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS subject VARCHAR(200);
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS details TEXT;
+                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS priority VARCHAR(50) DEFAULT 'Normal';
                     ALTER TABLE complaints DROP CONSTRAINT IF EXISTS complaints_user_id_fkey;
+                    ALTER TABLE complaints ALTER COLUMN user_id DROP NOT NULL;
+                    ALTER TABLE complaints ALTER COLUMN description DROP NOT NULL;
+                    ALTER TABLE complaints ALTER COLUMN id TYPE VARCHAR(64);
                     CREATE INDEX IF NOT EXISTS idx_complaints_category ON complaints(category);
                     CREATE INDEX IF NOT EXISTS idx_complaints_complainant ON complaints(complainant_phone);
                     CREATE INDEX IF NOT EXISTS idx_complaints_accused ON complaints(accused_phone);

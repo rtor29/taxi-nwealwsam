@@ -1501,7 +1501,8 @@ async function startServer() {
             return sendJson(result);
         }
 
-        if ((pathname === '/api/admin/complaints/resolve' || (pathname.startsWith('/api/complaints/') && pathname.endsWith('/resolve'))) && method === 'POST') {
+        if ((pathname === '/api/admin/complaints/resolve' || pathname === '/api/complaints/resolve' || 
+            ((pathname.startsWith('/api/complaints/') || pathname.startsWith('/api/admin/complaints/')) && pathname.endsWith('/resolve'))) && method === 'POST') {
             const body = await parseJsonBody(req);
             const parts = pathname.split('/');
             const complaintId = body.id || body.complaintId || (parts.length >= 4 ? parts[parts.length - 2] : null);

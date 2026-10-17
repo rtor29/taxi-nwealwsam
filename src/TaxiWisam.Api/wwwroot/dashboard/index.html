@@ -3160,11 +3160,11 @@
                     <div>
                         <label class="text-xs font-bold text-slate-800 block mb-1.5">حالة الشكوى:</label>
                         <select id="resolve-complaint-status" class="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1B4965] cursor-pointer">
-                            <option value="pending">قيد المراجعة ⏳</option>
-                            <option value="investigating">جاري التحقيق 🔍</option>
-                            <option value="resolved">تم الحل والصلح ✅</option>
+                            <option value="resolved" selected>تم الحل والصلح (نقل إلى تمت المعالجة) ✅</option>
                             <option value="action_taken">تم اتخاذ إجراء وعقوبة ⚠️</option>
+                            <option value="investigating">جاري التحقيق 🔍</option>
                             <option value="dismissed">مرفوضة / كيدية ✕</option>
+                            <option value="pending">قيد المراجعة ⏳</option>
                         </select>
                     </div>
 

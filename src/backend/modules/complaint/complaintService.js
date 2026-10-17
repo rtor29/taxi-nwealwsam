@@ -50,24 +50,18 @@ class ComplaintService {
             try {
                 await db.pool.query(`
                     INSERT INTO complaints (
-                        id, user_id, user_name, target_id, target_name,
-                        complainant_id, complainant_name, complainant_phone,
+                        id, complainant_id, complainant_name, complainant_phone,
                         accused_id, accused_name, accused_phone,
                         category, subject, details, complaint_text,
                         status, priority, ride_id, created_at
                     ) VALUES (
-                        $1, $2, $3, $4, $5,
-                        $6, $7, $8,
-                        $9, $10, $11,
-                        $12, $13, $14, $15,
-                        $16, $17, $18, NOW()
+                        $1, $2, $3, $4,
+                        $5, $6, $7,
+                        $8, $9, $10, $11,
+                        $12, $13, $14, NOW()
                     )
                 `, [
                     complaint.id,
-                    complaint.complainantId,
-                    complaint.complainantName,
-                    complaint.accusedId || null,
-                    complaint.accusedName || null,
                     complaint.complainantId,
                     complaint.complainantName,
                     complaint.complainantPhone,
@@ -182,7 +176,39 @@ class ComplaintService {
      */
     async resolveComplaint(complaintId, updates = {}, actor = 'المشرف العام (Admin)', ip = '127.0.0.1') {
         const complaints = db.memoryState.complaints || [];
-        const complaint = complaints.find(c => c.id === complaintId);
+        let complaint = complaints.find(c => c.id === complaintId);
+
+        // Fallback to PostgreSQL if not found in memory
+        if (!complaint && db.isPostgresConnected && db.pool) {
+            try {
+                const pgRes = await db.pool.query('SELECT * FROM complaints WHERE id = $1 LIMIT 1', [complaintId]);
+                if (pgRes.rows && pgRes.rows.length > 0) {
+                    const r = pgRes.rows[0];
+                    complaint = {
+                        id: r.id,
+                        complaintId: r.id,
+                        complainantId: r.complainant_id,
+                        complainantName: r.complainant_name || r.user_name,
+                        complainantPhone: r.complainant_phone,
+                        accusedId: r.accused_id,
+                        accusedName: r.accused_name || r.target_name,
+                        accusedPhone: r.accused_phone,
+                        category: r.category || r.subject,
+                        subject: r.subject || r.category,
+                        details: r.details || r.complaint_text,
+                        complaintText: r.complaint_text || r.details,
+                        priority: r.priority,
+                        status: r.status,
+                        createdAt: r.created_at,
+                        rideId: r.ride_id
+                    };
+                    complaints.push(complaint);
+                }
+            } catch (err) {
+                console.warn('[ComplaintService] PG fetch error:', err.message);
+            }
+        }
+
         if (!complaint) {
             return { success: false, error: 'الشكوى أو البلاغ غير موجود' };
         }
@@ -200,40 +226,81 @@ class ComplaintService {
 
         // Disciplinary action: Block accused driver if requested
         let driverActionLog = '';
-        if (updates.blockDriver && complaint.accusedId) {
-            const driver = db.findDriver(complaint.accusedId);
-            if (driver) {
-                driver.isBlocked = true;
-                driver.status = 'Blocked';
-                driverActionLog += ` | تم حظر الكابتن (${driver.fullName})`;
+        if (updates.blockDriver || updates.actionTaken === 'block') {
+            const accusedId = complaint.accusedId || complaint.targetId;
+            if (accusedId) {
+                const driver = db.findDriver(accusedId);
+                if (driver) {
+                    driver.isBlocked = true;
+                    driver.status = 'Blocked';
+                    driverActionLog += ` | تم حظر الكابتن (${driver.fullName})`;
+                }
             }
         }
 
         // Disciplinary action: Deduct penalty points if requested
-        if (updates.penaltyPoints && Number(updates.penaltyPoints) > 0 && complaint.accusedId) {
-            const pts = Number(updates.penaltyPoints);
-            const driver = db.findDriver(complaint.accusedId);
-            if (driver) {
-                driver.points = Math.max(0, (driver.points || 0) - pts);
-                driverActionLog += ` | خصم ${pts} نقطة من الكابتن (${driver.fullName})`;
+        if (updates.penaltyPoints && Number(updates.penaltyPoints) > 0) {
+            const accusedId = complaint.accusedId || complaint.targetId;
+            if (accusedId) {
+                const pts = Number(updates.penaltyPoints);
+                const driver = db.findDriver(accusedId);
+                if (driver) {
+                    driver.points = Math.max(0, (driver.points || 0) - pts);
+                    driverActionLog += ` | خصم ${pts} نقطة من الكابتن (${driver.fullName})`;
+                }
             }
         }
 
-        // Update in PostgreSQL
+        // Update in PostgreSQL (with upsert fallback)
         if (db.isPostgresConnected && db.pool) {
             try {
-                await db.pool.query(`
+                const updateRes = await db.pool.query(`
                     UPDATE complaints 
                     SET status = $1, admin_notes = $2, action_taken = $3, resolved_at = NOW(), updated_at = NOW()
                     WHERE id = $4
-                `, [complaint.status, complaint.adminNotes, complaint.actionTaken, complaint.id]);
+                `, [complaint.status, complaint.adminNotes || '', complaint.actionTaken || '', complaint.id]);
+
+                if (updateRes.rowCount === 0) {
+                    await db.pool.query(`
+                        INSERT INTO complaints (
+                            id, complainant_id, complainant_name, complainant_phone,
+                            accused_id, accused_name, accused_phone,
+                            category, subject, details, complaint_text,
+                            status, priority, ride_id, admin_notes, action_taken, resolved_at, created_at, updated_at
+                        ) VALUES (
+                            $1, $2, $3, $4,
+                            $5, $6, $7,
+                            $8, $9, $10, $11,
+                            $12, $13, $14, $15, $16, NOW(), COALESCE($17::timestamptz, NOW()), NOW()
+                        )
+                    `, [
+                        complaint.id,
+                        complaint.complainantId || null,
+                        complaint.complainantName || null,
+                        complaint.complainantPhone || null,
+                        complaint.accusedId || null,
+                        complaint.accusedName || null,
+                        complaint.accusedPhone || null,
+                        complaint.category || null,
+                        complaint.subject || complaint.category || null,
+                        complaint.details || complaint.complaintText || null,
+                        complaint.complaintText || complaint.details || null,
+                        complaint.status,
+                        complaint.priority || 'Normal',
+                        complaint.rideId || null,
+                        complaint.adminNotes || '',
+                        complaint.actionTaken || '',
+                        complaint.createdAt || new Date().toISOString()
+                    ]);
+                }
 
                 // Also update driver in PostgreSQL if blocked
-                if (updates.blockDriver && complaint.accusedId) {
+                const accusedId = complaint.accusedId || complaint.targetId;
+                if ((updates.blockDriver || updates.actionTaken === 'block') && accusedId) {
                     await db.pool.query(`
                         UPDATE drivers SET is_blocked = true, status = 'Blocked', updated_at = NOW()
                         WHERE driver_id = $1
-                    `, [complaint.accusedId]).catch(() => {});
+                    `, [accusedId]).catch(() => {});
                 }
             } catch (err) {
                 console.warn('[ComplaintService] PostgreSQL update error:', err.message);
@@ -263,7 +330,7 @@ class ComplaintService {
             });
         } catch (_) {}
 
-        return { success: true, complaint };
+        return { success: true, message: 'تمت معالجة وتحديث حالة الشكوى بنجاح ✅', complaint };
     }
 }
 

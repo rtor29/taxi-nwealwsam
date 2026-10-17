@@ -1480,10 +1480,37 @@ async function declineBookingFromAdmin(bookingId) {
 window._allComplaintsList = [];
 window._currentComplaintsFilter = 'all';
 
+function updateComplaintsBadges() {
+    const list = window._allComplaintsList || [];
+    const pendingCount = list.filter(c => {
+        const s = String(c.status || 'pending').toLowerCase();
+        return s === 'pending' || s === 'investigating' || s === 'open';
+    }).length;
+
+    const totalCount = list.length;
+    const badge = document.getElementById('complaints-counter-badge');
+    if (badge) {
+        badge.innerText = `${totalCount} بلاغ (${pendingCount} معلق)`;
+        if (pendingCount > 0) {
+            badge.className = 'px-2.5 py-0.5 bg-red-50 text-red-700 font-bold text-xs rounded-full border border-red-200';
+        } else {
+            badge.className = 'px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-full border border-emerald-200';
+        }
+    }
+
+    const sideBadge = document.getElementById('badge-complaints');
+    if (sideBadge) {
+        if (pendingCount > 0) {
+            sideBadge.innerText = pendingCount;
+            sideBadge.classList.remove('hidden');
+        } else {
+            sideBadge.classList.add('hidden');
+        }
+    }
+}
+
 async function loadComplaints() {
     const tbody = document.getElementById('complaints-table-body');
-    const badge = document.getElementById('complaints-counter-badge');
-    const sideBadge = document.getElementById('badge-complaints');
     if (!tbody) return;
 
     tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400 font-bold"><i class="fa-solid fa-spinner fa-spin text-red-500 text-lg mb-2 block"></i>جاري تحميل سجل البلاغات والشكاوى...</td></tr>';
@@ -1498,21 +1525,7 @@ async function loadComplaints() {
         }
 
         window._allComplaintsList = data.complaints;
-
-        // Update badges
-        const pendingCount = data.pendingCount !== undefined ? data.pendingCount : window._allComplaintsList.filter(c => c.status === 'pending' || c.status === 'investigating').length;
-        if (badge) {
-            badge.innerText = `${window._allComplaintsList.length} بلاغ (${pendingCount} معلق)`;
-        }
-        if (sideBadge) {
-            if (pendingCount > 0) {
-                sideBadge.innerText = pendingCount;
-                sideBadge.classList.remove('hidden');
-            } else {
-                sideBadge.classList.add('hidden');
-            }
-        }
-
+        updateComplaintsBadges();
         filterComplaintsLocally();
     } catch (err) {
         console.error('Error loading complaints:', err);
@@ -1550,9 +1563,15 @@ function filterComplaintsLocally() {
 
     // Filter by Tab
     if (filter === 'pending') {
-        filtered = filtered.filter(c => c.status === 'pending' || c.status === 'investigating' || !c.status);
+        filtered = filtered.filter(c => {
+            const s = String(c.status || 'pending').toLowerCase();
+            return s === 'pending' || s === 'investigating' || s === 'open';
+        });
     } else if (filter === 'resolved') {
-        filtered = filtered.filter(c => c.status === 'resolved' || c.status === 'action_taken' || c.status === 'Resolved' || c.status === 'محلولة');
+        filtered = filtered.filter(c => {
+            const s = String(c.status || '').toLowerCase();
+            return s === 'resolved' || s === 'action_taken' || s === 'محلولة';
+        });
     } else if (filter === 'low_rating') {
         filtered = filtered.filter(c => {
             const cat = String(c.category || c.subject || '');
@@ -1611,20 +1630,21 @@ function filterComplaintsLocally() {
         const rideId = c.ride_id || c.rideId || '';
         const category = c.category || c.subject || 'عام';
         const text = c.complaint_text || c.complaintText || c.details || c.description || 'لا توجد تفاصيل';
-        const status = c.status || 'pending';
+        const statusStr = String(c.status || 'pending').toLowerCase();
+        const isResolved = statusStr === 'resolved' || statusStr === 'action_taken' || statusStr === 'محلولة';
 
         // Status badge
         let statusBadge = '';
-        if (status === 'resolved' || status === 'Resolved' || status === 'محلولة') {
-            statusBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>تم الحل ✅</span>';
-        } else if (status === 'action_taken') {
-            statusBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200"><span class="w-1.5 h-1.5 rounded-full bg-rose-600"></span>إجراء وعقوبة ⚠️</span>';
-        } else if (status === 'investigating') {
-            statusBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>جاري التحقيق 🔍</span>';
-        } else if (status === 'dismissed') {
-            statusBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">مرفوضة / كيدية ✕</span>';
+        if (statusStr === 'resolved' || statusStr === 'محلولة') {
+            statusBadge = '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-2xs"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>تمت المعالجة ✅</span>';
+        } else if (statusStr === 'action_taken') {
+            statusBadge = '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/80 shadow-2xs"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>تمت المعالجة (عقوبة) ⚠️</span>';
+        } else if (statusStr === 'investigating') {
+            statusBadge = '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>جاري التحقيق 🔍</span>';
+        } else if (statusStr === 'dismissed') {
+            statusBadge = '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200/80 shadow-2xs">مرفوضة / كيدية ✕</span>';
         } else {
-            statusBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>قيد المراجعة ⏳</span>';
+            statusBadge = '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/80 shadow-2xs"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>قيد المراجعة ⏳</span>';
         }
 
         // Category badge
@@ -1639,6 +1659,24 @@ function filterComplaintsLocally() {
             catBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200"><i class="fa-solid fa-money-bill-wave"></i> ${escapeHtml(category)}</span>`;
         } else {
             catBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">${escapeHtml(category)}</span>`;
+        }
+
+        // Action button
+        let actionBtn = '';
+        if (isResolved) {
+            actionBtn = `
+                <button onclick="openResolveComplaintModal('${escapeHtml(id)}')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5" title="عرض تفاصيل المعالجة والإجراءات">
+                    <i class="fa-solid fa-check text-emerald-600 text-[11px]"></i>
+                    <span>مُعالجة ✓</span>
+                </button>
+            `;
+        } else {
+            actionBtn = `
+                <button onclick="openResolveComplaintModal('${escapeHtml(id)}')" class="px-3 py-1.5 bg-[#1B4965] hover:bg-[#14364A] text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs inline-flex items-center gap-1.5" title="معالجة الشكوى">
+                    <i class="fa-solid fa-gear text-amber-400 text-[11px]"></i>
+                    <span>معالجة ⚙️</span>
+                </button>
+            `;
         }
 
         tr.innerHTML = `
@@ -1664,10 +1702,7 @@ function filterComplaintsLocally() {
             </td>
             <td class="py-3 px-4 text-center">${statusBadge}</td>
             <td class="py-3 px-4 text-center">
-                <button onclick="openResolveComplaintModal('${escapeHtml(id)}')" class="px-3 py-1.5 bg-[#1B4965] hover:bg-[#14364A] text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs inline-flex items-center gap-1">
-                    <i class="fa-solid fa-gear text-amber-400"></i>
-                    <span>معالجة</span>
-                </button>
+                ${actionBtn}
             </td>
         `;
 
@@ -1708,7 +1743,13 @@ function openResolveComplaintModal(complaintId) {
 
     const statusSelect = document.getElementById('resolve-complaint-status');
     if (statusSelect) {
-        statusSelect.value = complaint.status || 'pending';
+        const s = String(complaint.status || '').toLowerCase();
+        // Default to 'resolved' for pending complaints to enable 1-click completion
+        if (s === 'resolved' || s === 'action_taken' || s === 'dismissed' || s === 'investigating') {
+            statusSelect.value = s;
+        } else {
+            statusSelect.value = 'resolved';
+        }
     }
 
     const notesInput = document.getElementById('resolve-complaint-notes');
@@ -1735,8 +1776,8 @@ async function submitResolveComplaint(event) {
     if (event) event.preventDefault();
 
     const id = document.getElementById('resolve-complaint-id')?.value;
-    const status = document.getElementById('resolve-complaint-status')?.value;
-    const adminNotes = document.getElementById('resolve-complaint-notes')?.value;
+    const status = document.getElementById('resolve-complaint-status')?.value || 'resolved';
+    const adminNotes = document.getElementById('resolve-complaint-notes')?.value || 'تمت المعالجة من قبل الإدارة';
     const penaltyPoints = parseInt(document.getElementById('resolve-penalty-points')?.value || '0', 10);
     const actionRadio = document.querySelector('input[name="disciplinary_action"]:checked')?.value || 'none';
 
@@ -1769,10 +1810,31 @@ async function submitResolveComplaint(event) {
 
         const data = await res.json();
         if (data.success) {
-            showToast('تم حفظ إجراء ومعالجة الشكوى بنجاح ✅');
+            showToast('تمت معالجة الشكوى بنجاح ✅');
             closeResolveComplaintModal();
-            loadComplaints();
-            loadDashboardStats();
+
+            // Instant state transition in local cache
+            const target = (window._allComplaintsList || []).find(c => (c.id === id || c.complaintId === id));
+            if (target) {
+                target.status = status;
+                target.adminNotes = adminNotes;
+                target.admin_notes = adminNotes;
+                target.resolvedAt = new Date().toISOString();
+                target.resolved_at = new Date().toISOString();
+                if (actionRadio !== 'none') {
+                    target.actionTaken = actionRadio;
+                    target.action_taken = actionRadio;
+                }
+            }
+
+            // Immediately recalculate live pending badge count
+            updateComplaintsBadges();
+
+            // Instantly re-render table without full page reload
+            filterComplaintsLocally();
+
+            // Background sync
+            if (typeof loadDashboardStats === 'function') loadDashboardStats();
         } else {
             showToast(data.error || 'فشل في حفظ معالجة الشكوى', true);
         }
