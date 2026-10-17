@@ -1842,7 +1842,7 @@ async function startServer() {
             }
         }
 
-        // Driver Arrived at Passenger Pickup
+        // Driver Arrived at Passenger Pickup (RLS Protected)
         if (pathname === '/api/ride/arrived' && method === 'POST') {
             try {
                 const body = await parseJsonBody(req);
@@ -1850,6 +1850,16 @@ async function startServer() {
                 const requests = db.memoryState.rideRequests || [];
                 const r = requests.find(item => item.id === requestId);
                 if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
+
+                // Security Check: Customer cannot mark driver arrival
+                const authUser = getAuthUser(req);
+                if (authUser && (authUser.role === 'Customer' || authUser.role === 'customer')) {
+                    return sendJson({ success: false, error: 'غير مصرح: هذا الإجراء محصور بالسائق فقط ولا يمكن تنفيذه من قبل الراكب' }, 403);
+                }
+                if (r.customerId && driverId && (driverId === r.customerId || driverId === r.customerPhone)) {
+                    return sendJson({ success: false, error: 'غير مصرح: تم رفض الطلب، الإجراء مخصص للسائق فقط' }, 403);
+                }
+
                 r.status = 'Arrived';
                 r.arrivedAt = new Date().toISOString();
                 db.saveStateSnapshot();
@@ -1893,6 +1903,112 @@ async function startServer() {
                 db.saveStateSnapshot();
 
                 return sendJson({ success: true, message: 'تم إشعار الراكب بوصولك إلى الموقع 📍', request: r });
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        // Driver Start Ride - Navigate to Destination (RLS Protected)
+        if ((pathname === '/api/ride/start' || pathname === '/api/ride/startRide' || pathname === '/api/ride/start-ride' || pathname === '/api/ride/navigate') && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const { requestId, driverId } = body;
+                if (!requestId) return sendJson({ success: false, error: 'requestId is required' }, 400);
+
+                const requests = db.memoryState.rideRequests || [];
+                const r = requests.find(item => item.id === requestId);
+                if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
+
+                // Authentication & Security Validation
+                const authUser = getAuthUser(req);
+
+                // 1. Reject if caller is a passenger / customer
+                if (authUser && (authUser.role === 'Customer' || authUser.role === 'customer')) {
+                    return sendJson({ 
+                        success: false, 
+                        error: 'غير مصرح: إجراء الانطلاق إلى الوجهة محصور بالسائق فقط ولا يمكن تنفيذه من قبل الراكب' 
+                    }, 403);
+                }
+
+                if (r.customerId && driverId && (driverId === r.customerId || driverId === r.customerPhone)) {
+                    return sendJson({ 
+                        success: false, 
+                        error: 'غير مصرح: تم رفض الطلب، الإجراء مخصص للسائق فقط' 
+                    }, 403);
+                }
+
+                // 2. Validate that current user is the assigned/accepted driver for this ride
+                const cleanDriverParam = String(driverId || '').replace(/[^0-9]/g, '');
+                const cleanAuthPhone = authUser && authUser.phone ? String(authUser.phone).replace(/[^0-9]/g, '') : '';
+                const cleanAssignedPhone = r.assignedDriverPhone ? String(r.assignedDriverPhone).replace(/[^0-9]/g, '') : '';
+                const cleanAcceptedPhone = r.acceptedDriverPhone ? String(r.acceptedDriverPhone).replace(/[^0-9]/g, '') : '';
+
+                const isDriverMatch = 
+                    (authUser && authUser.role === 'Admin') ||
+                    (authUser && authUser.role === 'Driver' && (
+                        authUser.id === r.assignedDriverId || 
+                        authUser.id === r.acceptedDriverId ||
+                        (cleanAuthPhone && (cleanAuthPhone === cleanAssignedPhone || cleanAuthPhone === cleanAcceptedPhone))
+                    )) ||
+                    (!authUser && driverId && (
+                        driverId === r.assignedDriverId || 
+                        driverId === r.acceptedDriverId ||
+                        (cleanDriverParam && (cleanDriverParam === cleanAssignedPhone || cleanDriverParam === cleanAcceptedPhone))
+                    ));
+
+                if (!isDriverMatch) {
+                    return sendJson({ 
+                        success: false, 
+                        error: 'غير مصرح: يجب أن يكون الكابتن المعتمد لهذه الرحلة فقط لبدء المشوار' 
+                    }, 403);
+                }
+
+                // 3. Update ride status to InProgress
+                r.status = 'InProgress';
+                r.startedAt = new Date().toISOString();
+
+                // Send Telegram Notification to Passenger if registered
+                try {
+                    const custPhone = (r.customerPhone || '').replace('+964', '0');
+                    const passenger = (db.memoryState.customers || []).find(c => 
+                        (r.customerId && c.customerId === r.customerId) ||
+                        (custPhone && c.phoneNumber && (c.phoneNumber === custPhone || ('0' + c.phoneNumber) === custPhone || c.phoneNumber === ('0' + custPhone)))
+                    );
+                    const targetChatId = (passenger && passenger.telegramChatId) || r.telegramChatId;
+                    if (targetChatId) {
+                        const drvName = r.assignedDriverName || 'الكابتن';
+                        const msg = `🚗 <b>انطلقت الرحلة الآن إلى وجهتك!</b>\n\n` +
+                            `الكابتن <b>${drvName}</b> في الطريق إلى: <b>${r.dropoffName || 'الوجهة المحددة'}</b>.\n\n` +
+                            `نتمنى لك رحلة آمنة ومريحة مع توصيلة! ✨`;
+                        telegramBot.notifyUser(targetChatId, msg).catch(() => {});
+                    }
+                } catch (tgErr) {
+                    console.error('[RideStart] Telegram notify error:', tgErr.message);
+                }
+
+                // In-app chat notification from driver to passenger
+                db.memoryState.chatMessages = db.memoryState.chatMessages || [];
+                const startMsg = {
+                    id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+                    requestId: r.id,
+                    senderId: driverId || r.assignedDriverId || 'driver',
+                    senderRole: 'Driver',
+                    senderName: r.assignedDriverName || 'الكابتن',
+                    text: '🚗 بدأنا الرحلة الآن — انطلاق إلى الوجهة! نتمنى لك مشواراً مريحاً.',
+                    createdAt: new Date().toISOString(),
+                    timestamp: new Date().toISOString()
+                };
+                db.memoryState.chatMessages.push(startMsg);
+
+                // Save snapshot
+                db.saveStateSnapshot();
+
+                return sendJson({ 
+                    success: true, 
+                    message: 'تم بدء الرحلة والانطلاق إلى الوجهة بنجاح 🚗', 
+                    status: 'InProgress',
+                    request: r 
+                });
             } catch (err) {
                 return sendJson({ success: false, error: err.message }, 500);
             }
@@ -1982,7 +2098,7 @@ async function startServer() {
             }
         }
 
-        // Driver Complete Ride
+        // Driver Complete Ride (RLS Protected)
         if (pathname === '/api/ride/complete' && method === 'POST') {
             try {
                 const body = await parseJsonBody(req);
@@ -1990,6 +2106,16 @@ async function startServer() {
                 const requests = db.memoryState.rideRequests || [];
                 const r = requests.find(item => item.id === requestId);
                 if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
+
+                // Security Check: Customer cannot complete ride
+                const authUser = getAuthUser(req);
+                if (authUser && (authUser.role === 'Customer' || authUser.role === 'customer')) {
+                    return sendJson({ success: false, error: 'غير مصرح: إنهاء المشوار محصور بالسائق فقط' }, 403);
+                }
+                if (r.customerId && driverId && (driverId === r.customerId || driverId === r.customerPhone)) {
+                    return sendJson({ success: false, error: 'غير مصرح: تم رفض الطلب، الإجراء مخصص للسائق فقط' }, 403);
+                }
+
                 r.status = 'Completed';
                 r.completedAt = new Date().toISOString();
                 db.saveStateSnapshot();
