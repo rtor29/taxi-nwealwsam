@@ -11,6 +11,7 @@ const authController = require('./modules/auth/authController');
 const adminController = require('./modules/admin/adminController');
 const whatsappService = require('./modules/whatsapp/whatsappService');
 const telegramBot = require('./modules/telegram/telegramBot');
+const pricingService = require('./modules/pricing/pricingService');
 
 // ---[ Rate Limiter: in-memory, per IP ]---
 const _rateLimitMap = new Map(); // ip -> { count, resetAt }
@@ -1730,6 +1731,20 @@ async function startServer() {
                 const candidateDriverIds = candidates.map(c => c.driverId);
                 const assignedDriver = candidates[0] || (driverCandidates[0] || null);
 
+                // Calculate dynamic surge pricing server-side for this instant taxi ride
+                const dynamicPricing = pricingService.calculateInstantRideFare({
+                    pickupLat: pLat,
+                    pickupLon: pLon,
+                    dropoffLat: parseFloat(dropoffLat) || 32.0321,
+                    dropoffLon: parseFloat(dropoffLon) || 44.3725,
+                    distanceKm: distanceKm || 3.5,
+                    durationMins: durationMins || 8,
+                    vehicleType: reqTier,
+                    promoCode: body.promoCode
+                });
+
+                const computedFare = dynamicPricing.fare || fare || 3000;
+
                 const newRequest = {
                     id: 'ride-' + Math.random().toString(36).substr(2, 9),
                     customerId: customerId || 'cust-user',
@@ -1741,7 +1756,11 @@ async function startServer() {
                     dropoffName: dropoffName || 'وجهة الوصول',
                     dropoffLat: parseFloat(dropoffLat) || 32.0321,
                     dropoffLon: parseFloat(dropoffLon) || 44.3725,
-                    fare: fare || 3000,
+                    fare: computedFare,
+                    surgeMultiplier: dynamicPricing.multipliers ? dynamicPricing.multipliers.cappedMultiplier : 1.0,
+                    surgeBadge: dynamicPricing.surgeBadge,
+                    discountBadge: dynamicPricing.discountBadge,
+                    pricingBreakdown: dynamicPricing.breakdown,
                     vehicleType: isVipTier ? 'VIP' : 'توفير',
                     distanceKm: distanceKm || 3.5,
                     durationMins: durationMins || 8,
@@ -1788,7 +1807,8 @@ async function startServer() {
                     success: true,
                     request: newRequest,
                     candidateCount: newRequest.candidateDriverIds.length,
-                    assignedDriver
+                    assignedDriver,
+                    pricing: dynamicPricing
                 });
             } catch (err) {
                 return sendJson({ success: false, error: err.message }, 500);
@@ -3378,14 +3398,53 @@ async function startServer() {
             });
         }
 
-        if (pathname === '/api/pricing/estimate') {
-            return sendJson({
-                success: true,
-                baseFare: 2500,
-                distanceFare: 3400,
-                totalFare: 5900,
-                currency: "IQD"
-            });
+        // Dynamic Surge Pricing calculation for Instant Taxi (Baly-like engine)
+        if ((pathname === '/api/rides/calculate-fare' || pathname === '/api/pricing/estimate') && (method === 'POST' || method === 'GET')) {
+            let params = {};
+            if (method === 'POST') {
+                params = await parseJsonBody(req);
+            } else {
+                params = {
+                    pickupLat: parseFloat(parsedUrl.searchParams.get('pickupLat')),
+                    pickupLon: parseFloat(parsedUrl.searchParams.get('pickupLon')),
+                    dropoffLat: parseFloat(parsedUrl.searchParams.get('dropoffLat')),
+                    dropoffLon: parseFloat(parsedUrl.searchParams.get('dropoffLon')),
+                    distanceKm: parseFloat(parsedUrl.searchParams.get('distanceKm')),
+                    durationMins: parseFloat(parsedUrl.searchParams.get('durationMins')),
+                    vehicleType: parsedUrl.searchParams.get('vehicleType'),
+                    isRoundTrip: parsedUrl.searchParams.get('isRoundTrip') === 'true',
+                    hasSecondStop: parsedUrl.searchParams.get('hasSecondStop') === 'true',
+                    promoCode: parsedUrl.searchParams.get('promoCode'),
+                    simulatedNight: parsedUrl.searchParams.has('simulatedNight') ? parsedUrl.searchParams.get('simulatedNight') === 'true' : undefined,
+                    simulatedDemandMultiplier: parsedUrl.searchParams.has('simulatedDemandMultiplier') ? parseFloat(parsedUrl.searchParams.get('simulatedDemandMultiplier')) : undefined
+                };
+            }
+            const result = pricingService.calculateInstantRideFare(params);
+            return sendJson(result);
+        }
+
+        // Admin Pricing Management & Emergency Override
+        if (pathname === '/api/admin/pricing' && method === 'GET') {
+            const settings = pricingService.getPricingSettings();
+            return sendJson({ success: true, settings });
+        }
+
+        if (pathname === '/api/admin/pricing' && (method === 'POST' || method === 'PUT')) {
+            const body = await parseJsonBody(req);
+            const result = await pricingService.savePricingSettings(body, 'المشرف العام (Admin)', clientIp);
+            return sendJson(result);
+        }
+
+        if (pathname === '/api/admin/pricing/emergency-override' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const current = pricingService.getPricingSettings();
+            const updated = {
+                ...current,
+                manualOverrideMultiplier: Number(body.multiplier) || 1.0,
+                manualOverrideLabel: body.label || 'وضع طبيعي (1.0x)'
+            };
+            const result = await pricingService.savePricingSettings(updated, 'المشرف العام (Admin)', clientIp);
+            return sendJson(result);
         }
 
         if (pathname === '/api/ads/vacancies') {

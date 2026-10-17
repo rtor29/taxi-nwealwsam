@@ -1,6 +1,7 @@
 const db = require('../../db');
 const backupService = require('../backup/backupService');
 const auditService = require('../audit/auditService');
+const pricingService = require('../pricing/pricingService');
 
 class AdminController {
     // 1. Dynamic Stats (Calculated on the fly from current active records)
@@ -873,6 +874,13 @@ class AdminController {
     }
 
     async updateSetting(key, valueJson, ip = '127.0.0.1') {
+        if (key === 'PricingParameters' || key === 'pricing_settings') {
+            try {
+                const parsedVal = typeof valueJson === 'string' ? JSON.parse(valueJson) : valueJson;
+                return await pricingService.savePricingSettings(parsedVal, 'المشرف العام (Admin)', ip);
+            } catch (err) {}
+        }
+
         let setting = db.memoryState.settings.find(s => s.key === key);
         if (setting) {
             setting.valueJson = typeof valueJson === 'string' ? valueJson : JSON.stringify(valueJson);
@@ -911,6 +919,18 @@ class AdminController {
         } catch (_) {}
 
         return { success: true, setting };
+    }
+
+    // Dynamic Surge Pricing Engine (Instant Taxi Rides Only)
+    getPricingSettings() {
+        return {
+            success: true,
+            settings: pricingService.getPricingSettings()
+        };
+    }
+
+    async updatePricingSettings(newSettings, ip = '127.0.0.1') {
+        return await pricingService.savePricingSettings(newSettings, 'المشرف العام (Admin)', ip);
     }
 
     // 9. Audit Logs

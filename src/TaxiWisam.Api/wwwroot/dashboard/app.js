@@ -1517,10 +1517,275 @@ async function resolveComplaint(id) {
 }
 
 // -----------------------------------------------------------------------------
-// 7. System Settings & Matching Engine Parameters
 // -----------------------------------------------------------------------------
+// 7. System Settings & Dynamic Surge Pricing Engine (Baly-like Taxi Engine)
+// -----------------------------------------------------------------------------
+let currentPricingConfig = {
+    baseFare: 2000,
+    kmRate: 450,
+    minuteRate: 100,
+    minFare: 2500,
+    enableDynamicSurge: true,
+    maxSurgeMultiplier: 2.0,
+    nightSurgePercent: 25,
+    demandSensitivity: 1.0,
+    manualOverrideMultiplier: 1.0,
+    manualOverrideLabel: 'وضع طبيعي (1.0x)',
+    discountPercent: 0,
+    discountFixed: 0
+};
+
+async function loadPricingSettings() {
+    try {
+        const res = await fetch(`${API_BASE}/pricing`);
+        let data = null;
+        if (res.ok) {
+            data = await res.json();
+            if (data.settings) currentPricingConfig = { ...currentPricingConfig, ...data.settings };
+        } else {
+            // fallback to general settings
+            const sRes = await fetch(`${API_BASE}/settings`);
+            if (sRes.ok) {
+                const sList = await sRes.json();
+                const p = (Array.isArray(sList) ? sList : []).find(s => s.key === 'PricingParameters' || s.key === 'pricing_settings');
+                if (p && p.valueJson) {
+                    const parsed = typeof p.valueJson === 'string' ? JSON.parse(p.valueJson) : p.valueJson;
+                    currentPricingConfig = { ...currentPricingConfig, ...parsed };
+                }
+            }
+        }
+
+        // Populate Form Fields
+        const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.value = val;
+        };
+
+        setVal('setting-base-fare', currentPricingConfig.baseFare || 2000);
+        setVal('setting-per-km', currentPricingConfig.kmRate || 450);
+        setVal('setting-per-minute', currentPricingConfig.minuteRate || 100);
+        setVal('setting-min-fare', currentPricingConfig.minFare || 2500);
+        setVal('setting-surge-max', currentPricingConfig.maxSurgeMultiplier || 2.0);
+        setVal('setting-night-surge', currentPricingConfig.nightSurgePercent || 25);
+        setVal('setting-demand-sensitivity', String(currentPricingConfig.demandSensitivity || 1.0));
+        setVal('setting-manual-multiplier', currentPricingConfig.manualOverrideMultiplier || 1.0);
+        setVal('setting-manual-label', currentPricingConfig.manualOverrideLabel || 'وضع طبيعي (1.0x)');
+
+        const surgeToggle = document.getElementById('setting-enable-surge');
+        if (surgeToggle) {
+            surgeToggle.checked = currentPricingConfig.enableDynamicSurge !== false;
+        }
+
+        // Update live status pill & manual override badge
+        updatePricingUIBadges();
+
+        // Run live fare simulator with loaded settings
+        runLiveFareSimulator();
+    } catch (err) {
+        console.warn('[Pricing] Could not fetch pricing settings:', err);
+    }
+}
+
+function updatePricingUIBadges() {
+    const isSurgeEnabled = document.getElementById('setting-enable-surge')?.checked !== false;
+    const livePill = document.getElementById('pricing-live-status-pill');
+    if (livePill) {
+        if (isSurgeEnabled) {
+            livePill.className = 'px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-full border border-emerald-200';
+            livePill.innerHTML = '⚡ الذروة الذكية: مفعّلة';
+        } else {
+            livePill.className = 'px-2.5 py-0.5 bg-slate-100 text-slate-600 font-bold text-xs rounded-full border border-slate-200';
+            livePill.innerHTML = '⏸️ الذروة الذكية: معطلة';
+        }
+    }
+
+    const stateText = document.getElementById('surge-engine-state-text');
+    if (stateText) {
+        if (isSurgeEnabled) {
+            stateText.className = 'text-emerald-600 font-bold';
+            stateText.textContent = 'نشط وجاهز للرحلات الفورية';
+        } else {
+            stateText.className = 'text-slate-400 font-bold';
+            stateText.textContent = 'متوقف (تسعير ثابت فقط)';
+        }
+    }
+
+    const manualMult = Number(document.getElementById('setting-manual-multiplier')?.value) || 1.0;
+    const manualLabel = document.getElementById('setting-manual-label')?.value || 'وضع طبيعي (1.0x)';
+    const manualBadge = document.getElementById('manual-override-current-badge');
+    if (manualBadge) {
+        manualBadge.textContent = manualLabel;
+        if (manualMult > 1.05) {
+            manualBadge.className = 'px-2.5 py-0.5 bg-amber-100 text-amber-800 font-bold text-xs rounded-full border border-amber-300';
+        } else if (manualMult < 0.95) {
+            manualBadge.className = 'px-2.5 py-0.5 bg-emerald-100 text-emerald-800 font-bold text-xs rounded-full border border-emerald-300';
+        } else {
+            manualBadge.className = 'px-2.5 py-0.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-full border border-slate-200';
+        }
+    }
+}
+
+async function savePricingSettings() {
+    const payload = {
+        baseFare: Number(document.getElementById('setting-base-fare')?.value) || 2000,
+        kmRate: Number(document.getElementById('setting-per-km')?.value) || 450,
+        minuteRate: Number(document.getElementById('setting-per-minute')?.value) || 100,
+        minFare: Number(document.getElementById('setting-min-fare')?.value) || 2500,
+        enableDynamicSurge: Boolean(document.getElementById('setting-enable-surge')?.checked),
+        maxSurgeMultiplier: Number(document.getElementById('setting-surge-max')?.value) || 2.0,
+        nightSurgePercent: Number(document.getElementById('setting-night-surge')?.value) || 25,
+        demandSensitivity: Number(document.getElementById('setting-demand-sensitivity')?.value) || 1.0,
+        manualOverrideMultiplier: Number(document.getElementById('setting-manual-multiplier')?.value) || 1.0,
+        manualOverrideLabel: document.getElementById('setting-manual-label')?.value || 'وضع طبيعي (1.0x)'
+    };
+
+    try {
+        const res = await fetch(`${API_BASE}/pricing`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            currentPricingConfig = { ...currentPricingConfig, ...payload };
+            updatePricingUIBadges();
+            runLiveFareSimulator();
+            showToast('تم حفظ وتحديث إعدادات التسعير والذروة بنجاح! ⚡💰');
+        } else {
+            showToast('تعذر حفظ إعدادات التسعير على الخادم', true);
+        }
+    } catch (err) {
+        showToast('خطأ في الاتصال بالخادم', true);
+    }
+}
+
+async function applyQuickEmergencyOverride(multiplier, label) {
+    const mInput = document.getElementById('setting-manual-multiplier');
+    const lInput = document.getElementById('setting-manual-label');
+    if (mInput) mInput.value = multiplier;
+    if (lInput) lInput.value = label;
+
+    try {
+        const res = await fetch(`${API_BASE}/pricing/emergency-override`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ multiplier, label })
+        });
+        if (res.ok) {
+            currentPricingConfig.manualOverrideMultiplier = multiplier;
+            currentPricingConfig.manualOverrideLabel = label;
+            updatePricingUIBadges();
+            runLiveFareSimulator();
+            showToast(`تم تفعيل: ${label} ⚡`);
+        } else {
+            showToast('تعذر تطبيق التدخل اليدوي', true);
+        }
+    } catch (err) {
+        showToast('خطأ في الاتصال بالخادم', true);
+    }
+}
+
+function runLiveFareSimulator() {
+    const baseFare = Number(document.getElementById('setting-base-fare')?.value) || 2000;
+    const kmRate = Number(document.getElementById('setting-per-km')?.value) || 450;
+    const minuteRate = Number(document.getElementById('setting-per-minute')?.value) || 100;
+    const minFare = Number(document.getElementById('setting-min-fare')?.value) || 2500;
+    const isSurgeEnabled = document.getElementById('setting-enable-surge')?.checked !== false;
+    const maxSurge = Number(document.getElementById('setting-surge-max')?.value) || 2.0;
+    const nightSurgePercent = Number(document.getElementById('setting-night-surge')?.value) || 25;
+    const manualMultiplier = Number(document.getElementById('setting-manual-multiplier')?.value) || 1.0;
+
+    // Simulator inputs
+    const distKm = Math.max(0.5, Number(document.getElementById('sim-distance')?.value) || 4.5);
+    const durMins = Math.max(2, Number(document.getElementById('sim-duration')?.value) || 12);
+    const tier = document.getElementById('sim-tier')?.value || 'super';
+    const demandMultiplier = Number(document.getElementById('sim-demand')?.value) || 1.0;
+    const isNight = Boolean(document.getElementById('sim-is-night')?.checked);
+
+    // Tier factor
+    let tierFactor = 1.0;
+    if (tier === 'eco') tierFactor = 0.90;
+    if (tier === 'vip') tierFactor = 1.20;
+
+    // Base math
+    const base = baseFare * tierFactor;
+    const distCost = distKm * kmRate * tierFactor;
+    const timeCost = durMins * minuteRate * tierFactor;
+    const rawStandard = base + distCost + timeCost;
+
+    // Surge calculation
+    let nightFactor = 1.0;
+    if (isSurgeEnabled && isNight && nightSurgePercent > 0) {
+        nightFactor = 1.0 + (nightSurgePercent / 100);
+    }
+
+    let trafficFactor = 1.0;
+    const avgSpeed = distKm / (durMins / 60);
+    if (isSurgeEnabled && avgSpeed < 18 && durMins > 10) {
+        trafficFactor = avgSpeed < 10 ? 1.20 : 1.10;
+    }
+
+    let combined = 1.0;
+    if (isSurgeEnabled) {
+        combined = manualMultiplier * (1.0 + (demandMultiplier - 1.0) + (nightFactor - 1.0) + (trafficFactor - 1.0));
+    } else {
+        combined = manualMultiplier;
+    }
+
+    const capped = Math.min(maxSurge, Math.max(0.7, combined));
+    let preFare = rawStandard * capped;
+
+    // Min fare floor
+    preFare = Math.max(minFare, preFare);
+
+    // Round to nearest 250 IQD
+    const finalFare = Math.round(preFare / 250) * 250;
+
+    // Update Simulator Output
+    const fareEl = document.getElementById('sim-result-fare');
+    if (fareEl) fareEl.textContent = finalFare.toLocaleString();
+
+    const baseEl = document.getElementById('sim-out-base');
+    if (baseEl) baseEl.textContent = `${Math.round(base).toLocaleString()} د.ع`;
+
+    const distEl = document.getElementById('sim-out-dist');
+    if (distEl) distEl.textContent = `${Math.round(distCost).toLocaleString()} د.ع`;
+
+    const timeEl = document.getElementById('sim-out-time');
+    if (timeEl) timeEl.textContent = `${Math.round(timeCost).toLocaleString()} د.ع`;
+
+    const multEl = document.getElementById('sim-out-multiplier');
+    if (multEl) multEl.textContent = `${capped.toFixed(2)}x`;
+
+    const badgeContainer = document.getElementById('sim-result-badge-container');
+    if (badgeContainer) {
+        let badgeHtml = '';
+        if (capped > 1.05) {
+            const p = Math.round((capped - 1.0) * 100);
+            if (manualMultiplier > 1.05) {
+                badgeHtml = `<span class="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">⚡ ذروة استثنائية (+${p}%)</span>`;
+            } else if (demandMultiplier > 1.05) {
+                badgeHtml = `<span class="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">⚡ زيادة لقلة السائقين (+${p}%)</span>`;
+            } else if (isNight) {
+                badgeHtml = `<span class="px-2.5 py-1 bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">🌙 تعرفة ليلية (+${p}%)</span>`;
+            } else {
+                badgeHtml = `<span class="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">⚡ تعرفة ذروة (+${p}%)</span>`;
+            }
+        } else if (capped < 0.95) {
+            badgeHtml = `<span class="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">🏷️ خصم مفعّل (-10%)</span>`;
+        } else {
+            badgeHtml = `<span class="px-2.5 py-1 bg-slate-800 text-slate-300 border border-slate-700 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">⚡ تعرفة قياسية (1.0x)</span>`;
+        }
+        badgeContainer.innerHTML = badgeHtml;
+    }
+}
+
 async function loadMatchingSettings() {
     try {
+        // Load Pricing Parameters first
+        await loadPricingSettings();
+
+        // Load Spatial Matching Parameters
         const res = await fetch(`${API_BASE}/settings`);
         if (!res.ok) return;
         let settings = await res.json();
@@ -1535,7 +1800,7 @@ async function loadMatchingSettings() {
         };
         try {
             if (matchConfig.valueJson) {
-                const parsed = JSON.parse(matchConfig.valueJson);
+                const parsed = typeof matchConfig.valueJson === 'string' ? JSON.parse(matchConfig.valueJson) : matchConfig.valueJson;
                 matchVals = {
                     MaxDetourMeters: parsed.max_detour_meters ?? parsed.MaxDetourMeters ?? 2000,
                     MinOverlapPercentage: parsed.min_overlap_percentage ?? parsed.MinOverlapPercentage ?? 60,
@@ -1550,30 +1815,6 @@ async function loadMatchingSettings() {
         if (document.getElementById('setting-search-radius')) document.getElementById('setting-search-radius').value = matchVals.SearchRadiusMeters ?? 5000;
         if (document.getElementById('setting-time-window')) document.getElementById('setting-time-window').value = matchVals.TimeWindowMinutes ?? 30;
 
-        const priceConfig = settings.find(s => s.key === 'pricing_settings' || s.key === 'PricingParameters') || {};
-        let priceVals = {
-            BaseFareIqd: 2500,
-            PerKmRateIqd: 400,
-            PerMinuteWaitIqd: 80,
-            SurgeMultiplierMax: 2.0
-        };
-        try {
-            if (priceConfig.valueJson) {
-                const parsedPrice = JSON.parse(priceConfig.valueJson);
-                priceVals = {
-                    BaseFareIqd: parsedPrice.base_fare_iqd ?? parsedPrice.BaseFareIqd ?? 2500,
-                    PerKmRateIqd: parsedPrice.per_km_rate_iqd ?? parsedPrice.PerKmRateIqd ?? 400,
-                    PerMinuteWaitIqd: parsedPrice.per_minute_rate_iqd ?? parsedPrice.PerMinuteWaitIqd ?? 80,
-                    SurgeMultiplierMax: parsedPrice.surge_multiplier_max ?? parsedPrice.SurgeMultiplierMax ?? 2.0
-                };
-            }
-        } catch(_) {}
-
-        if (document.getElementById('setting-base-fare')) document.getElementById('setting-base-fare').value = priceVals.BaseFareIqd ?? 2500;
-        if (document.getElementById('setting-per-km')) document.getElementById('setting-per-km').value = priceVals.PerKmRateIqd ?? 400;
-        if (document.getElementById('setting-per-minute')) document.getElementById('setting-per-minute').value = priceVals.PerMinuteWaitIqd ?? 80;
-        if (document.getElementById('setting-surge-max')) document.getElementById('setting-surge-max').value = priceVals.SurgeMultiplierMax ?? 2.0;
-
     } catch (err) {
         console.warn('Could not fetch settings', err);
     }
@@ -1582,10 +1823,10 @@ async function loadMatchingSettings() {
 async function saveMatchingSettings() {
     const payload = {
         valueJson: JSON.stringify({
-            MaxDetourMeters: Number(document.getElementById('setting-max-detour').value),
-            MinOverlapPercentage: Number(document.getElementById('setting-min-overlap').value),
-            SearchRadiusMeters: Number(document.getElementById('setting-search-radius').value),
-            TimeWindowMinutes: Number(document.getElementById('setting-time-window').value)
+            MaxDetourMeters: Number(document.getElementById('setting-max-detour')?.value) || 2000,
+            MinOverlapPercentage: Number(document.getElementById('setting-min-overlap')?.value) || 60,
+            SearchRadiusMeters: Number(document.getElementById('setting-search-radius')?.value) || 5000,
+            TimeWindowMinutes: Number(document.getElementById('setting-time-window')?.value) || 30
         })
     };
 
@@ -1597,30 +1838,8 @@ async function saveMatchingSettings() {
         });
         if (res.ok) {
             showToast('تم حفظ معايير محرك المطابقة الجغرافي بنجاح! 📍');
-        }
-    } catch (err) {
-        showToast('خطأ في الاتصال بالخادم', true);
-    }
-}
-
-async function savePricingSettings() {
-    const payload = {
-        valueJson: JSON.stringify({
-            BaseFareIqd: Number(document.getElementById('setting-base-fare').value),
-            PerKmRateIqd: Number(document.getElementById('setting-per-km').value),
-            PerMinuteWaitIqd: Number(document.getElementById('setting-per-minute').value),
-            SurgeMultiplierMax: Number(document.getElementById('setting-surge-max').value)
-        })
-    };
-
-    try {
-        const res = await fetch(`${API_BASE}/settings/PricingParameters`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-            showToast('تم حفظ إعدادات تسعير المشاوير بالدينار العراقي! 💰');
+        } else {
+            showToast('تعذر حفظ معايير المطابقة', true);
         }
     } catch (err) {
         showToast('خطأ في الاتصال بالخادم', true);
@@ -4460,6 +4679,11 @@ window.closeEditDriverModal = closeEditDriverModal;
 window.submitEditDriver = submitEditDriver;
 window.loadDashboardStats = loadDashboardStats;
 window.loadMatchingSettings = loadMatchingSettings;
+window.loadPricingSettings = loadPricingSettings;
+window.savePricingSettings = savePricingSettings;
+window.applyQuickEmergencyOverride = applyQuickEmergencyOverride;
+window.runLiveFareSimulator = runLiveFareSimulator;
+window.saveMatchingSettings = saveMatchingSettings;
 window.acceptBookingFromAdmin = acceptBookingFromAdmin;
 window.declineBookingFromAdmin = declineBookingFromAdmin;
 

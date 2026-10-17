@@ -1067,74 +1067,322 @@
                 </div>
             </section>
 
-            <!-- 7. SETTINGS & MATCHING TAB -->
+            <!-- 7. SETTINGS & DYNAMIC SURGE PRICING TAB -->
             <section id="tab-settings" class="tab-content hidden space-y-6">
-                <div>
-                    <h2 class="text-2xl font-black text-slate-900">إعدادات النظام ومعايير المطابقة الجغرافية</h2>
-                    <p class="text-xs md:text-sm text-slate-500">تعديل أسعار الرحلات ومحددات محرك المطابقة الجغرافي دون إعادة تشغيل الخادم</p>
+                <!-- Header -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+                            <h2 class="text-2xl font-black text-slate-900">إعدادات التسعير الديناميكي والمطابقة</h2>
+                            <span id="pricing-live-status-pill" class="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-full border border-emerald-200">
+                                ⚡ الذروة الذكية: مفعّلة
+                            </span>
+                        </div>
+                        <p class="text-xs md:text-sm text-slate-500">محرك كراوي التكسي الفوري الديناميكي (Dynamic Surge Engine) الشبيه بأنظمة بلي/أوبر، ومعايير المطابقة الجغرافية</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="loadPricingSettings()" class="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-2 shadow-xs transition cursor-pointer">
+                            <i class="fa-solid fa-arrows-rotate text-amber-500"></i>
+                            <span>تحديث الإعدادات</span>
+                        </button>
+                        <button onclick="savePricingSettings()" class="px-4 py-2 bg-[#1B4965] hover:bg-[#14364A] text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-xs transition cursor-pointer">
+                            <i class="fa-solid fa-floppy-disk text-amber-400"></i>
+                            <span>حفظ كافة التعديلات</span>
+                        </button>
+                    </div>
                 </div>
 
+                <!-- 4 Main SaaS Cards Grid -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <!-- Matching Parameters Card -->
-                    <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                        <h3 class="font-bold text-slate-900 text-base md:text-lg flex items-center space-x-2 space-x-reverse">
-                            <i class="fa-solid fa-map-location-dot text-amber-500"></i>
-                            <span>معايير محرك المطابقة (Matching Engine)</span>
-                        </h3>
-                        <p class="text-xs text-slate-500">محددات حساب التداخل والانحراف المسموح به للمسارات المشتركة في PostGIS.</p>
-                        
-                        <div class="space-y-3">
+                    <!-- Card 1: Standard Base Rates -->
+                    <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="font-bold text-slate-900 text-base md:text-lg flex items-center gap-2.5">
+                                <span class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200/60">
+                                    <i class="fa-solid fa-coins text-sm"></i>
+                                </span>
+                                <span>التعرفة القياسية الأساسية (Base Rates)</span>
+                            </h3>
+                            <span class="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">التكسي الفوري فقط</span>
+                        </div>
+                        <p class="text-xs text-slate-500 leading-relaxed">
+                            القيم الأساسية لاحتساب كروة المشوار المباشر بالدينار العراقي (لا تؤثر على خطوط الاشتراكات الثابتة).
+                        </p>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">أقصى مسافة انحراف مسموحة (متر)</label>
-                                <input type="number" id="setting-max-detour" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                <label class="block text-xs font-bold text-slate-700 mb-1">فتح العداد الأساسي (Base Fare د.ع)</label>
+                                <input type="number" id="setting-base-fare" step="250" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 transition" oninput="runLiveFareSimulator()">
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">أدنى نسبة تطابق للمسار (%)</label>
-                                <input type="number" id="setting-min-overlap" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                <label class="block text-xs font-bold text-slate-700 mb-1">سعر الكيلومتر الواحد (KM Rate د.ع)</label>
+                                <input type="number" id="setting-per-km" step="50" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 transition" oninput="runLiveFareSimulator()">
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">نصف قطر البحث الجغرافي (متر)</label>
-                                <input type="number" id="setting-search-radius" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                <label class="block text-xs font-bold text-slate-700 mb-1">سعر دقيقة الوقت/الانتظار (Minute Rate د.ع)</label>
+                                <input type="number" id="setting-per-minute" step="25" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 transition" oninput="runLiveFareSimulator()">
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">نافذة التسامح الزمني (دقيقة)</label>
-                                <input type="number" id="setting-time-window" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                <label class="block text-xs font-bold text-slate-700 mb-1">الحد الأدنى للأجرة (Minimum Fare د.ع)</label>
+                                <input type="number" id="setting-min-fare" step="250" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 transition" oninput="runLiveFareSimulator()">
                             </div>
-                            <button onclick="saveMatchingSettings()" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-sm transition">
-                                حفظ معايير المطابقة
-                            </button>
+                        </div>
+
+                        <!-- Cash Rounding Note -->
+                        <div class="p-3 bg-amber-50/60 border border-amber-200/70 rounded-xl flex items-center gap-2.5 text-xs text-amber-900 font-medium">
+                            <i class="fa-solid fa-circle-check text-amber-600"></i>
+                            <span><b>تقريب الكاش التلقائي:</b> يتم تدوير كل الكراوي تلقائياً لأقرب 250 دينار عراقي (مثل 3,250 أو 3,500 د.ع) لتفادي مشاكل الفكة.</span>
                         </div>
                     </div>
 
-                    <!-- Pricing Parameters Card -->
-                    <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                        <h3 class="font-bold text-slate-900 text-base md:text-lg flex items-center space-x-2 space-x-reverse">
-                            <i class="fa-solid fa-coins text-amber-500"></i>
-                            <span>تسعير المشاوير والخدمات (Pricing Settings)</span>
-                        </h3>
-                        <p class="text-xs text-slate-500">تحديد أسعار فتح العداد والكيلومتر والدقيقة للرحلات المباشرة بالدينار العراقي.</p>
+                    <!-- Card 2: Dynamic Surge & Traffic Controls -->
+                    <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="font-bold text-slate-900 text-base md:text-lg flex items-center gap-2.5">
+                                <span class="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-200/60">
+                                    <i class="fa-solid fa-bolt text-sm"></i>
+                                </span>
+                                <span>التحكم في الذروة الديناميكية وحركة المرور</span>
+                            </h3>
+                            <!-- Toggle Dynamic Surge -->
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="setting-enable-surge" class="sr-only peer" checked onchange="runLiveFareSimulator()">
+                                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                            </label>
+                        </div>
+                        <p class="text-xs text-slate-500 leading-relaxed">
+                            مضاعفات الأسعار الذكية التي ترتفع تلقائياً عند نقص السائقين، ساعات الليل المتأخرة، أو الازدحام المروري الخانق.
+                        </p>
 
-                        <div class="space-y-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">الأجرة الأساسية (فتح العداد - د.ع)</label>
-                                <input type="number" id="setting-base-fare" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                <label class="block text-xs font-bold text-slate-700 mb-1">السقف الأقصى للذروة (Max Surge Multiplier)</label>
+                                <div class="relative">
+                                    <input type="number" step="0.1" id="setting-surge-max" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 transition" oninput="runLiveFareSimulator()">
+                                    <span class="absolute left-3 top-2.5 text-xs font-bold text-slate-400">x أقصى حد</span>
+                                </div>
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">سعر الكيلومتر الواحد (د.ع)</label>
-                                <input type="number" id="setting-per-km" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                <label class="block text-xs font-bold text-slate-700 mb-1">نسبة الزيادة الليلية (% 00:00 - 05:30 فجراً)</label>
+                                <div class="relative">
+                                    <input type="number" step="5" id="setting-night-surge" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 transition" oninput="runLiveFareSimulator()">
+                                    <span class="absolute left-3 top-2.5 text-xs font-bold text-slate-400">% تعويض السائق</span>
+                                </div>
                             </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">سعر دقيقة الانتظار (د.ع)</label>
-                                <input type="number" id="setting-per-minute" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                            <div class="sm:col-span-2">
+                                <label class="block text-xs font-bold text-slate-700 mb-1">حساسية استجابة العرض والطلب (Demand Sensitivity)</label>
+                                <select id="setting-demand-sensitivity" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 transition" onchange="runLiveFareSimulator()">
+                                    <option value="0.8">هادئة (مضاعف خفيف 1.1x - 1.2x)</option>
+                                    <option value="1.0" selected>متوازنة - قياسية (مضاعف معتدل 1.15x - 1.35x)</option>
+                                    <option value="1.4">مرتفعة الاستجابة (مضاعف سريع 1.3x - 1.6x)</option>
+                                    <option value="1.8">هجومية (مضاعف يصل للحد الأقصى بسرعة عند قلة السائقين)</option>
+                                </select>
                             </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-700 mb-1">أقصى مضاعف لأوقات الذروة (Surge Multiplier)</label>
-                                <input type="number" step="0.1" id="setting-surge-max" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
-                            </div>
-                            <button onclick="savePricingSettings()" class="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-sm transition">
-                                حفظ تسعيرات النظام
+                        </div>
+
+                        <div class="flex items-center justify-between text-xs text-slate-500 pt-1">
+                            <span>حالة المحرك: <b id="surge-engine-state-text" class="text-emerald-600">نشط وجاهز للرحلات الفورية</b></span>
+                            <span class="text-[11px] text-slate-400">بتوقيت العراق (Asia/Baghdad)</span>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: Manual Emergency Override -->
+                    <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+                        <div class="flex items-center justify-between">
+                            <h3 class="font-bold text-slate-900 text-base md:text-lg flex items-center gap-2.5">
+                                <span class="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200/60">
+                                    <i class="fa-solid fa-triangle-exclamation text-sm"></i>
+                                </span>
+                                <span>التدخل اليدوي والحالات الاستثنائية</span>
+                            </h3>
+                            <span id="manual-override-current-badge" class="px-2.5 py-0.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-full border border-slate-200">
+                                وضع طبيعي (1.0x)
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 leading-relaxed">
+                            أزرار تشغيل فورية بنقرة واحدة لتعديل تعرفة كافة مشاوير التكسي فوراً أثناء الزيارات المليونية بالنجف، طوارئ الأحوال الجوية، أو عروض التخفيض:
+                        </p>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                            <!-- Preset 1: Ziyarah -->
+                            <button type="button" onclick="applyQuickEmergencyOverride(1.25, 'مضاعف زيارات ومناسبات دينية (+25%)')" class="p-3 bg-amber-50/70 hover:bg-amber-100/70 border border-amber-200/80 text-amber-950 rounded-xl text-right transition flex items-center justify-between cursor-pointer group">
+                                <div>
+                                    <p class="text-xs font-bold text-amber-900 group-hover:text-amber-950">🕌 مناسبات وزيارات دينية</p>
+                                    <p class="text-[11px] text-amber-700">مضاعف +25% لكافة المشاوير</p>
+                                </div>
+                                <span class="text-sm font-black text-amber-600 bg-white px-2 py-0.5 rounded-lg border border-amber-200">1.25x</span>
+                            </button>
+
+                            <!-- Preset 2: Extreme Surge -->
+                            <button type="button" onclick="applyQuickEmergencyOverride(1.50, 'ذروة استثنائية وطوارئ (+50%)')" class="p-3 bg-orange-50/70 hover:bg-orange-100/70 border border-orange-200/80 text-orange-950 rounded-xl text-right transition flex items-center justify-between cursor-pointer group">
+                                <div>
+                                    <p class="text-xs font-bold text-orange-900 group-hover:text-orange-950">🚨 ذروة استثنائية وطوارئ</p>
+                                    <p class="text-[11px] text-orange-700">مضاعف +50% لحالات الزحام الخانق</p>
+                                </div>
+                                <span class="text-sm font-black text-orange-600 bg-white px-2 py-0.5 rounded-lg border border-orange-200">1.50x</span>
+                            </button>
+
+                            <!-- Preset 3: Off-Peak Discount -->
+                            <button type="button" onclick="applyQuickEmergencyOverride(0.90, 'عروض ركود وتخفيض (-10%)')" class="p-3 bg-emerald-50/70 hover:bg-emerald-100/70 border border-emerald-200/80 text-emerald-950 rounded-xl text-right transition flex items-center justify-between cursor-pointer group">
+                                <div>
+                                    <p class="text-xs font-bold text-emerald-900 group-hover:text-emerald-950">🏷️ عروض ركود وتخفيض</p>
+                                    <p class="text-[11px] text-emerald-700">خصم -10% لتحفيز الطلب</p>
+                                </div>
+                                <span class="text-sm font-black text-emerald-600 bg-white px-2 py-0.5 rounded-lg border border-emerald-200">0.90x</span>
+                            </button>
+
+                            <!-- Preset 4: Reset Normal -->
+                            <button type="button" onclick="applyQuickEmergencyOverride(1.0, 'وضع طبيعي (1.0x)')" class="p-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 rounded-xl text-right transition flex items-center justify-between cursor-pointer group">
+                                <div>
+                                    <p class="text-xs font-bold text-slate-800 group-hover:text-slate-900">🔄 الوضع الافتراضي</p>
+                                    <p class="text-[11px] text-slate-500">إلغاء التدخل واعتماد الحساب الطبيعي</p>
+                                </div>
+                                <span class="text-sm font-black text-slate-600 bg-white px-2 py-0.5 rounded-lg border border-slate-200">1.0x</span>
                             </button>
                         </div>
+
+                        <div class="pt-1">
+                            <input type="hidden" id="setting-manual-multiplier" value="1.0">
+                            <input type="hidden" id="setting-manual-label" value="وضع طبيعي (1.0x)">
+                            <p class="text-[11px] text-slate-400">
+                                🛡️ يتم تسجيل أي تفعيل للتدخل اليدوي لحظياً في سجل التدقيق الأمني (Audit Logs) باسم المشرف ورقم الـ IP.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Card 4: Live Fare Simulator -->
+                    <div class="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-5 md:p-6 rounded-2xl shadow-sm space-y-4">
+                        <div class="flex items-center justify-between border-b border-slate-700/60 pb-3">
+                            <h3 class="font-bold text-white text-base md:text-lg flex items-center gap-2.5">
+                                <span class="w-9 h-9 rounded-xl bg-amber-400/20 text-amber-400 flex items-center justify-center border border-amber-400/30">
+                                    <i class="fa-solid fa-calculator text-sm"></i>
+                                </span>
+                                <span>محاكي التسعير الفوري الحي (Live Simulator)</span>
+                            </h3>
+                            <span class="text-[11px] font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-md border border-amber-400/20">
+                                محاكاة لحظية ⚡
+                            </span>
+                        </div>
+
+                        <!-- Simulator Inputs -->
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                            <div>
+                                <label class="block text-[11px] font-medium text-slate-300 mb-1">المسافة (كم)</label>
+                                <input type="number" id="sim-distance" value="4.5" step="0.5" min="0.5" max="50" class="w-full p-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono font-bold focus:outline-none focus:ring-1 focus:ring-amber-400" oninput="runLiveFareSimulator()">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-medium text-slate-300 mb-1">المدة (دقيقة)</label>
+                                <input type="number" id="sim-duration" value="12" step="1" min="2" max="180" class="w-full p-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-mono font-bold focus:outline-none focus:ring-1 focus:ring-amber-400" oninput="runLiveFareSimulator()">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-medium text-slate-300 mb-1">فئة الرحلة</label>
+                                <select id="sim-tier" class="w-full p-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-bold focus:outline-none focus:ring-1 focus:ring-amber-400" onchange="runLiveFareSimulator()">
+                                    <option value="super">سوبر (افتراضي)</option>
+                                    <option value="eco">توفير (الأوفر)</option>
+                                    <option value="vip">بلَس (VIP راحة)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-medium text-slate-300 mb-1">العرض والطلب</label>
+                                <select id="sim-demand" class="w-full p-2 bg-slate-800 border border-slate-700 rounded-lg text-white font-bold focus:outline-none focus:ring-1 focus:ring-amber-400" onchange="runLiveFareSimulator()">
+                                    <option value="1.0">طبيعي (1.0x)</option>
+                                    <option value="1.25">طلب مرتفع (+25%)</option>
+                                    <option value="1.35">سائقون قليلون (+35%)</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-2 pt-5">
+                                <label class="flex items-center gap-2 cursor-pointer select-none">
+                                    <input type="checkbox" id="sim-is-night" class="w-4 h-4 rounded text-amber-500 bg-slate-800 border-slate-600 focus:ring-amber-400" onchange="runLiveFareSimulator()">
+                                    <span class="text-[11px] font-bold text-slate-200">وقت ليلي متأخر 🌙</span>
+                                </label>
+                            </div>
+                            <div class="flex items-center gap-2 pt-5">
+                                <button type="button" onclick="runLiveFareSimulator()" class="w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-xs transition cursor-pointer">
+                                    إعادة الحساب
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Simulator Results Box -->
+                        <div class="bg-slate-950/70 border border-slate-700/80 rounded-xl p-4 space-y-3">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <span class="text-[11px] text-slate-400 block mb-0.5">الكروة النهائية للمشوار (مقربة لأقرب 250 د.ع):</span>
+                                    <div class="flex items-baseline gap-2">
+                                        <span id="sim-result-fare" class="text-3xl font-black text-amber-400 font-mono">5,250</span>
+                                        <span class="text-sm font-bold text-slate-300">دينار عراقي</span>
+                                    </div>
+                                </div>
+                                <div id="sim-result-badge-container">
+                                    <span id="sim-result-badge" class="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">
+                                        ⚡ تعرفة قياسية
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Breakdown Pills -->
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] pt-1 border-t border-slate-800">
+                                <div class="bg-slate-900/90 p-2 rounded-lg border border-slate-800 text-slate-300">
+                                    <span class="text-slate-500 block text-[10px]">فتح العداد:</span>
+                                    <span id="sim-out-base" class="font-bold text-white">2,000 د.ع</span>
+                                </div>
+                                <div class="bg-slate-900/90 p-2 rounded-lg border border-slate-800 text-slate-300">
+                                    <span class="text-slate-500 block text-[10px]">كروة المسافة:</span>
+                                    <span id="sim-out-dist" class="font-bold text-white">2,025 د.ع</span>
+                                </div>
+                                <div class="bg-slate-900/90 p-2 rounded-lg border border-slate-800 text-slate-300">
+                                    <span class="text-slate-500 block text-[10px]">كروة الزمن:</span>
+                                    <span id="sim-out-time" class="font-bold text-white">1,200 د.ع</span>
+                                </div>
+                                <div class="bg-slate-900/90 p-2 rounded-lg border border-slate-800 text-slate-300">
+                                    <span class="text-slate-500 block text-[10px]">إجمالي المضاعف:</span>
+                                    <span id="sim-out-multiplier" class="font-bold text-amber-400 font-mono">1.00x</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. Spatial Matching Engine Card (PostGIS) -->
+                <div class="bg-white p-5 md:p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-bold text-slate-900 text-base md:text-lg flex items-center gap-2.5">
+                            <span class="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200">
+                                <i class="fa-solid fa-map-location-dot text-sm text-amber-500"></i>
+                            </span>
+                            <span>معايير محرك المطابقة الجغرافي (Spatial Matching Engine - PostGIS)</span>
+                        </h3>
+                        <span class="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">خوارزمية المسارات المشتركة</span>
+                    </div>
+                    <p class="text-xs text-slate-500 leading-relaxed">
+                        محددات خوارزمية PostGIS المكانية لحساب التداخل والانحراف المسموح به للمسارات المجمعة في النجف الأشرف.
+                    </p>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-1">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">أقصى مسافة انحراف مسموحة (متر)</label>
+                            <input type="number" id="setting-max-detour" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">أدنى نسبة تطابق للمسار (%)</label>
+                            <input type="number" id="setting-min-overlap" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">نصف قطر البحث الجغرافي (متر)</label>
+                            <input type="number" id="setting-search-radius" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 transition">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">نافذة التسامح الزمني (دقيقة)</label>
+                            <input type="number" id="setting-time-window" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 transition">
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-2">
+                        <button type="button" onclick="saveMatchingSettings()" class="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-xs transition cursor-pointer">
+                            <i class="fa-solid fa-check text-emerald-400"></i>
+                            <span>حفظ معايير المطابقة الجغرافية</span>
+                        </button>
                     </div>
                 </div>
             </section>

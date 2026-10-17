@@ -20,11 +20,36 @@
       "key": "pricing_settings",
       "valueJson": "{\"base_fare_iqd\":2500,\"per_km_rate_iqd\":400,\"per_minute_rate_iqd\":80,\"surge_multiplier_max\":2}",
       "description": "تسعيرات مشاوير النجف الأشرف"
+    },
+    {
+      "key": "PricingParameters",
+      "valueJson": "{\"baseFare\":2500,\"kmRate\":400,\"minuteRate\":80,\"minFare\":2500,\"enableDynamicSurge\":true,\"maxSurgeMultiplier\":2,\"nightSurgePercent\":25,\"demandSensitivity\":1,\"manualOverrideMultiplier\":1,\"manualOverrideLabel\":\"وضع طبيعي (1.0x)\",\"discountPercent\":0,\"discountFixed\":0}",
+      "description": "معايير التسعير والذروة الديناميكية لمشاوير التكسي الفوري"
     }
   ],
-  "auditLogs": [],
+  "auditLogs": [
+    {
+      "id": 1792263072840,
+      "action": "PricingParametersUpdated",
+      "entityName": "SystemSetting",
+      "entityId": "PricingParameters",
+      "newValuesJson": "{\"actor\":\"المشرف العام (Admin)\",\"userAgent\":\"\",\"timestamp\":\"2026-10-17T18:51:11.999Z\",\"previous\":{\"baseFare\":2500,\"kmRate\":400,\"minuteRate\":80,\"minFare\":2500,\"enableDynamicSurge\":true,\"maxSurgeMultiplier\":2,\"nightSurgePercent\":25,\"demandSensitivity\":1,\"manualOverrideMultiplier\":1,\"manualOverrideLabel\":\"وضع طبيعي (1.0x)\",\"discountPercent\":0,\"discountFixed\":0},\"updated\":{\"baseFare\":2500,\"kmRate\":400,\"minuteRate\":80,\"minFare\":2500,\"enableDynamicSurge\":true,\"maxSurgeMultiplier\":2,\"nightSurgePercent\":25,\"demandSensitivity\":1,\"manualOverrideMultiplier\":1,\"manualOverrideLabel\":\"وضع طبيعي (1.0x)\",\"discountPercent\":0,\"discountFixed\":0},\"summary\":\"تحديث إعدادات التسعير: فتح العداد 2500 د.ع، الكيلومتر 400 د.ع، الذروة القصوى 2x\"}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-10-17T18:51:11.999Z"
+    },
+    {
+      "id": 1792263072739,
+      "action": "PricingParametersUpdated",
+      "entityName": "SystemSetting",
+      "entityId": "PricingParameters",
+      "newValuesJson": "{\"actor\":\"المشرف العام (Test)\",\"userAgent\":\"\",\"timestamp\":\"2026-10-17T18:51:11.998Z\",\"previous\":{\"baseFare\":2500,\"kmRate\":400,\"minuteRate\":80,\"minFare\":2500,\"enableDynamicSurge\":true,\"maxSurgeMultiplier\":2,\"nightSurgePercent\":25,\"demandSensitivity\":1,\"manualOverrideMultiplier\":1,\"manualOverrideLabel\":\"وضع طبيعي (1.0x)\",\"discountPercent\":0,\"discountFixed\":0},\"updated\":{\"baseFare\":2500,\"kmRate\":400,\"minuteRate\":80,\"minFare\":2500,\"enableDynamicSurge\":true,\"maxSurgeMultiplier\":2,\"nightSurgePercent\":25,\"demandSensitivity\":1,\"manualOverrideMultiplier\":1.25,\"manualOverrideLabel\":\"مناسبات وزيارات دينية (+25%)\",\"discountPercent\":0,\"discountFixed\":0},\"summary\":\"تحديث إعدادات التسعير: فتح العداد 2500 د.ع، الكيلومتر 400 د.ع، الذروة القصوى 2x\"}",
+      "ipAddress": "127.0.0.1",
+      "createdAt": "2026-10-17T18:51:11.998Z"
+    }
+  ],
   "notifications": [],
   "cancellationRequests": [],
+  "tripRatings": [],
   "stats": {
     "totalUsers": 0,
     "totalDrivers": 0,

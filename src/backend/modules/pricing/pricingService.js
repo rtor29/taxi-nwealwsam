@@ -1,0 +1,475 @@
+/**
+ * Dynamic Surge Pricing Engine for Instant Taxi Rides (توصيلة - التكسي الفوري فقط)
+ * 
+ * Rules:
+ * 1. Scope: Instant taxi rides only (Never modifies fixed route subscriptions).
+ * 2. Formula: Total Fare = (Base Fare + (Distance_KM * KM_Rate) + (Duration_Minutes * Minute_Rate)) * Multipliers - Discount
+ * 3. Factors:
+ *    - Demand/Supply ratio in area (5km radius).
+ *    - Night Surge (00:00 - 05:30 Baghdad time, +25%).
+ *    - Traffic Congestion (estimated from Mapbox duration/km speed).
+ *    - Manual Emergency Override (e.g. +25% Ziyarah in Najaf, +50% Extreme Surge, -10% Low Demand, 1.0x Normal).
+ *    - Surge Cap (maxSurgeMultiplier, e.g. 2.0x).
+ *    - Minimum Fare floor (e.g. 2,500 IQD).
+ *    - Iraqi Dinar Rounding: ALWAYS round to nearest 250 IQD.
+ */
+
+const db = require('../../db');
+const auditService = require('../audit/auditService');
+
+const DEFAULT_PRICING = {
+    baseFare: 2000,                // فتح العداد د.ع
+    kmRate: 450,                   // سعر الكيلومتر الواحد د.ع
+    minuteRate: 100,               // سعر دقيقة الوقت/الانتظار د.ع
+    minFare: 2500,                 // الحد الأدنى للأجرة د.ع
+    enableDynamicSurge: true,      // تفعيل التسعير الديناميكي الذكي
+    maxSurgeMultiplier: 2.0,       // سقف أقصى للذروة
+    nightSurgePercent: 25,         // نسبة الزيادة الليلية % (00:00 - 05:30)
+    demandSensitivity: 1.0,        // حساسية العرض والطلب (1.0 = عادي، 1.5 = عالي)
+    manualOverrideMultiplier: 1.0, // تدخل يدوي للطوارئ
+    manualOverrideLabel: 'وضع طبيعي (1.0x)',
+    discountPercent: 0,            // خصم ركود بالنسبة مئوية %
+    discountFixed: 0               // خصم ركود ثابت د.ع
+};
+
+class PricingService {
+    /**
+     * Get current pricing settings merged with defaults
+     */
+    getPricingSettings() {
+        try {
+            const list = db.memoryState.settings || [];
+            const found = list.find(s => s.key === 'PricingParameters' || s.key === 'pricing_settings');
+            if (found && found.valueJson) {
+                const parsed = typeof found.valueJson === 'string' ? JSON.parse(found.valueJson) : found.valueJson;
+                return {
+                    baseFare: Number(parsed.baseFare ?? parsed.base_fare_iqd ?? parsed.BaseFareIqd ?? DEFAULT_PRICING.baseFare),
+                    kmRate: Number(parsed.kmRate ?? parsed.per_km_rate_iqd ?? parsed.PerKmRateIqd ?? DEFAULT_PRICING.kmRate),
+                    minuteRate: Number(parsed.minuteRate ?? parsed.per_minute_rate_iqd ?? parsed.PerMinuteWaitIqd ?? DEFAULT_PRICING.minuteRate),
+                    minFare: Number(parsed.minFare ?? parsed.min_fare_iqd ?? DEFAULT_PRICING.minFare),
+                    enableDynamicSurge: parsed.enableDynamicSurge !== undefined ? Boolean(parsed.enableDynamicSurge) : DEFAULT_PRICING.enableDynamicSurge,
+                    maxSurgeMultiplier: Number(parsed.maxSurgeMultiplier ?? parsed.surge_multiplier_max ?? parsed.SurgeMultiplierMax ?? DEFAULT_PRICING.maxSurgeMultiplier),
+                    nightSurgePercent: Number(parsed.nightSurgePercent ?? DEFAULT_PRICING.nightSurgePercent),
+                    demandSensitivity: Number(parsed.demandSensitivity ?? DEFAULT_PRICING.demandSensitivity),
+                    manualOverrideMultiplier: Number(parsed.manualOverrideMultiplier ?? 1.0),
+                    manualOverrideLabel: parsed.manualOverrideLabel || 'وضع طبيعي (1.0x)',
+                    discountPercent: Number(parsed.discountPercent ?? 0),
+                    discountFixed: Number(parsed.discountFixed ?? 0)
+                };
+            }
+        } catch (e) {
+            console.warn('[PricingService] Error loading pricing settings:', e.message);
+        }
+        return { ...DEFAULT_PRICING };
+    }
+
+    /**
+     * Save pricing settings with audit logging & DB persistence
+     */
+    async savePricingSettings(newSettings, actor = 'المشرف العام (Admin)', ip = '127.0.0.1') {
+        const current = this.getPricingSettings();
+        const merged = {
+            baseFare: Math.max(500, Number(newSettings.baseFare ?? current.baseFare)),
+            kmRate: Math.max(100, Number(newSettings.kmRate ?? current.kmRate)),
+            minuteRate: Math.max(0, Number(newSettings.minuteRate ?? current.minuteRate)),
+            minFare: Math.max(1000, Number(newSettings.minFare ?? current.minFare)),
+            enableDynamicSurge: newSettings.enableDynamicSurge !== undefined ? Boolean(newSettings.enableDynamicSurge) : current.enableDynamicSurge,
+            maxSurgeMultiplier: Math.min(5.0, Math.max(1.0, Number(newSettings.maxSurgeMultiplier ?? current.maxSurgeMultiplier))),
+            nightSurgePercent: Math.min(100, Math.max(0, Number(newSettings.nightSurgePercent ?? current.nightSurgePercent))),
+            demandSensitivity: Math.min(3.0, Math.max(0.2, Number(newSettings.demandSensitivity ?? current.demandSensitivity))),
+            manualOverrideMultiplier: Math.min(4.0, Math.max(0.5, Number(newSettings.manualOverrideMultiplier ?? current.manualOverrideMultiplier))),
+            manualOverrideLabel: String(newSettings.manualOverrideLabel ?? current.manualOverrideLabel),
+            discountPercent: Math.min(50, Math.max(0, Number(newSettings.discountPercent ?? current.discountPercent))),
+            discountFixed: Math.max(0, Number(newSettings.discountFixed ?? current.discountFixed))
+        };
+
+        const jsonStr = JSON.stringify(merged);
+
+        // Update memoryState
+        if (!db.memoryState.settings) db.memoryState.settings = [];
+        let settingEntry = db.memoryState.settings.find(s => s.key === 'PricingParameters');
+        if (settingEntry) {
+            settingEntry.valueJson = jsonStr;
+        } else {
+            settingEntry = {
+                key: 'PricingParameters',
+                valueJson: jsonStr,
+                description: 'معايير التسعير والذروة الديناميكية لمشاوير التكسي الفوري'
+            };
+            db.memoryState.settings.push(settingEntry);
+        }
+
+        // Also update legacy pricing_settings key for compatibility
+        let legacyEntry = db.memoryState.settings.find(s => s.key === 'pricing_settings');
+        if (legacyEntry) {
+            legacyEntry.valueJson = JSON.stringify({
+                base_fare_iqd: merged.baseFare,
+                per_km_rate_iqd: merged.kmRate,
+                per_minute_rate_iqd: merged.minuteRate,
+                surge_multiplier_max: merged.maxSurgeMultiplier
+            });
+        }
+
+        // Persist to PostgreSQL if connected
+        if (db.isPostgresConnected && db.pool) {
+            try {
+                await db.pool.query(`
+                    INSERT INTO system_settings (key, value_json, description, updated_at)
+                    VALUES ($1, $2, $3, NOW())
+                    ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json, updated_at = NOW()
+                `, ['PricingParameters', jsonStr, 'معايير التسعير والذروة الديناميكية لمشاوير التكسي الفوري']);
+            } catch (e) {
+                console.warn('[PricingService] PostgreSQL update error:', e.message);
+            }
+        }
+
+        // Snapshot to state.json
+        db.saveStateSnapshot();
+
+        // Audit Log
+        try {
+            await auditService.logAuditEvent({
+                action: 'PricingParametersUpdated',
+                entityType: 'SystemSetting',
+                entityId: 'PricingParameters',
+                actor: actor || 'المشرف العام (Admin)',
+                details: {
+                    previous: current,
+                    updated: merged,
+                    summary: `تحديث إعدادات التسعير: فتح العداد ${merged.baseFare} د.ع، الكيلومتر ${merged.kmRate} د.ع، الذروة القصوى ${merged.maxSurgeMultiplier}x`
+                },
+                ip: ip || '127.0.0.1'
+            });
+        } catch (logErr) {
+            console.warn('[PricingService] Audit log error:', logErr.message);
+        }
+
+        return { success: true, settings: merged };
+    }
+
+    /**
+     * Check if current time in Baghdad (Asia/Baghdad) is late night (00:00 to 05:30)
+     */
+    isNightTimeBaghdad(customDate = null) {
+        try {
+            const date = customDate || new Date();
+            // Format to Asia/Baghdad hour and minute
+            const formatter = new Intl.DateTimeFormat('en-GB', {
+                timeZone: 'Asia/Baghdad',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+            const parts = formatter.formatToParts(date);
+            const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+            const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
+
+            // Night surge window: 00:00 to 05:30
+            if (hour >= 0 && hour < 5) return true;
+            if (hour === 5 && minute <= 30) return true;
+            return false;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * Round amount to the nearest 250 Iraqi Dinars (e.g. 3,250 / 3,500 / 3,750)
+     */
+    roundToNearest250(amount) {
+        return Math.round(Number(amount) / 250) * 250;
+    }
+
+    /**
+     * Calculate instant taxi ride fare dynamically
+     * @param {Object} options
+     * @param {number} options.pickupLat
+     * @param {number} options.pickupLon
+     * @param {number} options.dropoffLat
+     * @param {number} options.dropoffLon
+     * @param {number} options.distanceKm
+     * @param {number} options.durationMins
+     * @param {string} options.vehicleType - 'eco' | 'super' | 'vip' | 'plus'
+     * @param {boolean} options.isRoundTrip
+     * @param {boolean} options.hasSecondStop
+     * @param {string} options.promoCode
+     * @param {boolean} options.simulatedNight
+     * @param {number} options.simulatedDemandMultiplier
+     */
+    calculateInstantRideFare(options = {}) {
+        const settings = this.getPricingSettings();
+
+        const distanceKm = Math.max(0.5, Number(options.distanceKm) || 3.0);
+        const durationMins = Math.max(3, Number(options.durationMins) || Math.round(distanceKm * 2.5));
+        const vehicleType = (options.vehicleType || 'super').toLowerCase();
+        const isRoundTrip = Boolean(options.isRoundTrip);
+        const hasSecondStop = Boolean(options.hasSecondStop);
+
+        // Tier multipliers / base differences
+        let tierMultiplier = 1.0;
+        let tierNameAr = 'سوبر (الخيار الأفضل)';
+        if (vehicleType === 'eco' || vehicleType === 'saving' || vehicleType === 'توفير') {
+            tierMultiplier = 0.90; // خصم 10% لفئة التوفير
+            tierNameAr = 'توفير (التكسي الأوفر)';
+        } else if (vehicleType === 'vip' || vehicleType === 'plus' || vehicleType === 'بلَس') {
+            tierMultiplier = 1.20; // زيادة 20% لفئة بلس / VIP
+            tierNameAr = 'بلَس (خدمة أكثر راحة)';
+        }
+
+        // 1. Base components
+        const baseFare = settings.baseFare * tierMultiplier;
+        const distanceFare = distanceKm * settings.kmRate * tierMultiplier;
+        const timeFare = durationMins * settings.minuteRate * tierMultiplier;
+
+        const rawStandardFare = baseFare + distanceFare + timeFare;
+
+        // 2. Dynamic Factors
+        let demandMultiplier = 1.0;
+        let demandReason = '';
+        let nearbyDriversCount = 0;
+        let activeRequestsCount = 0;
+
+        // Check if dynamic surge is enabled
+        if (settings.enableDynamicSurge) {
+            if (options.simulatedDemandMultiplier !== undefined) {
+                // Testing / Simulation mode
+                demandMultiplier = Number(options.simulatedDemandMultiplier);
+                if (demandMultiplier > 1.0) {
+                    demandReason = 'نقص ملحوظ في عدد السائقين بالنسبة للطلبات';
+                }
+            } else {
+                // Real-time calculation from active drivers & pending rides
+                const pLat = Number(options.pickupLat) || 31.9961;
+                const pLon = Number(options.pickupLon) || 44.3168;
+
+                const toRad = deg => deg * Math.PI / 180;
+                const haversineKm = (lat1, lon1, lat2, lon2) => {
+                    const R = 6371;
+                    const dLat = toRad(lat2 - lat1);
+                    const dLon = toRad(lon2 - lon1);
+                    const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
+                    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                };
+
+                // Online instant taxi drivers within 5km
+                const drivers = (db.memoryState.drivers || []).filter(d => {
+                    const isOnline = d.isOnline === true || d.status === 'Active' || d.workStatus === 'Active';
+                    const isInstant = d.work_mode !== 'خط دائمي' && d.workStatus !== 'permanent';
+                    if (!isOnline || !isInstant) return false;
+                    const dLat = d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : pLat);
+                    const dLon = d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : pLon);
+                    const dist = haversineKm(pLat, pLon, dLat, dLon);
+                    return dist <= 6.0;
+                });
+                nearbyDriversCount = drivers.length;
+
+                // Pending or InProgress instant rides in the last 15 minutes
+                const now = Date.now();
+                const recentRides = (db.memoryState.rideRequests || []).filter(r => {
+                    if (r.status === 'Completed' || r.status === 'Cancelled') return false;
+                    const createdAt = new Date(r.createdAt || now).getTime();
+                    return (now - createdAt) < 15 * 60 * 1000;
+                });
+                activeRequestsCount = recentRides.length;
+
+                // Determine supply/demand surge
+                const sensitivity = settings.demandSensitivity || 1.0;
+                if (nearbyDriversCount === 0 && activeRequestsCount >= 1) {
+                    demandMultiplier = 1.35 * sensitivity;
+                    demandReason = 'قلة السائقين المتاحين في محيطك حالياً';
+                } else if (nearbyDriversCount <= 2 && activeRequestsCount >= 2) {
+                    demandMultiplier = 1.25 * sensitivity;
+                    demandReason = 'طلب مرتفع جداً مقارنة بعدد السائقين المتواجدين';
+                } else if (nearbyDriversCount <= 1) {
+                    demandMultiplier = 1.15 * sensitivity;
+                    demandReason = 'عدد محدود من السائقين في منطقتك';
+                }
+            }
+        }
+
+        // 3. Night Surge Factor
+        let isNight = false;
+        let nightMultiplier = 1.0;
+        if (options.simulatedNight !== undefined) {
+            isNight = Boolean(options.simulatedNight);
+        } else {
+            isNight = this.isNightTimeBaghdad();
+        }
+
+        if (settings.enableDynamicSurge && isNight && settings.nightSurgePercent > 0) {
+            nightMultiplier = 1.0 + (settings.nightSurgePercent / 100);
+        }
+
+        // 4. Traffic Congestion Factor
+        // If speed is very slow (< 18 km/h in urban streets), traffic surge applies
+        let trafficMultiplier = 1.0;
+        let trafficReason = '';
+        const avgSpeedKmh = (distanceKm / (durationMins / 60));
+        if (settings.enableDynamicSurge && avgSpeedKmh < 18 && durationMins > 10) {
+            if (avgSpeedKmh < 10) {
+                trafficMultiplier = 1.20; // Severe congestion
+                trafficReason = 'ازدحام مروري خانق على طول المسار';
+            } else {
+                trafficMultiplier = 1.10; // Moderate congestion
+                trafficReason = 'حركة سير بطيئة وازدحام';
+            }
+        }
+
+        // 5. Manual Emergency Override Factor
+        const manualMultiplier = Number(settings.manualOverrideMultiplier) || 1.0;
+
+        // Combine multipliers
+        // In real ride-hailing systems, surge factors compound or take the max primary with modifiers
+        let combinedMultiplier = 1.0;
+        if (settings.enableDynamicSurge) {
+            // Base compound multiplier
+            combinedMultiplier = manualMultiplier * (1.0 + (demandMultiplier - 1.0) + (nightMultiplier - 1.0) + (trafficMultiplier - 1.0));
+        } else {
+            combinedMultiplier = manualMultiplier;
+        }
+
+        // Enforce Surge Cap
+        const maxCap = Math.max(1.0, settings.maxSurgeMultiplier || 2.0);
+        const cappedMultiplier = Math.min(maxCap, Math.max(0.7, combinedMultiplier));
+        const wasCapped = combinedMultiplier > maxCap;
+
+        // Apply Multiplier to standard fare
+        let calculatedFare = rawStandardFare * cappedMultiplier;
+
+        // Additional trip features
+        if (isRoundTrip) {
+            calculatedFare *= 1.85; // ذهاب وإياب (خصم تشجيعي 15% على العودة)
+        }
+        if (hasSecondStop) {
+            calculatedFare += 1000; // إضافة محطة توقف إضافية
+        }
+
+        // 6. Discounts & Promotions
+        let totalDiscount = 0;
+        let discountReason = '';
+
+        if (settings.discountPercent > 0) {
+            const pDisc = calculatedFare * (settings.discountPercent / 100);
+            totalDiscount += pDisc;
+            discountReason = `خصم ركود إداري ${settings.discountPercent}%`;
+        }
+        if (settings.discountFixed > 0) {
+            totalDiscount += settings.discountFixed;
+            discountReason = discountReason ? `${discountReason} + ${settings.discountFixed} د.ع` : `خصم خاص ${settings.discountFixed} د.ع`;
+        }
+
+        // Promo code discount (e.g. from customer app)
+        const promo = String(options.promoCode || '').trim().toUpperCase();
+        if (promo && (promo === 'TAWSEELA' || promo === 'BALY' || promo === 'WELCOME' || promo === 'PROMO20')) {
+            const promoAmount = calculatedFare * 0.20; // 20% discount
+            totalDiscount += promoAmount;
+            discountReason = discountReason ? `${discountReason} | قسيمة خصم 20%` : 'قسيمة خصم ترويجية 20%';
+        }
+
+        let fareAfterDiscount = Math.max(0, calculatedFare - totalDiscount);
+
+        // 7. Enforce Minimum Fare Floor
+        const minFare = settings.minFare || 2500;
+        const reachedMinimum = fareAfterDiscount < minFare;
+        if (reachedMinimum) {
+            fareAfterDiscount = minFare;
+        }
+
+        // 8. Iraqi Dinar Rounding (Nearest 250 IQD)
+        const finalFare = this.roundToNearest250(fareAfterDiscount);
+
+        // 9. Badges & Explanations
+        let surgeBadge = null;
+        let discountBadge = null;
+
+        if (cappedMultiplier > 1.05) {
+            const surgePercent = Math.round((cappedMultiplier - 1.0) * 100);
+            if (manualMultiplier > 1.05 && manualMultiplier >= demandMultiplier) {
+                surgeBadge = {
+                    text: `⚡ ${settings.manualOverrideLabel} (+${surgePercent}%)`,
+                    type: 'manual_surge',
+                    percent: surgePercent,
+                    multiplier: Number(cappedMultiplier.toFixed(2))
+                };
+            } else if (demandMultiplier > 1.05) {
+                surgeBadge = {
+                    text: `⚡ زيادة مؤقتة لقلة السائقين (+${surgePercent}%)`,
+                    type: 'demand_surge',
+                    percent: surgePercent,
+                    multiplier: Number(cappedMultiplier.toFixed(2)),
+                    reason: demandReason
+                };
+            } else if (isNight && nightMultiplier > 1.05) {
+                surgeBadge = {
+                    text: `🌙 تعرفة ليلية متأخرة (+${surgePercent}%)`,
+                    type: 'night_surge',
+                    percent: surgePercent,
+                    multiplier: Number(cappedMultiplier.toFixed(2))
+                };
+            } else if (trafficMultiplier > 1.05) {
+                surgeBadge = {
+                    text: `🚗 ذروة وازدحام مروري (+${surgePercent}%)`,
+                    type: 'traffic_surge',
+                    percent: surgePercent,
+                    multiplier: Number(cappedMultiplier.toFixed(2)),
+                    reason: trafficReason
+                };
+            } else {
+                surgeBadge = {
+                    text: `⚡ تعرفة ذروة (+${surgePercent}%)`,
+                    type: 'surge',
+                    percent: surgePercent,
+                    multiplier: Number(cappedMultiplier.toFixed(2))
+                };
+            }
+        }
+
+        if (totalDiscount > 0 || manualMultiplier < 0.95) {
+            discountBadge = {
+                text: discountReason || '🏷️ تم تطبيق خصم خاص',
+                type: 'discount',
+                amountIqd: this.roundToNearest250(totalDiscount)
+            };
+        }
+
+        return {
+            success: true,
+            fare: finalFare,                     // المبلغ النهائي المقرب لأقرب 250 د.ع
+            currency: 'IQD',
+            breakdown: {
+                baseFare: Math.round(baseFare),
+                distanceKm: Number(distanceKm.toFixed(1)),
+                kmRate: settings.kmRate,
+                distanceFare: Math.round(distanceFare),
+                durationMins: Math.round(durationMins),
+                minuteRate: settings.minuteRate,
+                timeFare: Math.round(timeFare),
+                rawStandardFare: Math.round(rawStandardFare),
+                avgSpeedKmh: Number(avgSpeedKmh.toFixed(1)),
+                minFare: minFare
+            },
+            multipliers: {
+                tierMultiplier,
+                tierNameAr,
+                demandMultiplier: Number(demandMultiplier.toFixed(2)),
+                isNight,
+                nightMultiplier: Number(nightMultiplier.toFixed(2)),
+                trafficMultiplier: Number(trafficMultiplier.toFixed(2)),
+                manualMultiplier: Number(manualMultiplier.toFixed(2)),
+                combinedMultiplier: Number(combinedMultiplier.toFixed(2)),
+                cappedMultiplier: Number(cappedMultiplier.toFixed(2)),
+                wasCapped,
+                maxSurgeMultiplier: maxCap
+            },
+            context: {
+                nearbyDriversCount,
+                activeRequestsCount,
+                reachedMinimum
+            },
+            surgeBadge,
+            discountBadge
+        };
+    }
+}
+
+module.exports = new PricingService();
