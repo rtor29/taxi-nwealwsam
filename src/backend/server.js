@@ -2403,11 +2403,22 @@ async function startServer() {
                 const requests = db.memoryState.rideRequests || [];
                 const r = requests.find(item => item.id === requestId);
                 if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
+                const pSettings = pricingService.getPricingSettings();
+                const cancelFee = pSettings.cancellationFee || 1500;
+                const reqTime = r.requestedAt ? Number(r.requestedAt) : (r.createdAt ? new Date(r.createdAt).getTime() : Date.now());
+                const elapsedMinutes = (Date.now() - reqTime) / 60000;
+                const feeApplies = Boolean(r.assignedDriverId && (elapsedMinutes >= 2 || r.status === 'Arrived'));
                 r.status = 'Cancelled';
                 r.cancelReason = reason || 'إلغاء من قبل المستخدم';
+                r.cancellationFee = feeApplies ? cancelFee : 0;
                 r.cancelledAt = new Date().toISOString();
                 db.saveStateSnapshot();
-                return sendJson({ success: true, message: 'تم إلغاء الرحلة بنجاح', request: r });
+                return sendJson({ 
+                    success: true, 
+                    message: feeApplies ? `تم إلغاء الرحلة. تطبق رسوم إلغاء قدرها ${cancelFee} د.ع.` : 'تم إلغاء الرحلة بنجاح', 
+                    cancellationFee: r.cancellationFee,
+                    request: r 
+                });
             } catch (err) {
                 return sendJson({ success: false, error: err.message }, 500);
             }
@@ -3761,20 +3772,30 @@ async function startServer() {
         }
 
         if (pathname === '/api/admin/pricing' && (method === 'POST' || method === 'PUT')) {
+            const authUser = getAuthUser(req);
+            if (authUser && authUser.role && authUser.role !== 'Admin') {
+                return sendJson({ success: false, error: 'غير مصرح: تعديل التسعيرة محصور بالمشرف فقط' }, 403);
+            }
             const body = await parseJsonBody(req);
-            const result = await pricingService.savePricingSettings(body, 'المشرف العام (Admin)', clientIp);
+            const actor = (authUser && (authUser.fullName || authUser.username)) ? (authUser.fullName || authUser.username) : 'المشرف العام (Admin)';
+            const result = await pricingService.savePricingSettings(body, actor, clientIp);
             return sendJson(result);
         }
 
         if (pathname === '/api/admin/pricing/emergency-override' && method === 'POST') {
+            const authUser = getAuthUser(req);
+            if (authUser && authUser.role && authUser.role !== 'Admin') {
+                return sendJson({ success: false, error: 'غير مصرح: تعديل الذروة محصور بالمشرف فقط' }, 403);
+            }
             const body = await parseJsonBody(req);
             const current = pricingService.getPricingSettings();
             const updated = {
                 ...current,
                 manualOverrideMultiplier: Number(body.multiplier) || 1.0,
-                manualOverrideLabel: body.label || 'وضع طبيعي (1.0x)'
+                manualOverrideLabel: sanitizeInput(body.label || 'وضع طبيعي (1.0x)', 100)
             };
-            const result = await pricingService.savePricingSettings(updated, 'المشرف العام (Admin)', clientIp);
+            const actor = (authUser && (authUser.fullName || authUser.username)) ? (authUser.fullName || authUser.username) : 'المشرف العام (Admin)';
+            const result = await pricingService.savePricingSettings(updated, actor, clientIp);
             return sendJson(result);
         }
 

@@ -18,15 +18,16 @@ const db = require('../../db');
 const auditService = require('../audit/auditService');
 
 const DEFAULT_PRICING = {
-    baseFare: 2000,                // فتح العداد د.ع
-    kmRate: 450,                   // سعر الكيلومتر الواحد د.ع
-    minuteRate: 100,               // سعر دقيقة الوقت/الانتظار د.ع
-    minFare: 2500,                 // الحد الأدنى للأجرة د.ع
+    baseFare: 1000,                // فتح العداد د.ع (معيار تسعيرة بلي القياسية)
+    kmRate: 500,                   // سعر الكيلومتر الواحد د.ع (معيار بلي)
+    minuteRate: 100,               // سعر دقيقة الوقت/الانتظار د.ع (معيار بلي)
+    minFare: 3000,                 // الحد الأدنى للأجرة د.ع (معيار بلي)
+    cancellationFee: 1500,         // رسوم إلغاء الرحلة د.ع (معيار بلي بعد دقيقتين أو وصول الكابتن)
     enableDynamicSurge: true,      // تفعيل التسعير الديناميكي الذكي
     maxSurgeMultiplier: 2.0,       // سقف أقصى للذروة
     nightSurgePercent: 25,         // نسبة الزيادة الليلية % (00:00 - 05:30)
-    demandSensitivity: 1.0,        // حساسية العرض والطلب (1.0 = عادي، 1.5 = عالي)
-    manualOverrideMultiplier: 1.0, // تدخل يدوي للطوارئ
+    demandSensitivity: 1.0,        // حساسية العرض والطلب (1.0 = عادي)
+    manualOverrideMultiplier: 1.0, // مضاعف العرض والطلب الافتراضي (1.0x الوضع الطبيعي)
     manualOverrideLabel: 'وضع طبيعي (1.0x)',
     discountPercent: 0,            // خصم ركود بالنسبة مئوية %
     discountFixed: 0               // خصم ركود ثابت د.ع
@@ -47,6 +48,7 @@ class PricingService {
                     kmRate: Number(parsed.kmRate ?? parsed.per_km_rate_iqd ?? parsed.PerKmRateIqd ?? DEFAULT_PRICING.kmRate),
                     minuteRate: Number(parsed.minuteRate ?? parsed.per_minute_rate_iqd ?? parsed.PerMinuteWaitIqd ?? DEFAULT_PRICING.minuteRate),
                     minFare: Number(parsed.minFare ?? parsed.min_fare_iqd ?? DEFAULT_PRICING.minFare),
+                    cancellationFee: Number(parsed.cancellationFee ?? parsed.cancellation_fee_iqd ?? DEFAULT_PRICING.cancellationFee),
                     enableDynamicSurge: parsed.enableDynamicSurge !== undefined ? Boolean(parsed.enableDynamicSurge) : DEFAULT_PRICING.enableDynamicSurge,
                     maxSurgeMultiplier: Number(parsed.maxSurgeMultiplier ?? parsed.surge_multiplier_max ?? parsed.SurgeMultiplierMax ?? DEFAULT_PRICING.maxSurgeMultiplier),
                     nightSurgePercent: Number(parsed.nightSurgePercent ?? DEFAULT_PRICING.nightSurgePercent),
@@ -73,6 +75,7 @@ class PricingService {
             kmRate: Math.max(100, Number(newSettings.kmRate ?? current.kmRate)),
             minuteRate: Math.max(0, Number(newSettings.minuteRate ?? current.minuteRate)),
             minFare: Math.max(1000, Number(newSettings.minFare ?? current.minFare)),
+            cancellationFee: Math.min(10000, Math.max(0, Number(newSettings.cancellationFee ?? current.cancellationFee ?? 1500))),
             enableDynamicSurge: newSettings.enableDynamicSurge !== undefined ? Boolean(newSettings.enableDynamicSurge) : current.enableDynamicSurge,
             maxSurgeMultiplier: Math.min(5.0, Math.max(1.0, Number(newSettings.maxSurgeMultiplier ?? current.maxSurgeMultiplier))),
             nightSurgePercent: Math.min(100, Math.max(0, Number(newSettings.nightSurgePercent ?? current.nightSurgePercent))),
@@ -106,6 +109,8 @@ class PricingService {
                 base_fare_iqd: merged.baseFare,
                 per_km_rate_iqd: merged.kmRate,
                 per_minute_rate_iqd: merged.minuteRate,
+                min_fare_iqd: merged.minFare,
+                cancellation_fee_iqd: merged.cancellationFee,
                 surge_multiplier_max: merged.maxSurgeMultiplier
             });
         }
@@ -136,7 +141,7 @@ class PricingService {
                 details: {
                     previous: current,
                     updated: merged,
-                    summary: `تحديث إعدادات التسعير: فتح العداد ${merged.baseFare} د.ع، الكيلومتر ${merged.kmRate} د.ع، الذروة القصوى ${merged.maxSurgeMultiplier}x`
+                    summary: `تحديث إعدادات التسعير: فتح العداد ${merged.baseFare} د.ع، الكيلومتر ${merged.kmRate} د.ع، الحد الأدنى ${merged.minFare} د.ع، رسوم الإلغاء ${merged.cancellationFee} د.ع، الذروة القصوى ${merged.maxSurgeMultiplier}x`
                 },
                 ip: ip || '127.0.0.1'
             });
@@ -174,10 +179,10 @@ class PricingService {
     }
 
     /**
-     * Round amount to the nearest 250 Iraqi Dinars (e.g. 3,250 / 3,500 / 3,750)
+     * Round amount to the nearest 250 Iraqi Dinars UPWARD (Math.ceil) according to Iraqi cash convention
      */
     roundToNearest250(amount) {
-        return Math.round(Number(amount) / 250) * 250;
+        return Math.ceil(Number(amount) / 250) * 250;
     }
 
     /**
@@ -368,14 +373,14 @@ class PricingService {
 
         let fareAfterDiscount = Math.max(0, calculatedFare - totalDiscount);
 
-        // 7. Enforce Minimum Fare Floor
-        const minFare = settings.minFare || 2500;
+        // 7. Enforce Minimum Fare Floor (Baly Standard: 3,000 IQD)
+        const minFare = settings.minFare || 3000;
         const reachedMinimum = fareAfterDiscount < minFare;
         if (reachedMinimum) {
             fareAfterDiscount = minFare;
         }
 
-        // 8. Iraqi Dinar Rounding (Nearest 250 IQD)
+        // 8. Iraqi Dinar Rounding (Nearest 250 IQD Ceil)
         const finalFare = this.roundToNearest250(fareAfterDiscount);
 
         // 9. Badges & Explanations
@@ -434,7 +439,7 @@ class PricingService {
 
         return {
             success: true,
-            fare: finalFare,                     // المبلغ النهائي المقرب لأقرب 250 د.ع
+            fare: finalFare,                     // المبلغ النهائي المقرب لأقرب 250 د.ع تصاعدياً
             currency: 'IQD',
             breakdown: {
                 baseFare: Math.round(baseFare),
@@ -446,7 +451,8 @@ class PricingService {
                 timeFare: Math.round(timeFare),
                 rawStandardFare: Math.round(rawStandardFare),
                 avgSpeedKmh: Number(avgSpeedKmh.toFixed(1)),
-                minFare: minFare
+                minFare: minFare,
+                cancellationFee: settings.cancellationFee || 1500
             },
             multipliers: {
                 tierMultiplier,

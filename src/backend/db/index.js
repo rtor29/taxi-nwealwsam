@@ -166,8 +166,8 @@ class DatabaseManager {
                 },
                 {
                     key: "pricing_settings",
-                    valueJson: JSON.stringify({ base_fare_iqd: 2500, per_km_rate_iqd: 400, per_minute_rate_iqd: 80, surge_multiplier_max: 2.0 }),
-                    description: "تسعيرات مشاوير النجف الأشرف"
+                    valueJson: JSON.stringify({ base_fare_iqd: 1000, per_km_rate_iqd: 500, per_minute_rate_iqd: 100, min_fare_iqd: 3000, cancellation_fee_iqd: 1500, surge_multiplier_max: 2.0 }),
+                    description: "تسعيرة بلي القياسية في العراق (الوضع الافتراضي)"
                 }
             ],
             auditLogs: [],

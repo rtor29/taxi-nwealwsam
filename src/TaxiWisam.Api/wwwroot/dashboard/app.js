@@ -1852,18 +1852,20 @@ async function submitResolveComplaint(event) {
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
 // 7. System Settings & Dynamic Surge Pricing Engine (Baly-like Taxi Engine)
+// 7. System Settings & Dynamic Surge Pricing Engine (Baly Iraq Pricing Standard)
 // -----------------------------------------------------------------------------
 let currentPricingConfig = {
-    baseFare: 2000,
-    kmRate: 450,
+    baseFare: 1000,
+    kmRate: 500,
     minuteRate: 100,
-    minFare: 2500,
+    minFare: 3000,
+    cancellationFee: 1500,
     enableDynamicSurge: true,
     maxSurgeMultiplier: 2.0,
     nightSurgePercent: 25,
     demandSensitivity: 1.0,
     manualOverrideMultiplier: 1.0,
-    manualOverrideLabel: 'وضع طبيعي (1.0x)',
+    manualOverrideLabel: 'تسعيرة بلي القياسية (1.0x)',
     discountPercent: 0,
     discountFixed: 0
 };
@@ -1894,15 +1896,16 @@ async function loadPricingSettings() {
             if (el) el.value = val;
         };
 
-        setVal('setting-base-fare', currentPricingConfig.baseFare || 2000);
-        setVal('setting-per-km', currentPricingConfig.kmRate || 450);
+        setVal('setting-base-fare', currentPricingConfig.baseFare || 1000);
+        setVal('setting-per-km', currentPricingConfig.kmRate || 500);
         setVal('setting-per-minute', currentPricingConfig.minuteRate || 100);
-        setVal('setting-min-fare', currentPricingConfig.minFare || 2500);
+        setVal('setting-min-fare', currentPricingConfig.minFare || 3000);
+        setVal('setting-cancellation-fee', currentPricingConfig.cancellationFee || 1500);
         setVal('setting-surge-max', currentPricingConfig.maxSurgeMultiplier || 2.0);
         setVal('setting-night-surge', currentPricingConfig.nightSurgePercent || 25);
         setVal('setting-demand-sensitivity', String(currentPricingConfig.demandSensitivity || 1.0));
         setVal('setting-manual-multiplier', currentPricingConfig.manualOverrideMultiplier || 1.0);
-        setVal('setting-manual-label', currentPricingConfig.manualOverrideLabel || 'وضع طبيعي (1.0x)');
+        setVal('setting-manual-label', currentPricingConfig.manualOverrideLabel || 'تسعيرة بلي القياسية (1.0x)');
 
         const surgeToggle = document.getElementById('setting-enable-surge');
         if (surgeToggle) {
@@ -1917,6 +1920,16 @@ async function loadPricingSettings() {
     } catch (err) {
         console.warn('[Pricing] Could not fetch pricing settings:', err);
     }
+}
+
+function checkIsBalyStandard() {
+    const bf = Number(document.getElementById('setting-base-fare')?.value) || 0;
+    const km = Number(document.getElementById('setting-per-km')?.value) || 0;
+    const mn = Number(document.getElementById('setting-per-minute')?.value) || 0;
+    const mf = Number(document.getElementById('setting-min-fare')?.value) || 0;
+    const cf = Number(document.getElementById('setting-cancellation-fee')?.value) || 0;
+    const mult = Number(document.getElementById('setting-manual-multiplier')?.value) || 1.0;
+    return bf === 1000 && km === 500 && mn === 100 && mf === 3000 && cf === 1500 && Math.abs(mult - 1.0) < 0.01;
 }
 
 function updatePricingUIBadges() {
@@ -1944,7 +1957,7 @@ function updatePricingUIBadges() {
     }
 
     const manualMult = Number(document.getElementById('setting-manual-multiplier')?.value) || 1.0;
-    const manualLabel = document.getElementById('setting-manual-label')?.value || 'وضع طبيعي (1.0x)';
+    const manualLabel = document.getElementById('setting-manual-label')?.value || 'تسعيرة بلي القياسية (1.0x)';
     const manualBadge = document.getElementById('manual-override-current-badge');
     if (manualBadge) {
         manualBadge.textContent = manualLabel;
@@ -1956,20 +1969,62 @@ function updatePricingUIBadges() {
             manualBadge.className = 'px-2.5 py-0.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-full border border-slate-200';
         }
     }
+
+    // Update Baly Standard active badge in the banner
+    const balyBadge = document.getElementById('baly-active-status-badge');
+    if (balyBadge) {
+        if (checkIsBalyStandard()) {
+            balyBadge.className = 'px-2.5 py-0.5 bg-emerald-100 text-emerald-800 font-black text-xs rounded-full border border-emerald-300 flex items-center gap-1';
+            balyBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span><span>الافتراضي المعتمد 🇮🇶</span>';
+        } else {
+            balyBadge.className = 'px-2.5 py-0.5 bg-amber-100 text-amber-800 font-bold text-xs rounded-full border border-amber-300 flex items-center gap-1';
+            balyBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span><span>تسعيرة مخصصة ⚙️</span>';
+        }
+    }
+}
+
+async function applyBalyPricingStandard(andSave = true) {
+    const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    };
+    setVal('setting-base-fare', 1000);
+    setVal('setting-per-km', 500);
+    setVal('setting-per-minute', 100);
+    setVal('setting-min-fare', 3000);
+    setVal('setting-cancellation-fee', 1500);
+    setVal('setting-surge-max', 2.0);
+    setVal('setting-night-surge', 25);
+    setVal('setting-demand-sensitivity', '1.0');
+    setVal('setting-manual-multiplier', 1.0);
+    setVal('setting-manual-label', 'تسعيرة بلي القياسية (1.0x)');
+    const surgeToggle = document.getElementById('setting-enable-surge');
+    if (surgeToggle) surgeToggle.checked = true;
+
+    updatePricingUIBadges();
+    runLiveFareSimulator();
+
+    if (andSave) {
+        await savePricingSettings();
+        showToast('تم اعتماد وحفظ تسعيرة بلي القياسية كوضع افتراضي بنجاح! 🇮🇶🚕');
+    } else {
+        showToast('تم تعيين قيم تسعيرة بلي في الحقول');
+    }
 }
 
 async function savePricingSettings() {
     const payload = {
-        baseFare: Number(document.getElementById('setting-base-fare')?.value) || 2000,
-        kmRate: Number(document.getElementById('setting-per-km')?.value) || 450,
-        minuteRate: Number(document.getElementById('setting-per-minute')?.value) || 100,
-        minFare: Number(document.getElementById('setting-min-fare')?.value) || 2500,
+        baseFare: Math.max(500, Number(document.getElementById('setting-base-fare')?.value) || 1000),
+        kmRate: Math.max(100, Number(document.getElementById('setting-per-km')?.value) || 500),
+        minuteRate: Math.max(0, Number(document.getElementById('setting-per-minute')?.value) || 100),
+        minFare: Math.max(1000, Number(document.getElementById('setting-min-fare')?.value) || 3000),
+        cancellationFee: Math.max(0, Number(document.getElementById('setting-cancellation-fee')?.value) || 1500),
         enableDynamicSurge: Boolean(document.getElementById('setting-enable-surge')?.checked),
-        maxSurgeMultiplier: Number(document.getElementById('setting-surge-max')?.value) || 2.0,
-        nightSurgePercent: Number(document.getElementById('setting-night-surge')?.value) || 25,
+        maxSurgeMultiplier: Math.min(5.0, Math.max(1.0, Number(document.getElementById('setting-surge-max')?.value) || 2.0)),
+        nightSurgePercent: Math.min(100, Math.max(0, Number(document.getElementById('setting-night-surge')?.value) || 25)),
         demandSensitivity: Number(document.getElementById('setting-demand-sensitivity')?.value) || 1.0,
-        manualOverrideMultiplier: Number(document.getElementById('setting-manual-multiplier')?.value) || 1.0,
-        manualOverrideLabel: document.getElementById('setting-manual-label')?.value || 'وضع طبيعي (1.0x)'
+        manualOverrideMultiplier: Math.min(4.0, Math.max(0.5, Number(document.getElementById('setting-manual-multiplier')?.value) || 1.0)),
+        manualOverrideLabel: String(document.getElementById('setting-manual-label')?.value || 'تسعيرة بلي القياسية (1.0x)').slice(0, 100)
     };
 
     try {
@@ -2019,10 +2074,10 @@ async function applyQuickEmergencyOverride(multiplier, label) {
 }
 
 function runLiveFareSimulator() {
-    const baseFare = Number(document.getElementById('setting-base-fare')?.value) || 2000;
-    const kmRate = Number(document.getElementById('setting-per-km')?.value) || 450;
+    const baseFare = Number(document.getElementById('setting-base-fare')?.value) || 1000;
+    const kmRate = Number(document.getElementById('setting-per-km')?.value) || 500;
     const minuteRate = Number(document.getElementById('setting-per-minute')?.value) || 100;
-    const minFare = Number(document.getElementById('setting-min-fare')?.value) || 2500;
+    const minFare = Number(document.getElementById('setting-min-fare')?.value) || 3000;
     const isSurgeEnabled = document.getElementById('setting-enable-surge')?.checked !== false;
     const maxSurge = Number(document.getElementById('setting-surge-max')?.value) || 2.0;
     const nightSurgePercent = Number(document.getElementById('setting-night-surge')?.value) || 25;
@@ -2040,7 +2095,7 @@ function runLiveFareSimulator() {
     if (tier === 'eco') tierFactor = 0.90;
     if (tier === 'vip') tierFactor = 1.20;
 
-    // Base math
+    // Base math (Baly Standard)
     const base = baseFare * tierFactor;
     const distCost = distKm * kmRate * tierFactor;
     const timeCost = durMins * minuteRate * tierFactor;
@@ -2068,11 +2123,11 @@ function runLiveFareSimulator() {
     const capped = Math.min(maxSurge, Math.max(0.7, combined));
     let preFare = rawStandard * capped;
 
-    // Min fare floor
+    // Min fare floor (Baly Standard: 3,000 IQD)
     preFare = Math.max(minFare, preFare);
 
-    // Round to nearest 250 IQD
-    const finalFare = Math.round(preFare / 250) * 250;
+    // Round UPWARD to nearest 250 IQD (Math.ceil)
+    const finalFare = Math.ceil(preFare / 250) * 250;
 
     // Update Simulator Output
     const fareEl = document.getElementById('sim-result-fare');
@@ -2107,10 +2162,11 @@ function runLiveFareSimulator() {
         } else if (capped < 0.95) {
             badgeHtml = `<span class="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">🏷️ خصم مفعّل (-10%)</span>`;
         } else {
-            badgeHtml = `<span class="px-2.5 py-1 bg-slate-800 text-slate-300 border border-slate-700 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">⚡ تعرفة قياسية (1.0x)</span>`;
+            badgeHtml = `<span class="px-2.5 py-1 bg-slate-800 text-slate-300 border border-slate-700 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">⚡ تسعيرة بلي القياسية (1.0x)</span>`;
         }
         badgeContainer.innerHTML = badgeHtml;
     }
+}
 }
 
 async function loadMatchingSettings() {
