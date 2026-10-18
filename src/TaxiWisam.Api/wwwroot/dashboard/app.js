@@ -21,8 +21,21 @@ let isRejectionOpen = false;
 // 0. Authentication & Initialization
 // -----------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-    checkAdminAuth();
-    if (typeof initBackupDropzoneEvents === 'function') initBackupDropzoneEvents();
+    try {
+        initNavigationTabs();
+    } catch (e) {
+        console.warn('[Init] Navigation tabs init error:', e);
+    }
+
+    try {
+        checkAdminAuth();
+    } catch (e) {
+        console.warn('[Init] Auth check error:', e);
+    }
+
+    try {
+        if (typeof initBackupDropzoneEvents === 'function') initBackupDropzoneEvents();
+    } catch (_) {}
 });
 
 function escapeHtml(str) {
@@ -147,158 +160,221 @@ async function logoutAdmin() {
 // Mobile Sidebar Off-Canvas Navigation
 // -----------------------------------------------------------------------------
 function toggleMobileSidebar(force) {
-    const drawer = document.getElementById('sidebar-drawer');
-    const backdrop = document.getElementById('mobile-sidebar-backdrop');
-    if (!drawer) return;
+    try {
+        const drawer = document.getElementById('sidebar-drawer');
+        const backdrop = document.getElementById('mobile-sidebar-backdrop');
+        if (!drawer) return;
 
-    const isOpen = !drawer.classList.contains('translate-x-full');
-    const target = force !== undefined ? force : !isOpen;
+        const isOpen = !drawer.classList.contains('translate-x-full');
+        const target = force !== undefined ? force : !isOpen;
 
-    if (target) {
-        drawer.classList.remove('translate-x-full');
-        if (backdrop) {
-            backdrop.classList.add('active');
-            backdrop.classList.remove('hidden');
-            backdrop.classList.remove('pointer-events-none');
-            backdrop.style.display = 'block';
-            backdrop.style.pointerEvents = 'auto';
+        if (target) {
+            drawer.classList.remove('translate-x-full');
+            if (backdrop) {
+                backdrop.classList.add('active');
+                backdrop.classList.remove('hidden');
+                backdrop.classList.remove('pointer-events-none');
+                backdrop.style.display = 'block';
+                backdrop.style.pointerEvents = 'auto';
+            }
+        } else {
+            drawer.classList.add('translate-x-full');
+            if (backdrop) {
+                backdrop.classList.remove('active');
+                backdrop.classList.add('hidden');
+                backdrop.classList.add('pointer-events-none');
+                backdrop.style.display = 'none';
+                backdrop.style.pointerEvents = 'none';
+            }
         }
-    } else {
-        drawer.classList.add('translate-x-full');
-        if (backdrop) {
-            backdrop.classList.remove('active');
-            backdrop.classList.add('hidden');
-            backdrop.classList.add('pointer-events-none');
-            backdrop.style.display = 'none';
-            backdrop.style.pointerEvents = 'none';
-        }
+    } catch (e) {
+        console.warn('[Sidebar] Toggle error:', e);
     }
 }
+window.toggleMobileSidebar = toggleMobileSidebar;
 
 // -----------------------------------------------------------------------------
-// Tab Switching
+// Tab Switching & Navigation Initialization
 // -----------------------------------------------------------------------------
+function initNavigationTabs() {
+    try {
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        tabBtns.forEach(btn => {
+            if (btn.dataset.navBound === 'true') return;
+            btn.dataset.navBound = 'true';
+
+            let tabName = null;
+            if (btn.id && btn.id.startsWith('tab-btn-')) {
+                tabName = btn.id.replace('tab-btn-', '');
+            } else {
+                const match = btn.getAttribute('onclick')?.match(/switchTab\(['"]([^'"]+)['"]\)/);
+                if (match) tabName = match[1];
+            }
+
+            if (tabName) {
+                btn.addEventListener('click', () => {
+                    switchTab(tabName);
+                });
+            }
+        });
+    } catch (err) {
+        console.warn('[Navigation] Tab binding warning:', err);
+    }
+}
+window.initNavigationTabs = initNavigationTabs;
+
 function switchTab(tabName) {
-    // Close mobile drawer if open
-    toggleMobileSidebar(false);
-
-    // Clear any active cancellations polling
-    if (window._cancelTabInterval) { clearInterval(window._cancelTabInterval); window._cancelTabInterval = null; }
-
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.add('hidden');
-        content.style.display = 'none';
-    });
-
-    const btn = document.getElementById(`tab-btn-${tabName}`);
-    if (btn) btn.classList.add('active');
-
-    const content = document.getElementById(`tab-${tabName}`);
-    if (content) {
-        content.classList.remove('hidden');
-        content.style.display = 'block';
-    }
-
-    // Toggle full-canvas layout for fleet radar map
-    const mainArea = document.getElementById('main-content-area') || document.querySelector('main');
-    if (mainArea) {
-        if (tabName === 'fleet-map') {
-            mainArea.classList.remove('overflow-y-auto', 'p-4', 'md:p-8', 'pb-24', 'md:pb-8');
-            mainArea.classList.add('overflow-hidden', 'p-0');
-        } else {
-            mainArea.classList.remove('overflow-hidden', 'p-0');
-            mainArea.classList.add('overflow-y-auto', 'p-4', 'md:p-8', 'pb-24', 'md:pb-8');
+    try {
+        // Close mobile drawer if open
+        if (typeof toggleMobileSidebar === 'function') {
+            toggleMobileSidebar(false);
         }
-    }
 
-    // Update Breadcrumbs
-    const tabTitles = {
-        'overview': 'نظرة عامة والمؤشرات',
-        'verifications': 'توثيق مستمسكات السائقين',
-        'drivers': 'إدارة السائقين',
-        'customers': 'إدارة الركاب',
-        'routes': 'المسارات والحجوزات',
-        'cancellations': 'طلبات إلغاء الركاب',
-        'trip-ratings': 'تقييمات الرحلات والنقاط',
-        'fleet-map': 'متابعة الأسطول والمسارات',
-        'complaints': 'إدارة الشكاوى والبلاغات',
-        'settings': 'إعدادات التسعير والمطابقة',
-        'audit': 'سجل التدقيق الأمني',
-        'backup': 'النسخ الاحتياطي وقاعدة البيانات',
-        'customization': 'التخصيص والمظهر',
-        'ui-management': 'إدارة الواجهة',
-        'custom-buttons': 'أزرار مخصصة',
-        'advertisements': 'الإعلانات',
-        'telegram': 'بوت تيليجرام'
-    };
-    const bSection = document.getElementById('breadcrumb-section');
-    if (bSection) bSection.textContent = tabTitles[tabName] || tabName;
-    const bDivider = document.getElementById('breadcrumb-divider');
-    const bSub = document.getElementById('breadcrumb-sub');
-    if (bDivider && bSub) {
-        if (tabName === 'routes') {
-            bDivider.classList.remove('hidden');
-            bSub.classList.remove('hidden');
-            const isBookings = document.getElementById('sub-view-bookings') && !document.getElementById('sub-view-bookings').classList.contains('hidden');
-            bSub.textContent = isBookings ? 'سجل الحجوزات' : 'خطوط السير';
-        } else {
-            bDivider.classList.add('hidden');
-            bSub.classList.add('hidden');
+        // Clear any active cancellations polling
+        if (window._cancelTabInterval) { 
+            clearInterval(window._cancelTabInterval); 
+            window._cancelTabInterval = null; 
         }
-    }
 
-    switch (tabName) {
-        case 'overview':
-            loadDashboardStats();
-            break;
-        case 'verifications':
-            loadVerifications();
-            break;
-        case 'drivers':
-            loadDrivers();
-            break;
-        case 'customers':
-            loadCustomers();
-            break;
-        case 'routes':
-            loadRoutes();
-            break;
-        case 'cancellations':
-            loadCancellationRequests();
-            // Live-refresh every 15s while tab is open
-            window._cancelTabInterval = setInterval(() => { try { loadCancellationRequests(); } catch(e) {} }, 15000);
-            break;
-        case 'trip-ratings':
-            loadTripRatingsLeaderboard();
-            loadTripRatings();
-            break;
-        case 'fleet-map':
-            initFleetMapbox();
-            setTimeout(() => { if (fleetMap) fleetMap.resize(); }, 150);
-            setTimeout(() => { if (fleetMap) fleetMap.resize(); }, 400);
-            break;
-        case 'complaints':
-            loadComplaints();
-            break;
-        case 'settings':
-            loadMatchingSettings();
-            break;
-        case 'audit':
-            loadAuditLogs();
-            break;
-        case 'backup':
-            loadDashboardStats();
-            loadDatabaseEngineStats();
-            if (typeof initBackupDropzoneEvents === 'function') initBackupDropzoneEvents();
-            break;
-        case 'customization': loadCustomizationSettings(); break;
-        case 'ui-management': loadCustomButtons(); loadAdvertisements(); break;
-        case 'custom-buttons': loadCustomButtons(); break;
-        case 'advertisements': loadBannersConfig(); break;
-        case 'telegram': break;
+        document.querySelectorAll('.tab-btn').forEach(btn => btn?.classList?.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => {
+            if (content) {
+                content.classList.add('hidden');
+                content.style.display = 'none';
+            }
+        });
+
+        const btn = document.getElementById(`tab-btn-${tabName}`);
+        if (btn) btn.classList.add('active');
+
+        const content = document.getElementById(`tab-${tabName}`);
+        if (content) {
+            content.classList.remove('hidden');
+            content.style.display = 'block';
+        }
+
+        // Toggle full-canvas layout for fleet radar map
+        const mainArea = document.getElementById('main-content-area') || document.querySelector('main');
+        if (mainArea) {
+            if (tabName === 'fleet-map') {
+                mainArea.classList.remove('overflow-y-auto', 'p-4', 'md:p-8', 'pb-24', 'md:pb-8');
+                mainArea.classList.add('overflow-hidden', 'p-0');
+            } else {
+                mainArea.classList.remove('overflow-hidden', 'p-0');
+                mainArea.classList.add('overflow-y-auto', 'p-4', 'md:p-8', 'pb-24', 'md:pb-8');
+            }
+        }
+
+        // Update Breadcrumbs
+        const tabTitles = {
+            'overview': 'نظرة عامة والمؤشرات',
+            'verifications': 'توثيق مستمسكات السائقين',
+            'drivers': 'إدارة السائقين',
+            'customers': 'إدارة الركاب',
+            'routes': 'المسارات والحجوزات',
+            'cancellations': 'طلبات إلغاء الركاب',
+            'trip-ratings': 'تقييمات الرحلات والنقاط',
+            'fleet-map': 'متابعة الأسطول والمسارات',
+            'complaints': 'إدارة الشكاوى والبلاغات',
+            'settings': 'إعدادات التسعير والمطابقة',
+            'audit': 'سجل التدقيق الأمني',
+            'backup': 'النسخ الاحتياطي وقاعدة البيانات',
+            'customization': 'التخصيص والمظهر',
+            'ui-management': 'إدارة الواجهة',
+            'custom-buttons': 'أزرار مخصصة',
+            'advertisements': 'الإعلانات',
+            'telegram': 'بوت تيليجرام'
+        };
+        const bSection = document.getElementById('breadcrumb-section');
+        if (bSection) bSection.textContent = tabTitles[tabName] || tabName;
+        const bDivider = document.getElementById('breadcrumb-divider');
+        const bSub = document.getElementById('breadcrumb-sub');
+        if (bDivider && bSub) {
+            if (tabName === 'routes') {
+                bDivider.classList.remove('hidden');
+                bSub.classList.remove('hidden');
+                const isBookings = document.getElementById('sub-view-bookings') && !document.getElementById('sub-view-bookings').classList.contains('hidden');
+                bSub.textContent = isBookings ? 'سجل الحجوزات' : 'خطوط السير';
+            } else {
+                bDivider.classList.add('hidden');
+                bSub.classList.add('hidden');
+            }
+        }
+
+        // Safely invoke tab loader without allowing any failure to freeze the UI
+        try {
+            switch (tabName) {
+                case 'overview':
+                    if (typeof loadDashboardStats === 'function') loadDashboardStats();
+                    break;
+                case 'verifications':
+                    if (typeof loadVerifications === 'function') loadVerifications();
+                    break;
+                case 'drivers':
+                    if (typeof loadDrivers === 'function') loadDrivers();
+                    break;
+                case 'customers':
+                    if (typeof loadCustomers === 'function') loadCustomers();
+                    break;
+                case 'routes':
+                    if (typeof loadRoutes === 'function') loadRoutes();
+                    break;
+                case 'cancellations':
+                    if (typeof loadCancellationRequests === 'function') loadCancellationRequests();
+                    // Live-refresh every 15s while tab is open
+                    window._cancelTabInterval = setInterval(() => { 
+                        try { 
+                            if (typeof loadCancellationRequests === 'function') loadCancellationRequests(); 
+                        } catch(e) {} 
+                    }, 15000);
+                    break;
+                case 'trip-ratings':
+                    if (typeof loadTripRatingsLeaderboard === 'function') loadTripRatingsLeaderboard();
+                    if (typeof loadTripRatings === 'function') loadTripRatings();
+                    break;
+                case 'fleet-map':
+                    if (typeof initFleetMapbox === 'function') initFleetMapbox();
+                    setTimeout(() => { if (typeof fleetMap !== 'undefined' && fleetMap) fleetMap.resize(); }, 150);
+                    setTimeout(() => { if (typeof fleetMap !== 'undefined' && fleetMap) fleetMap.resize(); }, 400);
+                    break;
+                case 'complaints':
+                    if (typeof loadComplaints === 'function') loadComplaints();
+                    break;
+                case 'settings':
+                    if (typeof loadMatchingSettings === 'function') loadMatchingSettings();
+                    break;
+                case 'audit':
+                    if (typeof loadAuditLogs === 'function') loadAuditLogs();
+                    break;
+                case 'backup':
+                    if (typeof loadDashboardStats === 'function') loadDashboardStats();
+                    if (typeof loadDatabaseEngineStats === 'function') loadDatabaseEngineStats();
+                    if (typeof initBackupDropzoneEvents === 'function') initBackupDropzoneEvents();
+                    break;
+                case 'customization': 
+                    if (typeof loadCustomizationSettings === 'function') loadCustomizationSettings(); 
+                    break;
+                case 'ui-management': 
+                    if (typeof loadCustomButtons === 'function') loadCustomButtons(); 
+                    if (typeof loadAdvertisements === 'function') loadAdvertisements(); 
+                    break;
+                case 'custom-buttons': 
+                    if (typeof loadCustomButtons === 'function') loadCustomButtons(); 
+                    break;
+                case 'advertisements': 
+                    if (typeof loadBannersConfig === 'function') loadBannersConfig(); 
+                    break;
+                case 'telegram': 
+                    break;
+            }
+        } catch (loaderErr) {
+            console.error(`[Navigation] Error executing loader for tab '${tabName}':`, loaderErr);
+        }
+    } catch (e) {
+        console.error(`[Navigation] switchTab critical error for tab '${tabName}':`, e);
     }
 }
+window.switchTab = switchTab;
 
 function switchSubRouteTab(subTab) {
     const btnRoutes = document.getElementById('sub-btn-routes');
@@ -1923,94 +1999,109 @@ async function loadPricingSettings() {
 }
 
 function checkIsBalyStandard() {
-    const bf = Number(document.getElementById('setting-base-fare')?.value) || 0;
-    const km = Number(document.getElementById('setting-per-km')?.value) || 0;
-    const mn = Number(document.getElementById('setting-per-minute')?.value) || 0;
-    const mf = Number(document.getElementById('setting-min-fare')?.value) || 0;
-    const cf = Number(document.getElementById('setting-cancellation-fee')?.value) || 0;
-    const mult = Number(document.getElementById('setting-manual-multiplier')?.value) || 1.0;
-    return bf === 1000 && km === 500 && mn === 100 && mf === 3000 && cf === 1500 && Math.abs(mult - 1.0) < 0.01;
+    try {
+        const bf = Number(document.getElementById('setting-base-fare')?.value) || 0;
+        const km = Number(document.getElementById('setting-per-km')?.value) || 0;
+        const mn = Number(document.getElementById('setting-per-minute')?.value) || 0;
+        const mf = Number(document.getElementById('setting-min-fare')?.value) || 0;
+        const cf = Number(document.getElementById('setting-cancellation-fee')?.value) || 0;
+        const mult = Number(document.getElementById('setting-manual-multiplier')?.value) || 1.0;
+        return bf === 1000 && km === 500 && mn === 100 && mf === 3000 && cf === 1500 && Math.abs(mult - 1.0) < 0.01;
+    } catch (_) {
+        return false;
+    }
 }
+window.checkIsBalyStandard = checkIsBalyStandard;
 
 function updatePricingUIBadges() {
-    const isSurgeEnabled = document.getElementById('setting-enable-surge')?.checked !== false;
-    const livePill = document.getElementById('pricing-live-status-pill');
-    if (livePill) {
-        if (isSurgeEnabled) {
-            livePill.className = 'px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-full border border-emerald-200';
-            livePill.innerHTML = '⚡ الذروة الذكية: مفعّلة';
-        } else {
-            livePill.className = 'px-2.5 py-0.5 bg-slate-100 text-slate-600 font-bold text-xs rounded-full border border-slate-200';
-            livePill.innerHTML = '⏸️ الذروة الذكية: معطلة';
+    try {
+        const isSurgeEnabled = document.getElementById('setting-enable-surge')?.checked !== false;
+        const livePill = document.getElementById('pricing-live-status-pill');
+        if (livePill) {
+            if (isSurgeEnabled) {
+                livePill.className = 'px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-xs rounded-full border border-emerald-200';
+                livePill.innerHTML = '⚡ الذروة الذكية: مفعّلة';
+            } else {
+                livePill.className = 'px-2.5 py-0.5 bg-slate-100 text-slate-600 font-bold text-xs rounded-full border border-slate-200';
+                livePill.innerHTML = '⏸️ الذروة الذكية: معطلة';
+            }
         }
-    }
 
-    const stateText = document.getElementById('surge-engine-state-text');
-    if (stateText) {
-        if (isSurgeEnabled) {
-            stateText.className = 'text-emerald-600 font-bold';
-            stateText.textContent = 'نشط وجاهز للرحلات الفورية';
-        } else {
-            stateText.className = 'text-slate-400 font-bold';
-            stateText.textContent = 'متوقف (تسعير ثابت فقط)';
+        const stateText = document.getElementById('surge-engine-state-text');
+        if (stateText) {
+            if (isSurgeEnabled) {
+                stateText.className = 'text-emerald-600 font-bold';
+                stateText.textContent = 'نشط وجاهز للرحلات الفورية';
+            } else {
+                stateText.className = 'text-slate-400 font-bold';
+                stateText.textContent = 'متوقف (تسعير ثابت فقط)';
+            }
         }
-    }
 
-    const manualMult = Number(document.getElementById('setting-manual-multiplier')?.value) || 1.0;
-    const manualLabel = document.getElementById('setting-manual-label')?.value || 'تسعيرة بلي القياسية (1.0x)';
-    const manualBadge = document.getElementById('manual-override-current-badge');
-    if (manualBadge) {
-        manualBadge.textContent = manualLabel;
-        if (manualMult > 1.05) {
-            manualBadge.className = 'px-2.5 py-0.5 bg-amber-100 text-amber-800 font-bold text-xs rounded-full border border-amber-300';
-        } else if (manualMult < 0.95) {
-            manualBadge.className = 'px-2.5 py-0.5 bg-emerald-100 text-emerald-800 font-bold text-xs rounded-full border border-emerald-300';
-        } else {
-            manualBadge.className = 'px-2.5 py-0.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-full border border-slate-200';
+        const manualMult = Number(document.getElementById('setting-manual-multiplier')?.value) || 1.0;
+        const manualLabel = document.getElementById('setting-manual-label')?.value || 'تسعيرة بلي القياسية (1.0x)';
+        const manualBadge = document.getElementById('manual-override-current-badge');
+        if (manualBadge) {
+            manualBadge.textContent = manualLabel;
+            if (manualMult > 1.05) {
+                manualBadge.className = 'px-2.5 py-0.5 bg-amber-100 text-amber-800 font-bold text-xs rounded-full border border-amber-300';
+            } else if (manualMult < 0.95) {
+                manualBadge.className = 'px-2.5 py-0.5 bg-emerald-100 text-emerald-800 font-bold text-xs rounded-full border border-emerald-300';
+            } else {
+                manualBadge.className = 'px-2.5 py-0.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-full border border-slate-200';
+            }
         }
-    }
 
-    // Update Baly Standard active badge in the banner
-    const balyBadge = document.getElementById('baly-active-status-badge');
-    if (balyBadge) {
-        if (checkIsBalyStandard()) {
-            balyBadge.className = 'px-2.5 py-0.5 bg-emerald-100 text-emerald-800 font-black text-xs rounded-full border border-emerald-300 flex items-center gap-1';
-            balyBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span><span>الافتراضي المعتمد 🇮🇶</span>';
-        } else {
-            balyBadge.className = 'px-2.5 py-0.5 bg-amber-100 text-amber-800 font-bold text-xs rounded-full border border-amber-300 flex items-center gap-1';
-            balyBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span><span>تسعيرة مخصصة ⚙️</span>';
+        // Update Baly Standard active badge in the banner
+        const balyBadge = document.getElementById('baly-active-status-badge');
+        if (balyBadge) {
+            if (checkIsBalyStandard()) {
+                balyBadge.className = 'px-2.5 py-0.5 bg-emerald-100 text-emerald-800 font-black text-xs rounded-full border border-emerald-300 flex items-center gap-1';
+                balyBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span><span>الافتراضي المعتمد 🇮🇶</span>';
+            } else {
+                balyBadge.className = 'px-2.5 py-0.5 bg-amber-100 text-amber-800 font-bold text-xs rounded-full border border-amber-300 flex items-center gap-1';
+                balyBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span><span>تسعيرة مخصصة ⚙️</span>';
+            }
         }
+    } catch (e) {
+        console.warn('[PricingBadges] Warning:', e);
     }
 }
+window.updatePricingUIBadges = updatePricingUIBadges;
 
 async function applyBalyPricingStandard(andSave = true) {
-    const setVal = (id, val) => {
-        const el = document.getElementById(id);
-        if (el) el.value = val;
-    };
-    setVal('setting-base-fare', 1000);
-    setVal('setting-per-km', 500);
-    setVal('setting-per-minute', 100);
-    setVal('setting-min-fare', 3000);
-    setVal('setting-cancellation-fee', 1500);
-    setVal('setting-surge-max', 2.0);
-    setVal('setting-night-surge', 25);
-    setVal('setting-demand-sensitivity', '1.0');
-    setVal('setting-manual-multiplier', 1.0);
-    setVal('setting-manual-label', 'تسعيرة بلي القياسية (1.0x)');
-    const surgeToggle = document.getElementById('setting-enable-surge');
-    if (surgeToggle) surgeToggle.checked = true;
+    try {
+        const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.value = val;
+        };
+        setVal('setting-base-fare', 1000);
+        setVal('setting-per-km', 500);
+        setVal('setting-per-minute', 100);
+        setVal('setting-min-fare', 3000);
+        setVal('setting-cancellation-fee', 1500);
+        setVal('setting-surge-max', 2.0);
+        setVal('setting-night-surge', 25);
+        setVal('setting-demand-sensitivity', '1.0');
+        setVal('setting-manual-multiplier', 1.0);
+        setVal('setting-manual-label', 'تسعيرة بلي القياسية (1.0x)');
+        const surgeToggle = document.getElementById('setting-enable-surge');
+        if (surgeToggle) surgeToggle.checked = true;
 
-    updatePricingUIBadges();
-    runLiveFareSimulator();
+        updatePricingUIBadges();
+        runLiveFareSimulator();
 
-    if (andSave) {
-        await savePricingSettings();
-        showToast('تم اعتماد وحفظ تسعيرة بلي القياسية كوضع افتراضي بنجاح! 🇮🇶🚕');
-    } else {
-        showToast('تم تعيين قيم تسعيرة بلي في الحقول');
+        if (andSave) {
+            await savePricingSettings();
+            showToast('تم اعتماد وحفظ تسعيرة بلي القياسية كوضع افتراضي بنجاح! 🇮🇶🚕');
+        } else {
+            showToast('تم تعيين قيم تسعيرة بلي في الحقول');
+        }
+    } catch (e) {
+        console.error('[applyBalyPricingStandard] Error:', e);
     }
 }
+window.applyBalyPricingStandard = applyBalyPricingStandard;
 
 async function savePricingSettings() {
     const payload = {
@@ -2046,6 +2137,7 @@ async function savePricingSettings() {
         showToast('خطأ في الاتصال بالخادم', true);
     }
 }
+window.savePricingSettings = savePricingSettings;
 
 async function applyQuickEmergencyOverride(multiplier, label) {
     const mInput = document.getElementById('setting-manual-multiplier');
@@ -2072,102 +2164,107 @@ async function applyQuickEmergencyOverride(multiplier, label) {
         showToast('خطأ في الاتصال بالخادم', true);
     }
 }
+window.applyQuickEmergencyOverride = applyQuickEmergencyOverride;
 
 function runLiveFareSimulator() {
-    const baseFare = Number(document.getElementById('setting-base-fare')?.value) || 1000;
-    const kmRate = Number(document.getElementById('setting-per-km')?.value) || 500;
-    const minuteRate = Number(document.getElementById('setting-per-minute')?.value) || 100;
-    const minFare = Number(document.getElementById('setting-min-fare')?.value) || 3000;
-    const isSurgeEnabled = document.getElementById('setting-enable-surge')?.checked !== false;
-    const maxSurge = Number(document.getElementById('setting-surge-max')?.value) || 2.0;
-    const nightSurgePercent = Number(document.getElementById('setting-night-surge')?.value) || 25;
-    const manualMultiplier = Number(document.getElementById('setting-manual-multiplier')?.value) || 1.0;
+    try {
+        const baseFare = Number(document.getElementById('setting-base-fare')?.value) || 1000;
+        const kmRate = Number(document.getElementById('setting-per-km')?.value) || 500;
+        const minuteRate = Number(document.getElementById('setting-per-minute')?.value) || 100;
+        const minFare = Number(document.getElementById('setting-min-fare')?.value) || 3000;
+        const isSurgeEnabled = document.getElementById('setting-enable-surge')?.checked !== false;
+        const maxSurge = Number(document.getElementById('setting-surge-max')?.value) || 2.0;
+        const nightSurgePercent = Number(document.getElementById('setting-night-surge')?.value) || 25;
+        const manualMultiplier = Number(document.getElementById('setting-manual-multiplier')?.value) || 1.0;
 
-    // Simulator inputs
-    const distKm = Math.max(0.5, Number(document.getElementById('sim-distance')?.value) || 4.5);
-    const durMins = Math.max(2, Number(document.getElementById('sim-duration')?.value) || 12);
-    const tier = document.getElementById('sim-tier')?.value || 'super';
-    const demandMultiplier = Number(document.getElementById('sim-demand')?.value) || 1.0;
-    const isNight = Boolean(document.getElementById('sim-is-night')?.checked);
+        // Simulator inputs
+        const distKm = Math.max(0.5, Number(document.getElementById('sim-distance')?.value) || 4.5);
+        const durMins = Math.max(2, Number(document.getElementById('sim-duration')?.value) || 12);
+        const tier = document.getElementById('sim-tier')?.value || 'super';
+        const demandMultiplier = Number(document.getElementById('sim-demand')?.value) || 1.0;
+        const isNight = Boolean(document.getElementById('sim-is-night')?.checked);
 
-    // Tier factor
-    let tierFactor = 1.0;
-    if (tier === 'eco') tierFactor = 0.90;
-    if (tier === 'vip') tierFactor = 1.20;
+        // Tier factor
+        let tierFactor = 1.0;
+        if (tier === 'eco') tierFactor = 0.90;
+        if (tier === 'vip') tierFactor = 1.20;
 
-    // Base math (Baly Standard)
-    const base = baseFare * tierFactor;
-    const distCost = distKm * kmRate * tierFactor;
-    const timeCost = durMins * minuteRate * tierFactor;
-    const rawStandard = base + distCost + timeCost;
+        // Base math (Baly Standard)
+        const base = baseFare * tierFactor;
+        const distCost = distKm * kmRate * tierFactor;
+        const timeCost = durMins * minuteRate * tierFactor;
+        const rawStandard = base + distCost + timeCost;
 
-    // Surge calculation
-    let nightFactor = 1.0;
-    if (isSurgeEnabled && isNight && nightSurgePercent > 0) {
-        nightFactor = 1.0 + (nightSurgePercent / 100);
-    }
-
-    let trafficFactor = 1.0;
-    const avgSpeed = distKm / (durMins / 60);
-    if (isSurgeEnabled && avgSpeed < 18 && durMins > 10) {
-        trafficFactor = avgSpeed < 10 ? 1.20 : 1.10;
-    }
-
-    let combined = 1.0;
-    if (isSurgeEnabled) {
-        combined = manualMultiplier * (1.0 + (demandMultiplier - 1.0) + (nightFactor - 1.0) + (trafficFactor - 1.0));
-    } else {
-        combined = manualMultiplier;
-    }
-
-    const capped = Math.min(maxSurge, Math.max(0.7, combined));
-    let preFare = rawStandard * capped;
-
-    // Min fare floor (Baly Standard: 3,000 IQD)
-    preFare = Math.max(minFare, preFare);
-
-    // Round UPWARD to nearest 250 IQD (Math.ceil)
-    const finalFare = Math.ceil(preFare / 250) * 250;
-
-    // Update Simulator Output
-    const fareEl = document.getElementById('sim-result-fare');
-    if (fareEl) fareEl.textContent = finalFare.toLocaleString();
-
-    const baseEl = document.getElementById('sim-out-base');
-    if (baseEl) baseEl.textContent = `${Math.round(base).toLocaleString()} د.ع`;
-
-    const distEl = document.getElementById('sim-out-dist');
-    if (distEl) distEl.textContent = `${Math.round(distCost).toLocaleString()} د.ع`;
-
-    const timeEl = document.getElementById('sim-out-time');
-    if (timeEl) timeEl.textContent = `${Math.round(timeCost).toLocaleString()} د.ع`;
-
-    const multEl = document.getElementById('sim-out-multiplier');
-    if (multEl) multEl.textContent = `${capped.toFixed(2)}x`;
-
-    const badgeContainer = document.getElementById('sim-result-badge-container');
-    if (badgeContainer) {
-        let badgeHtml = '';
-        if (capped > 1.05) {
-            const p = Math.round((capped - 1.0) * 100);
-            if (manualMultiplier > 1.05) {
-                badgeHtml = `<span class="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">⚡ ذروة استثنائية (+${p}%)</span>`;
-            } else if (demandMultiplier > 1.05) {
-                badgeHtml = `<span class="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">⚡ زيادة لقلة السائقين (+${p}%)</span>`;
-            } else if (isNight) {
-                badgeHtml = `<span class="px-2.5 py-1 bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">🌙 تعرفة ليلية (+${p}%)</span>`;
-            } else {
-                badgeHtml = `<span class="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">⚡ تعرفة ذروة (+${p}%)</span>`;
-            }
-        } else if (capped < 0.95) {
-            badgeHtml = `<span class="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">🏷️ خصم مفعّل (-10%)</span>`;
-        } else {
-            badgeHtml = `<span class="px-2.5 py-1 bg-slate-800 text-slate-300 border border-slate-700 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">⚡ تسعيرة بلي القياسية (1.0x)</span>`;
+        // Surge calculation
+        let nightFactor = 1.0;
+        if (isSurgeEnabled && isNight && nightSurgePercent > 0) {
+            nightFactor = 1.0 + (nightSurgePercent / 100);
         }
-        badgeContainer.innerHTML = badgeHtml;
+
+        let trafficFactor = 1.0;
+        const avgSpeed = distKm / (durMins / 60);
+        if (isSurgeEnabled && avgSpeed < 18 && durMins > 10) {
+            trafficFactor = avgSpeed < 10 ? 1.20 : 1.10;
+        }
+
+        let combined = 1.0;
+        if (isSurgeEnabled) {
+            combined = manualMultiplier * (1.0 + (demandMultiplier - 1.0) + (nightFactor - 1.0) + (trafficFactor - 1.0));
+        } else {
+            combined = manualMultiplier;
+        }
+
+        const capped = Math.min(maxSurge, Math.max(0.7, combined));
+        let preFare = rawStandard * capped;
+
+        // Min fare floor (Baly Standard: 3,000 IQD)
+        preFare = Math.max(minFare, preFare);
+
+        // Round UPWARD to nearest 250 IQD (Math.ceil)
+        const finalFare = Math.ceil(preFare / 250) * 250;
+
+        // Update Simulator Output
+        const fareEl = document.getElementById('sim-result-fare');
+        if (fareEl) fareEl.textContent = finalFare.toLocaleString();
+
+        const baseEl = document.getElementById('sim-out-base');
+        if (baseEl) baseEl.textContent = `${Math.round(base).toLocaleString()} د.ع`;
+
+        const distEl = document.getElementById('sim-out-dist');
+        if (distEl) distEl.textContent = `${Math.round(distCost).toLocaleString()} د.ع`;
+
+        const timeEl = document.getElementById('sim-out-time');
+        if (timeEl) timeEl.textContent = `${Math.round(timeCost).toLocaleString()} د.ع`;
+
+        const multEl = document.getElementById('sim-out-multiplier');
+        if (multEl) multEl.textContent = `${capped.toFixed(2)}x`;
+
+        const badgeContainer = document.getElementById('sim-result-badge-container');
+        if (badgeContainer) {
+            let badgeHtml = '';
+            if (capped > 1.05) {
+                const p = Math.round((capped - 1.0) * 100);
+                if (manualMultiplier > 1.05) {
+                    badgeHtml = `<span class="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">⚡ ذروة استثنائية (+${p}%)</span>`;
+                } else if (demandMultiplier > 1.05) {
+                    badgeHtml = `<span class="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">⚡ زيادة لقلة السائقين (+${p}%)</span>`;
+                } else if (isNight) {
+                    badgeHtml = `<span class="px-2.5 py-1 bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">🌙 تعرفة ليلية (+${p}%)</span>`;
+                } else {
+                    badgeHtml = `<span class="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">⚡ تعرفة ذروة (+${p}%)</span>`;
+                }
+            } else if (capped < 0.95) {
+                badgeHtml = `<span class="px-2.5 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">🏷️ خصم مفعّل (-10%)</span>`;
+            } else {
+                badgeHtml = `<span class="px-2.5 py-1 bg-slate-800 text-slate-300 border border-slate-700 font-bold text-xs rounded-lg inline-flex items-center gap-1.5">⚡ تسعيرة بلي القياسية (1.0x)</span>`;
+            }
+            badgeContainer.innerHTML = badgeHtml;
+        }
+    } catch (e) {
+        console.warn('[LiveFareSimulator] Execution warning:', e);
     }
 }
-}
+window.runLiveFareSimulator = runLiveFareSimulator;
 
 async function loadMatchingSettings() {
     try {
