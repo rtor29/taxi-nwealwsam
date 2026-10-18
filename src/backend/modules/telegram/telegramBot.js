@@ -3,10 +3,14 @@ const https = require('https');
 const config = require('../../config');
 const db = require('../../db');
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || config.telegram?.botToken || '8904440367:AAEBLFy5DK-eM_MDqiLwQYgHIi-h-tjvyfU';
 if (!BOT_TOKEN) { console.error('[TelegramBot] TELEGRAM_BOT_TOKEN env var is required!'); }
 const ADMIN_CHAT_ID = '391762837';
 const API_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const REQUIRED_CHANNEL = process.env.TELEGRAM_CHANNEL || config.telegram?.channel || '@tawseelaiq';
+const REQUIRED_GROUP = process.env.TELEGRAM_GROUP || config.telegram?.group || '@tawseelaiqc';
+const BOT_USERNAME = '@tawseela_najaf_bot';
+const GROQ_API_KEY = process.env.GROQ_API_KEY || config.telegram?.groqApiKey || '';
 
 // OTP store for telegram
 const telegramOtpStore = new Map();
@@ -52,8 +56,15 @@ function getGovernoratesKeyboard(rolePrefix) {
 // ===================================================================
 const _tgRateMap = new Map();       // chatId -> { count, resetAt }
 const _tgFloodMap = new Map();      // chatId -> { msgs: [], warned }
-const _tgBannedUsers = new Set();   // permanently blocked chatIds this session
+const _tgBannedUsers = new Set();   // permanently blocked chatIds
 const _tgSuspiciousLog = [];        // log of suspicious activity
+
+// Restore persisted banned users
+try {
+    if (db.memoryState && Array.isArray(db.memoryState.bannedTelegramUsers)) {
+        db.memoryState.bannedTelegramUsers.forEach(id => _tgBannedUsers.add(String(id)));
+    }
+} catch (_) {}
 
 // Cleanup every 5 minutes
 setInterval(() => {
@@ -156,6 +167,15 @@ function _securityGate(chatId, text) {
         _tgSuspiciousLog.push({ chatId: cid, reason: 'flood', text: (text || '').substring(0, 80), time: new Date().toISOString() });
         // Auto-ban after flood
         _tgBannedUsers.add(cid);
+        try {
+            if (db.memoryState) {
+                if (!db.memoryState.bannedTelegramUsers) db.memoryState.bannedTelegramUsers = [];
+                if (!db.memoryState.bannedTelegramUsers.includes(cid)) {
+                    db.memoryState.bannedTelegramUsers.push(cid);
+                    db.saveStateSnapshot();
+                }
+            }
+        } catch (_) {}
         return 'flood_ban';
     }
 
@@ -193,6 +213,244 @@ function sendKeyboard(chatId, text, buttons) {
     return sendMessage(chatId, text, {
         reply_markup: { inline_keyboard: buttons }
     });
+}
+
+// --- Mandatory Subscription Enforcement ---
+async function checkUserSubscription(userId) {
+    if (String(userId) === ADMIN_CHAT_ID) {
+        return { subscribed: true, inChannel: true, inGroup: true };
+    }
+
+    const validStatuses = ['creator', 'administrator', 'member', 'restricted'];
+
+    try {
+        const [chRes, grpRes] = await Promise.all([
+            tgRequest('getChatMember', { chat_id: REQUIRED_CHANNEL, user_id: userId }),
+            tgRequest('getChatMember', { chat_id: REQUIRED_GROUP, user_id: userId })
+        ]);
+
+        const inChannel = chRes && chRes.ok && chRes.result && validStatuses.includes(chRes.result.status);
+        const inGroup = grpRes && grpRes.ok && grpRes.result && validStatuses.includes(grpRes.result.status);
+
+        return {
+            subscribed: Boolean(inChannel && inGroup),
+            inChannel: Boolean(inChannel),
+            inGroup: Boolean(inGroup)
+        };
+    } catch (err) {
+        console.warn('[TelegramBot] Subscription check error:', err.message);
+        // Fallback: If bot lacks admin rights or error occurred, allow access defensively
+        return { subscribed: true, inChannel: true, inGroup: true, fallback: true };
+    }
+}
+
+async function sendSubscriptionGateMessage(chatId) {
+    const text = `أهلاً بك في منصة توصيلة 🚖\nلإكمال استخدام البوت واستلام إشعارات المشاوير والخدمات، يرجى أولاً الانضمام إلى منصاتنا الرسمية:`;
+    const keyboard = [
+        [
+            { text: '📢 القناة الرسمية لتوصيلة', url: 'https://t.me/tawseelaiq' }
+        ],
+        [
+            { text: '💬 كروب المحادثة والدعم', url: 'https://t.me/tawseelaiqc' }
+        ],
+        [
+            { text: 'تأكيد الاشتراك والمتابعة 🔄', callback_data: 'check_subscription' }
+        ]
+    ];
+    return sendKeyboard(chatId, text, keyboard);
+}
+
+// --- Anti-Link & Anti-Promotion Engine for Group (@tawseelaiqc) ---
+function containsUnauthorizedLink(text) {
+    if (!text || typeof text !== 'string') return false;
+
+    // Detect URLs, Telegram links, or mentions
+    const linkRegex = /(https?:\/\/[^\s]+|t\.me\/[^\s]+|telegram\.me\/[^\s]+|@[a-zA-Z0-9_]+)/gi;
+    const matches = text.match(linkRegex);
+    if (!matches || matches.length === 0) return false;
+
+    for (const match of matches) {
+        const lower = match.toLowerCase();
+        const isWhitelisted =
+            lower.includes('tawseelaiq.app') ||
+            lower.includes('t.me/tawseelaiq') ||
+            lower.includes('t.me/tawseelaiqc') ||
+            lower.includes('t.me/tawseela_najaf_bot') ||
+            lower === '@tawseelaiq' ||
+            lower === '@tawseelaiqc' ||
+            lower === '@tawseela_najaf_bot';
+
+        if (!isWhitelisted) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// --- Group Moderation: Anti-link and Zero-Token Welcome ---
+async function handleGroupModeration(msg) {
+    const chatId = msg.chat.id;
+    const messageId = msg.message_id;
+    const from = msg.from || {};
+    const text = msg.text || msg.caption || '';
+
+    // 1. Anti-link & Anti-promotion enforcement
+    if (containsUnauthorizedLink(text)) {
+        try {
+            await tgRequest('deleteMessage', { chat_id: chatId, message_id: messageId });
+            const userName = from.first_name || from.username || 'العضو';
+            const warnRes = await sendMessage(
+                chatId,
+                `عذراً يا ${userName} ⚠️\nيُمنع نشر الروابط أو الإعلانات الترويجية داخل الكروب للحفاظ على أمان وخصوصية الأعضاء 🚖.`
+            );
+            if (warnRes?.result?.message_id) {
+                setTimeout(() => {
+                    tgRequest('deleteMessage', { chat_id: chatId, message_id: warnRes.result.message_id }).catch(() => {});
+                }, 12000);
+            }
+        } catch (e) {
+            console.warn('[TelegramBot] Anti-link deletion error:', e.message);
+        }
+        return true;
+    }
+
+    // 2. Zero-Token Welcome System (New Members)
+    if (msg.new_chat_members && msg.new_chat_members.length > 0) {
+        for (const newMember of msg.new_chat_members) {
+            if (newMember.is_bot) continue;
+            const name = newMember.first_name || newMember.username || 'عزيزنا';
+            const welcomeText = `أهلاً وسهلاً بك ${name} في كروب توصيلة الرسمي 🚖\nهنا يمكنك الاستفسار عن خدمات التاكسي والخطوط الدائمية في النجف الأشرف.\nللتسجيل وطلب تكسي: https://tawseelaiq.app\nنتمنى لك رحلات آمنة ومريحة!`;
+            sendMessage(chatId, welcomeText).catch(() => {});
+        }
+        try {
+            tgRequest('deleteMessage', { chat_id: chatId, message_id: messageId }).catch(() => {});
+        } catch (_) {}
+        return true;
+    }
+
+    // 3. Delete Left Chat Member service notification
+    if (msg.left_chat_member) {
+        try {
+            tgRequest('deleteMessage', { chat_id: chatId, message_id: messageId }).catch(() => {});
+        } catch (_) {}
+        return true;
+    }
+
+    return false;
+}
+
+// --- Groq AI Customer Support Engine ---
+async function askGroqAI(userPrompt) {
+    if (!GROQ_API_KEY) {
+        return 'عذراً، محرك الذكاء الاصطناعي غير متصل حالياً. يمكنك استخدام التطبيق عبر الرابط: https://tawseelaiq.app 🚖';
+    }
+
+    const systemPrompt = `أنت المساعد الذكي الرسمي الحصري لمنظومة وتطبيق «توصيلة» (Tawseela IQ) للنقل الذكي في محافظة النجف الأشرف والعراق.
+مهمتك تقديم الدعم الفني والإجابة عن استفسارات المستخدمين والركاب والكباتن بلغة عربية عراقية/فصحى ودودة وواضحة وموجزة ومباشرة.
+
+معلومات المنظومة والخدمات:
+1. حجز تكسي فوري: عبر تطبيق الويب https://tawseelaiq.app باختيار نقطة الانطلاق والوصول وتأكيد الطلب.
+2. حجز خط دائمي (باصات وستاركس): للجامعات (مثل جامعة الكوفة) والموظفين عبر تبويب "خط دائمي" في التطبيق.
+3. تسجيل الركاب: يتم برقم الهاتف العراقي واستلام رمز التحقق (OTP) السريع عبر التيليجرام أو الواتساب.
+4. تسجيل الكباتن (السائقين): عبر بوابة https://tawseelaiq.app/captain-login أو زر "سجل كابتن" في التطبيق مع رفع المستمسكات (إجازة السوق، البطاقة الوطنية، صور السيارة).
+5. التسعيرة القياسية المعتمدة (معايير بلي):
+   - فتح العداد: 1,000 دينار عراقي
+   - سعر الكيلومتر: 500 دينار عراقي
+   - سعر الدقيقة: 100 دينار عراقي
+   - الحد الأدنى للرحلة: 3,000 دينار عراقي
+   - رسوم الإلغاء: 1,500 دينار عراقي
+   - التقريب: يتم تقريب الأجرة صعوداً لأقرب 250 دينار عراقي دائماً.
+
+قواعد صارمة:
+- إذا سألك المستخدم عن أي موضوع عام خارج نطاق تطبيق وخدمات توصيلة (مثل: سياسة، برمجة، طب، دين، أو مواضيع عامة)، يجب أن ترفض بلباقة وحزم بالصيغة التالية نصاً:
+"أنا المساعد الذكي المخصص لمنظومة «توصيلة» فقط 🚖. يسعدني مساعدتك في كل ما يخص حجز الرحلات، التسجيل، أو الأسعار في تطبيقنا!"
+- اجعل إجاباتك دقيقة، مفيدة ومباشرة دون إطالة غير مبررة ولا تتجاوز فقرتين.`;
+
+    const requestBody = JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.6,
+        max_tokens: 350
+    });
+
+    return new Promise((resolve) => {
+        const options = {
+            hostname: 'api.groq.com',
+            port: 443,
+            path: '/openai/v1/chat/completions',
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${GROQ_API_KEY}`,
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(requestBody)
+            },
+            timeout: 10000
+        };
+
+        const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    const reply = parsed?.choices?.[0]?.message?.content;
+                    if (reply) {
+                        resolve(reply.trim());
+                    } else {
+                        resolve('يسعدنا خدمتك عبر تطبيق «توصيلة» 🚖. يمكنك حجز الرحلات مباشرة عبر: https://tawseelaiq.app');
+                    }
+                } catch (_) {
+                    resolve('أهلاً بك في توصيلة 🚖. يرجى زيارة https://tawseelaiq.app لطلب مشوارك.');
+                }
+            });
+        });
+
+        req.on('error', (err) => {
+            console.warn('[Groq AI Error]:', err.message);
+            resolve('أهلاً بك في توصيلة 🚖. يمكنك حجز مشوارك أو التسجيل مباشرة من: https://tawseelaiq.app');
+        });
+
+        req.on('timeout', () => {
+            req.destroy();
+            resolve('أهلاً بك في توصيلة 🚖. يمكنك حجز مشوارك مباشرة عبر: https://tawseelaiq.app');
+        });
+
+        req.write(requestBody);
+        req.end();
+    });
+}
+
+// --- Banned Users Management ---
+function getBannedUsers() {
+    const list = [];
+    for (const cid of _tgBannedUsers) {
+        const lastLog = _tgSuspiciousLog.slice().reverse().find(l => l.chatId === cid);
+        list.push({
+            chatId: cid,
+            type: 'telegram_user',
+            reason: lastLog?.reason || 'flood_or_violation',
+            snippet: lastLog?.text || 'محاولات مفرطة أو اختراق',
+            bannedAt: lastLog?.time || new Date().toISOString()
+        });
+    }
+    return list;
+}
+
+function unbanUser(chatId) {
+    const cid = String(chatId);
+    _tgBannedUsers.delete(cid);
+    _tgFloodMap.delete(cid);
+    _tgRateMap.delete(cid);
+    try {
+        if (db.memoryState && Array.isArray(db.memoryState.bannedTelegramUsers)) {
+            db.memoryState.bannedTelegramUsers = db.memoryState.bannedTelegramUsers.filter(x => String(x) !== cid);
+            db.saveStateSnapshot();
+        }
+    } catch (_) {}
+    return true;
 }
 
 // --- Direct Local Telegram OTP (VerifyWay Completely Removed) ---
@@ -545,7 +803,7 @@ async function completeDriverRegistration(chatId, user, locationInput) {
     userStates.delete(chatId);
 }
 
-async function handleCallback(chatId, data, user) {
+async function handleCallback(chatId, data, user, queryId) {
     if (!db.memoryState.botSubscribers) db.memoryState.botSubscribers = [];
     if (!db.memoryState.botSubscribers.includes(String(chatId))) { db.memoryState.botSubscribers.push(String(chatId)); db.saveStateSnapshot(); }
 
@@ -566,6 +824,32 @@ async function handleCallback(chatId, data, user) {
     }
 
     switch (data) {
+        case 'check_subscription': {
+            const userId = (user && user.id) || chatId;
+            const sub = await checkUserSubscription(userId);
+            if (sub.subscribed) {
+                if (queryId) {
+                    await tgRequest('answerCallbackQuery', {
+                        callback_query_id: queryId,
+                        text: '✅ تم التحقق من اشتراكك بنجاح! مرحباً بك في توصيلة 🚖',
+                        show_alert: false
+                    }).catch(() => {});
+                }
+                await sendMessage(chatId, '✅ <b>تم التحقق بنجاح!</b> شكراً لانضمامك لمنصات «توصيلة» الرسمية 🚖.');
+                await handleStart(chatId, user);
+            } else {
+                if (queryId) {
+                    await tgRequest('answerCallbackQuery', {
+                        callback_query_id: queryId,
+                        text: '⚠️ لم يتم التحقق من انضمامك بعد! يرجى الاشتراك في القناة والكروب أولاً.',
+                        show_alert: true
+                    }).catch(() => {});
+                }
+                await sendSubscriptionGateMessage(chatId);
+            }
+            break;
+        }
+
         case 'reg_passenger':
             userStates.set(chatId, { step: 'passenger_phone', role: 'Customer' });
             await sendKeyboard(chatId,
@@ -832,7 +1116,12 @@ async function handleMessage(chatId, text, user, location) {
                 return;
             }
         }
-        await handleStart(chatId, user);
+        // General text query in private chat: Ask Groq AI
+        const aiAnswer = await askGroqAI(text);
+        await sendKeyboard(chatId, aiAnswer, [
+            [{ text: '🚖 فتح تطبيق توصيلة (WebApp)', web_app: { url: 'https://tawseelaiq.app' } }],
+            [{ text: '📋 القائمة الرئيسية للخدمات', callback_data: 'help' }]
+        ]);
         return;
     }
 
@@ -1312,8 +1601,14 @@ async function handleMessage(chatId, text, user, location) {
             break;
         }
 
-        default:
-            await handleStart(chatId, user);
+        default: {
+            const aiAnswer = await askGroqAI(text);
+            await sendKeyboard(chatId, aiAnswer, [
+                [{ text: '🚖 فتح تطبيق توصيلة (WebApp)', web_app: { url: 'https://tawseelaiq.app' } }],
+                [{ text: '📋 القائمة الرئيسية للخدمات', callback_data: 'help' }]
+            ]);
+            break;
+        }
     }
 }
 
@@ -1410,15 +1705,38 @@ async function poll() {
                             const cbData = _sanitizeTgInput(cb.data);
                             if (!cbData || cbData.length > 100) continue;
 
-                            await tgRequest('answerCallbackQuery', { callback_query_id: cb.id });
-                            await handleCallback(chatId, cbData, cb.from);
+                            if (cbData !== 'check_subscription') {
+                                await tgRequest('answerCallbackQuery', { callback_query_id: cb.id }).catch(() => {});
+                            }
+                            await handleCallback(chatId, cbData, cb.from, cb.id);
                         }
                     } else if (update.message) {
                         const msg = update.message;
                         const chatId = msg.chat?.id;
                         if (!chatId) continue;
 
-                        // Block group/supergroup/channel - only private chat allowed
+                        // 1. Group / Supergroup moderation & AI support
+                        if (msg.chat.type === 'group' || msg.chat.type === 'supergroup') {
+                            const handled = await handleGroupModeration(msg);
+                            if (handled) continue;
+
+                            const text = msg.text || msg.caption || '';
+                            const isMentioned = text.includes(BOT_USERNAME) ||
+                                (msg.entities && msg.entities.some(e => e.type === 'mention' && text.substring(e.offset, e.offset + e.length) === BOT_USERNAME));
+                            const isReplyToBot = msg.reply_to_message && msg.reply_to_message.from &&
+                                (msg.reply_to_message.from.username === 'tawseela_najaf_bot' || msg.reply_to_message.from.is_bot);
+
+                            if (isMentioned || isReplyToBot) {
+                                const cleanPrompt = text.replace(new RegExp(BOT_USERNAME, 'gi'), '').trim();
+                                if (cleanPrompt) {
+                                    const reply = await askGroqAI(cleanPrompt);
+                                    await sendMessage(chatId, reply, { reply_to_message_id: msg.message_id });
+                                }
+                            }
+                            continue;
+                        }
+
+                        // Block non-private chats from personal bot flow
                         if (msg.chat.type !== 'private') continue;
 
                         const rawText = (msg.text || '').trim();
@@ -1439,6 +1757,15 @@ async function poll() {
                             }
                             // banned users get no response at all
                             continue;
+                        }
+
+                        // Mandatory Subscription Gate for private chat (Admin is exempted)
+                        if (String(chatId) !== ADMIN_CHAT_ID) {
+                            const sub = await checkUserSubscription(msg.from?.id || chatId);
+                            if (!sub.subscribed) {
+                                await sendSubscriptionGateMessage(chatId);
+                                continue;
+                            }
                         }
 
                         // Commands
@@ -1499,40 +1826,77 @@ async function notifyUser(chatId, text) {
     try { await sendMessage(chatId, text); } catch (_) {}
 }
 
-// Broadcast message to all registered users (customers and drivers with telegramChatId + admin)
-async function broadcastNotification(text) {
-    const recipients = new Set();
-    if (ADMIN_CHAT_ID) recipients.add(String(ADMIN_CHAT_ID));
-    
-    // Add known registered users
-    (db.memoryState.customers || []).forEach(c => {
-        if (c.telegramChatId) recipients.add(String(c.telegramChatId));
-    });
-    (db.memoryState.drivers || []).forEach(d => {
-        if (d.telegramChatId) recipients.add(String(d.telegramChatId));
-    });
-    
-    // Add all tracked subscribers
-    (db.memoryState.botSubscribers || []).forEach(chatId => {
-        recipients.add(String(chatId));
-    });
-
+// Broadcast message with target selector (channel, group, subscribers, all)
+async function broadcastNotification(text, target = 'subscribers') {
     let sentCount = 0;
     let failedCount = 0;
-    // Just plain text, no HTML tags (since user said only text)
-    // Actually, sending as plain text to avoid parse errors and just be normal text.
-    const cleanText = text.replace(/<[^>]*>?/gm, ''); // remove html if any
-    const formattedMsg = `📢 إشعار عام من إدارة المنصة:\n\n${cleanText}`;
-    
-    for (const chatId of recipients) {
+    const cleanText = (text || '').replace(/<[^>]*>?/gm, '').trim();
+    if (!cleanText) return { success: false, error: 'نص الإشعار فارغ' };
+    const formattedMsg = `📢 إشعار رسمي من إدارة توصيلة 🚖:\n\n${cleanText}`;
+
+    // 1. Send to Official Channel
+    if (target === 'channel' || target === 'all') {
         try {
-            await sendMessage(chatId, formattedMsg, { parse_mode: '' }); // send as plain text
-            sentCount++;
-        } catch (e) {
+            const res = await sendMessage(REQUIRED_CHANNEL, formattedMsg, { parse_mode: '' });
+            if (res && res.ok) sentCount++;
+            else failedCount++;
+        } catch (_) {
             failedCount++;
         }
     }
-    return { success: true, sentCount, failedCount, total: recipients.size };
+
+    // 2. Send to Discussion Group
+    if (target === 'group' || target === 'all') {
+        try {
+            const res = await sendMessage(REQUIRED_GROUP, formattedMsg, { parse_mode: '' });
+            if (res && res.ok) sentCount++;
+            else failedCount++;
+        } catch (_) {
+            failedCount++;
+        }
+    }
+
+    // 3. Send to Subscribers / Registered Users
+    if (target === 'subscribers' || target === 'all') {
+        const recipients = new Set();
+        if (ADMIN_CHAT_ID) recipients.add(String(ADMIN_CHAT_ID));
+        
+        // Add known registered users
+        (db.memoryState.customers || []).forEach(c => {
+            if (c.telegramChatId) recipients.add(String(c.telegramChatId));
+        });
+        (db.memoryState.drivers || []).forEach(d => {
+            if (d.telegramChatId) recipients.add(String(d.telegramChatId));
+        });
+        
+        // Add all tracked subscribers
+        (db.memoryState.botSubscribers || []).forEach(chatId => {
+            recipients.add(String(chatId));
+        });
+
+        for (const chatId of recipients) {
+            try {
+                const res = await sendMessage(chatId, formattedMsg, { parse_mode: '' });
+                if (res && res.ok) sentCount++;
+                else failedCount++;
+            } catch (e) {
+                failedCount++;
+            }
+        }
+    }
+
+    return { success: true, sentCount, failedCount, target };
 }
 
-module.exports = { startBot, stopBot, sendAdminNotification, broadcastNotification, notifyUser, sendMessage };
+module.exports = {
+    startBot,
+    stopBot,
+    sendAdminNotification,
+    broadcastNotification,
+    notifyUser,
+    sendMessage,
+    askGroqAI,
+    checkUserSubscription,
+    getBannedUsers,
+    unbanUser
+};

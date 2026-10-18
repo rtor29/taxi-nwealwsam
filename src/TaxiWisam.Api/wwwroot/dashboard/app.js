@@ -365,6 +365,7 @@ function switchTab(tabName) {
                     if (typeof loadBannersConfig === 'function') loadBannersConfig(); 
                     break;
                 case 'telegram': 
+                    if (typeof loadTelegramBannedList === 'function') loadTelegramBannedList();
                     break;
             }
         } catch (loaderErr) {
@@ -6314,15 +6315,225 @@ async function deleteAd(id) {
     } catch(e) { showToast('خطأ في الحذف', 'error'); }
 }
 
-// ===== Telegram Notification =====
-async function sendTelegramNotification() {
-    var msg = document.getElementById('tg-notify-msg').value.trim();
-    if (!msg) { showToast('اكتب الرسالة أولاً', 'error'); return; }
+// ===== Telegram Notification & Broadcast System =====
+let _telegramBannedCache = { ips: [], tgUsers: [] };
+
+function updateTelegramPreview() {
+    const input = document.getElementById('tg-notify-msg');
+    const preview = document.getElementById('tg-live-preview');
+    const counter = document.getElementById('tg-msg-counter');
+    if (!input || !preview) return;
+
+    const val = input.value;
+    if (counter) counter.textContent = `${val.length} حرف`;
+
+    if (!val.trim()) {
+        preview.innerHTML = '<i>اكتب نصاً في المربع أعلاه لمشاهدة المعاينة الفورية..</i>';
+    } else {
+        const escaped = val.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        preview.innerHTML = `📢 <b>إشعار رسمي من إدارة توصيلة 🚖:</b><br><br>${escaped.replace(/\n/g, '<br>')}`;
+    }
+}
+
+function insertEmojiIntoBroadcast(emoji) {
+    const input = document.getElementById('tg-notify-msg');
+    if (!input) return;
+    const start = input.selectionStart || input.value.length;
+    const end = input.selectionEnd || input.value.length;
+    const text = input.value;
+    input.value = text.substring(0, start) + emoji + text.substring(end);
+    input.focus();
+    input.selectionStart = input.selectionEnd = start + emoji.length;
+    updateTelegramPreview();
+}
+
+async function sendTelegramBroadcast() {
+    const msgEl = document.getElementById('tg-notify-msg');
+    const targetEl = document.getElementById('tg-broadcast-target');
+    const btn = document.getElementById('btn-tg-broadcast');
+    
+    const msg = msgEl ? msgEl.value.trim() : '';
+    const target = targetEl ? targetEl.value : 'subscribers';
+
+    if (!msg) {
+        showToast('يرجى كتابة نص الإشعار أولاً ⚠️', 'error');
+        return;
+    }
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري الإرسال عبر خوادم تيليجرام...';
+    }
+
     try {
-        await fetch('/api/admin/telegram/notify', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+localStorage.getItem('admin_token')}, body:JSON.stringify({message:msg}) });
-        showToast('تم الإرسال عبر تيليجرام ✅');
-        document.getElementById('tg-notify-msg').value = '';
-    } catch(e) { showToast('خطأ في الإرسال', 'error'); }
+        const res = await fetch('/api/admin/telegram/broadcast', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + (localStorage.getItem('admin_token') || 'admin')
+            },
+            body: JSON.stringify({ message: msg, target })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(`تم إرسال الإشعار بنجاح ✅ (تم إرساله إلى ${data.sentCount || 1} جهة)`);
+            if (msgEl) msgEl.value = '';
+            updateTelegramPreview();
+        } else {
+            showToast('تعذر الإرسال: ' + (data.error || 'خطأ غير متوقع'), 'error');
+        }
+    } catch (err) {
+        showToast('خطأ في الاتصال بالخادم: ' + err.message, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> إرسال الإشعار فوراً';
+        }
+    }
+}
+
+// Fallback legacy function
+async function sendTelegramNotification() {
+    return sendTelegramBroadcast();
+}
+
+async function loadTelegramBannedList() {
+    const tbody = document.getElementById('tg-banned-tbody');
+    const countBadge = document.getElementById('tg-banned-count');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-400"><i class="fa-solid fa-circle-notch fa-spin text-sky-500"></i> جاري جلب قائمة المحظورين وسجلات درع الأمان...</td></tr>';
+
+    try {
+        const res = await fetch('/api/admin/telegram/banned', {
+            headers: {
+                'Authorization': 'Bearer ' + (localStorage.getItem('admin_token') || 'admin')
+            }
+        });
+        const data = await res.json();
+
+        if (!data.success) {
+            tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-rose-500">تعذر تحميل القائمة: ${data.error || 'خطأ غير معروف'}</td></tr>`;
+            return;
+        }
+
+        _telegramBannedCache = {
+            ips: data.bannedIps || [],
+            tgUsers: data.bannedTelegramUsers || []
+        };
+
+        renderTelegramBannedTable(_telegramBannedCache);
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-rose-500">خطأ في الاتصال: ${err.message}</td></tr>`;
+    }
+}
+
+function renderTelegramBannedTable(data, filterQuery = '') {
+    const tbody = document.getElementById('tg-banned-tbody');
+    const countBadge = document.getElementById('tg-banned-count');
+    if (!tbody) return;
+
+    const ips = data.ips || [];
+    const tgUsers = data.tgUsers || [];
+    const totalCount = ips.length + tgUsers.length;
+    if (countBadge) countBadge.textContent = `${totalCount} محظور`;
+
+    const q = (filterQuery || '').toLowerCase().trim();
+    let rows = [];
+
+    // IP bans from Honeypot
+    ips.forEach(item => {
+        const ip = typeof item === 'string' ? item : item.ip;
+        const reason = (typeof item === 'object' && item.reason) ? item.reason : 'مصيدة Honeypot WAF';
+        const path = (typeof item === 'object' && item.path) ? item.path : '-';
+        const time = (typeof item === 'object' && item.bannedAt) ? new Date(item.bannedAt).toLocaleString('ar-IQ') : 'مسجل سابقاً';
+
+        if (!q || ip.toLowerCase().includes(q) || reason.toLowerCase().includes(q) || path.toLowerCase().includes(q)) {
+            rows.push(`
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="p-3 font-mono font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-network-wired text-rose-500"></i>
+                        <span>${ip}</span>
+                    </td>
+                    <td class="p-3">
+                        <span class="inline-block px-2 py-0.5 rounded-lg text-[10px] font-bold bg-rose-100 text-rose-700">درع المصيدة (Honeypot IP)</span>
+                    </td>
+                    <td class="p-3 font-mono text-slate-600">${path}</td>
+                    <td class="p-3 text-slate-500 text-[11px]">${time}</td>
+                    <td class="p-3 text-center">
+                        <button type="button" onclick="unbanTelegramEntity('ip', '${ip}')" class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs transition shadow-2xs">
+                            فك الحظر 🔓
+                        </button>
+                    </td>
+                </tr>
+            `);
+        }
+    });
+
+    // Telegram User bans
+    tgUsers.forEach(u => {
+        const cid = u.chatId || u.id;
+        const reason = u.reason || 'إرسال مفرط / مشبوه';
+        const snippet = u.snippet || '-';
+        const time = u.bannedAt ? new Date(u.bannedAt).toLocaleString('ar-IQ') : 'مؤخراً';
+
+        if (!q || String(cid).includes(q) || reason.toLowerCase().includes(q) || snippet.toLowerCase().includes(q)) {
+            rows.push(`
+                <tr class="hover:bg-slate-50 transition">
+                    <td class="p-3 font-mono font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-brands fa-telegram text-sky-500"></i>
+                        <span>User: ${cid}</span>
+                    </td>
+                    <td class="p-3">
+                        <span class="inline-block px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-800">تيليجرام (Flood / Injection)</span>
+                    </td>
+                    <td class="p-3 text-slate-600 text-[11px] truncate max-w-[200px]" title="${snippet}">${snippet}</td>
+                    <td class="p-3 text-slate-500 text-[11px]">${time}</td>
+                    <td class="p-3 text-center">
+                        <button type="button" onclick="unbanTelegramEntity('telegram', '${cid}')" class="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs transition shadow-2xs">
+                            فك الحظر 🔓
+                        </button>
+                    </td>
+                </tr>
+            `);
+        }
+    });
+
+    if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400 font-bold">لا توجد سجلات محظورة ${q ? 'تطابق البحث' : 'حالياً (النظام آمن 🟢)'}</td></tr>`;
+    } else {
+        tbody.innerHTML = rows.join('');
+    }
+}
+
+function filterTelegramBannedTable() {
+    const input = document.getElementById('tg-banned-search');
+    const q = input ? input.value : '';
+    renderTelegramBannedTable(_telegramBannedCache, q);
+}
+
+async function unbanTelegramEntity(type, target) {
+    if (!confirm(`هل أنت متأكد من فك الحظر عن (${target})؟`)) return;
+
+    try {
+        const res = await fetch('/api/admin/telegram/unban', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + (localStorage.getItem('admin_token') || 'admin')
+            },
+            body: JSON.stringify({ type, target })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(data.message || 'تم فك الحظر بنجاح ✅');
+            loadTelegramBannedList();
+        } else {
+            showToast('تعذر فك الحظر: ' + (data.error || 'خطأ غير معروف'), 'error');
+        }
+    } catch (err) {
+        showToast('خطأ في الاتصال: ' + err.message, 'error');
+    }
 }
 
 // ===== Feature 8: Fleet Operations Log =====

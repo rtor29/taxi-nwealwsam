@@ -14,6 +14,36 @@ const telegramBot = require('./modules/telegram/telegramBot');
 const pricingService = require('./modules/pricing/pricingService');
 const complaintService = require('./modules/complaint/complaintService');
 
+// ---[ Honeypot WAF & IP Ban Shield ]---
+const _bannedIpSet = new Set();
+function _initBannedIps() {
+    try {
+        if (db.memoryState && Array.isArray(db.memoryState.bannedIps)) {
+            db.memoryState.bannedIps.forEach(item => {
+                const ip = typeof item === 'string' ? item : item.ip;
+                if (ip) _bannedIpSet.add(ip);
+            });
+        }
+    } catch (_) {}
+}
+
+const HONEYPOT_PATTERNS = [
+    /^\/admin-portal-login(\/|$)/i,
+    /^\/\.env/i,
+    /^\/\.git/i,
+    /^\/actuator(\/|$)/i,
+    /^\/wp-admin(\/|$)/i,
+    /^\/phpmyadmin(\/|$)/i,
+    /^\/cgi-bin(\/|$)/i,
+    /^\/xmlrpc\.php/i,
+    /^\/api\/v1\/eval/i
+];
+
+function isHoneypotProbe(path) {
+    if (!path || typeof path !== 'string') return false;
+    return HONEYPOT_PATTERNS.some(regex => regex.test(path));
+}
+
 // ---[ Rate Limiter: in-memory, per IP ]---
 const _rateLimitMap = new Map(); // ip -> { count, resetAt }
 function _rateLimit(key, maxRequests = 60, windowMs = 60000) {
@@ -234,6 +264,7 @@ function parseJsonBody(req) {
 async function startServer() {
     // 1. Initialize PostgreSQL & Database state
     await db.init();
+    _initBannedIps();
     try { telegramBot.startBot(); } catch(e) { console.error('[TelegramBot] Start error:', e.message); }
 
     const server = http.createServer(async (req, res) => {
@@ -299,6 +330,42 @@ async function startServer() {
         const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
         const pathname = parsedUrl.pathname;
         const method = req.method;
+
+        // ---[ 1. Honeypot WAF & IP Ban Shield Check ]---
+        if (clientIp && _bannedIpSet.has(clientIp)) {
+            res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(JSON.stringify({ success: false, error: 'Forbidden - المحاولة محظورة من درع الأمان WAF' }));
+        }
+
+        if (isHoneypotProbe(pathname)) {
+            console.warn(`[Honeypot WAF Trap Triggered] IP: ${clientIp} requested ${pathname}`);
+            if (clientIp && clientIp !== '127.0.0.1' && clientIp !== '::1') {
+                _bannedIpSet.add(clientIp);
+                if (!db.memoryState.bannedIps) db.memoryState.bannedIps = [];
+                const existing = db.memoryState.bannedIps.find(x => (typeof x === 'string' ? x : x.ip) === clientIp);
+                if (!existing) {
+                    db.memoryState.bannedIps.push({
+                        ip: clientIp,
+                        reason: 'honeypot_trap',
+                        path: pathname,
+                        bannedAt: new Date().toISOString()
+                    });
+                    db.saveStateSnapshot();
+                }
+                // Send immediate Telegram alert
+                try {
+                    telegramBot.sendAdminNotification(
+                        `🚨 <b>درع الأمان WAF - مصيدة Honeypot!</b>\n` +
+                        `تم رصد محاولة اختراق وحظر الـ IP فوراً:\n` +
+                        `🌐 <b>IP:</b> <code>${clientIp}</code>\n` +
+                        `🎯 <b>المسار:</b> <code>${pathname}</code>\n` +
+                        `⏰ <b>التوقيت:</b> ${new Date().toLocaleTimeString('ar-IQ')}`
+                    );
+                } catch (_) {}
+            }
+            res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+            return res.end(JSON.stringify({ success: false, error: 'Access Denied - Security Threat Detected' }));
+        }
 
         const sendJson = (data, statusCode = 200) => {
             res.writeHead(statusCode, {
@@ -4071,21 +4138,97 @@ async function startServer() {
             return sendJson({ success: true });
         }
 
-        // Telegram bot admin
-        if (pathname === '/api/admin/telegram/notify' && method === 'POST') {
+        // Telegram bot admin: Broadcast
+        if (pathname === '/api/admin/telegram/broadcast' && method === 'POST') {
+            const authUser = getAuthUser(req);
+            if (!authUser || authUser.role !== 'Admin') {
+                return sendJson({ success: false, error: 'Unauthorized' }, 401);
+            }
             const body = await parseJsonBody(req);
             const msg = body.message || '';
-            let result = { success: true, sentCount: 1 };
+            const target = body.target || 'subscribers';
+            let result = { success: true };
             try {
                 if (typeof telegramBot.broadcastNotification === 'function') {
-                    result = await telegramBot.broadcastNotification(msg);
+                    result = await telegramBot.broadcastNotification(msg, target);
                 } else {
                     await telegramBot.sendAdminNotification(msg);
                 }
             } catch(e) {
                 console.error('[BroadcastNotification Error]:', e.message);
+                result = { success: false, error: e.message };
             }
             return sendJson(result);
+        }
+
+        // Telegram bot admin: Legacy notify
+        if (pathname === '/api/admin/telegram/notify' && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const msg = body.message || '';
+            const target = body.target || 'subscribers';
+            let result = { success: true, sentCount: 1 };
+            try {
+                if (typeof telegramBot.broadcastNotification === 'function') {
+                    result = await telegramBot.broadcastNotification(msg, target);
+                } else {
+                    await telegramBot.sendAdminNotification(msg);
+                }
+            } catch(e) {
+                console.error('[BroadcastNotification Error]:', e.message);
+                result = { success: false, error: e.message };
+            }
+            return sendJson(result);
+        }
+
+        // Telegram bot admin: Get Banned List (IPs & Telegram Users)
+        if (pathname === '/api/admin/telegram/banned' && method === 'GET') {
+            const authUser = getAuthUser(req);
+            if (!authUser || authUser.role !== 'Admin') {
+                return sendJson({ success: false, error: 'Unauthorized' }, 401);
+            }
+            const bannedIps = (db.memoryState.bannedIps || []).map(item => {
+                if (typeof item === 'string') {
+                    return { ip: item, reason: 'honeypot_trap', path: '-', bannedAt: new Date().toISOString() };
+                }
+                return item;
+            });
+            const bannedTelegramUsers = typeof telegramBot.getBannedUsers === 'function' ? telegramBot.getBannedUsers() : [];
+            return sendJson({
+                success: true,
+                bannedIps,
+                bannedTelegramUsers
+            });
+        }
+
+        // Telegram bot admin: Unban entity (IP or Telegram user)
+        if (pathname === '/api/admin/telegram/unban' && method === 'POST') {
+            const authUser = getAuthUser(req);
+            if (!authUser || authUser.role !== 'Admin') {
+                return sendJson({ success: false, error: 'Unauthorized' }, 401);
+            }
+            const body = await parseJsonBody(req);
+            const type = body.type || 'ip'; // 'ip' or 'telegram'
+            const target = String(body.target || '').trim();
+
+            if (!target) {
+                return sendJson({ success: false, error: 'Target identifier required' }, 400);
+            }
+
+            if (type === 'ip') {
+                _bannedIpSet.delete(target);
+                if (Array.isArray(db.memoryState.bannedIps)) {
+                    db.memoryState.bannedIps = db.memoryState.bannedIps.filter(x => (typeof x === 'string' ? x : x.ip) !== target);
+                    db.saveStateSnapshot();
+                }
+                return sendJson({ success: true, message: `تم رفع الحظر عن الـ IP: ${target}` });
+            } else if (type === 'telegram') {
+                if (typeof telegramBot.unbanUser === 'function') {
+                    telegramBot.unbanUser(target);
+                }
+                return sendJson({ success: true, message: `تم رفع الحظر عن مستخدم التيليجرام: ${target}` });
+            }
+
+            return sendJson({ success: false, error: 'نوع الحظر غير معروف' }, 400);
         }
 
         // Registration fields config

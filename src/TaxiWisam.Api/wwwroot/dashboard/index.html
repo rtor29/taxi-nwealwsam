@@ -2315,28 +2315,149 @@
 
         <!-- Telegram Tab -->
         <section id="tab-telegram" class="tab-content hidden" style="display:none">
-            <div class="flex items-center justify-between mb-6"><h2 class="text-xl font-black text-slate-900" style="color: #000000;">🤖 بوت تيليجرام</h2></div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700">
-                    <h3 class="text-lg font-bold text-white mb-4"><i class="fa-brands fa-telegram text-sky-400"></i> معلومات البوت</h3>
-                    <div class="space-y-3 text-sm">
-                        <div class="flex justify-between"><span class="text-slate-400">رابط البوت:</span><a href="https://t.me/tawseela_najaf_bot" target="_blank" class="text-sky-400 font-bold">@tawseela_najaf_bot</a></div>
-                        <div class="flex justify-between"><span class="text-slate-400">الحالة:</span><span class="text-emerald-400 font-bold">🟢 يعمل</span></div>
-                        <div class="flex justify-between"><span class="text-slate-400">OTP عبر:</span><span class="text-white font-bold">VerifyWay (Telegram)</span></div>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <div>
+                    <h2 class="text-xl font-black text-slate-900" style="color: #000000;">🤖 منظومة تيليجرام والذكاء الاصطناعي وجدار الحماية</h2>
+                    <p class="text-xs text-slate-500 mt-1">إدارة البوت الرسمي، محرك الدعم الذكي Groq AI، النشر الموجه، وقائمة حظر المتسللين (Honeypot WAF)</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="loadTelegramBannedList()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-rotate text-sky-500"></i> تحديث القوائم
+                    </button>
+                    <a href="https://t.me/tawseela_najaf_bot" target="_blank" class="px-3 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+                        <i class="fa-brands fa-telegram"></i> فتح البوت
+                    </a>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Bot & AI System Specs -->
+                <div class="bg-slate-900 text-white rounded-2xl p-6 border border-slate-800 shadow-md flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="px-2.5 py-1 rounded-lg bg-sky-500/20 text-sky-400 font-bold text-xs flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> متصل ويعمل
+                            </span>
+                            <i class="fa-brands fa-telegram text-2xl text-sky-400"></i>
+                        </div>
+                        <h3 class="text-base font-black text-white mb-3">حالة البوت والذكاء الاصطناعي</h3>
+                        <div class="space-y-2.5 text-xs text-slate-300">
+                            <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                                <span class="text-slate-400">معرف البوت:</span>
+                                <a href="https://t.me/tawseela_najaf_bot" target="_blank" class="text-sky-400 font-mono font-bold hover:underline">@tawseela_najaf_bot</a>
+                            </div>
+                            <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                                <span class="text-slate-400">القناة الإلزامية:</span>
+                                <a href="https://t.me/tawseelaiq" target="_blank" class="text-sky-400 font-mono font-bold hover:underline">@tawseelaiq</a>
+                            </div>
+                            <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                                <span class="text-slate-400">كروب المحادثة:</span>
+                                <a href="https://t.me/tawseelaiqc" target="_blank" class="text-sky-400 font-mono font-bold hover:underline">@tawseelaiqc</a>
+                            </div>
+                            <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                                <span class="text-slate-400">محرك الدعم الفني:</span>
+                                <span class="text-amber-400 font-bold">Groq AI (Llama 3.1)</span>
+                            </div>
+                            <div class="flex justify-between items-center py-1">
+                                <span class="text-slate-400">درع الحماية:</span>
+                                <span class="text-emerald-400 font-bold">Honeypot WAF Traps 🛡️</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="mt-4 p-3 bg-slate-900 rounded-xl text-xs text-slate-400">
-                        <p class="font-bold text-white mb-1">أوامر البوت:</p>
-                        <p>/start - القائمة الرئيسية</p>
-                        <p>/admin - لوحة الإدارة (للمشرف فقط)</p>
-                        <p>/status - حالة الحساب</p>
+                    <div class="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400 space-y-1">
+                        <div class="flex items-center gap-1.5"><i class="fa-solid fa-shield-halved text-emerald-400"></i> حظر الترويج والروابط في الكروب مفعّل.</div>
+                        <div class="flex items-center gap-1.5"><i class="fa-solid fa-bolt text-amber-400"></i> نظام الترحيب الذكي Zero-Token نشط.</div>
                     </div>
                 </div>
-                <div class="bg-slate-800/60 rounded-2xl p-6 border border-slate-700">
-                    <h3 class="text-lg font-bold text-white mb-4">📤 إرسال إشعار عبر البوت</h3>
-                    <div class="space-y-3">
-                        <textarea id="tg-notify-msg" rows="4" placeholder="اكتب الرسالة المراد إرسالها لجميع المستخدمين المشتركين بالبوت..." class="w-full bg-slate-900 border border-slate-600 text-white rounded-xl px-4 py-3 text-sm"></textarea>
-                        <button onclick="sendTelegramNotification()" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-xl"><i class="fa-brands fa-telegram"></i> إرسال عبر تيليجرام</button>
+
+                <!-- Broadcast Announcement Section -->
+                <div class="lg:col-span-2 bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-base font-black text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-bullhorn text-sky-500"></i> إرسال إشعار وبث موجه (Broadcast)
+                        </h3>
+                        <span class="text-xs text-slate-400">يدعم الرموز التعبيرية والتنسيق</span>
                     </div>
+
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1.5">جهة الاستهداف (Target Audience):</label>
+                                <select id="tg-broadcast-target" class="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-sky-500 focus:outline-none">
+                                    <option value="subscribers">👥 المشتركون والمسجلون بالبوت فقط</option>
+                                    <option value="channel">📢 القناة الرسمية العامة (@tawseelaiq)</option>
+                                    <option value="group">💬 كروب الاستفسارات والمحادثة (@tawseelaiqc)</option>
+                                    <option value="all">🚀 إرسال شامل للجميع (القناة + الكروب + المشتركون)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 mb-1.5">إدراج رمز تعبيري سريع:</label>
+                                <div class="flex items-center gap-1.5 pt-0.5">
+                                    <button type="button" onclick="insertEmojiIntoBroadcast('🚖')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold">🚖</button>
+                                    <button type="button" onclick="insertEmojiIntoBroadcast('🎉')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold">🎉</button>
+                                    <button type="button" onclick="insertEmojiIntoBroadcast('📢')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold">📢</button>
+                                    <button type="button" onclick="insertEmojiIntoBroadcast('✨')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold">✨</button>
+                                    <button type="button" onclick="insertEmojiIntoBroadcast('📍')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold">📍</button>
+                                    <button type="button" onclick="insertEmojiIntoBroadcast('⚠️')" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold">⚠️</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between items-center mb-1">
+                                <label class="text-xs font-bold text-slate-700">نص الرسالة أو الإشعار:</label>
+                                <span id="tg-msg-counter" class="text-[11px] text-slate-400">0 حرف</span>
+                            </div>
+                            <textarea id="tg-notify-msg" rows="3" oninput="updateTelegramPreview()" placeholder="اكتب نص الإشعار هنا.. مثال: زبائننا الكرام، يسرنا الإعلان عن توفير رحلات مباشرة لجامعة الكوفة..." class="w-full bg-slate-50 border border-slate-300 text-slate-800 rounded-xl px-4 py-2.5 text-xs focus:ring-2 focus:ring-sky-500 focus:outline-none"></textarea>
+                        </div>
+
+                        <!-- Live Preview Box -->
+                        <div class="bg-sky-50/60 rounded-xl p-3 border border-sky-100">
+                            <span class="block text-[11px] font-bold text-sky-800 mb-1">معاينة شكل الإشعار عند المستلم:</span>
+                            <div id="tg-live-preview" class="text-xs text-slate-700 whitespace-pre-wrap font-sans bg-white p-2.5 rounded-lg border border-sky-100 min-h-[38px]">
+                                <i>اكتب نصاً في المربع أعلاه لمشاهدة المعاينة الفورية..</i>
+                            </div>
+                        </div>
+
+                        <button type="button" id="btn-tg-broadcast" onclick="sendTelegramBroadcast()" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 shadow-sm">
+                            <i class="fa-solid fa-paper-plane"></i> إرسال الإشعار فوراً
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Banned Entities & Honeypot WAF Traps Table -->
+            <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                    <div>
+                        <h3 class="text-base font-black text-slate-900 flex items-center gap-2">
+                            <i class="fa-solid fa-shield-virus text-rose-500"></i> قائمة المحظورين ودرع المصيدة (Honeypot WAF & Bot Defense)
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-0.5">عناوين الـ IP التي حاولت استكشاف مسارات مشبوهة ومستخدمو التيليجرام المحظورون لسلوك مفرط</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="tg-banned-search" oninput="filterTelegramBannedTable()" placeholder="بحث في المحظورين (IP أو سبب)..." class="bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                        <span id="tg-banned-count" class="px-2.5 py-1 rounded-xl bg-rose-50 text-rose-600 font-bold text-xs border border-rose-100">0 محظور</span>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-slate-100">
+                    <table class="w-full text-right text-xs">
+                        <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                            <tr>
+                                <th class="p-3">المعرف / IP</th>
+                                <th class="p-3">نوع الحظر</th>
+                                <th class="p-3">سبب الحظر / المسار</th>
+                                <th class="p-3">تاريخ ووقت الحظر</th>
+                                <th class="p-3 text-center">الإجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tg-banned-tbody" class="divide-y divide-slate-100 text-slate-700 font-medium">
+                            <tr>
+                                <td colspan="5" class="p-6 text-center text-slate-400">جاري تحميل سجلات الأمان...</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </section>
@@ -3478,6 +3599,6 @@
         });
     </script>
 
-    <script src="/dashboard/app.js?v=20261019_fix_nav_v3"></script>
+    <script src="/dashboard/app.js?v=20261019_telegram_groq_waf_v1"></script>
 </body>
 </html>

@@ -49,6 +49,14 @@ const config = {
         latitude: 31.9961,
         longitude: 44.3168,
         city: 'النجف الأشرف'
+    },
+
+    // Telegram Bot & Groq AI
+    telegram: {
+        botToken: process.env.TELEGRAM_BOT_TOKEN || '8904440367:AAEBLFy5DK-eM_MDqiLwQYgHIi-h-tjvyfU',
+        channel: process.env.TELEGRAM_CHANNEL || '@tawseelaiq',
+        group: process.env.TELEGRAM_GROUP || '@tawseelaiqc',
+        groqApiKey: process.env.GROQ_API_KEY || ''
     }
 };
 
