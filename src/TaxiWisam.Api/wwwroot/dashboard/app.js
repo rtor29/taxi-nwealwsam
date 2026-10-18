@@ -5518,6 +5518,7 @@ async function saveAndPublishTheme() {
     try {
         localStorage.setItem('tawseela_dashboard_theme', JSON.stringify(currentThemeSettings));
         localStorage.setItem('tawseela_web_theme', JSON.stringify(currentThemeSettings));
+        localStorage.setItem('tawseela_theme', JSON.stringify(currentThemeSettings));
 
         var res = await fetch('/api/admin/app-config/theme', {
             method: 'POST',

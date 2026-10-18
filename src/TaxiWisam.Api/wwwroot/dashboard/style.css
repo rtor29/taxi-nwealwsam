@@ -7,7 +7,19 @@
 
 @font-face {
     font-family: 'Arial Unicode MS Regular';
-    src: local('Arial Unicode MS Regular'), local('Arial Unicode MS'), local('Arial');
+    src: url('/dashboard/fonts/arial-unicode-ms.woff2') format('woff2'),
+         local('Arial Unicode MS Regular'),
+         local('Arial Unicode MS'),
+         local('Arial');
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Arial Unicode MS';
+    src: url('/dashboard/fonts/arial-unicode-ms.woff2') format('woff2'),
+         local('Arial Unicode MS Regular'),
+         local('Arial Unicode MS'),
+         local('Arial');
     font-display: swap;
 }
 
