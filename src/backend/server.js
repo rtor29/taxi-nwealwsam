@@ -3922,7 +3922,7 @@ async function startServer() {
                 primaryHover: '#14364A',
                 accentColor: '#D97706',
                 brandLogoColor: '#EBB812',
-                fontFamily: 'IBM Plex Sans Arabic',
+                fontFamily: 'Arial Unicode MS Regular',
                 fontSize: '14px',
                 bgColor: '#F8FAFC',
                 cardBg: '#FFFFFF',

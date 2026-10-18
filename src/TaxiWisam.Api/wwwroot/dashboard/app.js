@@ -5291,7 +5291,7 @@ var currentThemeSettings = {
     primaryColor: '#1B4965',
     primaryHover: '#14364A',
     accentColor: '#D97706',
-    fontFamily: 'IBM Plex Sans Arabic',
+    fontFamily: 'Arial Unicode MS Regular',
     fontSize: '14px',
     bgColor: '#F8FAFC',
     cardBg: '#FFFFFF',
@@ -5406,8 +5406,12 @@ function updateLivePreviewCard() {
     var previewFontName = document.getElementById('preview-font-name');
     var previewSizeName = document.getElementById('preview-size-name');
 
+    var fontStack = (currentThemeSettings.fontFamily && currentThemeSettings.fontFamily.indexOf('Arial Unicode MS') !== -1)
+        ? "'Arial Unicode MS Regular', 'Arial Unicode MS', 'Cairo', 'IBM Plex Sans Arabic', -apple-system, sans-serif"
+        : "'" + currentThemeSettings.fontFamily + "', 'IBM Plex Sans Arabic', -apple-system, sans-serif";
+
     if (mockContainer) {
-        mockContainer.style.fontFamily = "'" + currentThemeSettings.fontFamily + "', -apple-system, sans-serif";
+        mockContainer.style.fontFamily = fontStack;
         mockContainer.style.fontSize = currentThemeSettings.fontSize;
         if (p.isDark) {
             mockContainer.style.backgroundColor = '#0b1120';
@@ -5420,7 +5424,7 @@ function updateLivePreviewCard() {
 
     if (mockPrimaryBtn) {
         mockPrimaryBtn.style.backgroundColor = currentThemeSettings.primaryColor;
-        mockPrimaryBtn.style.fontFamily = "'" + currentThemeSettings.fontFamily + "', -apple-system, sans-serif";
+        mockPrimaryBtn.style.fontFamily = fontStack;
     }
 
     if (mockAccentIcon) {
@@ -5441,7 +5445,7 @@ window.updateLivePreviewCard = updateLivePreviewCard;
 
 function applyLiveThemeToDashboard(th) {
     if (!th) return;
-    var fontFamily = th.fontFamily || 'IBM Plex Sans Arabic';
+    var fontFamily = th.fontFamily || 'Arial Unicode MS Regular';
     var fontSize = th.fontSize || '14px';
     var primary = th.primaryColor || '#1B4965';
     var active = th.accentColor || '#D97706';
@@ -5454,6 +5458,10 @@ function applyLiveThemeToDashboard(th) {
         document.head.appendChild(styleEl);
     }
 
+    var fontStack = (fontFamily && fontFamily.indexOf('Arial Unicode MS') !== -1)
+        ? "'Arial Unicode MS Regular', 'Arial Unicode MS', 'Cairo', 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+        : "'" + fontFamily + "', 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
     var isDark = Boolean(p.isDark);
     var bg = isDark ? '#0b1120' : '#f8fafc';
     var sidebarBg = isDark ? '#0f172a' : '#ffffff';
@@ -5464,7 +5472,7 @@ function applyLiveThemeToDashboard(th) {
 
     styleEl.textContent = `
         body, html, input, button, select, textarea, p, h1, h2, h3, h4, h5, h6, table, th, td, label, div, span:not([class*="fa"]):not([class*="badge"]) {
-            font-family: '${fontFamily}', 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+            font-family: ${fontStack} !important;
         }
         body, html {
             font-size: ${fontSize} !important;
@@ -5576,8 +5584,8 @@ window.setLogoColorPreset = setLogoColorPreset;
 function resetToDefaultTheme() {
     selectThemePreset('default');
     var ffEl = document.getElementById('theme-font-family');
-    if (ffEl) ffEl.value = 'IBM Plex Sans Arabic';
-    currentThemeSettings.fontFamily = 'IBM Plex Sans Arabic';
+    if (ffEl) ffEl.value = 'Arial Unicode MS Regular';
+    currentThemeSettings.fontFamily = 'Arial Unicode MS Regular';
     selectFontSize('14px');
     setLogoColorPreset('#EBB812');
     updateLivePreviewCard();
@@ -5595,7 +5603,7 @@ async function loadCustomizationSettings() {
             currentThemeSettings = Object.assign({}, currentThemeSettings, th);
             selectThemePreset(th.preset || 'default');
             if (document.getElementById('theme-font-family')) {
-                document.getElementById('theme-font-family').value = th.fontFamily || 'IBM Plex Sans Arabic';
+                document.getElementById('theme-font-family').value = th.fontFamily || 'Arial Unicode MS Regular';
                 currentThemeSettings.fontFamily = document.getElementById('theme-font-family').value;
             }
             if (th.fontSize) {

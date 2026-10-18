@@ -57,7 +57,10 @@
                     var primaryColor = th.dashPrimaryColor || '#1B4965';
                     var activeColor = th.dashActiveColor || '#1B4965';
                     var borderColor = th.dashBorderColor || '#e2e8f0';
-                    var fontFamily = th.dashFontFamily || 'IBM Plex Sans Arabic';
+                    var fontFamily = th.dashFontFamily || 'Arial Unicode MS Regular';
+                    var fontStack = (fontFamily && fontFamily.indexOf('Arial Unicode MS') !== -1)
+                        ? '"Arial Unicode MS Regular", "Arial Unicode MS", "Cairo", "IBM Plex Sans Arabic", sans-serif'
+                        : '"' + fontFamily + '", "IBM Plex Sans Arabic", sans-serif';
                     var strokeColor = th.dashFontStrokeColor || '#000000';
                     var strokeWidth = th.dashFontStrokeWidth || '0px';
                     var strokeCss = (strokeWidth && strokeWidth !== '0px' && strokeWidth !== '0')
@@ -66,7 +69,7 @@
 
                     var s = document.createElement('style');
                     s.id = 'dynamic-dashboard-theme-style';
-                    s.textContent = 'body, html, input, button, select, textarea, p, h1, h2, h3, h4, h5, h6, table, th, td, label, div, span:not([class*="fa"]):not([class*="badge"]) { font-family: "' + fontFamily + '", "IBM Plex Sans Arabic", sans-serif !important; ' + strokeCss + ' } i, i[class*="fa"], .fa, .fas, .far, .fab, .fa-solid, .fa-regular, .fa-brands, [class^="fa-"], [class*=" fa-"] { font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands", "FontAwesome" !important; font-style: normal !important; -webkit-text-stroke: 0 !important; } body { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } main { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } #sidebar-drawer, aside { background-color: ' + sidebarBg + ' !important; border-color: ' + borderColor + ' !important; } header { background-color: ' + headerBg + ' !important; border-color: ' + borderColor + ' !important; } .bg-white, .bg-slate-50, .bg-slate-100 { background-color: ' + cardBg + ' !important; border-color: ' + borderColor + ' !important; } .text-slate-900, .text-slate-800, h1, h2, h3, h4, h5, h6, .font-black { color: ' + headingColor + ' !important; } .text-slate-700, .text-slate-600, .text-slate-500, p, label { color: ' + textColor + ' !important; } .border-slate-100, .border-slate-200 { border-color: ' + borderColor + ' !important; } .tab-btn.active { background-color: #f1f5f9 !important; color: ' + activeColor + ' !important; border-right-color: ' + activeColor + ' !important; } .tab-btn.active i { color: ' + activeColor + ' !important; } .btn-theme-primary { background-color: ' + primaryColor + ' !important; border-color: ' + primaryColor + ' !important; color: #ffffff !important; }';
+                    s.textContent = 'body, html, input, button, select, textarea, p, h1, h2, h3, h4, h5, h6, table, th, td, label, div, span:not([class*="fa"]):not([class*="badge"]) { font-family: ' + fontStack + ' !important; ' + strokeCss + ' } i, i[class*="fa"], .fa, .fas, .far, .fab, .fa-solid, .fa-regular, .fa-brands, [class^="fa-"], [class*=" fa-"] { font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands", "FontAwesome" !important; font-style: normal !important; -webkit-text-stroke: 0 !important; } body { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } main { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } #sidebar-drawer, aside { background-color: ' + sidebarBg + ' !important; border-color: ' + borderColor + ' !important; } header { background-color: ' + headerBg + ' !important; border-color: ' + borderColor + ' !important; } .bg-white, .bg-slate-50, .bg-slate-100 { background-color: ' + cardBg + ' !important; border-color: ' + borderColor + ' !important; } .text-slate-900, .text-slate-800, h1, h2, h3, h4, h5, h6, .font-black { color: ' + headingColor + ' !important; } .text-slate-700, .text-slate-600, .text-slate-500, p, label { color: ' + textColor + ' !important; } .border-slate-100, .border-slate-200 { border-color: ' + borderColor + ' !important; } .tab-btn.active { background-color: #f1f5f9 !important; color: ' + activeColor + ' !important; border-right-color: ' + activeColor + ' !important; } .tab-btn.active i { color: ' + activeColor + ' !important; } .btn-theme-primary { background-color: ' + primaryColor + ' !important; border-color: ' + primaryColor + ' !important; color: #ffffff !important; }';
                     document.head.appendChild(s);
                 }
             }
@@ -1889,11 +1892,13 @@
                             <div>
                                 <label class="block text-xs font-bold text-slate-700 mb-2">نوع الخط العربي (Font Family)</label>
                                 <select id="theme-font-family" onchange="onTypographyChange()" class="w-full bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs md:text-sm text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-[#1B4965]/20 focus:border-[#1B4965] transition cursor-pointer">
+                                    <option value="Arial Unicode MS Regular" selected>Arial Unicode MS Regular (خط الخريطة والبحث - عالي الدقة)</option>
                                     <option value="IBM Plex Sans Arabic">IBM Plex Sans Arabic (الافتراضي الرسمي - عالي الوضوح)</option>
                                     <option value="Tajawal">Tajawal (تجوال - عصري وناعم)</option>
                                     <option value="Almarai">Almarai (المراعي - عريض وبارز)</option>
+                                    <option value="Cairo">Cairo (كيرو - أنيق ورقمي)</option>
                                 </select>
-                                <p class="text-[11px] text-slate-400 mt-1.5">خطوط مدروسة ومتوافقة بالكامل مع جميع أجهزة الويب والموبايل.</p>
+                                <p class="text-[11px] text-slate-400 mt-1.5">خطوط مدروسة ومتوافقة بالكامل مع جميع أجهزة الويب والموبايل وخريطة توصيله.</p>
                             </div>
 
                             <!-- Font Size Scale -->
