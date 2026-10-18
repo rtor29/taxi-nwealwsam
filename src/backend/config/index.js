@@ -1,6 +1,25 @@
 const path = require('path');
 const fs = require('fs');
 
+// Auto-load root .env into process.env if present
+try {
+    const envPath = path.resolve(__dirname, '..', '..', '..', '.env');
+    if (fs.existsSync(envPath)) {
+        const envContent = fs.readFileSync(envPath, 'utf8');
+        envContent.split(/\r?\n/).forEach(line => {
+            const trimmed = line.trim();
+            if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+                const idx = trimmed.indexOf('=');
+                const key = trimmed.substring(0, idx).trim();
+                const val = trimmed.substring(idx + 1).trim().replace(/^['"](.*)['"]$/, '$1');
+                if (key && process.env[key] === undefined) {
+                    process.env[key] = val;
+                }
+            }
+        });
+    }
+} catch (_) {}
+
 let googleSecretConfig = {};
 try {
     const secPath = path.join(__dirname, '..', '..', '..', 'google_client_secret.json');
