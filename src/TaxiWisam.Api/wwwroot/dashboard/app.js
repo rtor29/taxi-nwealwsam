@@ -3762,16 +3762,18 @@ function generateUniquePassword() {
 }
 
 function generateCaptainPassword() {
-    const pass = generateUniquePassword();
     const input = document.getElementById('admin-drv-password');
-    if (input) input.value = pass;
+    if (!input) return;
+    const pass = generateUniquePassword();
+    input.value = pass;
     showToast('تم توليد كلمة مرور فريدة وغير مكررة بنجاح 🔑');
 }
 
 function generateUniquePasswordToInput(inputId) {
-    const pass = generateUniquePassword();
     const input = document.getElementById(inputId);
-    if (input) input.value = pass;
+    if (!input) return;
+    const pass = generateUniquePassword();
+    input.value = pass;
     showToast('تم توليد كلمة مرور فريدة وغير مكررة 🔑');
 }
 
@@ -3836,7 +3838,6 @@ async function submitAdminAddCaptain(event) {
     const fullName = document.getElementById('admin-drv-name')?.value?.trim() || '';
     const phoneNumber = document.getElementById('admin-drv-phone')?.value?.trim() || '';
     const email = document.getElementById('admin-drv-email')?.value?.trim() || '';
-    const password = document.getElementById('admin-drv-password')?.value || '';
 
     const vehicleMake = document.getElementById('admin-drv-vehicle')?.value?.trim() || '';
     const vehiclePlate = document.getElementById('admin-drv-plate')?.value?.trim() || '';
@@ -3853,7 +3854,6 @@ async function submitAdminAddCaptain(event) {
         fullName,
         phoneNumber,
         email,
-        password,
         vehicleMake,
         vehiclePlate,
         vehicleColor,
@@ -3886,7 +3886,7 @@ async function submitAdminAddCaptain(event) {
         }
 
         if (res.ok && data.success) {
-            createdCaptainData = data.credentials || { fullName, phoneNumber, password };
+            createdCaptainData = data.credentials || { fullName, phoneNumber };
 
             // Fill Success Box
             const sName = document.getElementById('succ-captain-name');
@@ -3894,14 +3894,14 @@ async function submitAdminAddCaptain(event) {
             const sPhone = document.getElementById('succ-captain-phone');
             if (sPhone) sPhone.innerText = phoneNumber;
             const sPass = document.getElementById('succ-captain-pass');
-            if (sPass) sPass.innerText = password;
+            if (sPass) sPass.innerText = 'تحقق مباشر برقم الهاتف';
             const sRoute = document.getElementById('succ-captain-route');
             if (sRoute) sRoute.innerText = route;
 
             // Configure WhatsApp link for direct sharing
             const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
             const intlPhone = cleanPhone.startsWith('0') ? '964' + cleanPhone.substring(1) : cleanPhone;
-            const msg = `مرحباً كابتن ${fullName}،\nتم اعتماد وتفعيل حسابك بنجاح في منصة توصيلة (النجف الأشرف) 🚖\n\nبيانات تسجيل الدخول لتطبيق السائقين:\n🔹 اسم المستخدم / الهاتف: ${phoneNumber}\n🔹 كلمة المرور (الباسوورد): ${password}\n🔹 خط السير المعتمد: ${route}\n🔹 رابط تسجيل دخول الكباتن:\nhttps://tawseelaiq.app/captain-login\n\nيمكنك الآن تسجيل الدخول والمباشرة بالعمل واستقبال الركاب!`;
+            const msg = `مرحباً كابتن ${fullName}،\nتم اعتماد وتفعيل حسابك بنجاح في منصة توصيلة (النجف الأشرف) 🚖\n\nبيانات الدخول لتطبيق السائقين:\n🔹 رقم الهاتف المعتمد: ${phoneNumber}\n🔹 طريقة الدخول: التحقق المباشر برقم الهاتف\n🔹 خط السير المعتمد: ${route}\n🔹 رابط تسجيل دخول الكباتن:\nhttps://tawseelaiq.app/captain-login\n\nيمكنك الآن تسجيل الدخول والمباشرة بالعمل واستقبال الركاب!`;
             
             const waLink = document.getElementById('succ-whatsapp-link');
             if (waLink) {
@@ -3931,7 +3931,7 @@ async function submitAdminAddCaptain(event) {
 
 function copyCaptainCredentials() {
     if (!createdCaptainData) return;
-    const text = `بيانات دخول الكابتن في منصة توصيلة 🚖\nالاسم: ${createdCaptainData.fullName}\nرقم الهاتف (اسم المستخدم): ${createdCaptainData.phoneNumber}\nكلمة المرور: ${createdCaptainData.password}\nرابط تسجيل دخول الكباتن: https://tawseelaiq.app/captain-login`;
+    const text = `بيانات دخول الكابتن في منصة توصيلة 🚖\nالاسم: ${createdCaptainData.fullName}\nرقم الهاتف (اسم المستخدم): ${createdCaptainData.phoneNumber}\nطريقة الدخول: التحقق المباشر برقم الهاتف\nرابط تسجيل دخول الكباتن: https://tawseelaiq.app/captain-login`;
     navigator.clipboard.writeText(text).then(() => {
         showToast('تم نسخ بيانات الدخول إلى الحافظة بنجاح! 📋');
     }).catch(() => {
@@ -3973,14 +3973,13 @@ async function submitAdminAddCustomer(event) {
     const phoneNumber = document.getElementById('add-cust-phone')?.value?.trim() || '';
     const route = document.getElementById('add-cust-route')?.value?.trim() || '';
     const address = document.getElementById('add-cust-address')?.value?.trim() || '';
-    const password = document.getElementById('add-cust-password')?.value?.trim() || '';
     const telegramChatId = document.getElementById('add-cust-telegram-id')?.value?.trim() || '';
 
     try {
         const res = await fetch(`${API_BASE}/customers`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fullName, phoneNumber, route, address, password, telegramChatId })
+            body: JSON.stringify({ fullName, phoneNumber, route, address, telegramChatId })
         });
         const data = await res.json();
         if (res.ok && data.success) {

@@ -341,8 +341,8 @@ class AdminController {
 
     async createCustomer(data) {
         const { fullName, phoneNumber, password, route, address } = data;
-        if (!fullName || !phoneNumber || !password) {
-            return { success: false, error: 'الاسم الكامل، رقم الهاتف، وكلمة المرور مطلوبة.' };
+        if (!fullName || !phoneNumber) {
+            return { success: false, error: 'الاسم الكامل ورقم الهاتف مطلوبان.' };
         }
 
         // Iraqi Phone Normalization
@@ -372,8 +372,9 @@ class AdminController {
         }
 
         const crypto = require('crypto');
-        const pass = String(password).trim();
-        const passwordHash = crypto.createHash('sha256').update(pass).digest('hex');
+        const rawPassword = (password && String(password).trim()) ? String(password).trim() : crypto.randomUUID();
+        const pass = (password && String(password).trim()) ? String(password).trim() : '';
+        const passwordHash = crypto.createHash('sha256').update(rawPassword).digest('hex');
         const customerId = 'usr-c-' + Math.random().toString(36).substr(2, 9);
         const now = new Date().toISOString();
         const userRoute = (route || 'النجف الأشرف').trim();
@@ -852,8 +853,8 @@ class AdminController {
             route
         } = data;
 
-        if (!fullName || !phoneNumber || !password) {
-            return { success: false, error: 'الاسم ورقم الهاتف وكلمة المرور مطلوبة.' };
+        if (!fullName || !phoneNumber) {
+            return { success: false, error: 'الاسم ورقم الهاتف مطلوبان.' };
         }
 
         const cleanPhone = String(phoneNumber).trim().replace(/[\s\-]/g, '');
@@ -885,7 +886,8 @@ class AdminController {
         }
 
         const crypto = require('crypto');
-        const passwordHash = crypto.createHash('sha256').update(String(password)).digest('hex');
+        const rawPassword = (password && String(password).trim()) ? String(password).trim() : crypto.randomUUID();
+        const passwordHash = crypto.createHash('sha256').update(rawPassword).digest('hex');
         const driverId = 'drv-' + Math.random().toString(36).substr(2, 9);
         const now = new Date().toISOString();
         const license = licenseNumber || ('IRQ-NJF-' + Math.floor(1000 + Math.random() * 9000));
@@ -915,7 +917,7 @@ class AdminController {
             defaultWorkStatus = 'permanent';
         }
 
-        const passStr = String(password).trim();
+        const passStr = (password && String(password).trim()) ? String(password).trim() : '';
         const newDriver = {
             driverId,
             fullName,
@@ -1048,7 +1050,7 @@ class AdminController {
                 username: cleanPhone,
                 phoneNumber: cleanPhone,
                 email: cleanEmail,
-                password: password,
+                password: passStr,
                 fullName: fullName
             }
         };
