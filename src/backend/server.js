@@ -3298,12 +3298,11 @@ async function startServer() {
                         WHERE (driver_id = $1 
                            OR driver_id = $2
                            OR driver_id = $3
-                           OR (driver_phone IS NOT NULL AND RIGHT(REGEXP_REPLACE(driver_phone, '[^0-9]', '', 'g'), 8) = RIGHT($4, 8))
-                           OR (driver_name IS NOT NULL AND LOWER(driver_name) = LOWER($5))
+                           OR (driver_name IS NOT NULL AND LOWER(driver_name) = LOWER($4))
                            OR driver_id = 'drv-sample')
                           AND status IN ('Pending', 'Confirmed', 'Active', 'cancellation_pending')
                         ORDER BY created_at DESC
-                    `, [driverId, actualDriverId, cleanPhone, cleanPhone.length >= 7 ? cleanPhone : '_____', driverName || '']);
+                    `, [driverId, actualDriverId, cleanPhone, driverName || '']);
                     if (pgRes.rows && pgRes.rows.length > 0) {
                         driverBookings = pgRes.rows.map(r => ({
                             id: r.id,
