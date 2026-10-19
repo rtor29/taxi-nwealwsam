@@ -168,6 +168,115 @@ function getAuthUser(req) {
     return null;
 }
 
+// Unified phone normalization for safe comparisons
+function normalizePhone(p) {
+    if (!p) return '';
+    const digits = String(p).replace(/[^0-9]/g, '');
+    if (!digits) return '';
+    if (digits.startsWith('00964')) return digits.slice(5).replace(/^0+/, '');
+    if (digits.startsWith('964')) return digits.slice(3).replace(/^0+/, '');
+    return digits.replace(/^0+/, '');
+}
+
+// Flexible, type-safe driver authorization checker for ride lifecycle
+function isDriverAuthorizedForRide(ride, authUser, body) {
+    if (!ride) return false;
+
+    // Admin is always authorized
+    if (authUser && (authUser.role === 'Admin' || authUser.role === 'admin')) {
+        return true;
+    }
+
+    // Explicit customer callers cannot perform driver operations
+    if (authUser && (authUser.role === 'Customer' || authUser.role === 'customer')) {
+        return false;
+    }
+
+    const currentDriverId = String(body?.driverId || authUser?.id || body?.driverPhone || '').trim();
+    const currentDriverPhone = normalizePhone(body?.driverPhone || body?.driverId || authUser?.phone || authUser?.driver?.phoneNumber || '');
+
+    // Security: reject if current caller matches the customer of this ride
+    const custId = String(ride.customerId || ride.customer_id || '').trim();
+    const custPhone = normalizePhone(ride.customerPhone || ride.customer_phone || '');
+    if (custId && currentDriverId && custId.toLowerCase() === currentDriverId.toLowerCase()) {
+        return false;
+    }
+    if (custPhone && currentDriverPhone && custPhone === currentDriverPhone) {
+        return false;
+    }
+
+    // 1. Direct loose equality check: (ride.driver_id == req.body.driverId)
+    if (body?.driverId !== undefined && body?.driverId !== null && body.driverId !== '') {
+        if (ride.driver_id == body.driverId || 
+            ride.driverId == body.driverId || 
+            ride.assignedDriverId == body.driverId || 
+            ride.acceptedDriverId == body.driverId) {
+            return true;
+        }
+    }
+
+    // 2. All driver IDs associated with the ride
+    const rideDriverIds = [
+        ride.driver_id,
+        ride.driverId,
+        ride.assignedDriverId,
+        ride.acceptedDriverId,
+        ride.assignedDriver?.id,
+        ride.assignedDriver?.driverId
+    ].filter(Boolean).map(x => String(x).trim().toLowerCase());
+
+    // Check if currentDriverId matches any ride driver ID
+    if (currentDriverId && rideDriverIds.length > 0) {
+        const curLow = currentDriverId.toLowerCase();
+        if (rideDriverIds.includes(curLow)) return true;
+    }
+
+    // Check if authUser ID matches any ride driver ID
+    if (authUser?.id && rideDriverIds.length > 0) {
+        const authLow = String(authUser.id).trim().toLowerCase();
+        if (rideDriverIds.includes(authLow)) return true;
+    }
+
+    // 3. All driver phones associated with the ride
+    const rideDriverPhones = [
+        ride.driver_phone,
+        ride.driverPhone,
+        ride.assignedDriverPhone,
+        ride.acceptedDriverPhone,
+        ride.assignedDriver?.phoneNumber,
+        ride.assignedDriver?.phone
+    ].map(p => normalizePhone(p)).filter(Boolean);
+
+    // Check if currentDriverPhone matches any ride driver phone
+    if (currentDriverPhone && rideDriverPhones.length > 0) {
+        for (const rp of rideDriverPhones) {
+            if (rp === currentDriverPhone) return true;
+            if (rp.length >= 7 && currentDriverPhone.length >= 7) {
+                if (rp.endsWith(currentDriverPhone.slice(-8)) || currentDriverPhone.endsWith(rp.slice(-8))) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // 4. Resolve driver profile from memory state for cross-checking (e.g. ID -> phone or Phone -> ID)
+    const matchedDriver = (db.memoryState?.drivers || []).find(d => {
+        const dId = String(d.driverId || d.id || '').trim().toLowerCase();
+        const dPhone = normalizePhone(d.phoneNumber || d.phone);
+        const matchId = currentDriverId && dId && (dId === currentDriverId.toLowerCase());
+        const matchPhone = currentDriverPhone && dPhone && (dPhone === currentDriverPhone || (dPhone.length >= 7 && currentDriverPhone.length >= 7 && dPhone.endsWith(currentDriverPhone.slice(-8))));
+        return matchId || matchPhone;
+    });
+
+    if (matchedDriver) {
+        const dId = String(matchedDriver.driverId || matchedDriver.id || '').trim().toLowerCase();
+        const dPhone = normalizePhone(matchedDriver.phoneNumber || matchedDriver.phone);
+        if (dId && rideDriverIds.includes(dId)) return true;
+        if (dPhone && rideDriverPhones.includes(dPhone)) return true;
+    }
+
+    return false;
+}
 
 const mimeTypes = {
     '.html': 'text/html; charset=utf-8',
@@ -2253,13 +2362,15 @@ async function startServer() {
                 const r = requests.find(item => item.id === requestId);
                 if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
 
-                // Security Check: Customer cannot mark driver arrival
+                // Driver Authorization Check
                 const authUser = getAuthUser(req);
-                if (authUser && (authUser.role === 'Customer' || authUser.role === 'customer')) {
-                    return sendJson({ success: false, error: 'غير مصرح: هذا الإجراء محصور بالسائق فقط ولا يمكن تنفيذه من قبل الراكب' }, 403);
-                }
-                if (r.customerId && driverId && (driverId === r.customerId || driverId === r.customerPhone)) {
-                    return sendJson({ success: false, error: 'غير مصرح: تم رفض الطلب، الإجراء مخصص للسائق فقط' }, 403);
+                const isAuthorized = isDriverAuthorizedForRide(r, authUser, body);
+
+                if (!isAuthorized) {
+                    return sendJson({ 
+                        success: false, 
+                        error: 'غير مصرح: يجب أن يكون الكابتن المعتمد لهذه الرحلة فقط لبدء المشوار' 
+                    }, 403);
                 }
 
                 r.status = 'Arrived';
@@ -2308,44 +2419,11 @@ async function startServer() {
                 const r = requests.find(item => item.id === requestId);
                 if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
 
-                // Authentication & Security Validation
+                // Authentication & Driver Authorization Check
                 const authUser = getAuthUser(req);
+                const isAuthorized = isDriverAuthorizedForRide(r, authUser, body);
 
-                // 1. Reject if caller is a passenger / customer
-                if (authUser && (authUser.role === 'Customer' || authUser.role === 'customer')) {
-                    return sendJson({ 
-                        success: false, 
-                        error: 'غير مصرح: إجراء الانطلاق إلى الوجهة محصور بالسائق فقط ولا يمكن تنفيذه من قبل الراكب' 
-                    }, 403);
-                }
-
-                if (r.customerId && driverId && (driverId === r.customerId || driverId === r.customerPhone)) {
-                    return sendJson({ 
-                        success: false, 
-                        error: 'غير مصرح: تم رفض الطلب، الإجراء مخصص للسائق فقط' 
-                    }, 403);
-                }
-
-                // 2. Validate that current user is the assigned/accepted driver for this ride
-                const cleanDriverParam = String(driverId || '').replace(/[^0-9]/g, '');
-                const cleanAuthPhone = authUser && authUser.phone ? String(authUser.phone).replace(/[^0-9]/g, '') : '';
-                const cleanAssignedPhone = r.assignedDriverPhone ? String(r.assignedDriverPhone).replace(/[^0-9]/g, '') : '';
-                const cleanAcceptedPhone = r.acceptedDriverPhone ? String(r.acceptedDriverPhone).replace(/[^0-9]/g, '') : '';
-
-                const isDriverMatch = 
-                    (authUser && authUser.role === 'Admin') ||
-                    (authUser && authUser.role === 'Driver' && (
-                        authUser.id === r.assignedDriverId || 
-                        authUser.id === r.acceptedDriverId ||
-                        (cleanAuthPhone && (cleanAuthPhone === cleanAssignedPhone || cleanAuthPhone === cleanAcceptedPhone))
-                    )) ||
-                    (!authUser && driverId && (
-                        driverId === r.assignedDriverId || 
-                        driverId === r.acceptedDriverId ||
-                        (cleanDriverParam && (cleanDriverParam === cleanAssignedPhone || cleanDriverParam === cleanAcceptedPhone))
-                    ));
-
-                if (!isDriverMatch) {
+                if (!isAuthorized) {
                     return sendJson({ 
                         success: false, 
                         error: 'غير مصرح: يجب أن يكون الكابتن المعتمد لهذه الرحلة فقط لبدء المشوار' 
@@ -2497,13 +2575,15 @@ async function startServer() {
                 const r = requests.find(item => item.id === requestId);
                 if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
 
-                // Security Check: Customer cannot complete ride
+                // Security Check: Driver Authorization
                 const authUser = getAuthUser(req);
-                if (authUser && (authUser.role === 'Customer' || authUser.role === 'customer')) {
-                    return sendJson({ success: false, error: 'غير مصرح: إنهاء المشوار محصور بالسائق فقط' }, 403);
-                }
-                if (r.customerId && driverId && (driverId === r.customerId || driverId === r.customerPhone)) {
-                    return sendJson({ success: false, error: 'غير مصرح: تم رفض الطلب، الإجراء مخصص للسائق فقط' }, 403);
+                const isAuthorized = isDriverAuthorizedForRide(r, authUser, body);
+
+                if (!isAuthorized) {
+                    return sendJson({ 
+                        success: false, 
+                        error: 'غير مصرح: يجب أن يكون الكابتن المعتمد لهذه الرحلة فقط لإنهاء المشوار' 
+                    }, 403);
                 }
 
                 r.status = 'Completed';
