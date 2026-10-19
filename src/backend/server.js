@@ -168,10 +168,20 @@ function getAuthUser(req) {
     return null;
 }
 
+/**
+ * تحويل الأرقام العربية والمشرقية والفارسية إلى أرقام إنجليزية معيارية
+ */
+function normalizeArabicDigits(input) {
+    if (!input) return '';
+    return String(input)
+        .replace(/[٠-٩]/g, (char) => (char.charCodeAt(0) - 1632).toString())
+        .replace(/[۰-۹]/g, (char) => (char.charCodeAt(0) - 1776).toString());
+}
+
 // Unified phone normalization for safe comparisons
 function normalizePhone(p) {
     if (!p) return '';
-    const digits = String(p).replace(/[^0-9]/g, '');
+    const digits = normalizeArabicDigits(p).replace(/[^0-9]/g, '');
     if (!digits) return '';
     if (digits.startsWith('00964')) return digits.slice(5).replace(/^0+/, '');
     if (digits.startsWith('964')) return digits.slice(3).replace(/^0+/, '');
@@ -611,7 +621,7 @@ async function startServer() {
         // WhatsApp OTP Endpoints for Registration (Web & Flutter App Aliases)
         if ((pathname === '/api/auth/send-whatsapp-otp' || pathname === '/auth/send-whatsapp-otp' || pathname === '/api/auth/send-otp' || pathname === '/auth/send-otp') && method === 'POST') {
             const body = await parseJsonBody(req);
-            const phoneNumber = (body.phoneNumber || body.phone || '').trim();
+            const phoneNumber = normalizeArabicDigits(body.phoneNumber || body.phone || '').trim();
             if (!phoneNumber || typeof phoneNumber !== 'string' || phoneNumber.length > 30) {
                 return sendJson({ success: false, error: 'رقم الهاتف مطلوب' }, 400);
             }
@@ -661,8 +671,8 @@ async function startServer() {
 
         if ((pathname === '/api/auth/verify-whatsapp-otp' || pathname === '/auth/verify-whatsapp-otp' || pathname === '/api/auth/verify-otp' || pathname === '/auth/verify-otp') && method === 'POST') {
             const body = await parseJsonBody(req);
-            const phoneNumber = (body.phoneNumber || body.phone || '').trim();
-            const code = (body.code || body.otp || '').trim();
+            const phoneNumber = normalizeArabicDigits(body.phoneNumber || body.phone || '').trim();
+            const code = normalizeArabicDigits(body.code || body.otp || '').replace(/[^0-9]/g, '').trim();
             if (!phoneNumber || !code) {
                 return sendJson({ success: false, error: 'رقم الهاتف ورمز التحقق مطلوبان' }, 400);
             }
@@ -813,7 +823,8 @@ async function startServer() {
 
             const body = await parseJsonBody(req);
             // Cap inputs to prevent DoS via oversized payloads
-            const identifier = (body.identifier || body.email || body.phoneNumber || '').toString().slice(0, 120).trim().toLowerCase();
+            const rawIdentifier = (body.identifier || body.email || body.phoneNumber || '').toString().slice(0, 120).trim();
+            const identifier = normalizeArabicDigits(rawIdentifier).toLowerCase();
             const password = body.password ? String(body.password).slice(0, 200) : '';
             const requestedRole = (body.role || '').toString().slice(0, 20) || null;
             const isGoogleAuth = !!body.isGoogleAuth;
@@ -854,8 +865,7 @@ async function startServer() {
             const cleanIdStr = String(identifier).trim().toLowerCase();
             const cleanDigits = (s) => {
                 if (!s) return '';
-                const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-                let str = String(s).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d));
+                let str = normalizeArabicDigits(s);
                 let digits = str.replace(/[^0-9]/g, '');
                 if (digits.startsWith('00964')) digits = digits.substring(5);
                 else if (digits.startsWith('964')) digits = digits.substring(3);
@@ -1132,20 +1142,20 @@ async function startServer() {
 
         if (pathname === '/api/auth/register' && method === 'POST') {
             const body = await parseJsonBody(req);
-            const { phoneNumber, fullName, role, licenseNumber, password, passwordHash } = body;
+            let { phoneNumber, fullName, role, licenseNumber, password, passwordHash } = body;
+            phoneNumber = normalizeArabicDigits(phoneNumber || '').trim();
             const targetRole = role || 'Customer';
             const now = new Date().toISOString();
 
             // Iraqi Phone Normalization & Cross-Role Check
-            const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-            let norm = String(phoneNumber || '').replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
+            let norm = normalizeArabicDigits(phoneNumber || '').replace(/[^0-9]/g, '');
             if (norm.startsWith('00964')) norm = norm.substring(5);
             else if (norm.startsWith('964')) norm = norm.substring(3);
             if (norm.length === 10 && norm.startsWith('7')) norm = '0' + norm;
 
             const cleanPhone = (p) => {
                 if (!p) return '';
-                let s = String(p).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
+                let s = normalizeArabicDigits(p).replace(/[^0-9]/g, '');
                 if (s.startsWith('00964')) s = s.substring(5);
                 else if (s.startsWith('964')) s = s.substring(3);
                 if (s.length === 10 && s.startsWith('7')) s = '0' + s;
@@ -1164,7 +1174,7 @@ async function startServer() {
 
             // WhatsApp OTP verification if provided
             if (body.otpCode && body.otpCode !== 'TRUECALLER_VERIFIED') {
-                const otpCheck = whatsappService.verifyOtp(phoneNumber, body.otpCode);
+                const otpCheck = whatsappService.verifyOtp(phoneNumber, normalizeArabicDigits(body.otpCode).replace(/[^0-9]/g, ''));
                 if (!otpCheck.valid) {
                     return sendJson({ success: false, error: otpCheck.error }, 400);
                 }

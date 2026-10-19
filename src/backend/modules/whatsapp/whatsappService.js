@@ -69,7 +69,11 @@ class WhatsAppService {
     parseIraqiPhone(phone) {
         if (!phone) return null;
         const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-        let clean = String(phone || '').replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
+        const persDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+        let clean = String(phone || '')
+            .replace(/[٠-٩]/g, d => arabicDigits.indexOf(d))
+            .replace(/[۰-۹]/g, d => persDigits.indexOf(d))
+            .replace(/[^0-9]/g, '');
 
         if (clean.startsWith('00964')) clean = clean.substring(5);
         else if (clean.startsWith('964')) clean = clean.substring(3);
