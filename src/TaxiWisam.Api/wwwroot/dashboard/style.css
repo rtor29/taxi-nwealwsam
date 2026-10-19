@@ -1,6 +1,7 @@
 /* ==========================================================================
-   Tawseela Central SaaS Admin Dashboard - Modern Design System
-   Identity: Tawseela (Deep Navy #1B4965 / Amber #D97706 / Clean Slate #F8FAFC)
+   Tawseela Central SaaS Admin Dashboard - Dark Obsidian & Warm Amber Luxury Theme
+   Identity: Dark Obsidian (#080E1A -> #0D131F) / Warm Amber (#F59E0B / #D97706)
+   Standards: Google Material 3 (Touch >= 48px, WCAG 2.1 AA Contrast, Zero CLS)
    ========================================================================== */
 
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Almarai:wght@400;700;800&family=Tajawal:wght@400;500;700&family=Cairo:wght@400;600;700&display=swap');
@@ -24,25 +25,41 @@
 }
 
 :root {
-    --bg-main: #f8fafc;
-    --bg-surface: #ffffff;
-    --border-subtle: #e2e8f0;
-    --primary: #1B4965;
-    --primary-hover: #143a50;
-    --amber-accent: #d97706;
-    --text-main: #0f172a;
-    --text-muted: #64748b;
-    --text-subtle: #94a3b8;
+    --bg-canvas: #080E1A;
+    --bg-canvas-gradient: linear-gradient(180deg, #080E1A 0%, #0D131F 100%);
+    --bg-surface: rgba(22, 28, 40, 0.92);
+    --bg-surface-elevated: rgba(27, 34, 48, 0.95);
+    --bg-card: rgba(22, 28, 40, 0.92);
+    --bg-sidebar: rgba(11, 21, 40, 0.95);
+    --bg-header: rgba(13, 19, 31, 0.95);
+    --bg-modal: rgba(15, 23, 42, 0.96);
+    --border-subtle: rgba(255, 255, 255, 0.07);
+    --border-focus: #F59E0B;
+    --border-amber-glow: rgba(245, 158, 11, 0.25);
+    --amber-gold: #F59E0B;
+    --amber-dark: #D97706;
+    --amber-gradient: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+    --text-main: #F8FAFC;
+    --text-secondary: #CBD5E1;
+    --text-muted: #94A3B8;
+    --text-dim: #64748B;
+    --status-emerald: #10B981;
+    --status-amber: #F59E0B;
+    --status-crimson: #EF4444;
 }
 
-/* Typography & Base Reset */
+/* ==========================================================================
+   Typography & Base Reset
+   ========================================================================== */
 html, body {
     height: 100%;
     margin: 0;
     padding: 0;
-    font-family: 'Arial Unicode MS Regular', 'Arial Unicode MS', 'Cairo', 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background-color: var(--bg-main);
-    color: var(--text-main);
+    font-family: 'IBM Plex Sans Arabic', 'Cairo', 'Arial Unicode MS Regular', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: #080E1A !important;
+    background-image: radial-gradient(circle at 50% 0%, #161F30 0%, #080E1A 75%) !important;
+    background-attachment: fixed !important;
+    color: #F8FAFC !important;
     -webkit-overflow-scrolling: touch;
     touch-action: manipulation;
 }
@@ -50,7 +67,155 @@ html, body {
 main {
     -webkit-overflow-scrolling: touch;
     touch-action: auto;
-    background-color: var(--bg-main);
+    background: transparent !important;
+    color: #F8FAFC !important;
+}
+
+/* ==========================================================================
+   Dark Obsidian Glass Surfaces & Component Color Overrides
+   ========================================================================== */
+.bg-white,
+.bg-slate-50,
+.bg-slate-100 {
+    background-color: rgba(22, 28, 40, 0.92) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    border-color: rgba(255, 255, 255, 0.07) !important;
+    color: #F8FAFC !important;
+}
+
+/* High Contrast Headings and Text */
+.text-slate-900,
+.text-slate-800,
+h1, h2, h3, h4, h5, h6,
+.font-black,
+.font-extrabold {
+    color: #F8FAFC !important;
+}
+
+.text-slate-700,
+.text-slate-600 {
+    color: #CBD5E1 !important;
+}
+
+.text-slate-500,
+.text-slate-400 {
+    color: #94A3B8 !important;
+}
+
+.border-slate-200,
+.border-slate-100,
+.border-slate-200\/80,
+.border-slate-300 {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+    border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* ==========================================================================
+   Amber Radiance Accent Bar
+   ========================================================================== */
+.amber-radiance-bar {
+    height: 2px;
+    width: 100%;
+    background: linear-gradient(90deg, transparent, #F59E0B 50%, transparent);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+}
+
+/* ==========================================================================
+   Form Controls & Inputs (Dark Theme + 48px Minimum Height)
+   ========================================================================== */
+input[type="text"],
+input[type="number"],
+input[type="tel"],
+input[type="email"],
+input[type="search"],
+input[type="password"],
+select,
+textarea {
+    background-color: #161C28 !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    color: #F8FAFC !important;
+    border-radius: 0.75rem !important;
+    min-height: 48px !important;
+    padding: 0.625rem 0.875rem !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: #F59E0B !important;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25) !important;
+    outline: none !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: #64748B !important;
+}
+
+select option {
+    background-color: #161C28 !important;
+    color: #F8FAFC !important;
+}
+
+/* ==========================================================================
+   Primary Golden CTA Buttons (>= 48px Touch Target & High Contrast)
+   ========================================================================== */
+.btn-primary-golden,
+.btn-theme-primary,
+#btn-submit-add-captain,
+button[type="submit"] {
+    background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%) !important;
+    color: #0F172A !important;
+    font-weight: 800 !important;
+    border: none !important;
+    box-shadow: 0 4px 14px 0 rgba(245, 158, 11, 0.35) !important;
+    min-height: 48px !important;
+    min-width: 48px !important;
+    border-radius: 0.75rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.5rem !important;
+    transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.btn-primary-golden:hover,
+.btn-theme-primary:hover,
+#btn-submit-add-captain:hover,
+button[type="submit"]:hover {
+    box-shadow: 0 6px 20px 0 rgba(245, 158, 11, 0.45) !important;
+    filter: brightness(1.05);
+}
+
+.btn-primary-golden:active,
+.btn-theme-primary:active,
+#btn-submit-add-captain:active,
+button[type="submit"]:active {
+    transform: scale(0.98) !important;
+}
+
+/* ==========================================================================
+   Top Header Bar & Sidebar Navigation
+   ========================================================================== */
+header {
+    background-color: rgba(13, 19, 31, 0.95) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+#sidebar-drawer,
+aside {
+    background-color: rgba(11, 21, 40, 0.95) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
 /* Modern Clean Sidebar Tab Buttons */
@@ -58,48 +223,59 @@ main {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.625rem 0.875rem;
-    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.875rem;
     font-size: 0.875rem;
-    font-weight: 500;
-    color: #475569;
+    font-weight: 600;
+    color: #94A3B8 !important;
     border-right: 3px solid transparent;
     transition: all 0.15s ease-out;
     cursor: pointer;
     text-align: right;
     width: 100%;
+    min-height: 48px !important;
     border-left: none;
     border-top: none;
     border-bottom: none;
+    background: transparent;
 }
 
 .tab-btn:hover:not(.active) {
-    background-color: #f8fafc;
-    color: #0f172a;
+    background-color: rgba(255, 255, 255, 0.04) !important;
+    color: #F8FAFC !important;
 }
 
 .tab-btn:hover:not(.active) i {
-    color: var(--primary);
+    color: #F59E0B !important;
 }
 
 .tab-btn.active {
-    background-color: #f1f5f9;
-    color: var(--primary);
-    font-weight: 700;
-    border-right-color: var(--primary);
-    box-shadow: none;
+    background-color: rgba(245, 158, 11, 0.12) !important;
+    color: #F59E0B !important;
+    font-weight: 700 !important;
+    border-right: 4px solid #F59E0B !important;
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.1) !important;
 }
 
 .tab-btn.active i {
-    color: var(--primary) !important;
+    color: #F59E0B !important;
 }
 
 .tab-btn i {
-    color: #94a3b8;
+    color: #64748B;
     transition: color 0.15s ease-out;
 }
 
-/* Modern Data Table Styling */
+/* ==========================================================================
+   Data Table Styling (No Horizontal/Vertical Scroll Lock & High Contrast)
+   ========================================================================== */
+.table-responsive-wrapper,
+.overflow-x-auto {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    width: 100% !important;
+}
+
 table {
     border-collapse: separate;
     border-spacing: 0;
@@ -107,37 +283,110 @@ table {
 }
 
 thead th {
-    background-color: #f8fafc;
-    color: #475569;
-    font-size: 0.75rem;
-    font-weight: 600;
+    background-color: #1A2232 !important;
+    color: #94A3B8 !important;
+    font-size: 0.8rem !important;
+    font-weight: 700 !important;
     letter-spacing: 0.025em;
-    padding: 0.875rem 1rem;
-    border-bottom: 1px solid #e2e8f0;
+    padding: 0.875rem 1rem !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
     white-space: nowrap;
+    text-align: right;
 }
 
 tbody tr {
+    background-color: rgba(22, 28, 40, 0.85);
     transition: background-color 0.15s ease-out;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 tbody tr:hover {
-    background-color: rgba(248, 250, 252, 0.85);
+    background-color: rgba(245, 158, 11, 0.04) !important;
 }
 
 tbody td {
-    padding: 0.875rem 1rem;
-    font-size: 0.875rem;
+    padding: 0.875rem 1rem !important;
+    font-size: 0.875rem !important;
+    color: #E2E8F0 !important;
     vertical-align: middle;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
 }
 
-/* Modern Pill Badges */
+/* Table Action Buttons Google Touch Target & Spacing Compliance */
+#drivers-table-body button,
+#customers-table-body button,
+#routes-table-body button,
+#cancellations-table-body button,
+#verifications-table-body button,
+#complaints-table-body button,
+table tbody button,
+table tbody a.btn {
+    min-height: 48px !important;
+    min-width: 48px !important;
+    padding: 0.625rem 0.875rem !important;
+    font-size: 0.8125rem !important;
+    border-radius: 0.75rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.5rem !important;
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+table tbody td .flex {
+    gap: 0.625rem !important; /* 10px spacing for Google touch guidelines */
+}
+
+/* ==========================================================================
+   Modals & Popups (Dark Luxury Glass + 48px Touch Targets)
+   ========================================================================== */
+#modal-add-captain > div,
+#modal-add-customer > div,
+#modal-edit-customer > div,
+#modal-edit-driver > div,
+#document-modal > div,
+#image-zoom-modal > div {
+    background-color: rgba(15, 23, 42, 0.96) !important;
+    backdrop-filter: blur(24px) !important;
+    -webkit-backdrop-filter: blur(24px) !important;
+    border: 1px solid rgba(245, 158, 11, 0.25) !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85), 0 0 30px rgba(245, 158, 11, 0.1) !important;
+    border-radius: 1.5rem !important;
+}
+
+/* Modal Close Touch Targets >= 48px */
+#modal-add-captain button[onclick*="close"],
+#modal-add-customer button[onclick*="close"],
+#modal-edit-customer button[onclick*="close"],
+#modal-edit-driver button[onclick*="close"],
+#document-modal button[onclick*="close"] {
+    min-width: 48px !important;
+    min-height: 48px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 9999px !important;
+    color: #94A3B8 !important;
+    transition: color 0.15s ease, background-color 0.15s ease !important;
+}
+
+#modal-add-captain button[onclick*="close"]:hover,
+#modal-add-customer button[onclick*="close"]:hover,
+#modal-edit-customer button[onclick*="close"]:hover,
+#modal-edit-driver button[onclick*="close"]:hover,
+#document-modal button[onclick*="close"]:hover {
+    color: #F8FAFC !important;
+    background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ==========================================================================
+   Pill Badges (Emerald, Amber, Rose, Slate)
+   ========================================================================== */
 .badge-pill {
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
-    padding: 0.15rem 0.65rem;
+    padding: 0.25rem 0.75rem;
     font-size: 0.75rem;
     font-weight: 600;
     border-radius: 9999px;
@@ -153,46 +402,56 @@ tbody td {
 }
 
 .badge-emerald {
-    background-color: #ecfdf5;
-    color: #047857;
-    border: 1px solid rgba(167, 243, 208, 0.6);
+    background-color: rgba(16, 185, 129, 0.12) !important;
+    color: #34D399 !important;
+    border: 1px solid rgba(16, 185, 129, 0.3) !important;
 }
 .badge-emerald .badge-pill-dot,
 .badge-emerald .badge-dot {
-    background-color: #10b981;
+    background-color: #10B981 !important;
 }
 
 .badge-amber {
-    background-color: #fffbeb;
-    color: #b45309;
-    border: 1px solid rgba(253, 230, 138, 0.6);
+    background-color: rgba(245, 158, 11, 0.12) !important;
+    color: #FBBF24 !important;
+    border: 1px solid rgba(245, 158, 11, 0.3) !important;
 }
 .badge-amber .badge-pill-dot,
 .badge-amber .badge-dot {
-    background-color: #f59e0b;
+    background-color: #F59E0B !important;
 }
 
 .badge-rose {
-    background-color: #fff1f2;
-    color: #be123c;
-    border: 1px solid rgba(254, 205, 211, 0.6);
+    background-color: rgba(239, 68, 68, 0.12) !important;
+    color: #F87171 !important;
+    border: 1px solid rgba(239, 68, 68, 0.3) !important;
 }
 .badge-rose .badge-pill-dot,
 .badge-rose .badge-dot {
-    background-color: #f43f5e;
+    background-color: #EF4444 !important;
 }
 
 .badge-slate {
-    background-color: #f8fafc;
-    color: #475569;
-    border: 1px solid #e2e8f0;
+    background-color: rgba(148, 163, 184, 0.1) !important;
+    color: #CBD5E1 !important;
+    border: 1px solid rgba(148, 163, 184, 0.2) !important;
 }
 .badge-slate .badge-pill-dot,
 .badge-slate .badge-dot {
-    background-color: #94a3b8;
+    background-color: #94A3B8 !important;
 }
 
-/* Micro Animations */
+/* ==========================================================================
+   KPI Cards Stability (Zero CLS < 0.1)
+   ========================================================================== */
+.kpi-card {
+    min-height: 110px !important;
+    height: 100% !important;
+}
+
+/* ==========================================================================
+   Micro Animations & Scrollbars
+   ========================================================================== */
 @keyframes scaleUp {
     from {
         opacity: 0;
@@ -208,26 +467,27 @@ tbody td {
     animation: scaleUp 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-    background: transparent;
+    background: #080E1A;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: #1E293B;
     border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    background: #334155;
 }
 
-/* Visibility & Modal States */
+/* ==========================================================================
+   Visibility & Modal States (Preserved 100% Zero-Regression)
+   ========================================================================== */
 .hidden,
 [hidden],
 #login-overlay.hidden,
@@ -285,27 +545,26 @@ tbody td {
     min-height: 500px !important;
 }
 
-/* ==========================================================================
-   Clean Minimal Mapbox Popup for Radar Screen
-   ========================================================================== */
+/* Minimal Mapbox Popup for Fleet Radar */
 .mapboxgl-popup {
     z-index: 30;
 }
 .mapboxgl-popup-content {
-    background: #ffffff !important;
+    background: #161C28 !important;
+    color: #F8FAFC !important;
     border-radius: 16px !important;
     padding: 0 !important;
-    box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04) !important;
-    border: 1px solid rgba(226, 232, 240, 0.9) !important;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5) !important;
+    border: 1px solid rgba(245, 158, 11, 0.25) !important;
     overflow: hidden;
 }
 .mapboxgl-popup-tip {
-    border-top-color: #ffffff !important;
-    border-bottom-color: #ffffff !important;
+    border-top-color: #161C28 !important;
+    border-bottom-color: #161C28 !important;
 }
 .mapboxgl-popup-close-button {
     font-size: 16px !important;
-    color: #94a3b8 !important;
+    color: #94A3B8 !important;
     padding: 6px 10px !important;
     right: auto !important;
     left: 4px !important;
@@ -314,20 +573,20 @@ tbody td {
     transition: all 0.15s ease-out !important;
 }
 .mapboxgl-popup-close-button:hover {
-    color: #0f172a !important;
-    background-color: #f1f5f9 !important;
+    color: #F8FAFC !important;
+    background-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 /* ==========================================================================
    Dynamic Tawseela Logo Color Filter/Mask
    ========================================================================== */
 :root {
-    --brand-logo-color: #EBB812;
+    --brand-logo-color: #F59E0B;
 }
 
 .tawseela-dynamic-logo {
     display: inline-block;
-    background-color: var(--brand-logo-color, #EBB812);
+    background-color: var(--brand-logo-color, #F59E0B);
     -webkit-mask-image: url('assets/tawseela-logo-transparent.png');
     mask-image: url('assets/tawseela-logo-transparent.png');
     -webkit-mask-size: contain;

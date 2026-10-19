@@ -8,7 +8,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#080E1A">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="توصيله">
@@ -33,46 +33,51 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@400;600;700;900&family=Almarai:wght@400;700;800&family=Cairo:wght@400;600;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;600;700&family=Readex+Pro:wght@400;600;700&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/dashboard/style.css?v=20261017_modern_saas">
+    <link rel="stylesheet" href="/dashboard/style.css?v=20261020_dark_luxury_v2">
     <script>
         try {
             var cachedDashTheme = localStorage.getItem('tawseela_dashboard_theme');
             if (cachedDashTheme) {
                 var th = JSON.parse(cachedDashTheme);
-                // Reset legacy dark/yellow preset if stored
-                if (th && (th.dashSidebarBg === '#0f172a' || th.dashHeaderBg === '#0f172a' || th.dashPrimaryColor === '#f59e0b')) {
+                // Clear any legacy light or non-obsidian theme
+                if (th && (th.dashBgColor === '#f8fafc' || th.bgColor === '#F8FAFC' || th.primaryColor === '#1B4965')) {
                     localStorage.removeItem('tawseela_dashboard_theme');
                     cachedDashTheme = null;
                 }
             }
+            var bg = '#080E1A';
+            var sidebarBg = 'rgba(11, 21, 40, 0.95)';
+            var cardBg = 'rgba(22, 28, 40, 0.92)';
+            var headerBg = 'rgba(13, 19, 31, 0.95)';
+            var textColor = '#CBD5E1';
+            var headingColor = '#F8FAFC';
+            var primaryColor = '#F59E0B';
+            var activeColor = '#F59E0B';
+            var borderColor = 'rgba(255, 255, 255, 0.08)';
+            var fontStack = '"IBM Plex Sans Arabic", "Cairo", "Arial Unicode MS Regular", sans-serif';
+
             if (cachedDashTheme) {
                 var th = JSON.parse(cachedDashTheme);
                 if (th && th.dashBgColor) {
-                    var bg = th.dashBgColor || '#f8fafc';
-                    var sidebarBg = th.dashSidebarBg || '#ffffff';
-                    var cardBg = th.dashCardBg || '#ffffff';
-                    var headerBg = th.dashHeaderBg || '#ffffff';
-                    var textColor = th.dashTextColor || '#334155';
-                    var headingColor = th.dashHeadingColor || '#0f172a';
-                    var primaryColor = th.dashPrimaryColor || '#1B4965';
-                    var activeColor = th.dashActiveColor || '#1B4965';
-                    var borderColor = th.dashBorderColor || '#e2e8f0';
-                    var fontFamily = th.dashFontFamily || 'Arial Unicode MS Regular';
-                    var fontStack = (fontFamily && fontFamily.indexOf('Arial Unicode MS') !== -1)
-                        ? '"Arial Unicode MS Regular", "Arial Unicode MS", "Cairo", "IBM Plex Sans Arabic", sans-serif'
-                        : '"' + fontFamily + '", "IBM Plex Sans Arabic", sans-serif';
-                    var strokeColor = th.dashFontStrokeColor || '#000000';
-                    var strokeWidth = th.dashFontStrokeWidth || '0px';
-                    var strokeCss = (strokeWidth && strokeWidth !== '0px' && strokeWidth !== '0')
-                        ? '-webkit-text-stroke: ' + strokeWidth + ' ' + strokeColor + ' !important; text-stroke: ' + strokeWidth + ' ' + strokeColor + ' !important;'
-                        : '-webkit-text-stroke: 0 !important; text-stroke: 0 !important;';
-
-                    var s = document.createElement('style');
-                    s.id = 'dynamic-dashboard-theme-style';
-                    s.textContent = 'body, html, input, button, select, textarea, p, h1, h2, h3, h4, h5, h6, table, th, td, label, div, span:not([class*="fa"]):not([class*="badge"]) { font-family: ' + fontStack + ' !important; ' + strokeCss + ' } i, i[class*="fa"], .fa, .fas, .far, .fab, .fa-solid, .fa-regular, .fa-brands, [class^="fa-"], [class*=" fa-"] { font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands", "FontAwesome" !important; font-style: normal !important; -webkit-text-stroke: 0 !important; } body { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } main { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } #sidebar-drawer, aside { background-color: ' + sidebarBg + ' !important; border-color: ' + borderColor + ' !important; } header { background-color: ' + headerBg + ' !important; border-color: ' + borderColor + ' !important; } .bg-white, .bg-slate-50, .bg-slate-100 { background-color: ' + cardBg + ' !important; border-color: ' + borderColor + ' !important; } .text-slate-900, .text-slate-800, h1, h2, h3, h4, h5, h6, .font-black { color: ' + headingColor + ' !important; } .text-slate-700, .text-slate-600, .text-slate-500, p, label { color: ' + textColor + ' !important; } .border-slate-100, .border-slate-200 { border-color: ' + borderColor + ' !important; } .tab-btn.active { background-color: #f1f5f9 !important; color: ' + activeColor + ' !important; border-right-color: ' + activeColor + ' !important; } .tab-btn.active i { color: ' + activeColor + ' !important; } .btn-theme-primary { background-color: ' + primaryColor + ' !important; border-color: ' + primaryColor + ' !important; color: #ffffff !important; }';
-                    document.head.appendChild(s);
+                    bg = th.dashBgColor || bg;
+                    sidebarBg = th.dashSidebarBg || sidebarBg;
+                    cardBg = th.dashCardBg || cardBg;
+                    headerBg = th.dashHeaderBg || headerBg;
+                    textColor = th.dashTextColor || textColor;
+                    headingColor = th.dashHeadingColor || headingColor;
+                    primaryColor = th.dashPrimaryColor || primaryColor;
+                    activeColor = th.dashActiveColor || activeColor;
+                    borderColor = th.dashBorderColor || borderColor;
+                    if (th.dashFontFamily) {
+                        fontStack = '"' + th.dashFontFamily + '", "IBM Plex Sans Arabic", sans-serif';
+                    }
                 }
             }
+
+            var s = document.createElement('style');
+            s.id = 'dynamic-dashboard-theme-style';
+            s.textContent = 'body, html, input, button, select, textarea, p, h1, h2, h3, h4, h5, h6, table, th, td, label, div, span:not([class*="fa"]):not([class*="badge"]) { font-family: ' + fontStack + ' !important; } i, i[class*="fa"], .fa, .fas, .far, .fab, .fa-solid, .fa-regular, .fa-brands, [class^="fa-"], [class*=" fa-"] { font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands", "FontAwesome" !important; font-style: normal !important; -webkit-text-stroke: 0 !important; } body { background-color: ' + bg + ' !important; color: ' + textColor + ' !important; } main { background-color: transparent !important; color: ' + textColor + ' !important; } #sidebar-drawer, aside { background-color: ' + sidebarBg + ' !important; border-color: ' + borderColor + ' !important; } header { background-color: ' + headerBg + ' !important; border-color: ' + borderColor + ' !important; } .bg-white, .bg-slate-50, .bg-slate-100 { background-color: ' + cardBg + ' !important; border-color: ' + borderColor + ' !important; } .text-slate-900, .text-slate-800, h1, h2, h3, h4, h5, h6, .font-black { color: ' + headingColor + ' !important; } .text-slate-700, .text-slate-600 { color: ' + textColor + ' !important; } .border-slate-100, .border-slate-200 { border-color: ' + borderColor + ' !important; } .tab-btn.active { background-color: rgba(245, 158, 11, 0.12) !important; color: ' + activeColor + ' !important; border-right-color: ' + activeColor + ' !important; } .tab-btn.active i { color: ' + activeColor + ' !important; } .btn-theme-primary { background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%) !important; border: none !important; color: #0F172A !important; }';
+            document.head.appendChild(s);
         } catch(_) {}
     </script>
     <!-- Mapbox GL JS v3 -->
@@ -89,7 +94,7 @@
             }
         }
     </script>
-<body class="bg-slate-50 text-slate-800 font-['IBM_Plex_Sans_Arabic',sans-serif] antialiased min-h-screen flex flex-col">
+<body class="bg-[#080E1A] text-slate-100 font-['IBM_Plex_Sans_Arabic',sans-serif] antialiased min-h-screen flex flex-col">
 
     <!-- ===================================================================== -->
     <!-- 0. ADMIN LOGIN OVERLAY (Gated Access: admin / 1122 or ١١٢٢)             -->
@@ -222,48 +227,49 @@
     <!-- ===================================================================== -->
     <!-- TOP NAVIGATION BAR (Clean SaaS Header: h-16, Backdrop Blur, Breadcrumbs) -->
     <!-- ===================================================================== -->
-    <header class="h-16 bg-white/95 backdrop-blur-md text-slate-800 sticky top-0 z-30 shadow-xs border-b border-slate-200/80">
+    <header class="h-16 bg-[#0D131F]/95 backdrop-blur-md text-slate-100 sticky top-0 z-30 shadow-md border-b border-white/10 relative">
+        <div class="amber-radiance-bar absolute bottom-0 inset-x-0"></div>
         <div class="h-full px-4 md:px-6 flex items-center justify-between">
             <!-- Brand & Mobile Menu Toggle & Breadcrumbs -->
             <div class="flex items-center gap-3">
-                <button onclick="toggleMobileSidebar()" class="md:hidden w-9 h-9 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors">
-                    <i class="fa-solid fa-bars text-sm"></i>
+                <button onclick="toggleMobileSidebar()" class="md:hidden min-w-[48px] min-h-[48px] rounded-xl bg-slate-800/80 hover:bg-slate-700 text-amber-400 flex items-center justify-center transition-colors">
+                    <i class="fa-solid fa-bars text-base"></i>
                 </button>
 
-                <div class="w-9 h-9 rounded-xl bg-[#1B4965] text-amber-400 flex items-center justify-center font-black text-lg shadow-sm flex-shrink-0">
+                <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center font-black text-xl shadow-xs flex-shrink-0">
                     🚖
                 </div>
                 <div>
-                    <h1 class="text-sm md:text-base font-black tracking-tight text-slate-900 flex items-center gap-1.5">
+                    <h1 class="text-sm md:text-base font-black tracking-tight text-white flex items-center gap-2">
                         توصيله
-                        <span class="text-slate-600 font-bold text-[10px] bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded-md">الإدارة السحابية</span>
+                        <span class="text-amber-400 font-bold text-[10px] bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-md">لوحة الإدارة المركزية • النجف الأشرف</span>
                     </h1>
                     <p class="text-[10px] text-slate-400 hidden sm:block">منصة النقل الذكي الموحدة - النجف الأشرف</p>
                 </div>
 
                 <!-- Breadcrumbs -->
-                <div class="hidden lg:flex items-center gap-1.5 text-xs text-slate-400 mr-4 pr-4 border-r border-slate-200">
+                <div class="hidden lg:flex items-center gap-2 text-xs text-slate-400 mr-4 pr-4 border-r border-white/10">
                     <i class="fa-solid fa-house text-slate-400 text-xs"></i>
                     <span>الرئيسية</span>
-                    <i class="fa-solid fa-chevron-left text-[9px] text-slate-300"></i>
-                    <span id="breadcrumb-section" class="font-medium text-slate-600">نظرة عامة والمؤشرات</span>
-                    <span id="breadcrumb-divider" class="hidden text-slate-300 text-[9px]"><i class="fa-solid fa-chevron-left"></i></span>
-                    <span id="breadcrumb-sub" class="hidden font-bold text-[#1B4965]"></span>
+                    <i class="fa-solid fa-chevron-left text-[9px] text-slate-500"></i>
+                    <span id="breadcrumb-section" class="font-medium text-slate-300">نظرة عامة والمؤشرات</span>
+                    <span id="breadcrumb-divider" class="hidden text-slate-500 text-[9px]"><i class="fa-solid fa-chevron-left"></i></span>
+                    <span id="breadcrumb-sub" class="hidden font-bold text-amber-400"></span>
                 </div>
             </div>
 
             <!-- Action Buttons -->
-            <div class="flex items-center gap-2 md:gap-3">
+            <div class="flex items-center gap-2.5 md:gap-3">
                 <!-- Live connection status -->
-                <div class="hidden md:inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 rounded-full text-xs font-semibold">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
-                    <span>سحابي متصل (Live)</span>
+                <div class="hidden md:inline-flex items-center gap-2 px-3.5 py-1.5 bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 rounded-full text-xs font-bold shadow-xs">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block animate-pulse shadow-sm shadow-emerald-500/50"></span>
+                    <span>المنظومة متصلة ومستقرة ✅</span>
                 </div>
 
                 <!-- Main Website Button -->
                 <a href="/" target="_blank" title="فتح الموقع الرئيسي لمنصة توصيله"
-                   class="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 hover:text-slate-900 border border-slate-200/80 rounded-xl text-xs font-bold transition shadow-xs">
-                    <i class="fa-solid fa-globe text-xs text-slate-500"></i>
+                   class="min-h-[48px] flex items-center gap-2 px-3.5 bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white border border-white/10 rounded-xl text-xs font-bold transition shadow-xs">
+                    <i class="fa-solid fa-globe text-xs text-amber-400"></i>
                     <span class="hidden sm:inline">الموقع الرئيسي 🌐</span>
                     <span class="sm:hidden text-[11px]">الموقع</span>
                 </a>
@@ -271,25 +277,25 @@
                 <!-- Notification Bell & Dropdown -->
                 <div class="relative">
                     <button onclick="toggleNotificationsDropdown()" id="btn-notification-bell" title="مركز الإشعارات والتنبيهات"
-                            class="relative flex items-center justify-center w-9 h-9 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl transition shadow-xs border border-slate-200/80">
-                        <i class="fa-regular fa-bell text-sm"></i>
-                        <span id="header-notif-badge" class="hidden absolute -top-1 -right-1 px-1.5 py-0.2 min-w-[16px] text-[10px] bg-rose-500 text-white rounded-full font-black text-center shadow-xs">0</span>
+                            class="relative flex items-center justify-center min-w-[48px] min-h-[48px] bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-amber-400 rounded-xl transition shadow-xs border border-white/10">
+                        <i class="fa-regular fa-bell text-base"></i>
+                        <span id="header-notif-badge" class="hidden absolute top-1 right-1 px-1.5 py-0.2 min-w-[18px] text-[10px] bg-rose-500 text-white rounded-full font-black text-center shadow-xs">0</span>
                     </button>
 
                     <!-- Notifications Dropdown Menu -->
-                    <div id="notifications-dropdown" class="hidden absolute left-0 mt-2 w-80 sm:w-96 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden text-right">
-                        <div class="p-3.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                    <div id="notifications-dropdown" class="hidden absolute left-0 mt-2 w-80 sm:w-96 bg-[#161C28] border border-amber-500/20 rounded-2xl shadow-2xl z-50 overflow-hidden text-right">
+                        <div class="p-3.5 bg-[#0F172A] border-b border-white/10 flex items-center justify-between">
                             <div class="flex items-center gap-2">
-                                <i class="fa-solid fa-bell text-amber-500"></i>
-                                <span class="text-xs font-bold text-slate-900">مركز التنبيهات الآنية</span>
+                                <i class="fa-solid fa-bell text-amber-400"></i>
+                                <span class="text-xs font-bold text-white">مركز التنبيهات الآنية</span>
                             </div>
-                            <span id="dropdown-notif-count" class="text-[10px] bg-amber-50 text-amber-700 border border-amber-200/60 px-2 py-0.5 rounded-full font-bold">0 تنبيه</span>
+                            <span id="dropdown-notif-count" class="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold">0 تنبيه</span>
                         </div>
-                        <div id="notifications-list" class="max-h-80 overflow-y-auto divide-y divide-slate-100 p-1">
+                        <div id="notifications-list" class="max-h-80 overflow-y-auto divide-y divide-white/5 p-1">
                             <div class="p-4 text-center text-xs text-slate-400">لا توجد إشعارات جديدة</div>
                         </div>
-                        <div class="p-2.5 bg-slate-50/80 border-t border-slate-100 text-center">
-                            <button onclick="switchTab('verifications'); toggleNotificationsDropdown(false);" class="text-xs text-[#1B4965] hover:underline font-bold">
+                        <div class="p-2.5 bg-[#0F172A]/80 border-t border-white/10 text-center">
+                            <button onclick="switchTab('verifications'); toggleNotificationsDropdown(false);" class="text-xs text-amber-400 hover:text-amber-300 font-bold py-1">
                                 الانتقال لطلبات التوثيق 🪪
                             </button>
                         </div>
@@ -297,11 +303,11 @@
                 </div>
 
                 <!-- Admin Profile & Logout -->
-                <div class="flex items-center gap-2 border-r border-slate-200 pr-2 sm:pr-3">
-                    <span class="text-xs font-bold text-slate-700 hidden sm:inline">Admin</span>
+                <div class="flex items-center gap-2 border-r border-white/10 pr-2 sm:pr-3">
+                    <span class="text-xs font-bold text-slate-300 hidden sm:inline">Admin</span>
                     <button onclick="logoutAdmin()" title="تسجيل الخروج"
-                            class="px-2.5 py-1.5 bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200/80 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
-                        <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+                            class="min-h-[48px] px-3.5 bg-slate-800/80 hover:bg-rose-950/60 text-slate-300 hover:text-rose-300 border border-white/10 hover:border-rose-500/40 rounded-xl text-xs font-bold transition flex items-center gap-2">
+                        <i class="fa-solid fa-arrow-right-from-bracket text-xs text-rose-400"></i>
                         <span class="hidden sm:inline">خروج</span>
                     </button>
                 </div>
@@ -320,15 +326,15 @@
 
         <!-- Sidebar Navigation (Desktop sticky, Mobile off-canvas drawer) -->
         <aside id="sidebar-drawer" 
-               class="fixed md:static inset-y-0 right-0 z-40 w-64 bg-white text-slate-700 flex flex-col justify-between border-l border-slate-200/80 transform translate-x-full md:translate-x-0 transition-transform duration-200 ease-out flex-shrink-0 shadow-xs md:shadow-none">
+               class="fixed md:static inset-y-0 right-0 z-40 w-64 bg-[#0B1528]/95 backdrop-blur-xl text-slate-200 flex flex-col justify-between border-l border-white/10 transform translate-x-full md:translate-x-0 transition-transform duration-200 ease-out flex-shrink-0 shadow-xl md:shadow-none">
             
-            <div class="py-4 md:py-6 px-3 space-y-1 overflow-y-auto">
-                <div class="flex items-center justify-between md:hidden pb-3 mb-2 border-b border-slate-100 px-2">
-                    <div class="flex items-center space-x-2 space-x-reverse font-bold text-slate-900 text-sm">
+            <div class="py-4 md:py-6 px-3 space-y-1.5 overflow-y-auto">
+                <div class="flex items-center justify-between md:hidden pb-3 mb-2 border-b border-white/10 px-2">
+                    <div class="flex items-center space-x-2 space-x-reverse font-bold text-white text-sm">
                         <span>🚖</span>
-                        <span>قائمة توصيله</span>
+                        <span>قائمة توصيله المركزية</span>
                     </div>
-                    <button onclick="toggleMobileSidebar(false)" class="text-slate-400 hover:text-slate-700 text-lg p-1">
+                    <button onclick="toggleMobileSidebar(false)" class="text-slate-400 hover:text-white text-lg min-w-[48px] min-h-[48px] flex items-center justify-center">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
@@ -345,7 +351,7 @@
                         <i class="fa-solid fa-id-card w-5 text-center text-slate-400"></i>
                         <span>توثيق السائقين</span>
                     </div>
-                    <span id="badge-verifications" class="hidden px-2 py-0.5 text-[10px] bg-rose-50 text-rose-700 border border-rose-200/60 rounded-full font-bold">0</span>
+                    <span id="badge-verifications" class="hidden px-2 py-0.5 text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/30 rounded-full font-bold">0</span>
                 </button>
 
                 <button onclick="switchTab('drivers')" id="tab-btn-drivers" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
@@ -368,7 +374,7 @@
                         <i class="fa-solid fa-user-xmark w-5 text-center text-slate-400"></i>
                         <span>طلبات إلغاء الركاب</span>
                     </div>
-                    <span id="badge-cancellations" class="hidden px-2 py-0.5 text-[10px] bg-amber-50 text-amber-700 border border-amber-200/60 rounded-full font-bold">0</span>
+                    <span id="badge-cancellations" class="hidden px-2 py-0.5 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full font-bold">0</span>
                 </button>
 
                 <button onclick="switchTab('trip-ratings')" id="tab-btn-trip-ratings" class="tab-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition">
@@ -376,7 +382,7 @@
                         <i class="fa-solid fa-star w-5 text-center text-slate-400"></i>
                         <span>تقييمات الرحلات والنقاط</span>
                     </div>
-                    <span id="badge-trip-ratings" class="hidden px-2 py-0.5 text-[10px] bg-amber-50 text-amber-700 border border-amber-200/60 rounded-full font-bold">0</span>
+                    <span id="badge-trip-ratings" class="hidden px-2 py-0.5 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full font-bold">0</span>
                 </button>
 
                 <button onclick="switchTab('fleet-map')" id="tab-btn-fleet-map" class="tab-btn w-full flex items-center space-x-3 space-x-reverse px-3 py-2.5 rounded-xl text-sm font-semibold transition">
@@ -389,7 +395,7 @@
                         <i class="fa-solid fa-shield-halved w-5 text-center text-slate-400"></i>
                         <span>الشكاوى والبلاغات</span>
                     </div>
-                    <span id="badge-complaints" class="hidden px-2 py-0.5 text-[10px] bg-amber-50 text-amber-700 border border-amber-200/60 rounded-full font-bold">0</span>
+                    <span id="badge-complaints" class="hidden px-2 py-0.5 text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full font-bold">0</span>
                 </button>
 
                 <div class="text-[11px] font-bold text-slate-400 uppercase px-3 pt-4 mb-1 tracking-wider">الإعدادات والأمان</div>
@@ -436,8 +442,8 @@
             </div>
 
             <!-- Footer info -->
-            <div class="p-4 border-t border-slate-100 text-xs text-slate-400 text-center bg-slate-50/50">
-                <p class="font-bold text-[#1B4965]">توصيله SaaS Dashboard</p>
+            <div class="p-4 border-t border-white/10 text-xs text-slate-400 text-center bg-[#080E1A]/80">
+                <p class="font-bold text-amber-400">توصيله SaaS Dashboard</p>
                 <p class="text-[10px] text-slate-400 mt-0.5">النجف الأشرف • محرك PostgreSQL الذاتي</p>
             </div>
         </aside>
@@ -453,56 +459,56 @@
                         <p class="text-xs md:text-sm text-slate-500">متابعة إحصائيات منصة توصيله الحية في محافظة النجف</p>
                     </div>
                     <div class="flex items-center gap-2">
-                        <button onclick="loadDashboardStats()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs md:text-sm font-bold flex items-center space-x-2 space-x-reverse transition">
+                        <button onclick="loadDashboardStats()" class="min-h-[48px] px-4 py-2 bg-slate-800 hover:bg-slate-700 text-amber-400 border border-white/10 rounded-xl text-xs md:text-sm font-bold flex items-center space-x-2 space-x-reverse transition cursor-pointer">
                             <i class="fa-solid fa-rotate"></i>
                             <span>تحديث</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- KPI Cards -->
+                <!-- KPI Cards (Google Material 3 Zero CLS Guaranteed) -->
                 <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                    <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3 md:space-x-4 space-x-reverse">
-                        <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center text-xl md:text-2xl font-bold flex-shrink-0">
+                    <div class="kpi-card min-h-[110px] bg-[#161C28]/95 backdrop-blur-2xl p-4 md:p-6 rounded-2xl border border-white/10 shadow-lg flex items-center space-x-3 md:space-x-4 space-x-reverse relative overflow-hidden group hover:border-amber-500/40 transition">
+                        <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center text-xl md:text-2xl font-bold flex-shrink-0 shadow-sm shadow-amber-500/20">
                             <i class="fa-solid fa-taxi"></i>
                         </div>
                         <div>
-                            <p class="text-[11px] md:text-xs font-semibold text-slate-500">إجمالي السائقين</p>
-                            <h3 id="stat-total-drivers" class="text-xl md:text-2xl font-extrabold text-slate-900 mt-0.5">0</h3>
-                            <p class="text-[10px] md:text-xs text-emerald-600 font-medium mt-0.5"><span id="stat-verified-drivers">0</span> موثق</p>
+                            <p class="text-[11px] md:text-xs font-semibold text-slate-400">إجمالي السائقين</p>
+                            <h3 id="stat-total-drivers" class="text-xl md:text-2xl font-mono font-extrabold text-white mt-0.5 tracking-tight">0</h3>
+                            <p class="text-[10px] md:text-xs text-emerald-400 font-medium mt-0.5"><span id="stat-verified-drivers">0</span> موثق</p>
                         </div>
                     </div>
 
-                    <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3 md:space-x-4 space-x-reverse">
-                        <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center text-xl md:text-2xl font-bold flex-shrink-0">
+                    <div class="kpi-card min-h-[110px] bg-[#161C28]/95 backdrop-blur-2xl p-4 md:p-6 rounded-2xl border border-white/10 shadow-lg flex items-center space-x-3 md:space-x-4 space-x-reverse relative overflow-hidden group hover:border-rose-500/40 transition">
+                        <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center text-xl md:text-2xl font-bold flex-shrink-0 shadow-sm shadow-rose-500/20">
                             <i class="fa-solid fa-id-card"></i>
                         </div>
                         <div>
-                            <p class="text-[11px] md:text-xs font-semibold text-slate-500">بانتظار التدقيق</p>
-                            <h3 id="stat-pending-verifications" class="text-xl md:text-2xl font-extrabold text-rose-600 mt-0.5">0</h3>
+                            <p class="text-[11px] md:text-xs font-semibold text-slate-400">بانتظار التدقيق</p>
+                            <h3 id="stat-pending-verifications" class="text-xl md:text-2xl font-mono font-extrabold text-rose-400 mt-0.5 tracking-tight">0</h3>
                             <p class="text-[10px] md:text-xs text-slate-400 font-medium mt-0.5">بحاجة فحص</p>
                         </div>
                     </div>
 
-                    <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3 md:space-x-4 space-x-reverse">
-                        <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center text-xl md:text-2xl font-bold flex-shrink-0">
+                    <div class="kpi-card min-h-[110px] bg-[#161C28]/95 backdrop-blur-2xl p-4 md:p-6 rounded-2xl border border-white/10 shadow-lg flex items-center space-x-3 md:space-x-4 space-x-reverse relative overflow-hidden group hover:border-sky-500/40 transition">
+                        <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-sky-500/15 border border-sky-500/30 text-sky-400 flex items-center justify-center text-xl md:text-2xl font-bold flex-shrink-0 shadow-sm shadow-sky-500/20">
                             <i class="fa-solid fa-route"></i>
                         </div>
                         <div>
-                            <p class="text-[11px] md:text-xs font-semibold text-slate-500">المسارات النشطة</p>
-                            <h3 id="stat-active-routes" class="text-xl md:text-2xl font-extrabold text-slate-900 mt-0.5">0</h3>
+                            <p class="text-[11px] md:text-xs font-semibold text-slate-400">المسارات النشطة</p>
+                            <h3 id="stat-active-routes" class="text-xl md:text-2xl font-mono font-extrabold text-white mt-0.5 tracking-tight">0</h3>
                             <p class="text-[10px] md:text-xs text-slate-400 font-medium mt-0.5">خطوط نقل دورية</p>
                         </div>
                     </div>
 
-                    <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-3 md:space-x-4 space-x-reverse">
-                        <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-xl md:text-2xl font-bold flex-shrink-0">
+                    <div class="kpi-card min-h-[110px] bg-[#161C28]/95 backdrop-blur-2xl p-4 md:p-6 rounded-2xl border border-white/10 shadow-lg flex items-center space-x-3 md:space-x-4 space-x-reverse relative overflow-hidden group hover:border-emerald-500/40 transition">
+                        <div class="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-xl md:text-2xl font-bold flex-shrink-0 shadow-sm shadow-emerald-500/20">
                             <i class="fa-solid fa-money-bill-wave"></i>
                         </div>
                         <div>
-                            <p class="text-[11px] md:text-xs font-semibold text-slate-500">إجمالي الحجوزات</p>
-                            <h3 id="stat-total-bookings" class="text-xl md:text-2xl font-extrabold text-slate-900 mt-0.5">0</h3>
-                            <p class="text-[10px] md:text-xs text-emerald-600 font-medium mt-0.5"><span id="stat-total-revenue">0</span> د.ع</p>
+                            <p class="text-[11px] md:text-xs font-semibold text-slate-400">إجمالي الحجوزات</p>
+                            <h3 id="stat-total-bookings" class="text-xl md:text-2xl font-mono font-extrabold text-white mt-0.5 tracking-tight">0</h3>
+                            <p class="text-[10px] md:text-xs text-emerald-400 font-medium mt-0.5"><span id="stat-total-revenue">0</span> د.ع</p>
                         </div>
                     </div>
                 </div>
@@ -2730,33 +2736,34 @@
     <!-- ===================================================================== -->
     <!-- MODAL: ADD CAPTAIN & DRAW ROUTE (Admin Feature)                       -->
     <!-- ===================================================================== -->
-    <div id="modal-add-captain" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm hidden items-center justify-center p-2 sm:p-4 pointer-events-none">
-        <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full overflow-hidden flex flex-col max-h-[95vh] animate-scale-up border border-slate-200">
+    <div id="modal-add-captain" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md hidden items-center justify-center p-2 sm:p-4 pointer-events-none">
+        <div class="bg-[#0F172A]/95 backdrop-blur-2xl rounded-3xl shadow-2xl max-w-4xl w-full overflow-hidden flex flex-col max-h-[95vh] animate-scale-up border border-amber-500/25 relative">
+            <div class="amber-radiance-bar absolute top-0 inset-x-0"></div>
             
             <!-- Modal Header -->
-            <div class="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+            <div class="px-6 py-4 bg-[#080E1A] text-white flex items-center justify-between border-b border-white/10">
                 <div class="flex items-center space-x-3 space-x-reverse">
-                    <div class="w-10 h-10 rounded-2xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-xl shadow-md">
+                    <div class="w-10 h-10 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center font-black text-xl shadow-md">
                         🚖
                     </div>
                     <div>
-                        <h3 class="font-bold text-base leading-tight">تسجيل كابتن جديد واعتماد خط سيره</h3>
+                        <h3 class="font-bold text-base leading-tight text-white">تسجيل كابتن جديد واعتماد خط سيره</h3>
                         <p class="text-[11px] text-amber-400 font-semibold">إدخال البيانات وتفعيل الحساب واعتماد خط السير ومعرف تيليجرام</p>
                     </div>
                 </div>
-                <button type="button" onclick="closeAddCaptainModal()" class="text-slate-400 hover:text-white transition text-3xl font-bold p-1 leading-none cursor-pointer">
+                <button type="button" onclick="closeAddCaptainModal()" class="text-slate-400 hover:text-white transition text-2xl font-bold min-w-[48px] min-h-[48px] flex items-center justify-center rounded-full hover:bg-white/10 cursor-pointer">
                     &times;
                 </button>
             </div>
 
             <!-- Modal Body (Form) -->
-            <form id="form-add-captain" onsubmit="submitAdminAddCaptain(event)" class="overflow-y-auto flex-1 p-5 space-y-5 bg-slate-50">
+            <form id="form-add-captain" onsubmit="submitAdminAddCaptain(event)" class="overflow-y-auto flex-1 p-5 space-y-5 bg-transparent">
                 
                 <!-- SECTION 1: Personal & Login Credentials -->
-                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <span class="text-xs font-black text-slate-800 flex items-center gap-2">
-                            <span class="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs">1</span>
+                <div class="bg-[#161C28]/95 backdrop-blur-xl p-5 rounded-2xl border border-white/10 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between border-b border-white/10 pb-2">
+                        <span class="text-xs font-black text-white flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs">1</span>
                             <span>بيانات الحساب وتفعيل الكابتن</span>
                         </span>
                         <span class="text-[11px] text-slate-400">تفعيل الحساب والتحقق برقم الهاتف</span>
@@ -2764,31 +2771,31 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">الاسم الكامل للكابتن <span class="text-rose-500">*</span></label>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">الاسم الكامل للكابتن <span class="text-rose-500">*</span></label>
                             <input type="text" id="admin-drv-name" required placeholder="مثال: وسام علي الشمري"
-                                   class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900">
+                                   class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف العراقي <span class="text-rose-500">*</span></label>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">رقم الهاتف العراقي <span class="text-rose-500">*</span></label>
                             <input type="tel" id="admin-drv-phone" required oninput="checkAdminCaptainPhone(this.value)" placeholder="07706204066 أو 07801234567" dir="ltr"
-                                   class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 text-left">
+                                   class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-xs font-mono font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 text-white text-left">
                             <div id="admin-drv-phone-status" class="text-xs font-bold mt-1.5 hidden"></div>
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">البريد الإلكتروني (اختياري)</label>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">البريد الإلكتروني (اختياري)</label>
                             <input type="email" id="admin-drv-email" placeholder="captain@taxiwisam.com" dir="ltr"
-                                   class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 text-left">
+                                   class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-white text-left">
                         </div>
                     </div>
                 </div>
 
                 <!-- SECTION 2: Vehicle & Service Details -->
-                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <span class="text-xs font-black text-slate-800 flex items-center gap-2">
-                            <span class="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs">2</span>
+                <div class="bg-[#161C28]/95 backdrop-blur-xl p-5 rounded-2xl border border-white/10 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between border-b border-white/10 pb-2">
+                        <span class="text-xs font-black text-white flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs">2</span>
                             <span>بيانات المركبة والخدمة</span>
                         </span>
                         <span class="text-[11px] text-slate-400">تظهر للراكب عند البحث</span>
@@ -2796,28 +2803,28 @@
 
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">نوع وموديل السيارة <span class="text-rose-500">*</span></label>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">نوع وموديل السيارة <span class="text-rose-500">*</span></label>
                             <input type="text" id="admin-drv-vehicle" required placeholder="مثال: كيا ريو 2022 / سايبا"
-                                   class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900">
+                                   class="w-full px-3.5 py-2 bg-[#161C28] border border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">رقم اللوحة والمحافظة <span class="text-rose-500">*</span></label>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">رقم اللوحة والمحافظة <span class="text-rose-500">*</span></label>
                             <input type="text" id="admin-drv-plate" required placeholder="مثال: 12345 النجف - خصوصي"
-                                   class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900">
+                                   class="w-full px-3.5 py-2 bg-[#161C28] border border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">لون المركبة</label>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">لون المركبة</label>
                             <input type="text" id="admin-drv-color" placeholder="مثال: أبيض / أصفر / رصاصي" value="أبيض"
-                                   class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900">
+                                   class="w-full px-3.5 py-2 bg-[#161C28] border border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                         </div>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">عدد المقاعد الشاغرة للركاب <span class="text-rose-500">*</span></label>
-                            <select id="admin-drv-seats" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 font-semibold">
+                            <label class="block text-xs font-bold text-slate-300 mb-1">عدد المقاعد الشاغرة للركاب <span class="text-rose-500">*</span></label>
+                            <select id="admin-drv-seats" class="w-full px-3.5 py-2 bg-[#161C28] border border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-white font-semibold">
                                 <option value="4" selected>4 ركاب (سيارة صالون)</option>
                                 <option value="1">1 راكب</option>
                                 <option value="2">2 ركاب</option>
@@ -2829,16 +2836,16 @@
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">نوع الخدمة والخط <span class="text-rose-500">*</span></label>
-                            <select id="admin-drv-service" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 font-semibold">
+                            <label class="block text-xs font-bold text-slate-300 mb-1">نوع الخدمة والخط <span class="text-rose-500">*</span></label>
+                            <select id="admin-drv-service" class="w-full px-3.5 py-2 bg-[#161C28] border border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-white font-semibold">
                                 <option value="permanent" selected>خط دائمي ثابت (جامعات / موظفين / خط يومي)</option>
                                 <option value="both">كلاهما (خط دائمي + تكسي)</option>
                                 <option value="short">تكسي (مشاوير فورية فقط)</option>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">فئة المركبة للراكب <span class="text-rose-500">*</span></label>
-                            <select id="admin-drv-vehicle-type" class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 font-semibold">
+                            <label class="block text-xs font-bold text-slate-300 mb-1">فئة المركبة للراكب <span class="text-rose-500">*</span></label>
+                            <select id="admin-drv-vehicle-type" class="w-full px-3.5 py-2 bg-[#161C28] border border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-white font-semibold">
                                 <option value="eco" selected>🚕 توفير</option>
                                 <option value="vip">👑 VIP</option>
                             </select>
@@ -2847,51 +2854,51 @@
                 </div>
 
                 <!-- SECTION 3: Route & Telegram Details -->
-                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <span class="text-xs font-black text-slate-800 flex items-center gap-2">
-                            <span class="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-xs">3</span>
+                <div class="bg-[#161C28]/95 backdrop-blur-xl p-5 rounded-2xl border border-white/10 shadow-sm space-y-4">
+                    <div class="flex items-center justify-between border-b border-white/10 pb-2">
+                        <span class="text-xs font-black text-white flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs">3</span>
                             <span>خط السير المعتمد ومعرّف تيليجرام</span>
                         </span>
-                        <span class="text-[11px] text-emerald-600 font-bold">بيانات العمل والتواصل المباشر</span>
+                        <span class="text-[11px] text-emerald-400 font-bold">بيانات العمل والتواصل المباشر</span>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">خط السير / مسار الكابتن <span class="text-rose-500">*</span></label>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">خط السير / مسار الكابتن <span class="text-rose-500">*</span></label>
                             <input type="text" id="admin-drv-route" required placeholder="مثال: حي الغدير ➔ جامعة الكوفة"
-                                   class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900">
+                                   class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">معرّف تيليجرام (Telegram Chat ID) <span class="text-slate-400 text-[10px] font-normal">(اختياري)</span></label>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">معرّف تيليجرام (Telegram Chat ID) <span class="text-slate-400 text-[10px] font-normal">(اختياري)</span></label>
                             <div class="relative">
                                 <input type="text" id="add-drv-telegram-id" placeholder="مثال: 123456789" dir="ltr"
-                                       class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-slate-900 text-left pl-10">
-                                <span class="absolute left-3 top-2.5 text-sky-500"><i class="fa-brands fa-telegram text-base"></i></span>
+                                       class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-white text-left pl-10">
+                                <span class="absolute left-3 top-2.5 text-sky-400"><i class="fa-brands fa-telegram text-base"></i></span>
                             </div>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <div>
-                            <label class="block text-xs font-bold text-slate-700 mb-1">أجرة الراكب التقديرية (د.ع):</label>
+                            <label class="block text-xs font-bold text-slate-300 mb-1">أجرة الراكب التقديرية (د.ع):</label>
                             <input type="number" id="admin-route-fare" value="3000" step="500"
-                                   class="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-center text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                                   class="w-full px-3.5 py-2 bg-[#161C28] border border-slate-700 rounded-xl text-xs font-mono font-bold text-center text-white focus:outline-none focus:ring-2 focus:ring-amber-500">
                         </div>
-                        <div class="flex items-center text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-                            <i class="fa-solid fa-circle-info text-amber-500 ml-1.5 text-sm"></i>
+                        <div class="flex items-center text-[11px] text-slate-300 bg-slate-800/60 p-2.5 rounded-xl border border-white/10">
+                            <i class="fa-solid fa-circle-info text-amber-400 ml-1.5 text-sm"></i>
                             <span>يتم إشعار الكابتن بطلبات المشاوير وحجوزات الخط فوراً عبر تيليجرام عند توفر معرّف المحادثة.</span>
                         </div>
                     </div>
                 </div>
 
                 <!-- Footer Buttons -->
-                <div class="flex items-center justify-end gap-3 pt-2 border-t border-slate-200">
-                    <button type="button" onclick="closeAddCaptainModal()" class="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer">
+                <div class="flex items-center justify-end gap-3 pt-2 border-t border-white/10">
+                    <button type="button" onclick="closeAddCaptainModal()" class="min-h-[48px] px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition border border-white/10 cursor-pointer">
                         إلغاء
                     </button>
-                    <button type="submit" id="btn-submit-add-captain" class="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs sm:text-sm transition flex items-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer">
+                    <button type="submit" id="btn-submit-add-captain" class="btn-primary-golden min-h-[50px] px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs sm:text-sm transition flex items-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer">
                         <i class="fa-solid fa-check-double"></i>
                         <span>حفظ واعتماد الكابتن وتثبيت مساره 🚀</span>
                     </button>
@@ -2956,78 +2963,80 @@
     </div>
 
     <!-- ADD CUSTOMER MODAL -->
-    <div id="modal-add-customer" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4 pointer-events-none">
-        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-                <h3 class="text-lg font-black text-slate-900 flex items-center gap-2">
-                    <i class="fa-solid fa-user-plus text-blue-600"></i>
+    <div id="modal-add-customer" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md hidden items-center justify-center p-4 pointer-events-none">
+        <div class="bg-[#0F172A]/95 backdrop-blur-2xl rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-amber-500/25 space-y-4 relative overflow-hidden">
+            <div class="amber-radiance-bar absolute top-0 inset-x-0"></div>
+            <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                <h3 class="text-lg font-black text-white flex items-center gap-2">
+                    <i class="fa-solid fa-user-plus text-amber-400"></i>
                     <span>إضافة حساب راكب جديد وتفعيله</span>
                 </h3>
-                <button type="button" onclick="closeAddCustomerModal()" class="text-slate-400 hover:text-slate-600 text-2xl font-bold p-1 leading-none cursor-pointer">&times;</button>
+                <button type="button" onclick="closeAddCustomerModal()" class="text-slate-400 hover:text-white text-2xl font-bold min-w-[48px] min-h-[48px] flex items-center justify-center rounded-full hover:bg-white/10 cursor-pointer">&times;</button>
             </div>
             <form id="form-add-customer" onsubmit="submitAdminAddCustomer(event)" class="space-y-3.5">
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">الاسم الكامل للراكب <span class="text-rose-500">*</span></label>
-                    <input type="text" id="add-cust-name" required placeholder="مثال: حيدر علي الحسني" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label class="block text-xs font-bold text-slate-300 mb-1">الاسم الكامل للراكب <span class="text-rose-500">*</span></label>
+                    <input type="text" id="add-cust-name" required placeholder="مثال: حيدر علي الحسني" class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف العراقي (اسم المستخدم) <span class="text-rose-500">*</span></label>
-                    <input type="tel" id="add-cust-phone" required placeholder="07701234567" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 text-left" dir="ltr">
+                    <label class="block text-xs font-bold text-slate-300 mb-1">رقم الهاتف العراقي (اسم المستخدم) <span class="text-rose-500">*</span></label>
+                    <input type="tel" id="add-cust-phone" required placeholder="07701234567" class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-left text-white" dir="ltr">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">المسار (خط السير المطلوب) <span class="text-rose-500">*</span></label>
-                    <input type="text" id="add-cust-route" required placeholder="مثال: من حي الجامعة إلى جامعة الكوفة" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label class="block text-xs font-bold text-slate-300 mb-1">المسار (خط السير المطلوب) <span class="text-rose-500">*</span></label>
+                    <input type="text" id="add-cust-route" required placeholder="مثال: من حي الجامعة إلى جامعة الكوفة" class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">العنوان بالتفصيل <span class="text-rose-500">*</span></label>
-                    <input type="text" id="add-cust-address" required placeholder="مثال: النجف - حي الجامعة - قرب المسجد" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label class="block text-xs font-bold text-slate-300 mb-1">العنوان بالتفصيل <span class="text-rose-500">*</span></label>
+                    <input type="text" id="add-cust-address" required placeholder="مثال: النجف - حي الجامعة - قرب المسجد" class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">معرّف تيليجرام (Telegram Chat ID) <span class="text-slate-400 text-[10px] font-normal">(اختياري)</span></label>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">معرّف تيليجرام (Telegram Chat ID) <span class="text-slate-400 text-[10px] font-normal">(اختياري)</span></label>
                     <div class="relative">
-                        <input type="text" id="add-cust-telegram-id" placeholder="مثال: 123456789" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 text-left pl-10" dir="ltr">
-                        <span class="absolute left-3 top-2.5 text-sky-500"><i class="fa-brands fa-telegram text-base"></i></span>
+                        <input type="text" id="add-cust-telegram-id" placeholder="مثال: 123456789" class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-left pl-10 text-white" dir="ltr">
+                        <span class="absolute left-3 top-2.5 text-sky-400"><i class="fa-brands fa-telegram text-base"></i></span>
                     </div>
                 </div>
-                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                    <button type="button" onclick="closeAddCustomerModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer">إلغاء</button>
-                    <button type="submit" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black shadow-md shadow-blue-600/20 transition cursor-pointer">إنشاء وتفعيل الحساب 🚀</button>
+                <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-white/10">
+                    <button type="button" onclick="closeAddCustomerModal()" class="min-h-[48px] px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition border border-white/10 cursor-pointer">إلغاء</button>
+                    <button type="submit" class="btn-primary-golden min-h-[50px] px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black shadow-lg shadow-amber-500/25 transition cursor-pointer">إنشاء وتفعيل الحساب 🚀</button>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- EDIT CUSTOMER MODAL -->
-    <div id="modal-edit-customer" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4 pointer-events-none">
-        <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
-            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-                <h3 class="text-lg font-black text-slate-900 flex items-center gap-2">
-                    <i class="fa-solid fa-user-pen text-amber-500"></i>
+    <div id="modal-edit-customer" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md hidden items-center justify-center p-4 pointer-events-none">
+        <div class="bg-[#0F172A]/95 backdrop-blur-2xl rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-amber-500/25 space-y-4 max-h-[92vh] overflow-y-auto relative">
+            <div class="amber-radiance-bar absolute top-0 inset-x-0"></div>
+            <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                <h3 class="text-lg font-black text-white flex items-center gap-2">
+                    <i class="fa-solid fa-user-pen text-amber-400"></i>
                     <span>تعديل بيانات الراكب</span>
                 </h3>
-                <button type="button" onclick="closeEditCustomerModal()" class="text-slate-400 hover:text-slate-600 text-2xl font-bold p-1 leading-none">&times;</button>
+                <button type="button" onclick="closeEditCustomerModal()" class="text-slate-400 hover:text-white text-2xl font-bold min-w-[48px] min-h-[48px] flex items-center justify-center rounded-full hover:bg-white/10 cursor-pointer">&times;</button>
             </div>
             <form id="form-edit-customer" onsubmit="submitEditCustomer(event)" class="space-y-3.5">
                 <input type="hidden" id="edit-cust-id">
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">الاسم الكامل</label>
-                    <input type="text" id="edit-cust-name" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <label class="block text-xs font-bold text-slate-300 mb-1">الاسم الكامل</label>
+                    <input type="text" id="edit-cust-name" required class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف</label>
-                    <input type="tel" id="edit-cust-phone" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-left" dir="ltr">
+                    <label class="block text-xs font-bold text-slate-300 mb-1">رقم الهاتف</label>
+                    <input type="tel" id="edit-cust-phone" required class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-left text-white" dir="ltr">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">المسار (خط السير)</label>
-                    <input type="text" id="edit-cust-route" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <label class="block text-xs font-bold text-slate-300 mb-1">المسار (خط السير)</label>
+                    <input type="text" id="edit-cust-route" required class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">العنوان</label>
-                    <input type="text" id="edit-cust-address" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <label class="block text-xs font-bold text-slate-300 mb-1">العنوان</label>
+                    <input type="text" id="edit-cust-address" required class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">المحافظة</label>
-                    <select id="edit-cust-gov" onchange="onEditModalGovChange('customer', this.value)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <label class="block text-xs font-bold text-slate-300 mb-1">المحافظة</label>
+                    <select id="edit-cust-gov" onchange="onEditModalGovChange('customer', this.value)" class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                         <option value="najaf">النجف</option>
                         <option value="baghdad">بغداد</option>
                         <option value="basra">البصرة</option>
@@ -3050,65 +3059,66 @@
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">معرّف تيليجرام (Telegram Chat ID) <span class="text-slate-400 text-[10px] font-normal">(اختياري)</span></label>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">معرّف تيليجرام (Telegram Chat ID) <span class="text-slate-400 text-[10px] font-normal">(اختياري)</span></label>
                     <div class="relative">
-                        <input type="text" id="edit-cust-telegram-id" placeholder="مثال: 123456789" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-left pl-10" dir="ltr">
-                        <span class="absolute left-3 top-2.5 text-sky-500"><i class="fa-brands fa-telegram text-base"></i></span>
+                        <input type="text" id="edit-cust-telegram-id" placeholder="مثال: 123456789" class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-left pl-10 text-white" dir="ltr">
+                        <span class="absolute left-3 top-2.5 text-sky-400"><i class="fa-brands fa-telegram text-base"></i></span>
                     </div>
                     <p class="text-[11px] text-slate-400 mt-1">يتم ربطه تلقائياً عند مراسلة الراكب للبوت، أو يمكن إدخاله يدوياً لاستلام إشعارات المشاوير.</p>
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">كلمة المرور (اتركها فارغة إذا لم ترغب بالتغيير)</label>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">كلمة المرور (اتركها فارغة إذا لم ترغب بالتغيير)</label>
                     <div class="flex gap-2">
-                        <input type="text" id="edit-cust-password" placeholder="أدخل كلمة مرور جديدة أو اتركها كما هي" class="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500">
-                        <button type="button" onclick="generateUniquePasswordToInput('edit-cust-password')" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
-                            <i class="fa-solid fa-dice"></i>
+                        <input type="text" id="edit-cust-password" placeholder="أدخل كلمة مرور جديدة أو اتركها كما هي" class="flex-1 px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
+                        <button type="button" onclick="generateUniquePasswordToInput('edit-cust-password')" class="min-h-[48px] px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1 border border-white/10 cursor-pointer">
+                            <i class="fa-solid fa-dice text-amber-400"></i>
                             <span>توليد</span>
                         </button>
                     </div>
                 </div>
-                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                    <button type="button" onclick="closeEditCustomerModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition">إلغاء</button>
-                    <button type="submit" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black shadow-md shadow-amber-500/20 transition">حفظ التعديلات ✅</button>
+                <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-white/10">
+                    <button type="button" onclick="closeEditCustomerModal()" class="min-h-[48px] px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition border border-white/10 cursor-pointer">إلغاء</button>
+                    <button type="submit" class="btn-primary-golden min-h-[50px] px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black shadow-lg shadow-amber-500/25 transition cursor-pointer">حفظ التعديلات ✅</button>
                 </div>
             </form>
         </div>
     </div>
 
     <!-- EDIT DRIVER MODAL -->
-    <div id="modal-edit-driver" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm hidden items-center justify-center p-4 pointer-events-none">
-        <div class="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
-            <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-                <h3 class="text-lg font-black text-slate-900 flex items-center gap-2">
-                    <i class="fa-solid fa-user-gear text-amber-500"></i>
+    <div id="modal-edit-driver" style="display: none;" class="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md hidden items-center justify-center p-4 pointer-events-none">
+        <div class="bg-[#0F172A]/95 backdrop-blur-2xl rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-amber-500/25 space-y-4 max-h-[92vh] overflow-y-auto relative">
+            <div class="amber-radiance-bar absolute top-0 inset-x-0"></div>
+            <div class="flex items-center justify-between pb-3 border-b border-white/10">
+                <h3 class="text-lg font-black text-white flex items-center gap-2">
+                    <i class="fa-solid fa-user-gear text-amber-400"></i>
                     <span>تعديل بيانات الكابتن</span>
                 </h3>
-                <button type="button" onclick="closeEditDriverModal()" class="text-slate-400 hover:text-slate-600 text-2xl font-bold p-1 leading-none">&times;</button>
+                <button type="button" onclick="closeEditDriverModal()" class="text-slate-400 hover:text-white text-2xl font-bold min-w-[48px] min-h-[48px] flex items-center justify-center rounded-full hover:bg-white/10 cursor-pointer">&times;</button>
             </div>
             <form id="form-edit-driver" onsubmit="submitEditDriver(event)" class="space-y-3.5">
                 <input type="hidden" id="edit-drv-id">
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">الاسم الكامل</label>
-                    <input type="text" id="edit-drv-name" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <label class="block text-xs font-bold text-slate-300 mb-1">الاسم الكامل</label>
+                    <input type="text" id="edit-drv-name" required class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">رقم الهاتف</label>
-                    <input type="tel" id="edit-drv-phone" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-left" dir="ltr">
+                    <label class="block text-xs font-bold text-slate-300 mb-1">رقم الهاتف</label>
+                    <input type="tel" id="edit-drv-phone" required class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-left text-white" dir="ltr">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">المسار (خط السير المعتمد)</label>
-                    <input type="text" id="edit-drv-route" required class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <label class="block text-xs font-bold text-slate-300 mb-1">المسار (خط السير المعتمد)</label>
+                    <input type="text" id="edit-drv-route" required class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">فئة المركبة للراكب</label>
-                    <select id="edit-drv-vehicle-type" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <label class="block text-xs font-bold text-slate-300 mb-1">فئة المركبة للراكب</label>
+                    <select id="edit-drv-vehicle-type" class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                         <option value="eco">🚕 توفير</option>
                         <option value="vip">👑 VIP</option>
                     </select>
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">المحافظة</label>
-                    <select id="edit-drv-gov" onchange="onEditModalGovChange('driver', this.value)" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <label class="block text-xs font-bold text-slate-300 mb-1">المحافظة</label>
+                    <select id="edit-drv-gov" onchange="onEditModalGovChange('driver', this.value)" class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                         <option value="najaf">النجف</option>
                         <option value="baghdad">بغداد</option>
                         <option value="basra">البصرة</option>
@@ -3124,33 +3134,33 @@
                         <option value="wasit">واسط</option>
                         <option value="saladin">صلاح الدين</option>
                         <option value="dhi_qar">ذي قار</option>
-                        <option value="maysan">ميسان</option>
+                        <option value="maysan">ميسan</option>
                         <option value="muthanna">المثنى</option>
                         <option value="qadisiyyah">القادسية</option>
                     </select>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">معرّف تيليجرام (Telegram Chat ID)</label>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">معرّف تيليجرام (Telegram Chat ID)</label>
                     <div class="relative">
-                        <input type="text" id="edit-drv-telegram-id" placeholder="مثال: 123456789" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-left pl-10" dir="ltr">
-                        <span class="absolute left-3 top-2.5 text-sky-500"><i class="fa-brands fa-telegram text-lg"></i></span>
+                        <input type="text" id="edit-drv-telegram-id" placeholder="مثال: 123456789" class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-left pl-10 text-white" dir="ltr">
+                        <span class="absolute left-3 top-2.5 text-sky-400"><i class="fa-brands fa-telegram text-lg"></i></span>
                     </div>
                     <p class="text-[11px] text-slate-400 mt-1">يتم ربطه تلقائياً عند مراسلة الكابتن للبوت، أو يمكن تعيينه يدوياً لاستلام إشعارات المشاوير الفورية.</p>
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-700 mb-1">كلمة المرور (اتركها فارغة إذا لم ترغب بالتغيير)</label>
+                    <label class="block text-xs font-bold text-slate-300 mb-1">كلمة المرور (اتركها فارغة إذا لم ترغب بالتغيير)</label>
                     <div class="flex gap-2">
-                        <input type="text" id="edit-drv-password" placeholder="أدخل كلمة مرور جديدة أو اتركها كما هي" class="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500">
-                        <button type="button" onclick="generateUniquePasswordToInput('edit-drv-password')" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer">
-                            <i class="fa-solid fa-dice"></i>
+                        <input type="text" id="edit-drv-password" placeholder="أدخل كلمة مرور جديدة أو اتركها كما هي" class="flex-1 px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
+                        <button type="button" onclick="generateUniquePasswordToInput('edit-drv-password')" class="min-h-[48px] px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1 border border-white/10 cursor-pointer">
+                            <i class="fa-solid fa-dice text-amber-400"></i>
                             <span>توليد</span>
                         </button>
                     </div>
                 </div>
-                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                    <button type="button" onclick="closeEditDriverModal()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition">إلغاء</button>
-                    <button type="submit" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black shadow-md shadow-amber-500/20 transition">حفظ التعديلات ✅</button>
+                <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-white/10">
+                    <button type="button" onclick="closeEditDriverModal()" class="min-h-[48px] px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition border border-white/10 cursor-pointer">إلغاء</button>
+                    <button type="submit" class="btn-primary-golden min-h-[50px] px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black shadow-lg shadow-amber-500/25 transition cursor-pointer">حفظ التعديلات ✅</button>
                 </div>
             </form>
         </div>
@@ -3475,6 +3485,6 @@
         });
     </script>
 
-    <script src="/dashboard/app.js?v=20261019_role_routing_v6"></script>
+    <script src="/dashboard/app.js?v=20261020_dark_luxury_v2"></script>
 </body>
 </html>

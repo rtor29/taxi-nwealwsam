@@ -1112,8 +1112,8 @@ async function loadDrivers(search = '') {
             const tgLinked = Boolean(d.telegramChatId || d.telegram_chat_id);
             const tgUser = (d.telegramUsername || d.telegram_username) ? ` (${escapeHtml(d.telegramUsername || d.telegram_username)})` : '';
             const tgIcon = tgLinked
-                ? `<span class="inline-flex items-center text-emerald-500 hover:text-emerald-600 transition cursor-help" title="مرتبط بالتيليجرام: ${escapeHtml(d.telegramChatId || d.telegram_chat_id)}${tgUser}"><i class="fa-brands fa-telegram text-sm"></i></span>`
-                : `<span class="inline-flex items-center text-slate-300" title="غير مرتبط بتيليجرام"><i class="fa-brands fa-telegram text-sm"></i></span>`;
+                ? `<span class="inline-flex items-center text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)] cursor-help" title="مرتبط بالتيليجرام: ${escapeHtml(d.telegramChatId || d.telegram_chat_id)}${tgUser}"><i class="fa-brands fa-telegram text-base"></i></span>`
+                : `<span class="inline-flex items-center text-slate-500" title="غير مرتبط بتيليجرام"><i class="fa-brands fa-telegram text-base"></i></span>`;
 
             tr.innerHTML = `
                 <td class="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
@@ -1273,8 +1273,8 @@ async function loadCustomers(search = '') {
             const tgLinked = Boolean(c.telegramChatId || c.telegram_chat_id);
             const tgUser = (c.telegramUsername || c.telegram_username) ? ` (${escapeHtml(c.telegramUsername || c.telegram_username)})` : '';
             const tgIcon = tgLinked
-                ? `<span class="inline-flex items-center text-emerald-500 hover:text-emerald-600 transition cursor-help" title="مرتبط بالتيليجرام: ${escapeHtml(c.telegramChatId || c.telegram_chat_id)}${tgUser}"><i class="fa-brands fa-telegram text-sm"></i></span>`
-                : `<span class="inline-flex items-center text-slate-300" title="غير مرتبط بتيليجرام"><i class="fa-brands fa-telegram text-sm"></i></span>`;
+                ? `<span class="inline-flex items-center text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)] cursor-help" title="مرتبط بالتيليجرام: ${escapeHtml(c.telegramChatId || c.telegram_chat_id)}${tgUser}"><i class="fa-brands fa-telegram text-base"></i></span>`
+                : `<span class="inline-flex items-center text-slate-500" title="غير مرتبط بتيليجرام"><i class="fa-brands fa-telegram text-base"></i></span>`;
 
             tr.innerHTML = `
                 <td class="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
@@ -4733,18 +4733,18 @@ window.filterCancellationRows = filterCancellationRows;
 var THEME_PRESETS = {
     default: {
         id: 'default',
-        name: 'الافتراضي الرسمي',
-        description: 'توصيلة كحلي هادئ ولمسات كهرمانية دافئة',
-        primaryColor: '#1B4965',
-        primaryHover: '#14364A',
-        accentColor: '#D97706',
-        bgColor: '#F8FAFC',
-        cardBg: '#FFFFFF',
-        textColor: '#0F172A',
-        borderColor: '#E2E8F0',
-        badgeBg: '#ECFDF5',
-        badgeText: '#047857',
-        isDark: false
+        name: 'الأوبسيديان الفاخر والذهب العنبري',
+        description: 'سواد أوبسيديان عميق مع زجاج داكن فاخر ولمسات كهرمانية دافئة',
+        primaryColor: '#F59E0B',
+        primaryHover: '#D97706',
+        accentColor: '#F59E0B',
+        bgColor: '#080E1A',
+        cardBg: '#161C28',
+        textColor: '#CBD5E1',
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        badgeBg: 'rgba(245, 158, 11, 0.12)',
+        badgeText: '#F59E0B',
+        isDark: true
     },
     emerald: {
         id: 'emerald',
@@ -4753,13 +4753,13 @@ var THEME_PRESETS = {
         primaryColor: '#065F46',
         primaryHover: '#044E39',
         accentColor: '#10B981',
-        bgColor: '#F8FAFC',
-        cardBg: '#FFFFFF',
-        textColor: '#0F172A',
-        borderColor: '#E2E8F0',
+        bgColor: '#080E1A',
+        cardBg: '#161C28',
+        textColor: '#CBD5E1',
+        borderColor: 'rgba(255, 255, 255, 0.08)',
         badgeBg: '#ECFDF5',
         badgeText: '#047857',
-        isDark: false
+        isDark: true
     },
     slate: {
         id: 'slate',
@@ -4768,13 +4768,13 @@ var THEME_PRESETS = {
         primaryColor: '#334155',
         primaryHover: '#1E293B',
         accentColor: '#0284C7',
-        bgColor: '#F8FAFC',
-        cardBg: '#FFFFFF',
-        textColor: '#0F172A',
-        borderColor: '#E2E8F0',
+        bgColor: '#080E1A',
+        cardBg: '#161C28',
+        textColor: '#CBD5E1',
+        borderColor: 'rgba(255, 255, 255, 0.08)',
         badgeBg: '#F0F9FF',
         badgeText: '#0369A1',
-        isDark: false
+        isDark: true
     },
     dark: {
         id: 'dark',
@@ -4783,10 +4783,10 @@ var THEME_PRESETS = {
         primaryColor: '#38BDF8',
         primaryHover: '#0EA5E9',
         accentColor: '#F59E0B',
-        bgColor: '#0F172A',
-        cardBg: '#1E293B',
-        textColor: '#F8FAFC',
-        borderColor: '#334155',
+        bgColor: '#080E1A',
+        cardBg: '#161C28',
+        textColor: '#CBD5E1',
+        borderColor: 'rgba(255, 255, 255, 0.08)',
         badgeBg: '#132743',
         badgeText: '#38BDF8',
         isDark: true
@@ -4795,14 +4795,14 @@ var THEME_PRESETS = {
 
 var currentThemeSettings = {
     preset: 'default',
-    primaryColor: '#1B4965',
-    primaryHover: '#14364A',
-    accentColor: '#D97706',
-    fontFamily: 'Arial Unicode MS Regular',
+    primaryColor: '#F59E0B',
+    primaryHover: '#D97706',
+    accentColor: '#F59E0B',
+    fontFamily: 'IBM Plex Sans Arabic',
     fontSize: '14px',
-    bgColor: '#F8FAFC',
-    cardBg: '#FFFFFF',
-    textColor: '#0F172A'
+    bgColor: '#080E1A',
+    cardBg: '#161C28',
+    textColor: '#CBD5E1'
 };
 
 function switchCustomSubTab(tabName) {
@@ -4969,13 +4969,13 @@ function applyLiveThemeToDashboard(th) {
         ? "'Arial Unicode MS Regular', 'Arial Unicode MS', 'Cairo', 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
         : "'" + fontFamily + "', 'IBM Plex Sans Arabic', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
-    var isDark = Boolean(p.isDark);
-    var bg = isDark ? '#0b1120' : '#f8fafc';
-    var sidebarBg = isDark ? '#0f172a' : '#ffffff';
-    var cardBg = isDark ? '#1e293b' : '#ffffff';
-    var textColor = isDark ? '#94a3b8' : '#334155';
-    var headingColor = isDark ? '#f8fafc' : '#0f172a';
-    var borderColor = isDark ? '#334155' : '#e2e8f0';
+    var isDark = (p.isDark !== false);
+    var bg = isDark ? '#080E1A' : '#f8fafc';
+    var sidebarBg = isDark ? 'rgba(11, 21, 40, 0.95)' : '#ffffff';
+    var cardBg = isDark ? 'rgba(22, 28, 40, 0.92)' : '#ffffff';
+    var textColor = isDark ? '#CBD5E1' : '#334155';
+    var headingColor = isDark ? '#F8FAFC' : '#0f172a';
+    var borderColor = isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0';
 
     styleEl.textContent = `
         body, html, input, button, select, textarea, p, h1, h2, h3, h4, h5, h6, table, th, td, label, div, span:not([class*="fa"]):not([class*="badge"]) {
@@ -4992,7 +4992,7 @@ function applyLiveThemeToDashboard(th) {
             color: ${textColor} !important;
         }
         main {
-            background-color: ${bg} !important;
+            background-color: transparent !important;
             color: ${textColor} !important;
         }
         #sidebar-drawer, aside {
@@ -5000,12 +5000,23 @@ function applyLiveThemeToDashboard(th) {
             border-color: ${borderColor} !important;
         }
         header {
-            background-color: ${sidebarBg} !important;
+            background-color: rgba(13, 19, 31, 0.95) !important;
             border-color: ${borderColor} !important;
+        }
+        .bg-white, .bg-slate-50, .bg-slate-100 {
+            background-color: ${cardBg} !important;
+            border-color: ${borderColor} !important;
+        }
+        .text-slate-900, .text-slate-800, h1, h2, h3, h4, h5, h6 {
+            color: ${headingColor} !important;
+        }
+        .text-slate-700, .text-slate-600 {
+            color: ${textColor} !important;
         }
         .tab-btn.active {
             border-right-color: ${primary} !important;
             color: ${primary} !important;
+            background-color: rgba(245, 158, 11, 0.12) !important;
         }
         .tab-btn.active i {
             color: ${primary} !important;
