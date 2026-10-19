@@ -594,7 +594,6 @@ async function linkUserByPhone(chatId, rawPhone, user) {
                 `SELECT * FROM drivers 
                  WHERE phone_number = $1 OR phone_number = $2 
                     OR phone_number LIKE '%' || $3
-                    OR phone = $1 OR phone = $2
                  LIMIT 1`,
                 [cleanPhone, intlPhone, shortDigits]
             );
@@ -664,7 +663,6 @@ async function linkUserByPhone(chatId, rawPhone, user) {
                 `SELECT * FROM customers 
                  WHERE phone_number = $1 OR phone_number = $2 
                     OR phone_number LIKE '%' || $3
-                    OR phone = $1 OR phone = $2
                  LIMIT 1`,
                 [cleanPhone, intlPhone, shortDigits]
             );
