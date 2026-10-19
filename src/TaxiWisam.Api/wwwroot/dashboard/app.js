@@ -1110,8 +1110,9 @@ async function loadDrivers(search = '') {
                 : '-';
 
             const tgLinked = Boolean(d.telegramChatId || d.telegram_chat_id);
+            const tgUser = (d.telegramUsername || d.telegram_username) ? ` (${escapeHtml(d.telegramUsername || d.telegram_username)})` : '';
             const tgIcon = tgLinked
-                ? `<span class="inline-flex items-center text-emerald-500 hover:text-emerald-600 transition" title="مرتبط بالتيليجرام: ${escapeHtml(d.telegramChatId || d.telegram_chat_id)}"><i class="fa-brands fa-telegram text-sm"></i></span>`
+                ? `<span class="inline-flex items-center text-emerald-500 hover:text-emerald-600 transition cursor-help" title="مرتبط بالتيليجرام: ${escapeHtml(d.telegramChatId || d.telegram_chat_id)}${tgUser}"><i class="fa-brands fa-telegram text-sm"></i></span>`
                 : `<span class="inline-flex items-center text-slate-300" title="غير مرتبط بتيليجرام"><i class="fa-brands fa-telegram text-sm"></i></span>`;
 
             tr.innerHTML = `
@@ -1270,8 +1271,9 @@ async function loadCustomers(search = '') {
                 : '-';
 
             const tgLinked = Boolean(c.telegramChatId || c.telegram_chat_id);
+            const tgUser = (c.telegramUsername || c.telegram_username) ? ` (${escapeHtml(c.telegramUsername || c.telegram_username)})` : '';
             const tgIcon = tgLinked
-                ? `<span class="inline-flex items-center text-emerald-500 hover:text-emerald-600 transition cursor-help" title="مرتبط بالتيليجرام: ${escapeHtml(c.telegramChatId || c.telegram_chat_id)}"><i class="fa-brands fa-telegram text-sm"></i></span>`
+                ? `<span class="inline-flex items-center text-emerald-500 hover:text-emerald-600 transition cursor-help" title="مرتبط بالتيليجرام: ${escapeHtml(c.telegramChatId || c.telegram_chat_id)}${tgUser}"><i class="fa-brands fa-telegram text-sm"></i></span>`
                 : `<span class="inline-flex items-center text-slate-300" title="غير مرتبط بتيليجرام"><i class="fa-brands fa-telegram text-sm"></i></span>`;
 
             tr.innerHTML = `

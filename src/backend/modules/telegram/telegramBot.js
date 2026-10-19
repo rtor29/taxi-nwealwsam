@@ -531,91 +531,91 @@ async function checkPhoneRegistration(phone) {
     return null;
 }
 
-// --- Link User / Driver by Phone (Deep Link / Auto-Link) ---
+// --- Normalize Iraqi Phone (Unified Helper) ---
+function normalizeIraqiPhone(raw) {
+    if (!raw) return { cleanPhone: '', intlPhone: '', displayPhone: '' };
+    const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+    let str = String(raw).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d));
+    let digits = str.replace(/[^0-9]/g, '');
+    if (digits.startsWith('00964')) digits = digits.substring(5);
+    else if (digits.startsWith('964')) digits = digits.substring(3);
+    
+    if (digits.length === 10 && digits.startsWith('7')) {
+        digits = '0' + digits;
+    }
+    const cleanPhone = digits;
+    const intlPhone = digits.startsWith('0') ? '+964' + digits.substring(1) : '+964' + digits;
+    const displayPhone = cleanPhone || String(raw).trim();
+    return { cleanPhone, intlPhone, displayPhone };
+}
+
+// --- Prompt User for Phone Number (Contact Request Button + Manual Typing) ---
+async function promptUserForPhone(chatId) {
+    userStates.set(chatId, { step: 'awaiting_phone' });
+    const promptText = `أهلاً بك في منصة توصيلة 🚖\nيرجى إرسال رقم هاتفك لتأكيد حسابك وتفعيل استلام الإشعارات اللحظية.`;
+    return tgRequest('sendMessage', {
+        chat_id: chatId,
+        text: promptText,
+        reply_markup: {
+            keyboard: [
+                [{ text: '📱 مشاركة رقم هاتفي', request_contact: true }]
+            ],
+            resize_keyboard: true,
+            one_time_keyboard: true
+        }
+    });
+}
+
+// --- Link User / Driver by Phone (Deep Link / Auto-Link & Role Routing) ---
 async function linkUserByPhone(chatId, rawPhone, user) {
     if (!chatId || !rawPhone) return false;
-    const digits = String(rawPhone).replace(/[^0-9]/g, '');
-    let cleanPhone = digits;
-    if (cleanPhone.startsWith('964')) cleanPhone = '0' + cleanPhone.substring(3);
-    if (!cleanPhone.startsWith('0') && cleanPhone.length === 10) cleanPhone = '0' + cleanPhone;
+    const { cleanPhone, intlPhone, displayPhone } = normalizeIraqiPhone(rawPhone);
+    if (!cleanPhone || cleanPhone.length < 8) {
+        await sendMessage(chatId, '⚠️ يرجى إرسال رقم هاتف عراقي صالح (مثال: 07701234567)');
+        return false;
+    }
 
     const tgUsername = user?.username ? `@${user.username}` : '';
-    const tgName = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'المستخدم';
+    const shortDigits = cleanPhone.length >= 9 ? cleanPhone.slice(-9) : cleanPhone;
 
-    const matchDigits = (phone) => {
-        if (!phone) return false;
-        const d = String(phone).replace(/[^0-9]/g, '');
-        if (d === digits) return true;
-        if (cleanPhone && cleanPhone.length >= 9 && d.endsWith(cleanPhone.substring(cleanPhone.length - 9))) return true;
+    const phoneMatches = (p) => {
+        if (!p) return false;
+        const norm = normalizeIraqiPhone(p).cleanPhone;
+        if (norm === cleanPhone) return true;
+        if (shortDigits && norm.endsWith(shortDigits)) return true;
         return false;
     };
 
-    let customer = (db.memoryState.customers || []).find(c => matchDigits(c.phoneNumber));
-    let driver = (db.memoryState.drivers || []).find(d => matchDigits(d.phoneNumber));
-
-    if (!customer && !driver && db.isPostgresConnected && db.pool) {
+    // 1. الحالة الأولى: مسجل مسبقاً في الداش بورد كسائق (Driver)
+    let driver = (db.memoryState.drivers || []).find(d => phoneMatches(d.phoneNumber) || phoneMatches(d.phone));
+    if (!driver && db.isPostgresConnected && db.pool) {
         try {
-            const shortMatch = cleanPhone.length >= 9 ? cleanPhone.substring(cleanPhone.length - 9) : cleanPhone;
-            const res = await db.pool.query(
-                `SELECT role, user_id, full_name, phone_number FROM users WHERE phone_number LIKE $1 OR phone_number = $2 LIMIT 1`,
-                [`%${shortMatch}`, cleanPhone]
+            const pgDrv = await db.pool.query(
+                `SELECT * FROM drivers 
+                 WHERE phone_number = $1 OR phone_number = $2 
+                    OR phone_number LIKE '%' || $3
+                    OR phone = $1 OR phone = $2
+                 LIMIT 1`,
+                [cleanPhone, intlPhone, shortDigits]
             );
-            if (res.rows && res.rows.length > 0) {
-                const row = res.rows[0];
-                if ((row.role || '').toLowerCase() === 'driver') {
-                    driver = (db.memoryState.drivers || []).find(d => d.driverId === row.user_id) || {
-                        driverId: row.user_id,
-                        fullName: row.full_name,
-                        phoneNumber: row.phone_number
-                    };
-                } else {
-                    customer = (db.memoryState.customers || []).find(c => c.customerId === row.user_id) || {
-                        customerId: row.user_id,
-                        fullName: row.full_name,
-                        phoneNumber: row.phone_number
-                    };
+            if (pgDrv.rows && pgDrv.rows.length > 0) {
+                const row = pgDrv.rows[0];
+                driver = (db.memoryState.drivers || []).find(d => d.driverId === row.driver_id) || {
+                    driverId: row.driver_id,
+                    fullName: row.full_name,
+                    phoneNumber: row.phone_number
+                };
+                if (!db.memoryState.drivers.some(d => d.driverId === driver.driverId)) {
+                    db.memoryState.drivers.unshift(driver);
                 }
             }
         } catch (e) {
-            console.warn('[TelegramBot] linkUserByPhone db query error:', e.message);
+            console.warn('[TelegramBot] PG driver lookup error:', e.message);
         }
     }
 
-    if (customer) {
-        customer.telegramChatId = String(chatId);
-        customer.telegram_chat_id = String(chatId);
-        customer.telegramUsername = tgUsername;
-        customer.telegram_username = tgUsername;
-        customer.telegramLinkedAt = new Date().toISOString();
-        customer.telegram_linked_at = customer.telegramLinkedAt;
-        db.saveStateSnapshot();
-        db.persistTelegramChatId('Customer', customer.customerId, chatId, tgUsername).catch(() => {});
-
-        // 1. Remove old custom keyboards
-        await tgRequest('sendMessage', {
-            chat_id: chatId,
-            text: `✅ <b>تم ربط حسابك في توصيلة بنجاح!</b>\n\n` +
-                  `👤 <b>الاسم:</b> ${customer.fullName || tgName}\n` +
-                  `📱 <b>الهاتف:</b> ${customer.phoneNumber || cleanPhone}\n` +
-                  `🔔 ستصلك الآن كافة إشعارات مشاويرك (تأكيد الحجز، وصول الكابتن، وتفاصيل الرحلة) مباشرة عبر تيليجرام!`,
-            parse_mode: 'HTML',
-            reply_markup: { remove_keyboard: true }
-        });
-
-        const token = 'jwt_customer_' + customer.customerId;
-        const returnUrl = `https://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(customer.customerId)}&role=Customer&fullName=${encodeURIComponent(customer.fullName || tgName)}`;
-
-        await sendKeyboard(chatId,
-            `🚖 يمكنك العودة للتطبيق الآن والبدء بطلب مشاويرك:`,
-            [
-                [{ text: '🚗 العودة إلى تطبيق توصيلة 🚖', url: returnUrl }]
-            ]
-        );
-        userStates.delete(chatId);
-        return true;
-    }
-
     if (driver) {
+        const driverName = driver.fullName || 'كابتن';
         driver.telegramChatId = String(chatId);
         driver.telegram_chat_id = String(chatId);
         driver.telegramUsername = tgUsername;
@@ -625,106 +625,223 @@ async function linkUserByPhone(chatId, rawPhone, user) {
         db.saveStateSnapshot();
         db.persistTelegramChatId('Driver', driver.driverId, chatId, tgUsername).catch(() => {});
 
+        if (db.isPostgresConnected && db.pool) {
+            try {
+                await db.pool.query(
+                    `UPDATE drivers 
+                     SET telegram_chat_id = $1, telegram_username = $2, telegram_linked_at = NOW() 
+                     WHERE phone_number = $3 OR phone_number = $4 OR driver_id = $5`,
+                    [String(chatId), tgUsername, cleanPhone, intlPhone, driver.driverId]
+                );
+            } catch (_) {}
+        }
+
+        // مسح كيبورد الأزرار السفلية وإرسال رسالة الترحيب الخاصة بالسائق
         await tgRequest('sendMessage', {
             chat_id: chatId,
-            text: `✅ <b>تم ربط حساب الكابتن بنجاح!</b>\n\n` +
-                  `🚕 <b>الكابتن:</b> ${driver.fullName || tgName}\n` +
-                  `📱 <b>الهاتف:</b> ${driver.phoneNumber || cleanPhone}\n` +
-                  `🔔 ستصلك الآن إشعارات طلبات المشاوير الجديدة بالقرب منك فوراً!`,
-            parse_mode: 'HTML',
+            text: `أهلاً وسهلاً بك كابتن ${driverName}! 🚖\n\nتم تأكيد وتفعيل حسابك بنجاح ✅\nمعرف حسابك مثبت الآن في لوحة التحكم، وستصلك إشعارات المشاوير الجديدة مباشرة هنا.`,
             reply_markup: { remove_keyboard: true }
         });
 
         const token = 'jwt_driver_' + driver.driverId;
-        const returnUrl = `https://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driver.driverId)}&role=Driver&fullName=${encodeURIComponent(driver.fullName || tgName)}`;
+        const returnUrl = `https://tawseelaiq.app/?role=Driver&phone=${encodeURIComponent(cleanPhone)}&login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driver.driverId)}&fullName=${encodeURIComponent(driverName)}`;
 
         await sendKeyboard(chatId,
-            `🚗 يمكنك العودة لتطبيق الكابتن الآن واستقبال طلبات المشاوير:`,
+            `اضغط أدناه لفتح واجهة الكابتن:`,
             [
-                [{ text: '🚕 العودة إلى تطبيق الكابتن', url: returnUrl }]
+                [{ text: 'فتح واجهة الكابتن 🚖', url: returnUrl }]
             ]
         );
         userStates.delete(chatId);
         return true;
     }
 
+    // 2. الحالة الثانية: مسجل كراكب (Customer)
+    let customer = (db.memoryState.customers || []).find(c => phoneMatches(c.phoneNumber) || phoneMatches(c.phone));
+    if (!customer && db.isPostgresConnected && db.pool) {
+        try {
+            const pgCust = await db.pool.query(
+                `SELECT * FROM customers 
+                 WHERE phone_number = $1 OR phone_number = $2 
+                    OR phone_number LIKE '%' || $3
+                    OR phone = $1 OR phone = $2
+                 LIMIT 1`,
+                [cleanPhone, intlPhone, shortDigits]
+            );
+            if (pgCust.rows && pgCust.rows.length > 0) {
+                const row = pgCust.rows[0];
+                customer = (db.memoryState.customers || []).find(c => c.customerId === row.customer_id) || {
+                    customerId: row.customer_id,
+                    fullName: row.full_name,
+                    phoneNumber: row.phone_number
+                };
+                if (!db.memoryState.customers.some(c => c.customerId === customer.customerId)) {
+                    db.memoryState.customers.unshift(customer);
+                }
+            }
+        } catch (e) {
+            console.warn('[TelegramBot] PG customer lookup error:', e.message);
+        }
+    }
+
+    if (customer) {
+        const customerName = customer.fullName || 'الراكب';
+        customer.telegramChatId = String(chatId);
+        customer.telegram_chat_id = String(chatId);
+        customer.telegramUsername = tgUsername;
+        customer.telegram_username = tgUsername;
+        customer.telegramLinkedAt = new Date().toISOString();
+        customer.telegram_linked_at = customer.telegramLinkedAt;
+        db.saveStateSnapshot();
+        db.persistTelegramChatId('Customer', customer.customerId, chatId, tgUsername).catch(() => {});
+
+        if (db.isPostgresConnected && db.pool) {
+            try {
+                await db.pool.query(
+                    `UPDATE customers 
+                     SET telegram_chat_id = $1, telegram_username = $2, telegram_linked_at = NOW() 
+                     WHERE phone_number = $3 OR phone_number = $4 OR customer_id = $5`,
+                    [String(chatId), tgUsername, cleanPhone, intlPhone, customer.customerId]
+                );
+            } catch (_) {}
+        }
+
+        await tgRequest('sendMessage', {
+            chat_id: chatId,
+            text: `أهلاً وسهلاً بك ${customerName}! 🚖\n\nتم تأكيد وربط حسابك بنجاح ✅\nمعرف حسابك مسجل بالنظام، وستصلك رسائل فورية بتفاصيل رحلاتك ووصول الكابتن لموقعك.`,
+            reply_markup: { remove_keyboard: true }
+        });
+
+        const token = 'jwt_customer_' + customer.customerId;
+        const returnUrl = `https://tawseelaiq.app/?role=Customer&phone=${encodeURIComponent(cleanPhone)}&login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(customer.customerId)}&fullName=${encodeURIComponent(customerName)}`;
+
+        await sendKeyboard(chatId,
+            `اضغط أدناه لفتح تطبيق توصيلة للركاب:`,
+            [
+                [{ text: 'فتح تطبيق توصيلة للركاب 🚖', url: returnUrl }]
+            ]
+        );
+        userStates.delete(chatId);
+        return true;
+    }
+
+    // 3. الحالة الثالثة: غير مسجل في النظام إطلاقاً
+    userStates.delete(chatId);
     await tgRequest('sendMessage', {
         chat_id: chatId,
-        text: `✅ <b>تم استلام طلب ربط التيليجرام للرقم (${cleanPhone})!</b>\n\n` +
-              `ستصلك إشعارات المشوار فور اكتمال طلبك في تطبيق توصيلة 🚖.`,
-        parse_mode: 'HTML',
+        text: `عذراً، رقم الهاتف (${displayPhone}) غير مسجل بعد في منصة توصيلة ⚠️\n\n• إذا كنت راكباً: يمكنك الدخول للتطبيق وتسجيل حساب جديد فوراً عبر الرابط أدناه.\n• إذا كنت كابتناً: يرجى مراجعة إدارة توصيلة لتسجيل وتفعيل حسابك أولاً.`,
         reply_markup: { remove_keyboard: true }
     });
 
     await sendKeyboard(chatId,
-        `اضغط أدناه لفتح تطبيق توصيلة:`,
+        `للتسجيل كراكب جديد اضغط أدناه:`,
         [
-            [{ text: '🚗 فتح تطبيق توصيلة', url: 'https://tawseelaiq.app' }]
+            [{ text: 'تسجيل حساب راكب جديد 📲', url: 'https://tawseelaiq.app/login' }]
         ]
     );
-    userStates.delete(chatId);
     return false;
 }
 
 // --- Bot Command Handlers ---
 async function handleStart(chatId, user) {
     if (!db.memoryState.botSubscribers) db.memoryState.botSubscribers = [];
-    if (!db.memoryState.botSubscribers.includes(String(chatId))) { db.memoryState.botSubscribers.push(String(chatId)); db.saveStateSnapshot(); }
+    if (!db.memoryState.botSubscribers.includes(String(chatId))) { 
+        db.memoryState.botSubscribers.push(String(chatId)); 
+        db.saveStateSnapshot(); 
+    }
 
     userStates.delete(chatId);
-    const name = (user && user.first_name) ? user.first_name : 'مستخدم';
-    
-    // Check if user is an already registered customer or driver
-    const customer = (db.memoryState.customers || []).find(c => String(c.telegramChatId) === String(chatId));
-    const driver = (db.memoryState.drivers || []).find(d => String(d.telegramChatId) === String(chatId));
 
-    if (customer) {
-        const token = 'jwt_customer_' + customer.customerId;
-        await sendKeyboard(chatId,
-            `مرحباً بك <b>${customer.fullName}</b> في بوت توصيله 🚕\n\nيرجى تحديد نوع المشوار المطلوب:\n\n💡 <i>ملاحظة للايفون: إذا فتحت التطبيق ولم يظهر موقعك، اضغط على 🧭 (البوصلة) في الأسفل لفتحه في سفاري.</i>`,
-            [
-                [
-                    { text: '⚡ مشوار قصير', callback_data: 'passenger_trip_short' },
-                    { text: '🔄 خط دائم', callback_data: 'passenger_trip_daily' }
-                ],
-                [{ text: '🗺️ فتح خريطة الخطوط الدائمية (WebApp)', web_app: { url: 'https://tawseelaiq.app/?role=Customer&tripType=daily' } }],
-                [{ text: '🚗 فتح التطبيق مباشرة', url: 'https://tawseelaiq.app/?login_token=' + encodeURIComponent(token) + '&userId=' + encodeURIComponent(customer.customerId) + '&role=Customer&fullName=' + encodeURIComponent(customer.fullName) }],
-                [{ text: '📞 تواصل مع الإدارة', callback_data: 'contact_admin' }],
-                [{ text: '❓ مساعدة', callback_data: 'help' }],
-                [{ text: '🚪 تسجيل خروج', callback_data: 'logout' }]
-            ]
-        );
-        return;
+    // 1. التحقق الإلزامي من الاشتراك في القناة والكروب
+    if (String(chatId) !== ADMIN_CHAT_ID) {
+        const sub = await checkUserSubscription(user?.id || chatId);
+        if (!sub.subscribed) {
+            return sendSubscriptionGateMessage(chatId);
+        }
+    }
+
+    // 2. التحقق مما إذا كان المستخدم مسجلاً بالفعل كسائق
+    let driver = (db.memoryState.drivers || []).find(d => String(d.telegramChatId) === String(chatId));
+    if (!driver && db.isPostgresConnected && db.pool) {
+        try {
+            const pgDrv = await db.pool.query('SELECT * FROM drivers WHERE telegram_chat_id = $1 LIMIT 1', [String(chatId)]);
+            if (pgDrv.rows && pgDrv.rows.length > 0) {
+                const r = pgDrv.rows[0];
+                driver = {
+                    driverId: r.driver_id,
+                    fullName: r.full_name,
+                    phoneNumber: r.phone_number,
+                    telegramChatId: r.telegram_chat_id,
+                    telegramUsername: r.telegram_username,
+                    telegramLinkedAt: r.telegram_linked_at
+                };
+            }
+        } catch (_) {}
     }
 
     if (driver) {
+        const driverName = driver.fullName || 'كابتن';
+        const cleanPhone = normalizeIraqiPhone(driver.phoneNumber).cleanPhone;
         const token = 'jwt_driver_' + driver.driverId;
-        await sendKeyboard(chatId,
-            `مرحباً بك الكابتن <b>${driver.fullName}</b> في بوت توصيله 🚕\n\nيرجى تحديد نوع المشاوير التي ترغب بتقديمها:\n\n💡 <i>ملاحظة للايفون: اضغط على 🧭 (البوصلة) لفتح التطبيق في متصفح سفاري لضمان عمل الـ GPS.</i>`,
+        const driverUrl = `https://tawseelaiq.app/?role=Driver&phone=${encodeURIComponent(cleanPhone)}&login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driver.driverId)}&fullName=${encodeURIComponent(driverName)}`;
+
+        await tgRequest('sendMessage', {
+            chat_id: chatId,
+            text: `أهلاً وسهلاً بك كابتن ${driverName}! 🚖\n\nتم تأكيد وتفعيل حسابك بنجاح ✅\nمعرف حسابك مثبت الآن في لوحة التحكم، وستصلك إشعارات المشاوير الجديدة مباشرة هنا.`,
+            reply_markup: { remove_keyboard: true }
+        });
+
+        return sendKeyboard(chatId,
+            `اضغط أدناه لفتح واجهة الكابتن:`,
             [
-                [{ text: '⚡ مشاوير قصيرة', callback_data: 'driver_set_short' }],
-                [{ text: '🔄 خطوط دائمة', callback_data: 'driver_set_daily' }],
-                [{ text: '🚖 كلاهما (مشاوير قصيرة وخطوط دائمة)', callback_data: 'driver_set_both' }],
-                [{ text: '🚗 فتح تطبيق السائق', url: 'https://tawseelaiq.app/?login_token=' + encodeURIComponent(token) + '&userId=' + encodeURIComponent(driver.driverId) + '&role=Driver&fullName=' + encodeURIComponent(driver.fullName) }],
-                [{ text: '📞 تواصل مع الإدارة', callback_data: 'contact_admin' }],
-                [{ text: '🚪 تسجيل خروج', callback_data: 'logout' }]
+                [{ text: 'فتح واجهة الكابتن 🚖', url: driverUrl }],
+                [{ text: '🔄 ربط أو تغيير رقم الهاتف', callback_data: 'prompt_phone' }]
             ]
         );
-        return;
     }
 
-    const keyboard = [
-        [{ text: '🗺️ فتح خريطة الخطوط الدائمية (WebApp)', web_app: { url: 'https://tawseelaiq.app/?role=Customer&tripType=daily' } }],
-        [{ text: '🚶 تسجيل راكب', callback_data: 'reg_passenger' }, { text: '🚕 تسجيل سائق', callback_data: 'reg_driver' }],
-        [{ text: '🔑 تسجيل دخول', callback_data: 'login' }],
-        [{ text: '📞 تواصل مع الإدارة', callback_data: 'contact_admin' }],
-        [{ text: '❓ مساعدة', callback_data: 'help' }]
-    ];
+    // 3. التحقق مما إذا كان المستخدم مسجلاً بالفعل كراكب
+    let customer = (db.memoryState.customers || []).find(c => String(c.telegramChatId) === String(chatId));
+    if (!customer && db.isPostgresConnected && db.pool) {
+        try {
+            const pgCust = await db.pool.query('SELECT * FROM customers WHERE telegram_chat_id = $1 LIMIT 1', [String(chatId)]);
+            if (pgCust.rows && pgCust.rows.length > 0) {
+                const r = pgCust.rows[0];
+                customer = {
+                    customerId: r.customer_id,
+                    fullName: r.full_name,
+                    phoneNumber: r.phone_number,
+                    telegramChatId: r.telegram_chat_id,
+                    telegramUsername: r.telegram_username,
+                    telegramLinkedAt: r.telegram_linked_at
+                };
+            }
+        } catch (_) {}
+    }
 
-    await sendKeyboard(chatId,
-        `مرحباً <b>${name}</b> في بوت توصيله 🚕\nخدمة النقل الذكي في النجف الأشرف\n\nاختر ما تريد:`,
-        keyboard
-    );
+    if (customer) {
+        const customerName = customer.fullName || 'الراكب';
+        const cleanPhone = normalizeIraqiPhone(customer.phoneNumber).cleanPhone;
+        const token = 'jwt_customer_' + customer.customerId;
+        const customerUrl = `https://tawseelaiq.app/?role=Customer&phone=${encodeURIComponent(cleanPhone)}&login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(customer.customerId)}&fullName=${encodeURIComponent(customerName)}`;
+
+        await tgRequest('sendMessage', {
+            chat_id: chatId,
+            text: `أهلاً وسهلاً بك ${customerName}! 🚖\n\nتم تأكيد وربط حسابك بنجاح ✅\nمعرف حسابك مسجل بالنظام، وستصلك رسائل فورية بتفاصيل رحلاتك ووصول الكابتن لموقعك.`,
+            reply_markup: { remove_keyboard: true }
+        });
+
+        return sendKeyboard(chatId,
+            `اضغط أدناه لفتح تطبيق توصيلة للركاب:`,
+            [
+                [{ text: 'فتح تطبيق توصيلة للركاب 🚖', url: customerUrl }],
+                [{ text: '🔄 ربط أو تغيير رقم الهاتف', callback_data: 'prompt_phone' }]
+            ]
+        );
+    }
+
+    // 4. المستخدم غير مرتبط: نطلب منه إرسال رقم الهاتف مع زر مشاركة جهة الاتصال
+    return promptUserForPhone(chatId);
 }
 
 // --- Step 2: Complete Registration By User Location ---
@@ -991,25 +1108,40 @@ async function handleCallback(chatId, data, user, queryId) {
             break;
         }
 
-        case 'reg_passenger':
-            userStates.set(chatId, { step: 'passenger_phone', role: 'Customer' });
-            await sendKeyboard(chatId,
-                '🚶 <b>تسجيل حساب راكب جديد:</b>\n\n' +
-                '📱 أرسل رقم هاتفك العراقي (مثال: <code>07701234567</code>)، أو يمكنك التحقق والتسجيل مباشرة عبر تطبيق الويب الموثق بواتساب و Truecaller:',
-                [
-                    [{ text: '🌐 التسجيل والتحقق في تطبيق الويب', url: 'https://tawseelaiq.app/?role=Customer' }]
-                ]
-            );
+        case 'prompt_phone': {
+            if (queryId) {
+                await tgRequest('answerCallbackQuery', {
+                    callback_query_id: queryId
+                }).catch(() => {});
+            }
+            await promptUserForPhone(chatId);
             break;
+        }
+
+        case 'reg_passenger':
+            userStates.delete(chatId);
+            await tgRequest('sendMessage', {
+                chat_id: chatId,
+                text: '🚶 <b>تسجيل حساب راكب جديد:</b>\n\nيمكنك إنشاء حسابك مباشرة من خلال تطبيق الويب بكل سهولة وأمان:',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: 'تسجيل حساب راكب جديد 📲', url: 'https://tawseelaiq.app/login' }]
+                    ]
+                }
+            });
+            break;
+
         case 'reg_driver':
-            userStates.set(chatId, { step: 'driver_phone', role: 'Driver' });
-            await sendKeyboard(chatId,
-                '🚕 <b>تسجيل كابتن (سائق) جديد:</b>\n\n' +
-                '📱 أرسل رقم هاتفك العراقي (مثال: <code>07701234567</code>)، أو يمكنك التحقق والتسجيل مباشرة عبر تطبيق الويب الموثق بواتساب و Truecaller:',
-                [
-                    [{ text: '🌐 التسجيل والتحقق في تطبيق الويب', url: 'https://tawseelaiq.app/?role=Driver' }]
-                ]
-            );
+            userStates.delete(chatId);
+            await tgRequest('sendMessage', {
+                chat_id: chatId,
+                text: '🚕 <b>تنويه هام لكباتن توصيلة:</b>\n\nيُحظر التسجيل الذاتي للسائقين عبر التطبيق؛ يتم إنشاء وتفعيل حسابات السائقين <b>حصراً من قِبل إدارة المنظومة</b>.\n\nللانضمام لأسطول كباتن توصيلة، يرجى مراجعة إدارة المنظومة أو التواصل مع الدعم الفني.',
+                reply_markup: {
+                    inline_keyboard: [
+                        [{ text: '📞 التواصل مع الدعم الإداري', callback_data: 'contact_admin' }]
+                    ]
+                }
+            });
             break;
         case 'login':
             userStates.set(chatId, { step: 'login_phone' });
@@ -1230,31 +1362,16 @@ async function handleMessage(chatId, text, user, location) {
     if (!db.memoryState.botSubscribers.includes(String(chatId))) { db.memoryState.botSubscribers.push(String(chatId)); db.saveStateSnapshot(); }
 
     const state = userStates.get(chatId);
+    const digits = (text || '').replace(/[^0-9]/g, '');
+
+    // إذا كان المستخدم في مرحلة إرسال الهاتف أو أرسل رقماً يحتوي على 7 أرقام على الأقل
+    if (digits.length >= 7 || (state && (state.step === 'awaiting_phone' || state.step === 'login_phone' || state.step === 'passenger_phone' || state.step === 'driver_phone'))) {
+        await linkUserByPhone(chatId, text, user);
+        return;
+    }
+
     if (!state) {
         if (!text) return;
-        const digits = text.replace(/[^0-9]/g, '');
-        if (digits.length >= 7) {
-            const existing = await checkPhoneRegistration(text);
-            if (existing) {
-                // Auto-link account directly
-                const linked = await linkUserByPhone(chatId, digits, user);
-                if (linked) return;
-            } else {
-                const cleanPhone = digits.startsWith('964') ? '0' + digits.substring(3) : (digits.startsWith('0') ? digits : '0' + digits);
-                const encodedPhone = encodeURIComponent(cleanPhone);
-                await sendKeyboard(chatId,
-                    `ℹ️ <b>الرقم (${text.trim()}) غير مسجل في النظام.</b>\n\n` +
-                    `💡 <i>لا داعي للتحقق هنا في تيليجرام</i>؛ التحقق مفعّل وآمن في تطبيق الويب عبر واتساب و Truecaller.\n\n` +
-                    `يرجى فتح التطبيق لتأكيد رقمك وإكمال التسجيل:`,
-                    [
-                        [{ text: '🚶 تسجيل راكب في تطبيق الويب', url: `https://tawseelaiq.app/?role=Customer&phone=${encodedPhone}` }],
-                        [{ text: '🚕 تسجيل سائق في تطبيق الويب', url: `https://tawseelaiq.app/?role=Driver&phone=${encodedPhone}` }],
-                        [{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]
-                    ]
-                );
-                return;
-            }
-        }
         // General text query in private chat: Ask Groq AI
         const aiAnswer = await askGroqAI(text);
         await sendKeyboard(chatId, aiAnswer, [
@@ -1878,7 +1995,12 @@ async function poll() {
                         // Block non-private chats from personal bot flow
                         if (msg.chat.type !== 'private') continue;
 
-                        const rawText = (msg.text || '').trim();
+                        let rawText = '';
+                        if (msg.contact && msg.contact.phone_number) {
+                            rawText = String(msg.contact.phone_number).trim();
+                        } else {
+                            rawText = (msg.text || '').trim();
+                        }
                         const text = _sanitizeTgInput(rawText);
                         const location = msg.location;
 
@@ -1908,14 +2030,19 @@ async function poll() {
                                 if (isRegDeepLink) {
                                     const rawPhone = text.replace('/start reg_', '').replace('/start%20reg_', '').trim();
                                     userStates.set(chatId, { pendingRegPhone: rawPhone });
+                                } else if (msg.contact && msg.contact.phone_number) {
+                                    userStates.set(chatId, { pendingRegPhone: msg.contact.phone_number });
                                 }
                                 await sendSubscriptionGateMessage(chatId);
                                 continue;
                             }
                         }
 
-                        // Commands
-                        if (isRegDeepLink) {
+                        // Commands & Direct Inputs
+                        if (msg.contact && msg.contact.phone_number) {
+                            await linkUserByPhone(chatId, msg.contact.phone_number, msg.from);
+                        }
+                        else if (isRegDeepLink) {
                             const rawPhone = text.replace('/start reg_', '').replace('/start%20reg_', '').trim();
                             await linkUserByPhone(chatId, rawPhone, msg.from);
                         }
