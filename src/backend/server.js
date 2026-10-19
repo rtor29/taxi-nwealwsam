@@ -4250,6 +4250,39 @@ async function startServer() {
             return sendJson({ success: true });
         }
 
+        // Public Announcements Endpoint for Customer Home & Web App
+        if (pathname === '/api/announcements/latest' && method === 'GET') {
+            const defaultText = "أهلاً بك في توصيلة 🚖 | خدمة النقل الذكي في النجف الأشرف.. مشاوير فورية وخطوط دائمية بأسعار معتمدة.";
+            const ann = db.memoryState.latestAnnouncement;
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            return sendJson({
+                success: true,
+                announcement: {
+                    message: (ann && ann.message) ? ann.message : defaultText,
+                    createdAt: (ann && ann.createdAt) ? ann.createdAt : new Date().toISOString()
+                }
+            });
+        }
+
+        if (pathname === '/api/announcements/latest' && method === 'POST') {
+            const authUser = getAuthUser(req);
+            if (!authUser || authUser.role !== 'Admin') {
+                return sendJson({ success: false, error: 'Unauthorized' }, 401);
+            }
+            const body = await parseJsonBody(req);
+            const msg = (body.message || body.text || '').replace(/<[^>]*>?/gm, '').trim();
+            if (!msg) return sendJson({ success: false, error: 'نص الإعلان مطلوب' }, 400);
+            db.memoryState.latestAnnouncement = {
+                message: msg,
+                createdAt: new Date().toISOString()
+            };
+            if (!db.memoryState.banners) db.memoryState.banners = {};
+            if (!db.memoryState.banners.topBanner) db.memoryState.banners.topBanner = {};
+            db.memoryState.banners.topBanner.subtitle = msg;
+            db.saveStateSnapshot();
+            return sendJson({ success: true, announcement: db.memoryState.latestAnnouncement });
+        }
+
         // Telegram bot admin: Broadcast
         if (pathname === '/api/admin/telegram/broadcast' && method === 'POST') {
             const authUser = getAuthUser(req);
@@ -4270,6 +4303,21 @@ async function startServer() {
                 console.error('[BroadcastNotification Error]:', e.message);
                 result = { success: false, error: e.message };
             }
+
+            // Persist broadcast as latest announcement for dynamic app banner sync
+            const cleanMsg = msg.replace(/<[^>]*>?/gm, '').trim();
+            if (cleanMsg) {
+                db.memoryState.latestAnnouncement = {
+                    message: cleanMsg,
+                    target: target,
+                    createdAt: new Date().toISOString()
+                };
+                if (!db.memoryState.banners) db.memoryState.banners = {};
+                if (!db.memoryState.banners.topBanner) db.memoryState.banners.topBanner = {};
+                db.memoryState.banners.topBanner.subtitle = cleanMsg;
+                db.saveStateSnapshot();
+            }
+
             return sendJson(result);
         }
 
