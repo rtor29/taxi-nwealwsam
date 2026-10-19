@@ -2167,6 +2167,157 @@ async function broadcastNotification(text, target = 'subscribers') {
     return { success: true, sentCount, failedCount, target };
 }
 
+// ===================================================================
+// --- TRIP LIFECYCLE NOTIFICATIONS (4-STAGE PIPELINE) ---
+// ===================================================================
+
+// Helper: Resolve Customer Telegram Chat ID from ride object or DB
+async function findCustomerTelegramChatId(ride) {
+    if (!ride) return null;
+    if (ride.telegramChatId) return String(ride.telegramChatId);
+    if (ride.customerTelegramChatId) return String(ride.customerTelegramChatId);
+    if (ride.customerChatId) return String(ride.customerChatId);
+
+    const custPhone = String(ride.customerPhone || ride.phone || '').trim();
+    const cleanDigits = custPhone.replace(/[^0-9]/g, '');
+    const cleanPhone = cleanDigits.replace(/^0+/, '');
+    const customerId = ride.customerId;
+
+    // 1. Search in-memory state customers
+    const customers = db.memoryState?.customers || [];
+    let cust = customers.find(c => {
+        if (customerId && (c.customerId === customerId || c.id === customerId)) return true;
+        if (cleanPhone) {
+            const p = String(c.phoneNumber || c.phone || '').replace(/[^0-9]/g, '').replace(/^0+/, '');
+            if (p && (p === cleanPhone || p.endsWith(cleanPhone) || cleanPhone.endsWith(p))) return true;
+        }
+        return false;
+    });
+
+    if (cust && cust.telegramChatId) {
+        return String(cust.telegramChatId);
+    }
+
+    // 2. Search PostgreSQL database if connected
+    if (db.isPostgresConnected && db.pool) {
+        try {
+            if (customerId) {
+                const res = await db.pool.query('SELECT telegram_chat_id FROM customers WHERE customer_id = $1 LIMIT 1', [customerId]);
+                if (res.rows.length > 0 && res.rows[0].telegram_chat_id) {
+                    return String(res.rows[0].telegram_chat_id);
+                }
+            }
+            if (cleanPhone) {
+                const res = await db.pool.query('SELECT telegram_chat_id FROM customers WHERE phone_number LIKE $1 LIMIT 1', [`%${cleanPhone.slice(-10)}%`]);
+                if (res.rows.length > 0 && res.rows[0].telegram_chat_id) {
+                    return String(res.rows[0].telegram_chat_id);
+                }
+            }
+        } catch (err) {
+            console.warn('[TelegramBot] findCustomerTelegramChatId DB query error:', err.message);
+        }
+    }
+
+    return null;
+}
+
+// Stage 1: Trip Accepted by Captain
+async function notifyTripAccepted(ride) {
+    try {
+        const chatId = await findCustomerTelegramChatId(ride);
+        if (!chatId) return { success: false, reason: 'no_chat_id' };
+
+        const driverName = ride.assignedDriverName || 'كابتن توصيلة';
+        const driverCar = ride.assignedDriverVehicle || 'سيارة معتمدة';
+        const driverPhone = ride.assignedDriverPhone || '';
+        const rawFare = ride.fare || ride.estimatedFare || 3000;
+        const balyFare = Math.max(3000, Math.ceil(Number(rawFare) / 250) * 250).toLocaleString('en-US');
+
+        const msg = `🚖 <b>تم قبول طلب مشوارك بنجاح!</b>\n\n` +
+            `الكابتن: <b>${driverName}</b>\n` +
+            `السيارة: <b>${driverCar}</b>\n` +
+            (driverPhone ? `📞 رقم الهاتف: <code>${driverPhone}</code>\n` : '') +
+            `💰 الأجرة التقديرية: <b>${balyFare}</b> دينار عراقي\n\n` +
+            `الكابتن في طريقه إلى نقطة الانطلاق الآن 📍`;
+
+        await sendMessage(chatId, msg);
+        return { success: true };
+    } catch (err) {
+        console.error('[TelegramBot] notifyTripAccepted error:', err.message);
+        return { success: false, error: err.message };
+    }
+}
+
+// Stage 2: Captain Arrived at Pickup Location
+async function notifyDriverArrived(ride) {
+    try {
+        const chatId = await findCustomerTelegramChatId(ride);
+        if (!chatId) return { success: false, reason: 'no_chat_id' };
+
+        const driverName = ride.assignedDriverName || 'الكابتن';
+        const driverCar = ride.assignedDriverVehicle || 'المركبة';
+        const driverPhone = ride.assignedDriverPhone || '';
+
+        const msg = `🚖 <b>كابتن توصيلة وصل الآن وبانتظارك!</b>\n\n` +
+            `الكابتن: <b>${driverName}</b>\n` +
+            `السيارة: <b>${driverCar}</b>\n` +
+            (driverPhone ? `📞 للتواصل مع الكابتن: <code>${driverPhone}</code>\n\n` : `\n`) +
+            `يرجى التوجه إلى نقطة الالتقاء. نتمنى لك رحلة آمنة ومريحة! ✨`;
+
+        await sendMessage(chatId, msg);
+        return { success: true };
+    } catch (err) {
+        console.error('[TelegramBot] notifyDriverArrived error:', err.message);
+        return { success: false, error: err.message };
+    }
+}
+
+// Stage 3: Trip Started (In Progress to Destination)
+async function notifyTripStarted(ride) {
+    try {
+        const chatId = await findCustomerTelegramChatId(ride);
+        if (!chatId) return { success: false, reason: 'no_chat_id' };
+
+        const driverName = ride.assignedDriverName || 'الكابتن';
+        const destination = ride.dropoffName || ride.dropoffAddress || 'الوجهة المحددة';
+
+        const msg = `🚗 <b>انطلقت الرحلة الآن إلى وجهتك!</b>\n\n` +
+            `الكابتن <b>${driverName}</b> في الطريق إلى: <b>${destination}</b>.\n\n` +
+            `نتمنى لك رحلة آمنة ومريحة مع توصيلة! ✨`;
+
+        await sendMessage(chatId, msg);
+        return { success: true };
+    } catch (err) {
+        console.error('[TelegramBot] notifyTripStarted error:', err.message);
+        return { success: false, error: err.message };
+    }
+}
+
+// Stage 4: Trip Completed & Fare Collected (Baly Standard)
+async function notifyTripCompleted(ride, fareInput) {
+    try {
+        const chatId = await findCustomerTelegramChatId(ride);
+        if (!chatId) return { success: false, reason: 'no_chat_id' };
+
+        const rawFare = fareInput !== undefined && fareInput !== null
+            ? fareInput
+            : (ride.finalFare || ride.fare || ride.estimatedFare || 3000);
+        const finalFareNum = Math.max(3000, Math.ceil(Number(rawFare || 3000) / 250) * 250);
+        const formattedFare = finalFareNum.toLocaleString('en-US');
+
+        const msg = `🏁 الحمد لله على سلامة الوصول!\n\n` +
+            `تم إنهاء مشوارك بنجاح ✅\n` +
+            `💰 المبلغ المستلم: ${formattedFare} دينار عراقي\n\n` +
+            `نتمنى لك وقتاً طيباً، ويسعدنا تقييمك للكابتن عبر التطبيق ⭐`;
+
+        await sendMessage(chatId, msg, { parse_mode: '' });
+        return { success: true, fare: finalFareNum };
+    } catch (err) {
+        console.error('[TelegramBot] notifyTripCompleted error:', err.message);
+        return { success: false, error: err.message };
+    }
+}
+
 module.exports = {
     startBot,
     stopBot,
@@ -2177,5 +2328,11 @@ module.exports = {
     askGroqAI,
     checkUserSubscription,
     getBannedUsers,
-    unbanUser
+    unbanUser,
+    findCustomerTelegramChatId,
+    notifyTripAccepted,
+    notifyDriverArrived,
+    notifyTripStarted,
+    notifyTripCompleted
 };
+

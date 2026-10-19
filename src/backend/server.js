@@ -2212,6 +2212,15 @@ async function startServer() {
                     };
                     db.memoryState.chatMessages.push(initMsg);
 
+                    // Stage 1: Notify Customer on Telegram that trip was accepted
+                    try {
+                        if (typeof telegramBot.notifyTripAccepted === 'function') {
+                            telegramBot.notifyTripAccepted(r).catch(err => console.error('[RideAccepted] Telegram notify error:', err.message));
+                        }
+                    } catch (tgErr) {
+                        console.error('[RideAccepted] Telegram notify error:', tgErr.message);
+                    }
+
                     db.saveStateSnapshot();
                     return sendJson({ success: true, message: 'تم قبول المشوار بنجاح!', request: r });
                 } else {
@@ -2257,24 +2266,10 @@ async function startServer() {
                 r.arrivedAt = new Date().toISOString();
                 db.saveStateSnapshot();
 
-                // Send Telegram Notification to Passenger if registered via Telegram (Phase 4)
+                // Stage 2: Send Telegram Notification to Passenger - Captain Arrived
                 try {
-                    const custPhone = (r.customerPhone || '').replace('+964', '0');
-                    const passenger = (db.memoryState.customers || []).find(c => 
-                        (r.customerId && c.customerId === r.customerId) ||
-                        (custPhone && c.phoneNumber && (c.phoneNumber === custPhone || ('0' + c.phoneNumber) === custPhone || c.phoneNumber === ('0' + custPhone)))
-                    );
-                    const targetChatId = (passenger && passenger.telegramChatId) || r.telegramChatId;
-                    if (targetChatId) {
-                        const drvName = r.assignedDriverName || 'الكابتن';
-                        const drvCar = r.assignedDriverVehicle || 'المركبة';
-                        const drvPhone = r.assignedDriverPhone || '';
-                        const msg = `🚖 <b>كابتن توصيلة وصل الآن وبانتظارك!</b>\n` +
-                            `الكابتن: <b>${drvName}</b>\n` +
-                            `السيارة: <b>${drvCar}</b>\n` +
-                            (drvPhone ? `📞 للتواصل مع الكابتن: <code>${drvPhone}</code>\n\n` : `\n`) +
-                            `نتمنى لك رحلة آمنة ومريحة مع توصيلة! ✨`;
-                        telegramBot.notifyUser(targetChatId, msg).catch(() => {});
+                    if (typeof telegramBot.notifyDriverArrived === 'function') {
+                        telegramBot.notifyDriverArrived(r).catch(err => console.error('[RideArrived] Telegram notify error:', err.message));
                     }
                 } catch (tgErr) {
                     console.error('[RideArrived] Telegram notify error:', tgErr.message);
@@ -2361,20 +2356,10 @@ async function startServer() {
                 r.status = 'InProgress';
                 r.startedAt = new Date().toISOString();
 
-                // Send Telegram Notification to Passenger if registered
+                // Stage 3: Send Telegram Notification to Passenger - Trip Started
                 try {
-                    const custPhone = (r.customerPhone || '').replace('+964', '0');
-                    const passenger = (db.memoryState.customers || []).find(c => 
-                        (r.customerId && c.customerId === r.customerId) ||
-                        (custPhone && c.phoneNumber && (c.phoneNumber === custPhone || ('0' + c.phoneNumber) === custPhone || c.phoneNumber === ('0' + custPhone)))
-                    );
-                    const targetChatId = (passenger && passenger.telegramChatId) || r.telegramChatId;
-                    if (targetChatId) {
-                        const drvName = r.assignedDriverName || 'الكابتن';
-                        const msg = `🚗 <b>انطلقت الرحلة الآن إلى وجهتك!</b>\n\n` +
-                            `الكابتن <b>${drvName}</b> في الطريق إلى: <b>${r.dropoffName || 'الوجهة المحددة'}</b>.\n\n` +
-                            `نتمنى لك رحلة آمنة ومريحة مع توصيلة! ✨`;
-                        telegramBot.notifyUser(targetChatId, msg).catch(() => {});
+                    if (typeof telegramBot.notifyTripStarted === 'function') {
+                        telegramBot.notifyTripStarted(r).catch(err => console.error('[RideStart] Telegram notify error:', err.message));
                     }
                 } catch (tgErr) {
                     console.error('[RideStart] Telegram notify error:', tgErr.message);
@@ -2523,6 +2508,19 @@ async function startServer() {
 
                 r.status = 'Completed';
                 r.completedAt = new Date().toISOString();
+                if (body.fare || body.finalFare) {
+                    r.finalFare = body.finalFare || body.fare;
+                }
+
+                // Stage 4: Send Telegram Notification to Passenger - Trip Completed & Fare Collected
+                try {
+                    if (typeof telegramBot.notifyTripCompleted === 'function') {
+                        telegramBot.notifyTripCompleted(r, r.finalFare || r.fare || body.fare).catch(err => console.error('[RideComplete] Telegram notify error:', err.message));
+                    }
+                } catch (tgErr) {
+                    console.error('[RideComplete] Telegram notify error:', tgErr.message);
+                }
+
                 db.saveStateSnapshot();
                 return sendJson({ success: true, message: 'تم إكمال الرحلة بنجاح 🏁', request: r });
             } catch (err) {
