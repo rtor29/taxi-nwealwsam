@@ -1109,9 +1109,15 @@ async function loadDrivers(search = '') {
                 ? `<a href="tel:${escapeHtml(d.phoneNumber)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 font-mono text-xs transition-colors" dir="ltr" title="اتصال بالكابتن"><i class="fa-solid fa-phone text-[10px] text-slate-400"></i><span>${escapeHtml(d.phoneNumber)}</span></a>`
                 : '-';
 
+            const tgLinked = Boolean(d.telegramChatId || d.telegram_chat_id);
+            const tgIcon = tgLinked
+                ? `<span class="inline-flex items-center text-emerald-500 hover:text-emerald-600 transition" title="مرتبط بالتيليجرام: ${escapeHtml(d.telegramChatId || d.telegram_chat_id)}"><i class="fa-brands fa-telegram text-sm"></i></span>`
+                : `<span class="inline-flex items-center text-slate-300" title="غير مرتبط بتيليجرام"><i class="fa-brands fa-telegram text-sm"></i></span>`;
+
             tr.innerHTML = `
-                <td class="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-1.5">
-                    ${escapeHtml(d.fullName)}
+                <td class="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
+                    ${tgIcon}
+                    <span>${escapeHtml(d.fullName)}</span>
                     ${d.isBlocked ? '<span class="px-1.5 py-0.5 text-[10px] bg-rose-50 text-rose-700 border border-rose-200/60 rounded font-bold">معلق</span>' : ''}
                 </td>
                 <td class="py-3.5 px-4 font-mono text-xs">${driverPhoneHtml}</td>
@@ -4763,6 +4769,9 @@ function openEditDriverModal(driverId) {
     document.getElementById('edit-drv-phone').value = driver.phoneNumber || '';
     document.getElementById('edit-drv-route').value = driver.route || '';
     document.getElementById('edit-drv-password').value = '';
+    const tgInput = document.getElementById('edit-drv-telegram-id');
+    if (tgInput) tgInput.value = driver.telegramChatId || driver.telegram_chat_id || '';
+
     const vehicleTypeEl = document.getElementById('edit-drv-vehicle-type');
     if (vehicleTypeEl) vehicleTypeEl.value = driver.vehicleType === 'vip' ? 'vip' : 'eco';
 
@@ -4810,6 +4819,7 @@ async function submitEditDriver(event) {
     const phoneNumber = document.getElementById('edit-drv-phone').value.trim();
     const route = document.getElementById('edit-drv-route').value.trim();
     const password = document.getElementById('edit-drv-password').value.trim();
+    const telegramChatId = (document.getElementById('edit-drv-telegram-id') && document.getElementById('edit-drv-telegram-id').value.trim()) || '';
     const governorate = (document.getElementById('edit-drv-gov') && document.getElementById('edit-drv-gov').value) || 'najaf';
     const vehicleType = (document.getElementById('edit-drv-vehicle-type') || {}).value || 'eco';
 
@@ -4823,6 +4833,7 @@ async function submitEditDriver(event) {
     try {
         const payload = {
             fullName, phoneNumber, route, governorate, vehicleType,
+            telegramChatId,
             permanentLat: permanentLat || null,
             permanentLon: permanentLon || null,
             permanentLocationName: permanentLocationName || route,

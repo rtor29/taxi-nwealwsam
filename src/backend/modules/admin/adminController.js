@@ -40,7 +40,8 @@ class AdminController {
                 ...d,
                 route: routeName,
                 password: d.plainPassword || (d.passwordHash ? '••••••••' : '123456'),
-                points: parseInt(d.points || d.rewardScore || 0, 10)
+                points: parseInt(d.points || d.rewardScore || 0, 10),
+                telegramChatId: d.telegramChatId || d.telegram_chat_id || ''
             };
         });
 
@@ -67,7 +68,8 @@ class AdminController {
                         passwordHash: row.password_hash,
                         status: row.status,
                         isVerified: row.is_verified,
-                        isBlocked: row.is_blocked
+                        isBlocked: row.is_blocked,
+                        telegramChatId: row.telegram_chat_id ? String(row.telegram_chat_id) : null
                     };
                     db.memoryState.drivers.unshift(driver);
                 }
@@ -79,6 +81,15 @@ class AdminController {
         if (data.phoneNumber !== undefined) driver.phoneNumber = String(data.phoneNumber).trim();
         if (data.governorate !== undefined) driver.governorate = String(data.governorate).trim();
         if (data.vehicleType !== undefined) driver.vehicleType = String(data.vehicleType).toLowerCase() === 'vip' ? 'vip' : 'eco';
+        if (data.telegramChatId !== undefined || data.telegram_chat_id !== undefined) {
+            const rawTg = String(data.telegramChatId !== undefined ? data.telegramChatId : data.telegram_chat_id).trim();
+            driver.telegramChatId = rawTg || null;
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    await db.pool.query('UPDATE drivers SET telegram_chat_id = $1 WHERE driver_id = $2', [driver.telegramChatId, driverId]);
+                } catch (_) {}
+            }
+        }
         if (data.availableSeats !== undefined) {
             driver.availableSeats = parseInt(data.availableSeats, 10) || 4;
             driver.totalSeats = driver.totalSeats || driver.availableSeats;

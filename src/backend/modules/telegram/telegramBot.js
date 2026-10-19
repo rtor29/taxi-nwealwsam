@@ -531,6 +531,133 @@ async function checkPhoneRegistration(phone) {
     return null;
 }
 
+// --- Link User / Driver by Phone (Deep Link / Auto-Link) ---
+async function linkUserByPhone(chatId, rawPhone, user) {
+    if (!chatId || !rawPhone) return false;
+    const digits = String(rawPhone).replace(/[^0-9]/g, '');
+    let cleanPhone = digits;
+    if (cleanPhone.startsWith('964')) cleanPhone = '0' + cleanPhone.substring(3);
+    if (!cleanPhone.startsWith('0') && cleanPhone.length === 10) cleanPhone = '0' + cleanPhone;
+
+    const tgUsername = user?.username ? `@${user.username}` : '';
+    const tgName = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'المستخدم';
+
+    const matchDigits = (phone) => {
+        if (!phone) return false;
+        const d = String(phone).replace(/[^0-9]/g, '');
+        if (d === digits) return true;
+        if (cleanPhone && cleanPhone.length >= 9 && d.endsWith(cleanPhone.substring(cleanPhone.length - 9))) return true;
+        return false;
+    };
+
+    let customer = (db.memoryState.customers || []).find(c => matchDigits(c.phoneNumber));
+    let driver = (db.memoryState.drivers || []).find(d => matchDigits(d.phoneNumber));
+
+    if (!customer && !driver && db.isPostgresConnected && db.pool) {
+        try {
+            const shortMatch = cleanPhone.length >= 9 ? cleanPhone.substring(cleanPhone.length - 9) : cleanPhone;
+            const res = await db.pool.query(
+                `SELECT role, user_id, full_name, phone_number FROM users WHERE phone_number LIKE $1 OR phone_number = $2 LIMIT 1`,
+                [`%${shortMatch}`, cleanPhone]
+            );
+            if (res.rows && res.rows.length > 0) {
+                const row = res.rows[0];
+                if ((row.role || '').toLowerCase() === 'driver') {
+                    driver = (db.memoryState.drivers || []).find(d => d.driverId === row.user_id) || {
+                        driverId: row.user_id,
+                        fullName: row.full_name,
+                        phoneNumber: row.phone_number
+                    };
+                } else {
+                    customer = (db.memoryState.customers || []).find(c => c.customerId === row.user_id) || {
+                        customerId: row.user_id,
+                        fullName: row.full_name,
+                        phoneNumber: row.phone_number
+                    };
+                }
+            }
+        } catch (e) {
+            console.warn('[TelegramBot] linkUserByPhone db query error:', e.message);
+        }
+    }
+
+    if (customer) {
+        customer.telegramChatId = String(chatId);
+        customer.telegramUsername = tgUsername;
+        db.saveStateSnapshot();
+        db.persistTelegramChatId('Customer', customer.customerId, chatId, tgUsername).catch(() => {});
+
+        // 1. Remove old custom keyboards
+        await tgRequest('sendMessage', {
+            chat_id: chatId,
+            text: `✅ <b>تم ربط حسابك في توصيلة بنجاح!</b>\n\n` +
+                  `👤 <b>الاسم:</b> ${customer.fullName || tgName}\n` +
+                  `📱 <b>الهاتف:</b> ${customer.phoneNumber || cleanPhone}\n` +
+                  `🔔 ستصلك الآن كافة إشعارات مشاويرك (تأكيد الحجز، وصول الكابتن، وتفاصيل الرحلة) مباشرة عبر تيليجرام!`,
+            parse_mode: 'HTML',
+            reply_markup: { remove_keyboard: true }
+        });
+
+        const token = 'jwt_customer_' + customer.customerId;
+        const returnUrl = `https://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(customer.customerId)}&role=Customer&fullName=${encodeURIComponent(customer.fullName || tgName)}`;
+
+        await sendKeyboard(chatId,
+            `🚖 يمكنك العودة للتطبيق الآن والبدء بطلب مشاويرك:`,
+            [
+                [{ text: '🚗 العودة إلى تطبيق توصيلة 🚖', url: returnUrl }]
+            ]
+        );
+        userStates.delete(chatId);
+        return true;
+    }
+
+    if (driver) {
+        driver.telegramChatId = String(chatId);
+        driver.telegramUsername = tgUsername;
+        db.saveStateSnapshot();
+        db.persistTelegramChatId('Driver', driver.driverId, chatId, tgUsername).catch(() => {});
+
+        await tgRequest('sendMessage', {
+            chat_id: chatId,
+            text: `✅ <b>تم ربط حساب الكابتن بنجاح!</b>\n\n` +
+                  `🚕 <b>الكابتن:</b> ${driver.fullName || tgName}\n` +
+                  `📱 <b>الهاتف:</b> ${driver.phoneNumber || cleanPhone}\n` +
+                  `🔔 ستصلك الآن إشعارات طلبات المشاوير الجديدة بالقرب منك فوراً!`,
+            parse_mode: 'HTML',
+            reply_markup: { remove_keyboard: true }
+        });
+
+        const token = 'jwt_driver_' + driver.driverId;
+        const returnUrl = `https://tawseelaiq.app/?login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driver.driverId)}&role=Driver&fullName=${encodeURIComponent(driver.fullName || tgName)}`;
+
+        await sendKeyboard(chatId,
+            `🚗 يمكنك العودة لتطبيق الكابتن الآن واستقبال طلبات المشاوير:`,
+            [
+                [{ text: '🚕 العودة إلى تطبيق الكابتن', url: returnUrl }]
+            ]
+        );
+        userStates.delete(chatId);
+        return true;
+    }
+
+    await tgRequest('sendMessage', {
+        chat_id: chatId,
+        text: `✅ <b>تم استلام طلب ربط التيليجرام للرقم (${cleanPhone})!</b>\n\n` +
+              `ستصلك إشعارات المشوار فور اكتمال طلبك في تطبيق توصيلة 🚖.`,
+        parse_mode: 'HTML',
+        reply_markup: { remove_keyboard: true }
+    });
+
+    await sendKeyboard(chatId,
+        `اضغط أدناه لفتح تطبيق توصيلة:`,
+        [
+            [{ text: '🚗 فتح تطبيق توصيلة', url: 'https://tawseelaiq.app' }]
+        ]
+    );
+    userStates.delete(chatId);
+    return false;
+}
+
 // --- Bot Command Handlers ---
 async function handleStart(chatId, user) {
     if (!db.memoryState.botSubscribers) db.memoryState.botSubscribers = [];
@@ -836,7 +963,13 @@ async function handleCallback(chatId, data, user, queryId) {
                     }).catch(() => {});
                 }
                 await sendMessage(chatId, '✅ <b>تم التحقق بنجاح!</b> شكراً لانضمامك لمنصات «توصيلة» الرسمية 🚖.');
-                await handleStart(chatId, user);
+                if (state.pendingRegPhone) {
+                    const phoneToLink = state.pendingRegPhone;
+                    userStates.delete(chatId);
+                    await linkUserByPhone(chatId, phoneToLink, user);
+                } else {
+                    await handleStart(chatId, user);
+                }
             } else {
                 if (queryId) {
                     await tgRequest('answerCallbackQuery', {
@@ -1095,11 +1228,9 @@ async function handleMessage(chatId, text, user, location) {
         if (digits.length >= 7) {
             const existing = await checkPhoneRegistration(text);
             if (existing) {
-                await sendKeyboard(chatId,
-                    `⚠️ <b>الرقم مسجل ${existing.roleAr}. استخدم تسجيل الدخول.</b>`,
-                    [[{ text: '🔑 تسجيل دخول', callback_data: 'login' }], [{ text: '🔙 القائمة الرئيسية', callback_data: 'help' }]]
-                );
-                return;
+                // Auto-link account directly
+                const linked = await linkUserByPhone(chatId, digits, user);
+                if (linked) return;
             } else {
                 const cleanPhone = digits.startsWith('964') ? '0' + digits.substring(3) : (digits.startsWith('0') ? digits : '0' + digits);
                 const encodedPhone = encodeURIComponent(cleanPhone);
@@ -1759,17 +1890,30 @@ async function poll() {
                             continue;
                         }
 
+                        // Check if command is deep link registration
+                        const isRegDeepLink = text.startsWith('/start reg_') || text.startsWith('/start%20reg_');
+
                         // Mandatory Subscription Gate for private chat (Admin is exempted)
                         if (String(chatId) !== ADMIN_CHAT_ID) {
                             const sub = await checkUserSubscription(msg.from?.id || chatId);
                             if (!sub.subscribed) {
+                                if (isRegDeepLink) {
+                                    const rawPhone = text.replace('/start reg_', '').replace('/start%20reg_', '').trim();
+                                    userStates.set(chatId, { pendingRegPhone: rawPhone });
+                                }
                                 await sendSubscriptionGateMessage(chatId);
                                 continue;
                             }
                         }
 
                         // Commands
-                        if (text === '/start') { await handleStart(chatId, msg.from); }
+                        if (isRegDeepLink) {
+                            const rawPhone = text.replace('/start reg_', '').replace('/start%20reg_', '').trim();
+                            await linkUserByPhone(chatId, rawPhone, msg.from);
+                        }
+                        else if (text === '/start' || text.startsWith('/start ')) {
+                            await handleStart(chatId, msg.from);
+                        }
                         else if (text === '/status') {
                             await sendMessage(chatId, 'ℹ️ استخدم /start لبدء التسجيل أو تسجيل الدخول.');
                         }
@@ -1805,8 +1949,8 @@ function startBot() {
     if (process.env.TELEGRAM_BOT_ENABLED === 'false' || !BOT_TOKEN || pollingActive) return;
     pollingActive = true;
     console.log('[TelegramBot] Started polling...');
-    // Delete webhook first (in case one exists)
-    tgRequest('deleteWebhook', {}).then(() => {
+    // Delete webhook first (and drop any pending updates to clear stale loops)
+    tgRequest('deleteWebhook', { drop_pending_updates: true }).then(() => {
         poll();
     }).catch(() => { poll(); });
 }

@@ -314,6 +314,12 @@ class DatabaseManager {
                     ALTER TABLE drivers ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT false;
                     ALTER TABLE drivers ADD COLUMN IF NOT EXISTS work_mode VARCHAR(50) DEFAULT 'مشوار قصير';
                     ALTER TABLE drivers ADD COLUMN IF NOT EXISTS points INT DEFAULT 0;
+                    ALTER TABLE drivers ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(64);
+                    ALTER TABLE drivers ADD COLUMN IF NOT EXISTS telegram_username VARCHAR(100);
+                    ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(64);
+                    ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_username VARCHAR(100);
+                    CREATE INDEX IF NOT EXISTS idx_drivers_telegram_chat ON drivers(telegram_chat_id);
+                    CREATE INDEX IF NOT EXISTS idx_customers_telegram_chat ON customers(telegram_chat_id);
                     CREATE TABLE IF NOT EXISTS trip_ratings (
                         id SERIAL PRIMARY KEY,
                         ride_id VARCHAR(100),
@@ -738,13 +744,24 @@ class DatabaseManager {
 
 
     // Persist telegramChatId mapping
-    async persistTelegramChatId(role, id, chatId) {
+    async persistTelegramChatId(role, id, chatId, username = null) {
         if (!this.pool || !this.isPostgresConnected) return;
         try {
             const table = role === 'Driver' ? 'drivers' : 'customers';
             const col = role === 'Driver' ? 'driver_id' : 'customer_id';
-            await this.pool.query(`UPDATE ${table} SET telegram_chat_id = $1 WHERE ${col} = $2`, [String(chatId), id]);
-        } catch (e) { console.warn('[Database] persistTelegramChatId error:', e.message); }
+            await this.pool.query(
+                `UPDATE ${table} SET telegram_chat_id = $1, telegram_username = COALESCE($2, telegram_username) WHERE ${col} = $3`,
+                [chatId ? String(chatId) : null, username || null, id]
+            );
+        } catch (e) {
+            try {
+                const table = role === 'Driver' ? 'drivers' : 'customers';
+                const col = role === 'Driver' ? 'driver_id' : 'customer_id';
+                await this.pool.query(`UPDATE ${table} SET telegram_chat_id = $1 WHERE ${col} = $2`, [chatId ? String(chatId) : null, id]);
+            } catch (err) {
+                console.warn('[Database] persistTelegramChatId error:', err.message);
+            }
+        }
     }
 
     // Record passenger rating of captain, update captain average rating & points, and persist safely

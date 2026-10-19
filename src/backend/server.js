@@ -2079,14 +2079,25 @@ async function startServer() {
                         `⏳ جاري انتظار قبول السائق.`;
                     telegramBot.notifyUser(custObj.telegramChatId, tgMsg).catch(() => {});
                 }
-                if (assignedDriver && assignedDriver.telegramChatId) {
-                    const drvMsg = `🚖 <b>طلب مشوار جديد (${tierBadge}) بالقرب منك!</b>\n\n` +
-                        `👤 <b>الراكب:</b> ${newRequest.customerName}\n` +
-                        `🟢 <b>الانطلاق:</b> ${newRequest.pickupName}\n` +
-                        `🔴 <b>الوصول:</b> ${newRequest.dropoffName}\n` +
-                        `💰 <b>الأجرة:</b> ${newRequest.fare} د.ع\n\n` +
-                        `👉 افتح التطبيق للقبول: https://tawseelaiq.app/?role=Driver`;
-                    telegramBot.notifyUser(assignedDriver.telegramChatId, drvMsg).catch(() => {});
+                // Notify all candidate drivers with telegramChatId
+                try {
+                    const candidateIds = new Set(newRequest.candidateDriverIds || []);
+                    if (assignedDriver && assignedDriver.driverId) candidateIds.add(assignedDriver.driverId);
+
+                    const drvMsg = `🔔 <b>طلب مشوار جديد!</b>\n` +
+                        `📍 الانطلاق: <b>${newRequest.pickupName || 'موقع الراكب'}</b>\n` +
+                        `🏁 الوجهة: <b>${newRequest.dropoffName || 'الوجهة المحددة'}</b>\n` +
+                        `💰 الأجرة التقديرية: <b>${newRequest.fare} د.ع</b>\n\n` +
+                        `افتح التطبيق لقبول الطلب:\nhttps://tawseelaiq.app/?role=Driver`;
+
+                    for (const dId of candidateIds) {
+                        const drv = (db.memoryState.drivers || []).find(d => d.driverId === dId);
+                        if (drv && drv.telegramChatId) {
+                            telegramBot.notifyUser(drv.telegramChatId, drvMsg).catch(() => {});
+                        }
+                    }
+                } catch (drvTgErr) {
+                    console.error('[NewRide] Driver Telegram notify error:', drvTgErr.message);
                 }
 
                 return sendJson({
@@ -2258,8 +2269,9 @@ async function startServer() {
                         const drvName = r.assignedDriverName || 'الكابتن';
                         const drvCar = r.assignedDriverVehicle || 'المركبة';
                         const drvPhone = r.assignedDriverPhone || '';
-                        const msg = `🚖 <b>وصل الكابتن إلى موقعك الآن!</b>\n\n` +
-                            `الكابتن <b>${drvName}</b> (${drvCar}) في انتظارك عند نقطة الانطلاق 📍.\n` +
+                        const msg = `🚖 <b>كابتن توصيلة وصل الآن وبانتظارك!</b>\n` +
+                            `الكابتن: <b>${drvName}</b>\n` +
+                            `السيارة: <b>${drvCar}</b>\n` +
                             (drvPhone ? `📞 للتواصل مع الكابتن: <code>${drvPhone}</code>\n\n` : `\n`) +
                             `نتمنى لك رحلة آمنة ومريحة مع توصيلة! ✨`;
                         telegramBot.notifyUser(targetChatId, msg).catch(() => {});

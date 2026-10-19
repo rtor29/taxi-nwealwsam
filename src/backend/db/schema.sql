@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS drivers (
     latitude NUMERIC(10, 7) DEFAULT 31.9961,
     longitude NUMERIC(10, 7) DEFAULT 44.3168,
     heading NUMERIC(5, 2) DEFAULT 0,
+    telegram_chat_id VARCHAR(64),
+    telegram_username VARCHAR(100),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -60,6 +62,7 @@ CREATE TABLE IF NOT EXISTS drivers (
 CREATE INDEX IF NOT EXISTS idx_drivers_status ON drivers(status);
 CREATE INDEX IF NOT EXISTS idx_drivers_verified ON drivers(is_verified);
 CREATE INDEX IF NOT EXISTS idx_drivers_blocked ON drivers(is_blocked);
+CREATE INDEX IF NOT EXISTS idx_drivers_telegram_chat ON drivers(telegram_chat_id);
 
 -- 3. Customers
 CREATE TABLE IF NOT EXISTS customers (
@@ -77,12 +80,15 @@ CREATE TABLE IF NOT EXISTS customers (
     total_bookings INT NOT NULL DEFAULT 0,
     is_active BOOLEAN NOT NULL DEFAULT true,
     is_blocked BOOLEAN NOT NULL DEFAULT false,
+    telegram_chat_id VARCHAR(64),
+    telegram_username VARCHAR(100),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_customers_active ON customers(is_active);
 CREATE INDEX IF NOT EXISTS idx_customers_blocked ON customers(is_blocked);
+CREATE INDEX IF NOT EXISTS idx_customers_telegram_chat ON customers(telegram_chat_id);
 
 -- 4. Driver Documents (Verifications Queue)
 CREATE TABLE IF NOT EXISTS driver_documents (
