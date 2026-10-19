@@ -1269,11 +1269,16 @@ async function loadCustomers(search = '') {
                 ? `<a href="tel:${escapeHtml(c.phoneNumber)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 font-mono text-xs transition-colors" dir="ltr" title="اتصال بالراكب"><i class="fa-solid fa-phone text-[10px] text-slate-400"></i><span>${escapeHtml(c.phoneNumber)}</span></a>`
                 : '-';
 
+            const tgLinked = Boolean(c.telegramChatId || c.telegram_chat_id);
+            const tgIcon = tgLinked
+                ? `<span class="inline-flex items-center text-emerald-500 hover:text-emerald-600 transition cursor-help" title="مرتبط بالتيليجرام: ${escapeHtml(c.telegramChatId || c.telegram_chat_id)}"><i class="fa-brands fa-telegram text-sm"></i></span>`
+                : `<span class="inline-flex items-center text-slate-300" title="غير مرتبط بتيليجرام"><i class="fa-brands fa-telegram text-sm"></i></span>`;
+
             tr.innerHTML = `
-                <td class="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-1.5">
-                    ${escapeHtml(c.fullName)}
+                <td class="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
+                    ${tgIcon}
+                    <span>${escapeHtml(c.fullName)}</span>
                     ${c.isBlocked ? '<span class="px-1.5 py-0.5 text-[10px] bg-rose-50 text-rose-700 border border-rose-200/60 rounded font-bold">محظور</span>' : ''}
-                    ${c.telegramChatId ? '<span title="مسجل عبر تيليجرام" class="px-1.5 py-0.5 text-[10px] bg-sky-50 text-sky-700 border border-sky-200/60 rounded font-bold">📱 تيليجرام</span>' : ''}
                 </td>
                 <td class="py-3.5 px-4 font-mono text-xs">${customerPhoneHtml}</td>
                 <td class="py-3.5 px-4"><span class="inline-flex items-center px-2.5 py-0.5 bg-slate-100 text-slate-700 border border-slate-200/60 rounded-md text-xs font-medium">${escapeHtml(c.route || c.area || 'غير محدد')}</span></td>
@@ -3725,12 +3730,10 @@ function openAddCaptainModal() {
     modal.classList.remove('pointer-events-none');
     modal.style.display = 'flex';
     modal.style.pointerEvents = 'auto';
-    document.getElementById('form-add-captain').style.display = 'block';
-    document.getElementById('admin-captain-success-box').style.display = 'none';
-
-    setTimeout(() => {
-        initAdminCaptainRouteMap();
-    }, 200);
+    const form = document.getElementById('form-add-captain');
+    if (form) form.style.display = 'block';
+    const succ = document.getElementById('admin-captain-success-box');
+    if (succ) succ.style.display = 'none';
 }
 
 function closeAddCaptainModal() {
@@ -3811,381 +3814,38 @@ async function checkAdminCaptainPhone(val) {
 }
 
 function initAdminCaptainRouteMap() {
-    const container = document.getElementById('admin-captain-route-map');
-    if (!container || typeof mapboxgl === 'undefined') return;
-
-    ensureMapboxRTL();
-
-    if (!adminCaptainMap) {
-        mapboxgl.accessToken = MAPBOX_PUBLIC_TOKEN;
-        adminCaptainMap = new mapboxgl.Map({
-            container: 'admin-captain-route-map',
-            style: 'mapbox://styles/mapbox/navigation-night-v1',
-            center: [44.345, 32.015],
-            zoom: 12
-        });
-
-        adminCaptainMap.addControl(new mapboxgl.NavigationControl(), 'top-left');
-
-        adminCaptainMap.on('load', () => {
-            adminCaptainMap.addSource('captain-route-source', {
-                type: 'geojson',
-                data: { type: 'FeatureCollection', features: [] }
-            });
-
-            adminCaptainMap.addLayer({
-                id: 'captain-route-line',
-                type: 'line',
-                source: 'captain-route-source',
-                layout: { 'line-join': 'round', 'line-cap': 'round' },
-                paint: {
-                    'line-color': '#f59e0b',
-                    'line-width': 5,
-                    'line-opacity': 0.95
-                }
-            });
-
-            updateAdminCaptainRouteMap();
-        });
-
-        adminCaptainMap.on('click', (e) => {
-            if (adminPickMode === 'start') {
-                document.getElementById('admin-route-start-lat').value = e.lngLat.lat;
-                document.getElementById('admin-route-start-lon').value = e.lngLat.lng;
-                document.getElementById('admin-route-start-label').innerText = `إحداثيات [${e.lngLat.lat.toFixed(4)}, ${e.lngLat.lng.toFixed(4)}]`;
-                adminPickMode = null;
-                resetAdminPickButtons();
-                updateAdminCaptainRouteMap();
-            } else if (adminPickMode === 'dest') {
-                document.getElementById('admin-route-end-lat').value = e.lngLat.lat;
-                document.getElementById('admin-route-end-lon').value = e.lngLat.lng;
-                document.getElementById('admin-route-dest-label').innerText = `إحداثيات [${e.lngLat.lat.toFixed(4)}, ${e.lngLat.lng.toFixed(4)}]`;
-                adminPickMode = null;
-                resetAdminPickButtons();
-                updateAdminCaptainRouteMap();
-            }
-        });
-    } else {
-        setTimeout(() => adminCaptainMap.resize(), 100);
-        updateAdminCaptainRouteMap();
-    }
+    // Mapbox route drawing safely removed from captain registration modal
 }
 
-function setAdminMapPickMode(mode) {
-    adminPickMode = mode;
-    const btnStart = document.getElementById('btn-admin-pick-start');
-    const btnDest = document.getElementById('btn-admin-pick-dest');
-
-    if (mode === 'start') {
-        if (btnStart) btnStart.className = 'px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer ring-2 ring-emerald-400';
-        if (btnDest) btnDest.className = 'px-3 py-2 bg-rose-100 border border-rose-300 text-rose-800 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer';
-        showToast('انقر على الخريطة لتثبيت نقطة الانطلاق 🟢');
-    } else {
-        if (btnDest) btnDest.className = 'px-3 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer ring-2 ring-rose-400';
-        if (btnStart) btnStart.className = 'px-3 py-2 bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer';
-        showToast('انقر على الخريطة لتثبيت نقطة الوصول 🔴');
-    }
-}
-
-function resetAdminPickButtons() {
-    const btnStart = document.getElementById('btn-admin-pick-start');
-    const btnDest = document.getElementById('btn-admin-pick-dest');
-    if (btnStart) btnStart.className = 'px-3 py-2 bg-emerald-100 border border-emerald-300 text-emerald-800 hover:bg-emerald-600 hover:text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer';
-    if (btnDest) btnDest.className = 'px-3 py-2 bg-rose-100 border border-rose-300 text-rose-800 hover:bg-rose-600 hover:text-white rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer';
-}
-
-const OTHER_GOVERNORATES = ['بغداد', 'كربلاء', 'بابل', 'البصرة', 'أربيل', 'الموصل', 'السليمانية', 'الأنبار', 'ديالى', 'كركوك', 'واسط', 'ميسان', 'المثنى', 'ذي قار', 'القادسية', 'صلاح الدين', 'دهوك', 'الديوانية', 'الحلة', 'الناصرية', 'العمارة', 'الكوت', 'السماوة'];
-
-function isStrictlyNajafLocation(name, center) {
-    if (!center || center.length < 2) return false;
-    const lon = center[0];
-    const lat = center[1];
-    // Najaf Governorate Bounding Box (Lat ~ 31.6 to 32.35, Lon ~ 44.05 to 44.65)
-    if (lon < 44.05 || lon > 44.65 || lat < 31.6 || lat > 32.35) {
-        return false;
-    }
-    const lowerName = (name || '').toLowerCase();
-    for (const gov of OTHER_GOVERNORATES) {
-        if (lowerName.includes(gov) && !lowerName.includes('النجف') && !lowerName.includes('الكوفة')) {
-            return false;
-        }
-    }
-    return true;
-}
-
-let adminSearchDebounceTimer = null;
-function searchAdminNajafPlace(type) {
-    const input = document.getElementById(type === 'start' ? 'admin-route-start-input' : 'admin-route-dest-input');
-    const box = document.getElementById(type === 'start' ? 'admin-start-results' : 'admin-dest-results');
-    if (!input || !box) return;
-
-    const q = input.value.trim();
-    if (!q || q.length < 1) {
-        box.innerHTML = '';
-        box.classList.add('hidden');
-        return;
-    }
-
-    const qLower = q.toLowerCase();
-
-    // 1. Instant local landmark matches
-    const localMatches = ADMIN_NAJAF_PLACES
-        .filter(p => p.name.toLowerCase().includes(qLower))
-        .map(p => ({
-            name: p.name,
-            displayName: p.name,
-            category: 'معلم / منطقة في النجف',
-            icon: '📍',
-            lat: p.lat,
-            lon: p.lon
-        }));
-
-    renderAdminSearchResults(localMatches, true);
-
-    // 2. Debounced live query to Mapbox Geocoding (strictly bounded to Najaf Governorate)
-    clearTimeout(adminSearchDebounceTimer);
-    adminSearchDebounceTimer = setTimeout(async () => {
-        try {
-            const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?country=iq&proximity=44.3168,31.9961&bbox=44.05,31.75,44.65,32.35&language=ar&types=poi,address,neighborhood,locality,place,district&limit=10&autocomplete=true&access_token=${MAPBOX_PUBLIC_TOKEN}`;
-            const res = await fetch(geocodeUrl);
-            let mbFeatures = [];
-            if (res.ok) {
-                const geoData = await res.json();
-                mbFeatures = (geoData && geoData.features) ? geoData.features : [];
-            }
-
-            const combined = [...localMatches];
-            const seenNames = new Set(localMatches.map(m => m.name.toLowerCase()));
-
-            mbFeatures.forEach(feat => {
-                const featName = (feat.place_name_ar || feat.place_name || feat.text_ar || feat.text || '').trim();
-                const center = feat.center; // [lon, lat]
-                if (!isStrictlyNajafLocation(featName, center)) return;
-                if (featName && center && center.length >= 2) {
-                    const simpleName = featName.split(',')[0].trim();
-                    if (!seenNames.has(featName.toLowerCase()) && !seenNames.has(simpleName.toLowerCase())) {
-                        seenNames.add(featName.toLowerCase());
-
-                        let icon = '📍';
-                        let category = 'موقع بالخريطة';
-                        const pTypes = feat.place_type || [];
-                        if (pTypes.includes('poi')) {
-                            icon = '🏬';
-                            category = 'محل / أسواق / مجمع';
-                            if (featName.includes('جامعة') || featName.includes('كلية') || featName.includes('معهد')) {
-                                icon = '🎓';
-                                category = 'جامعة / صرح تعليمي';
-                            } else if (featName.includes('مستشفى') || featName.includes('عيادة') || featName.includes('مركز صحي')) {
-                                icon = '🏥';
-                                category = 'مستشفى / مركز طبي';
-                            } else if (featName.includes('مسجد') || featName.includes('حسينية') || featName.includes('مرقد') || featName.includes('مزار')) {
-                                icon = '🕌';
-                                category = 'معلم ديني / مزار';
-                            }
-                        } else if (pTypes.includes('address')) {
-                            icon = '🏠';
-                            category = 'بيت / عنوان دقيق';
-                        } else if (pTypes.includes('neighborhood') || pTypes.includes('locality')) {
-                            icon = '🏘️';
-                            category = 'حي سكني / منطقة';
-                        } else if (featName.includes('شارع') || featName.includes('طريق')) {
-                            icon = '🛣️';
-                            category = 'شارع / طريق رئيسي';
-                        }
-
-                        combined.push({
-                            name: featName,
-                            displayName: featName,
-                            category,
-                            icon,
-                            lat: center[1],
-                            lon: center[0]
-                        });
-                    }
-                }
-            });
-
-            renderAdminSearchResults(combined, false);
-        } catch (searchErr) {
-            console.warn('[Mapbox Search] Error searching places:', searchErr);
-            renderAdminSearchResults(localMatches, false);
-        }
-    }, 280);
-
-    function renderAdminSearchResults(items, isLoading) {
-        if (!items || items.length === 0) {
-            if (isLoading) {
-                box.innerHTML = '<div class="p-3 text-slate-500 text-center text-xs flex items-center justify-center gap-2"><i class="fa-solid fa-circle-notch fa-spin text-amber-500"></i> جاري البحث في خريطة النجف...</div>';
-            } else {
-                box.innerHTML = '<div class="p-3 text-slate-400 text-center text-xs">لم نجد نتائج مطابقة، يمكنك النقر على الخريطة لتثبيت الموقع 📍</div>';
-            }
-            box.classList.remove('hidden');
-            return;
-        }
-
-        box.innerHTML = items.slice(0, 10).map(p => {
-            const safeName = (p.displayName || p.name).replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            const icon = p.icon || '📍';
-            const cat = p.category || 'النجف الأشرف';
-            return `
-                <div onclick="selectAdminNajafPlace('${type}', '${safeName}', ${p.lat}, ${p.lon})"
-                     class="p-2.5 hover:bg-amber-50 cursor-pointer border-b border-slate-100 last:border-0 flex items-center justify-between transition">
-                    <div class="flex items-center gap-2 overflow-hidden">
-                        <span class="text-base">${icon}</span>
-                        <div class="text-right truncate">
-                            <div class="font-bold text-slate-800 text-xs truncate">${p.name}</div>
-                            <div class="text-[10px] text-slate-400 truncate">${cat}</div>
-                        </div>
-                    </div>
-                    <span class="text-[10px] text-amber-600 font-semibold bg-amber-50 px-2 py-0.5 rounded-full whitespace-nowrap">اختيار</span>
-                </div>
-            `;
-        }).join('') + (isLoading ? '<div class="p-1.5 text-center text-[10px] text-slate-400"><i class="fa-solid fa-circle-notch fa-spin text-amber-500"></i> جاري استكمال البحث بالخريطة...</div>' : '');
-        box.classList.remove('hidden');
-    }
-}
-
-function selectAdminNajafPlace(type, name, lat, lon) {
-    const input = document.getElementById(type === 'start' ? 'admin-route-start-input' : 'admin-route-dest-input');
-    const box = document.getElementById(type === 'start' ? 'admin-start-results' : 'admin-dest-results');
-    if (input) input.value = name;
-    if (box) box.classList.add('hidden');
-
-    if (type === 'start') {
-        document.getElementById('admin-route-start-lat').value = lat;
-        document.getElementById('admin-route-start-lon').value = lon;
-        document.getElementById('admin-route-start-label').innerText = name;
-    } else {
-        document.getElementById('admin-route-end-lat').value = lat;
-        document.getElementById('admin-route-end-lon').value = lon;
-        document.getElementById('admin-route-dest-label').innerText = name;
-    }
-
-    if (adminCaptainMap) {
-        adminCaptainMap.flyTo({
-            center: [lon, lat],
-            zoom: 14,
-            essential: true
-        });
-    }
-
-    updateAdminCaptainRouteMap();
-}
-
-async function updateAdminCaptainRouteMap() {
-    if (!adminCaptainMap) return;
-
-    const sLat = parseFloat(document.getElementById('admin-route-start-lat').value || 31.9961);
-    const sLon = parseFloat(document.getElementById('admin-route-start-lon').value || 44.3168);
-    const eLat = parseFloat(document.getElementById('admin-route-end-lat').value || 32.0321);
-    const eLon = parseFloat(document.getElementById('admin-route-end-lon').value || 44.3725);
-
-    // Update start marker
-    if (adminCaptainStartMarker) adminCaptainStartMarker.remove();
-    const startEl = document.createElement('div');
-    startEl.style.width = '24px';
-    startEl.style.height = '24px';
-    startEl.style.borderRadius = '50%';
-    startEl.style.backgroundColor = '#10b981';
-    startEl.style.border = '2px solid white';
-    startEl.style.boxShadow = '0 0 10px rgba(16,185,129,0.8)';
-    startEl.style.display = 'flex';
-    startEl.style.alignItems = 'center';
-    startEl.style.justifyContent = 'center';
-    startEl.style.color = 'white';
-    startEl.style.fontSize = '12px';
-    startEl.innerText = '🟢';
-
-    adminCaptainStartMarker = new mapboxgl.Marker(startEl)
-        .setLngLat([sLon, sLat])
-        .addTo(adminCaptainMap);
-
-    // Update dest marker
-    if (adminCaptainDestMarker) adminCaptainDestMarker.remove();
-    const destEl = document.createElement('div');
-    destEl.style.width = '24px';
-    destEl.style.height = '24px';
-    destEl.style.borderRadius = '50%';
-    destEl.style.backgroundColor = '#ef4444';
-    destEl.style.border = '2px solid white';
-    destEl.style.boxShadow = '0 0 10px rgba(239,68,68,0.8)';
-    destEl.style.display = 'flex';
-    destEl.style.alignItems = 'center';
-    destEl.style.justifyContent = 'center';
-    destEl.style.color = 'white';
-    destEl.style.fontSize = '12px';
-    destEl.innerText = '🏁';
-
-    adminCaptainDestMarker = new mapboxgl.Marker(destEl)
-        .setLngLat([eLon, eLat])
-        .addTo(adminCaptainMap);
-
-    // Calculate directions route
-    try {
-        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${sLon},${sLat};${eLon},${eLat}?geometries=geojson&overview=full&access_token=${MAPBOX_PUBLIC_TOKEN}`;
-        const res = await fetch(url);
-        if (res.ok) {
-            const data = await res.json();
-            if (data.routes && data.routes[0]) {
-                const route = data.routes[0];
-                const distKm = (route.distance / 1000).toFixed(1);
-                document.getElementById('admin-route-dist-label').innerText = `${distKm} كم`;
-
-                const source = adminCaptainMap.getSource('captain-route-source');
-                if (source) {
-                    source.setData({
-                        type: 'Feature',
-                        geometry: route.geometry
-                    });
-                }
-            }
-        }
-    } catch (err) {
-        // Fallback straight line
-        const source = adminCaptainMap.getSource('captain-route-source');
-        if (source) {
-            source.setData({
-                type: 'Feature',
-                geometry: {
-                    type: 'LineString',
-                    coordinates: [[sLon, sLat], [eLon, eLat]]
-                }
-            });
-        }
-    }
-
-    // Fit bounds
-    const bounds = new mapboxgl.LngLatBounds();
-    bounds.extend([sLon, sLat]);
-    bounds.extend([eLon, eLat]);
-    adminCaptainMap.fitBounds(bounds, { padding: 45, maxZoom: 14 });
-}
+function setAdminMapPickMode(mode) {}
+function resetAdminPickButtons() {}
+function searchAdminNajafPlace(type) {}
+function selectAdminNajafPlace(type, name, lat, lon) {}
+async function updateAdminCaptainRouteMap() {}
 
 async function submitAdminAddCaptain(event) {
     event.preventDefault();
     const btn = document.getElementById('btn-submit-add-captain');
-    btn.disabled = true;
-    btn.innerText = 'جاري الحفظ والتثبيت...';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'جاري الحفظ والتثبيت...';
+    }
 
-    const fullName = document.getElementById('admin-drv-name').value.trim();
-    const phoneNumber = document.getElementById('admin-drv-phone').value.trim();
-    const email = document.getElementById('admin-drv-email').value.trim();
-    const password = document.getElementById('admin-drv-password').value;
+    const fullName = document.getElementById('admin-drv-name')?.value?.trim() || '';
+    const phoneNumber = document.getElementById('admin-drv-phone')?.value?.trim() || '';
+    const email = document.getElementById('admin-drv-email')?.value?.trim() || '';
+    const password = document.getElementById('admin-drv-password')?.value || '';
 
-    const vehicleMake = document.getElementById('admin-drv-vehicle').value.trim();
-    const vehiclePlate = document.getElementById('admin-drv-plate').value.trim();
-    const vehicleColor = document.getElementById('admin-drv-color').value.trim();
-    const availableSeats = parseInt(document.getElementById('admin-drv-seats').value, 10);
-    const serviceType = document.getElementById('admin-drv-service').value;
-    const vehicleType = document.getElementById('admin-drv-vehicle-type').value;
+    const vehicleMake = document.getElementById('admin-drv-vehicle')?.value?.trim() || '';
+    const vehiclePlate = document.getElementById('admin-drv-plate')?.value?.trim() || '';
+    const vehicleColor = document.getElementById('admin-drv-color')?.value?.trim() || 'أبيض';
+    const availableSeats = parseInt(document.getElementById('admin-drv-seats')?.value || '4', 10);
+    const serviceType = document.getElementById('admin-drv-service')?.value || 'permanent';
+    const vehicleType = document.getElementById('admin-drv-vehicle-type')?.value || 'eco';
 
-    const startName = document.getElementById('admin-route-start-label').innerText;
-    const endName = document.getElementById('admin-route-dest-label').innerText;
-    const startLat = parseFloat(document.getElementById('admin-route-start-lat').value);
-    const startLon = parseFloat(document.getElementById('admin-route-start-lon').value);
-    const endLat = parseFloat(document.getElementById('admin-route-end-lat').value);
-    const endLon = parseFloat(document.getElementById('admin-route-end-lon').value);
-    const fare = parseFloat(document.getElementById('admin-route-fare').value || 3000);
+    const route = document.getElementById('admin-drv-route')?.value?.trim() || 'النجف ➔ جامعة الكوفة';
+    const telegramChatId = document.getElementById('add-drv-telegram-id')?.value?.trim() || document.getElementById('admin-drv-telegram-id')?.value?.trim() || '';
+    const fare = parseFloat(document.getElementById('admin-route-fare')?.value || 3000);
 
     const payload = {
         fullName,
@@ -4198,17 +3858,8 @@ async function submitAdminAddCaptain(event) {
         availableSeats,
         serviceType,
         vehicleType,
-        route: {
-            startName,
-            endName,
-            startLat,
-            startLon,
-            endLat,
-            endLon,
-            fare,
-            availableSeats,
-            departureTime: '07:30 ص'
-        }
+        telegramChatId,
+        route
     };
 
     try {
@@ -4227,30 +3878,38 @@ async function submitAdminAddCaptain(event) {
             throw new Error(`استجابة غير صالحة من السيرفر (${res.status})`);
         }
 
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-check-double"></i> <span>حفظ واعتماد الكابتن وتثبيت مساره 🚀</span>';
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-check-double"></i> <span>حفظ واعتماد الكابتن وتثبيت مساره 🚀</span>';
+        }
 
         if (res.ok && data.success) {
-            createdCaptainData = data.credentials;
+            createdCaptainData = data.credentials || { fullName, phoneNumber, password };
 
             // Fill Success Box
-            document.getElementById('succ-captain-name').innerText = fullName;
-            document.getElementById('succ-captain-phone').innerText = phoneNumber;
-            document.getElementById('succ-captain-pass').innerText = password;
-            document.getElementById('succ-captain-route').innerText = `${startName} ➔ ${endName}`;
+            const sName = document.getElementById('succ-captain-name');
+            if (sName) sName.innerText = fullName;
+            const sPhone = document.getElementById('succ-captain-phone');
+            if (sPhone) sPhone.innerText = phoneNumber;
+            const sPass = document.getElementById('succ-captain-pass');
+            if (sPass) sPass.innerText = password;
+            const sRoute = document.getElementById('succ-captain-route');
+            if (sRoute) sRoute.innerText = route;
 
             // Configure WhatsApp link for direct sharing
             const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
             const intlPhone = cleanPhone.startsWith('0') ? '964' + cleanPhone.substring(1) : cleanPhone;
-            const msg = `مرحباً كابتن ${fullName}،\nتم اعتماد وتفعيل حسابك بنجاح في منصة توصيلة (النجف الأشرف) 🚖\n\nبيانات تسجيل الدخول لتطبيق السائقين:\n🔹 اسم المستخدم / الهاتف: ${phoneNumber}\n🔹 كلمة المرور (الباسوورد): ${password}\n🔹 خط السير المعتمد: ${startName} ➔ ${endName}\n🔹 رابط تسجيل دخول الكباتن:\nhttps://tawseelaiq.app/captain-login\n\nيمكنك الآن تسجيل الدخول والمباشرة بالعمل واستقبال الركاب!`;
+            const msg = `مرحباً كابتن ${fullName}،\nتم اعتماد وتفعيل حسابك بنجاح في منصة توصيلة (النجف الأشرف) 🚖\n\nبيانات تسجيل الدخول لتطبيق السائقين:\n🔹 اسم المستخدم / الهاتف: ${phoneNumber}\n🔹 كلمة المرور (الباسوورد): ${password}\n🔹 خط السير المعتمد: ${route}\n🔹 رابط تسجيل دخول الكباتن:\nhttps://tawseelaiq.app/captain-login\n\nيمكنك الآن تسجيل الدخول والمباشرة بالعمل واستقبال الركاب!`;
             
             const waLink = document.getElementById('succ-whatsapp-link');
             if (waLink) {
                 waLink.href = `https://wa.me/${intlPhone}?text=${encodeURIComponent(msg)}`;
             }
 
-            document.getElementById('form-add-captain').style.display = 'none';
-            document.getElementById('admin-captain-success-box').style.display = 'flex';
+            const form = document.getElementById('form-add-captain');
+            if (form) form.style.display = 'none';
+            const succBox = document.getElementById('admin-captain-success-box');
+            if (succBox) succBox.style.display = 'flex';
 
             showToast(`تم تسجيل واعتماد الكابتن ${fullName} بنجاح! 🎉`);
             loadDrivers();
@@ -4260,8 +3919,10 @@ async function submitAdminAddCaptain(event) {
             alert(data.error || 'فشل تسجيل الكابتن، يرجى التحقق من صحة البيانات والمحاولة مجدداً.');
         }
     } catch (err) {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-check-double"></i> <span>حفظ واعتماد الكابتن وتثبيت مساره 🚀</span>';
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-check-double"></i> <span>حفظ واعتماد الكابتن وتثبيت مساره 🚀</span>';
+        }
         alert('حدث خطأ في الاتصال بالخادم: ' + err.message);
     }
 }
@@ -4306,17 +3967,18 @@ function closeAddCustomerModal() {
 
 async function submitAdminAddCustomer(event) {
     event.preventDefault();
-    const fullName = document.getElementById('add-cust-name').value.trim();
-    const phoneNumber = document.getElementById('add-cust-phone').value.trim();
-    const route = document.getElementById('add-cust-route').value.trim();
-    const address = document.getElementById('add-cust-address').value.trim();
-    const password = document.getElementById('add-cust-password').value.trim();
+    const fullName = document.getElementById('add-cust-name')?.value?.trim() || '';
+    const phoneNumber = document.getElementById('add-cust-phone')?.value?.trim() || '';
+    const route = document.getElementById('add-cust-route')?.value?.trim() || '';
+    const address = document.getElementById('add-cust-address')?.value?.trim() || '';
+    const password = document.getElementById('add-cust-password')?.value?.trim() || '';
+    const telegramChatId = document.getElementById('add-cust-telegram-id')?.value?.trim() || '';
 
     try {
         const res = await fetch(`${API_BASE}/customers`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ fullName, phoneNumber, route, address, password })
+            body: JSON.stringify({ fullName, phoneNumber, route, address, password, telegramChatId })
         });
         const data = await res.json();
         if (res.ok && data.success) {
@@ -4346,39 +4008,9 @@ let editDrvPickupMarker = null;
 let editDrvDropoffMarker = null;
 let editDrvMode = 'pickup';
 
-function setEditMapMode(type, mode) {
-    if (type === 'customer') {
-        editCustMode = mode;
-        const btnPickup = document.getElementById('btn-mode-cust-pickup');
-        const btnDropoff = document.getElementById('btn-mode-cust-dropoff');
-        if (btnPickup && btnDropoff) {
-            if (mode === 'pickup') {
-                btnPickup.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 text-white transition shadow-sm';
-                btnDropoff.className = 'px-2.5 py-1 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 transition';
-            } else {
-                btnPickup.className = 'px-2.5 py-1 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 transition';
-                btnDropoff.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-600 text-white transition shadow-sm';
-            }
-        }
-    } else {
-        editDrvMode = mode;
-        const btnPickup = document.getElementById('btn-mode-drv-pickup');
-        const btnDropoff = document.getElementById('btn-mode-drv-dropoff');
-        if (btnPickup && btnDropoff) {
-            if (mode === 'pickup') {
-                btnPickup.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 text-white transition shadow-sm';
-                btnDropoff.className = 'px-2.5 py-1 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 transition';
-            } else {
-                btnPickup.className = 'px-2.5 py-1 text-xs font-bold rounded-lg text-slate-600 hover:text-slate-900 transition';
-                btnDropoff.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-600 text-white transition shadow-sm';
-            }
-        }
-    }
-}
-
+function setEditMapMode(type, mode) {}
 function createPinElement(color, label) {
     const el = document.createElement('div');
-    el.style.cssText = `background:${color};width:24px;height:24px;border-radius:50%;border:2px solid white;box-shadow:0 3px 8px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:bold;cursor:pointer;`;
     el.innerHTML = label;
     return el;
 }
@@ -4404,289 +4036,34 @@ const DASHBOARD_IRAQ_GOVERNORATES = {
     qadisiyyah:   { name: 'القادسية',    center: [44.9330, 31.9845], bbox: '44.40,31.40,45.60,32.60' }
 };
 
-window.onEditModalGovChange = function(type, govKey) {
-    const gov = DASHBOARD_IRAQ_GOVERNORATES[govKey] || DASHBOARD_IRAQ_GOVERNORATES.najaf;
-    const parts = gov.bbox.split(',').map(Number);
-    const bounds = [[parts[0], parts[1]], [parts[2], parts[3]]];
-    const targetMap = type === 'customer' ? editCustMap : editDrvMap;
-    const searchInput = document.getElementById(type === 'customer' ? 'edit-cust-map-search' : 'edit-drv-map-search');
-    if (searchInput) {
-        searchInput.placeholder = `🔍 ابحث عن موقع في ${gov.name}...`;
-        searchInput.value = '';
-    }
-    const resultsContainer = document.getElementById(type === 'customer' ? 'edit-cust-search-results' : 'edit-drv-search-results');
-    if (resultsContainer) {
-        resultsContainer.innerHTML = '';
-        resultsContainer.classList.add('hidden');
-    }
-
-    if (targetMap) {
-        try { targetMap.setMaxBounds(bounds); } catch(_) {}
-        targetMap.flyTo({ center: gov.center, zoom: 13 });
-    }
-};
-
-function initEditCustomerMap(customer) {
-    const container = document.getElementById('edit-cust-mapbox-container');
-    if (!container || typeof mapboxgl === 'undefined') return;
-
-    ensureMapboxRTL();
-    mapboxgl.accessToken = MAPBOX_PUBLIC_TOKEN;
-
-    const govKey = (document.getElementById('edit-cust-gov') && document.getElementById('edit-cust-gov').value) || customer.governorate || 'najaf';
-    const gov = DASHBOARD_IRAQ_GOVERNORATES[govKey] || DASHBOARD_IRAQ_GOVERNORATES.najaf;
-    const parts = gov.bbox.split(',').map(Number);
-    const bounds = [[parts[0], parts[1]], [parts[2], parts[3]]];
-
-    const pLat = customer.permanentLat || (customer.routeLat || gov.center[1]);
-    const pLon = customer.permanentLon || (customer.routeLon || gov.center[0]);
-
-    document.getElementById('edit-cust-lat').value = customer.permanentLat || '';
-    document.getElementById('edit-cust-lon').value = customer.permanentLon || '';
-    document.getElementById('edit-cust-location-name').value = customer.permanentLocationName || '';
-    document.getElementById('edit-cust-dropoff-lat').value = customer.permanentDropoffLat || '';
-    document.getElementById('edit-cust-dropoff-lon').value = customer.permanentDropoffLon || '';
-    document.getElementById('edit-cust-dropoff-name').value = customer.permanentDropoffName || '';
-
-    document.getElementById('disp-edit-cust-pickup').textContent = customer.permanentLocationName || customer.address || (customer.permanentLat ? `${customer.permanentLat}, ${customer.permanentLon}` : 'لم يحدد');
-    document.getElementById('disp-edit-cust-dropoff').textContent = customer.permanentDropoffName || customer.route || (customer.permanentDropoffLat ? `${customer.permanentDropoffLat}, ${customer.permanentDropoffLon}` : 'لم يحدد');
-
-    if (!editCustMap) {
-        editCustMap = new mapboxgl.Map({
-            container: 'edit-cust-mapbox-container',
-            style: 'mapbox://styles/mapbox/navigation-night-v1',
-            center: [pLon, pLat],
-            zoom: 13,
-            maxBounds: bounds
-        });
-        editCustMap.addControl(new mapboxgl.NavigationControl(), 'top-left');
-
-        editCustMap.on('click', async (e) => {
-            const { lng, lat } = e.lngLat;
-            await applyEditModalCoordinate('customer', editCustMode, lat, lng);
-        });
-    } else {
-        try { editCustMap.setMaxBounds(bounds); } catch(_) {}
-        editCustMap.setCenter([pLon, pLat]);
-        editCustMap.resize();
-    }
-
-    setTimeout(() => {
-        if (editCustMap) editCustMap.resize();
-    }, 200);
-
-    if (editCustPickupMarker) editCustPickupMarker.remove();
-    if (editCustDropoffMarker) editCustDropoffMarker.remove();
-
-    if (customer.permanentLat && customer.permanentLon) {
-        editCustPickupMarker = new mapboxgl.Marker({ element: createPinElement('#10B981', '🟢') })
-            .setLngLat([customer.permanentLon, customer.permanentLat])
-            .addTo(editCustMap);
-    }
-    if (customer.permanentDropoffLat && customer.permanentDropoffLon) {
-        editCustDropoffMarker = new mapboxgl.Marker({ element: createPinElement('#EF4444', '🔴') })
-            .setLngLat([customer.permanentDropoffLon, customer.permanentDropoffLat])
-            .addTo(editCustMap);
-    }
-}
-
-function initEditDriverMap(driver) {
-    const container = document.getElementById('edit-drv-mapbox-container');
-    if (!container || typeof mapboxgl === 'undefined') return;
-
-    ensureMapboxRTL();
-    mapboxgl.accessToken = MAPBOX_PUBLIC_TOKEN;
-
-    const govKey = (document.getElementById('edit-drv-gov') && document.getElementById('edit-drv-gov').value) || driver.governorate || 'najaf';
-    const gov = DASHBOARD_IRAQ_GOVERNORATES[govKey] || DASHBOARD_IRAQ_GOVERNORATES.najaf;
-    const parts = gov.bbox.split(',').map(Number);
-    const bounds = [[parts[0], parts[1]], [parts[2], parts[3]]];
-
-    const pLat = driver.permanentLat || (driver.latitude || gov.center[1]);
-    const pLon = driver.permanentLon || (driver.longitude || gov.center[0]);
-
-    document.getElementById('edit-drv-lat').value = driver.permanentLat || '';
-    document.getElementById('edit-drv-lon').value = driver.permanentLon || '';
-    document.getElementById('edit-drv-location-name').value = driver.permanentLocationName || '';
-    document.getElementById('edit-drv-dropoff-lat').value = driver.permanentDropoffLat || '';
-    document.getElementById('edit-drv-dropoff-lon').value = driver.permanentDropoffLon || '';
-    document.getElementById('edit-drv-dropoff-name').value = driver.permanentDropoffName || '';
-
-    document.getElementById('disp-edit-drv-pickup').textContent = driver.permanentLocationName || driver.route || (driver.permanentLat ? `${driver.permanentLat}, ${driver.permanentLon}` : 'لم يحدد');
-    document.getElementById('disp-edit-drv-dropoff').textContent = driver.permanentDropoffName || (driver.permanentDropoffLat ? `${driver.permanentDropoffLat}, ${driver.permanentDropoffLon}` : 'لم يحدد');
-
-    if (!editDrvMap) {
-        editDrvMap = new mapboxgl.Map({
-            container: 'edit-drv-mapbox-container',
-            style: 'mapbox://styles/mapbox/navigation-night-v1',
-            center: [pLon, pLat],
-            zoom: 13,
-            maxBounds: bounds
-        });
-        editDrvMap.addControl(new mapboxgl.NavigationControl(), 'top-left');
-
-        editDrvMap.on('click', async (e) => {
-            const { lng, lat } = e.lngLat;
-            await applyEditModalCoordinate('driver', editDrvMode, lat, lng);
-        });
-    } else {
-        try { editDrvMap.setMaxBounds(bounds); } catch(_) {}
-        editDrvMap.setCenter([pLon, pLat]);
-        editDrvMap.resize();
-    }
-
-    setTimeout(() => {
-        if (editDrvMap) editDrvMap.resize();
-    }, 200);
-
-    if (editDrvPickupMarker) editDrvPickupMarker.remove();
-    if (editDrvDropoffMarker) editDrvDropoffMarker.remove();
-
-    if (driver.permanentLat && driver.permanentLon) {
-        editDrvPickupMarker = new mapboxgl.Marker({ element: createPinElement('#10B981', '🟢') })
-            .setLngLat([driver.permanentLon, driver.permanentLat])
-            .addTo(editDrvMap);
-    }
-    if (driver.permanentDropoffLat && driver.permanentDropoffLon) {
-        editDrvDropoffMarker = new mapboxgl.Marker({ element: createPinElement('#EF4444', '🔴') })
-            .setLngLat([driver.permanentDropoffLon, driver.permanentDropoffLat])
-            .addTo(editDrvMap);
-    }
-}
-
-async function applyEditModalCoordinate(type, mode, lat, lon, customName) {
-    let placeName = customName;
-    if (!placeName) {
-        try {
-            const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lon},${lat}.json?access_token=${MAPBOX_PUBLIC_TOKEN}&language=ar&types=poi,neighborhood,locality,place,address`);
-            const data = await res.json();
-            if (data.features && data.features.length > 0) {
-                placeName = data.features[0].text || data.features[0].place_name;
-            }
-        } catch (_) {}
-    }
-    placeName = placeName || `موقع في النجف (${lat.toFixed(4)}, ${lon.toFixed(4)})`;
-
-    if (type === 'customer') {
-        if (mode === 'pickup') {
-            document.getElementById('edit-cust-lat').value = lat;
-            document.getElementById('edit-cust-lon').value = lon;
-            document.getElementById('edit-cust-location-name').value = placeName;
-            document.getElementById('disp-edit-cust-pickup').textContent = placeName;
-            document.getElementById('edit-cust-address').value = placeName;
-            if (editCustPickupMarker) editCustPickupMarker.remove();
-            editCustPickupMarker = new mapboxgl.Marker({ element: createPinElement('#10B981', '🟢') })
-                .setLngLat([lon, lat])
-                .addTo(editCustMap);
-        } else {
-            document.getElementById('edit-cust-dropoff-lat').value = lat;
-            document.getElementById('edit-cust-dropoff-lon').value = lon;
-            document.getElementById('edit-cust-dropoff-name').value = placeName;
-            document.getElementById('disp-edit-cust-dropoff').textContent = placeName;
-            const pName = document.getElementById('edit-cust-location-name').value || 'النجف';
-            document.getElementById('edit-cust-route').value = `${pName} → ${placeName}`;
-            if (editCustDropoffMarker) editCustDropoffMarker.remove();
-            editCustDropoffMarker = new mapboxgl.Marker({ element: createPinElement('#EF4444', '🔴') })
-                .setLngLat([lon, lat])
-                .addTo(editCustMap);
-        }
-    } else {
-        if (mode === 'pickup') {
-            document.getElementById('edit-drv-lat').value = lat;
-            document.getElementById('edit-drv-lon').value = lon;
-            document.getElementById('edit-drv-location-name').value = placeName;
-            document.getElementById('disp-edit-drv-pickup').textContent = placeName;
-            document.getElementById('edit-drv-route').value = placeName;
-            if (editDrvPickupMarker) editDrvPickupMarker.remove();
-            editDrvPickupMarker = new mapboxgl.Marker({ element: createPinElement('#10B981', '🟢') })
-                .setLngLat([lon, lat])
-                .addTo(editDrvMap);
-        } else {
-            document.getElementById('edit-drv-dropoff-lat').value = lat;
-            document.getElementById('edit-drv-dropoff-lon').value = lon;
-            document.getElementById('edit-drv-dropoff-name').value = placeName;
-            document.getElementById('disp-edit-drv-dropoff').textContent = placeName;
-            const pName = document.getElementById('edit-drv-location-name').value || 'النجف';
-            document.getElementById('edit-drv-route').value = `${pName} → ${placeName}`;
-            if (editDrvDropoffMarker) editDrvDropoffMarker.remove();
-            editDrvDropoffMarker = new mapboxgl.Marker({ element: createPinElement('#EF4444', '🔴') })
-                .setLngLat([lon, lat])
-                .addTo(editDrvMap);
-        }
-    }
-}
-
-let editModalSearchDebounce = null;
-async function searchEditModalPlace(query, type) {
-    const resultsContainer = document.getElementById(type === 'customer' ? 'edit-cust-search-results' : 'edit-drv-search-results');
-    if (!resultsContainer) return;
-    if (!query || query.trim().length === 0) {
-        resultsContainer.innerHTML = '';
-        resultsContainer.classList.add('hidden');
-        return;
-    }
-
-    clearTimeout(editModalSearchDebounce);
-    editModalSearchDebounce = setTimeout(async () => {
-        try {
-            const govKey = (document.getElementById(type === 'customer' ? 'edit-cust-gov' : 'edit-drv-gov') || {}).value || 'najaf';
-            const gov = DASHBOARD_IRAQ_GOVERNORATES[govKey] || DASHBOARD_IRAQ_GOVERNORATES.najaf;
-            const bbox = gov.bbox;
-            const prox = gov.center.join(',');
-            const res = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query.trim())}.json?access_token=${MAPBOX_PUBLIC_TOKEN}&country=iq&bbox=${bbox}&proximity=${prox}&language=ar&types=poi,address,neighborhood,locality,place,district&limit=10&autocomplete=true`);
-            const data = await res.json();
-            if (!data.features || data.features.length === 0) {
-                resultsContainer.innerHTML = `<div class="p-2 text-slate-400 text-center">لا توجد نتائج مطابقة في ${gov.name}</div>`;
-                resultsContainer.classList.remove('hidden');
-                return;
-            }
-
-            resultsContainer.innerHTML = '';
-            data.features.forEach(f => {
-                const item = document.createElement('div');
-                item.className = 'p-2 hover:bg-slate-50 cursor-pointer font-medium text-slate-800 flex items-center justify-between';
-                item.innerHTML = `<span>📍 ${f.place_name}</span>`;
-                item.onclick = async () => {
-                    const [lon, lat] = f.center;
-                    const mode = type === 'customer' ? editCustMode : editDrvMode;
-                    const targetMap = type === 'customer' ? editCustMap : editDrvMap;
-                    await applyEditModalCoordinate(type, mode, lat, lon, f.text || f.place_name);
-                    if (targetMap) {
-                        targetMap.flyTo({ center: [lon, lat], zoom: 14 });
-                    }
-                    resultsContainer.innerHTML = '';
-                    resultsContainer.classList.add('hidden');
-                    const searchInput = document.getElementById(type === 'customer' ? 'edit-cust-map-search' : 'edit-drv-map-search');
-                    if (searchInput) searchInput.value = '';
-                };
-                resultsContainer.appendChild(item);
-            });
-            resultsContainer.classList.remove('hidden');
-        } catch (_) {}
-    }, 250);
-}
+window.onEditModalGovChange = function(type, govKey) {};
+function initEditCustomerMap(customer) {}
+function initEditDriverMap(driver) {}
+async function applyEditModalCoordinate(type, mode, lat, lon, customName) {}
+async function searchEditModalPlace(query, type) {}
 
 // Customer Editing
 function openEditCustomerModal(customerId) {
     const customer = (window.customersMap && window.customersMap[customerId]) || {};
-    document.getElementById('edit-cust-id').value = customerId;
-    document.getElementById('edit-cust-name').value = customer.fullName || '';
-    document.getElementById('edit-cust-phone').value = customer.phoneNumber || '';
-    document.getElementById('edit-cust-route').value = customer.route || customer.area || '';
-    document.getElementById('edit-cust-address').value = customer.address || customer.area || '';
-    document.getElementById('edit-cust-password').value = '';
+    const elId = document.getElementById('edit-cust-id');
+    if (elId) elId.value = customerId;
+    const elName = document.getElementById('edit-cust-name');
+    if (elName) elName.value = customer.fullName || '';
+    const elPhone = document.getElementById('edit-cust-phone');
+    if (elPhone) elPhone.value = customer.phoneNumber || '';
+    const elRoute = document.getElementById('edit-cust-route');
+    if (elRoute) elRoute.value = customer.route || customer.area || '';
+    const elAddress = document.getElementById('edit-cust-address');
+    if (elAddress) elAddress.value = customer.address || customer.area || '';
+    const elPass = document.getElementById('edit-cust-password');
+    if (elPass) elPass.value = '';
+
+    const elTg = document.getElementById('edit-cust-telegram-id');
+    if (elTg) elTg.value = customer.telegramChatId || customer.telegram_chat_id || '';
 
     const govKey = customer.governorate || 'najaf';
     const govEl = document.getElementById('edit-cust-gov');
     if (govEl) govEl.value = govKey;
-    const govObj = DASHBOARD_IRAQ_GOVERNORATES[govKey] || DASHBOARD_IRAQ_GOVERNORATES.najaf;
-    const searchInput = document.getElementById('edit-cust-map-search');
-    if (searchInput) {
-        searchInput.placeholder = `🔍 ابحث عن موقع في ${govObj.name}...`;
-        searchInput.value = '';
-    }
-
-    setEditMapMode('customer', 'pickup');
 
     const modal = document.getElementById('modal-edit-customer');
     if (modal) {
@@ -4696,10 +4073,6 @@ function openEditCustomerModal(customerId) {
         modal.style.display = 'flex';
         modal.style.pointerEvents = 'auto';
     }
-
-    setTimeout(() => {
-        initEditCustomerMap(customer);
-    }, 100);
 }
 
 function closeEditCustomerModal() {
@@ -4715,30 +4088,18 @@ function closeEditCustomerModal() {
 
 async function submitEditCustomer(event) {
     event.preventDefault();
-    const customerId = document.getElementById('edit-cust-id').value;
-    const fullName = document.getElementById('edit-cust-name').value.trim();
-    const phoneNumber = document.getElementById('edit-cust-phone').value.trim();
-    const route = document.getElementById('edit-cust-route').value.trim();
-    const address = document.getElementById('edit-cust-address').value.trim();
-    const password = document.getElementById('edit-cust-password').value.trim();
-    const governorate = (document.getElementById('edit-cust-gov') && document.getElementById('edit-cust-gov').value) || 'najaf';
-
-    const permanentLat = document.getElementById('edit-cust-lat').value;
-    const permanentLon = document.getElementById('edit-cust-lon').value;
-    const permanentLocationName = document.getElementById('edit-cust-location-name').value;
-    const permanentDropoffLat = document.getElementById('edit-cust-dropoff-lat').value;
-    const permanentDropoffLon = document.getElementById('edit-cust-dropoff-lon').value;
-    const permanentDropoffName = document.getElementById('edit-cust-dropoff-name').value;
+    const customerId = document.getElementById('edit-cust-id')?.value;
+    const fullName = document.getElementById('edit-cust-name')?.value?.trim() || '';
+    const phoneNumber = document.getElementById('edit-cust-phone')?.value?.trim() || '';
+    const route = document.getElementById('edit-cust-route')?.value?.trim() || '';
+    const address = document.getElementById('edit-cust-address')?.value?.trim() || '';
+    const password = document.getElementById('edit-cust-password')?.value?.trim() || '';
+    const governorate = document.getElementById('edit-cust-gov')?.value || 'najaf';
+    const telegramChatId = document.getElementById('edit-cust-telegram-id')?.value?.trim() || '';
 
     try {
         const payload = {
-            fullName, phoneNumber, route, address, governorate,
-            permanentLat: permanentLat || null,
-            permanentLon: permanentLon || null,
-            permanentLocationName: permanentLocationName || address,
-            permanentDropoffLat: permanentDropoffLat || null,
-            permanentDropoffLon: permanentDropoffLon || null,
-            permanentDropoffName: permanentDropoffName || route
+            fullName, phoneNumber, route, address, governorate, telegramChatId
         };
         if (password) payload.password = password;
 
@@ -4764,11 +4125,16 @@ async function submitEditCustomer(event) {
 // Driver Editing
 function openEditDriverModal(driverId) {
     const driver = (window.driversMap && window.driversMap[driverId]) || {};
-    document.getElementById('edit-drv-id').value = driverId;
-    document.getElementById('edit-drv-name').value = driver.fullName || '';
-    document.getElementById('edit-drv-phone').value = driver.phoneNumber || '';
-    document.getElementById('edit-drv-route').value = driver.route || '';
-    document.getElementById('edit-drv-password').value = '';
+    const elId = document.getElementById('edit-drv-id');
+    if (elId) elId.value = driverId;
+    const elName = document.getElementById('edit-drv-name');
+    if (elName) elName.value = driver.fullName || '';
+    const elPhone = document.getElementById('edit-drv-phone');
+    if (elPhone) elPhone.value = driver.phoneNumber || '';
+    const elRoute = document.getElementById('edit-drv-route');
+    if (elRoute) elRoute.value = driver.route || '';
+    const elPass = document.getElementById('edit-drv-password');
+    if (elPass) elPass.value = '';
     const tgInput = document.getElementById('edit-drv-telegram-id');
     if (tgInput) tgInput.value = driver.telegramChatId || driver.telegram_chat_id || '';
 
@@ -4778,14 +4144,6 @@ function openEditDriverModal(driverId) {
     const govKey = driver.governorate || 'najaf';
     const govEl = document.getElementById('edit-drv-gov');
     if (govEl) govEl.value = govKey;
-    const govObj = DASHBOARD_IRAQ_GOVERNORATES[govKey] || DASHBOARD_IRAQ_GOVERNORATES.najaf;
-    const searchInput = document.getElementById('edit-drv-map-search');
-    if (searchInput) {
-        searchInput.placeholder = `🔍 ابحث عن موقع في ${govObj.name}...`;
-        searchInput.value = '';
-    }
-
-    setEditMapMode('driver', 'pickup');
 
     const modal = document.getElementById('modal-edit-driver');
     if (modal) {
@@ -4795,10 +4153,6 @@ function openEditDriverModal(driverId) {
         modal.style.display = 'flex';
         modal.style.pointerEvents = 'auto';
     }
-
-    setTimeout(() => {
-        initEditDriverMap(driver);
-    }, 100);
 }
 
 function closeEditDriverModal() {
@@ -4814,32 +4168,19 @@ function closeEditDriverModal() {
 
 async function submitEditDriver(event) {
     event.preventDefault();
-    const driverId = document.getElementById('edit-drv-id').value;
-    const fullName = document.getElementById('edit-drv-name').value.trim();
-    const phoneNumber = document.getElementById('edit-drv-phone').value.trim();
-    const route = document.getElementById('edit-drv-route').value.trim();
-    const password = document.getElementById('edit-drv-password').value.trim();
-    const telegramChatId = (document.getElementById('edit-drv-telegram-id') && document.getElementById('edit-drv-telegram-id').value.trim()) || '';
-    const governorate = (document.getElementById('edit-drv-gov') && document.getElementById('edit-drv-gov').value) || 'najaf';
-    const vehicleType = (document.getElementById('edit-drv-vehicle-type') || {}).value || 'eco';
-
-    const permanentLat = document.getElementById('edit-drv-lat').value;
-    const permanentLon = document.getElementById('edit-drv-lon').value;
-    const permanentLocationName = document.getElementById('edit-drv-location-name').value;
-    const permanentDropoffLat = document.getElementById('edit-drv-dropoff-lat').value;
-    const permanentDropoffLon = document.getElementById('edit-drv-dropoff-lon').value;
-    const permanentDropoffName = document.getElementById('edit-drv-dropoff-name').value;
+    const driverId = document.getElementById('edit-drv-id')?.value;
+    const fullName = document.getElementById('edit-drv-name')?.value?.trim() || '';
+    const phoneNumber = document.getElementById('edit-drv-phone')?.value?.trim() || '';
+    const route = document.getElementById('edit-drv-route')?.value?.trim() || '';
+    const password = document.getElementById('edit-drv-password')?.value?.trim() || '';
+    const telegramChatId = document.getElementById('edit-drv-telegram-id')?.value?.trim() || '';
+    const governorate = document.getElementById('edit-drv-gov')?.value || 'najaf';
+    const vehicleType = document.getElementById('edit-drv-vehicle-type')?.value || 'eco';
 
     try {
         const payload = {
             fullName, phoneNumber, route, governorate, vehicleType,
-            telegramChatId,
-            permanentLat: permanentLat || null,
-            permanentLon: permanentLon || null,
-            permanentLocationName: permanentLocationName || route,
-            permanentDropoffLat: permanentDropoffLat || null,
-            permanentDropoffLon: permanentDropoffLon || null,
-            permanentDropoffName: permanentDropoffName || ''
+            telegramChatId
         };
         if (password) payload.password = password;
 

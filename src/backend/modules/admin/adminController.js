@@ -41,7 +41,9 @@ class AdminController {
                 route: routeName,
                 password: d.plainPassword || (d.passwordHash ? '••••••••' : '123456'),
                 points: parseInt(d.points || d.rewardScore || 0, 10),
-                telegramChatId: d.telegramChatId || d.telegram_chat_id || ''
+                telegramChatId: d.telegramChatId || d.telegram_chat_id || '',
+                telegramUsername: d.telegramUsername || d.telegram_username || '',
+                telegramLinkedAt: d.telegramLinkedAt || d.telegram_linked_at || null
             };
         });
 
@@ -84,9 +86,14 @@ class AdminController {
         if (data.telegramChatId !== undefined || data.telegram_chat_id !== undefined) {
             const rawTg = String(data.telegramChatId !== undefined ? data.telegramChatId : data.telegram_chat_id).trim();
             driver.telegramChatId = rawTg || null;
+            driver.telegram_chat_id = driver.telegramChatId;
+            if (driver.telegramChatId && !driver.telegramLinkedAt) {
+                driver.telegramLinkedAt = new Date().toISOString();
+                driver.telegram_linked_at = driver.telegramLinkedAt;
+            }
             if (db.isPostgresConnected && db.pool) {
                 try {
-                    await db.pool.query('UPDATE drivers SET telegram_chat_id = $1 WHERE driver_id = $2', [driver.telegramChatId, driverId]);
+                    await db.pool.query('UPDATE drivers SET telegram_chat_id = $1, telegram_linked_at = CASE WHEN $1 IS NOT NULL AND telegram_linked_at IS NULL THEN NOW() ELSE telegram_linked_at END WHERE driver_id = $2', [driver.telegramChatId, driverId]);
                 } catch (_) {}
             }
         }
@@ -425,6 +432,9 @@ class AdminController {
             ...c,
             route: c.route || c.preferredRoute || c.area || 'النجف الأشرف',
             address: c.address || c.area || 'النجف الأشرف',
+            telegramChatId: c.telegramChatId || c.telegram_chat_id || '',
+            telegramUsername: c.telegramUsername || c.telegram_username || '',
+            telegramLinkedAt: c.telegramLinkedAt || c.telegram_linked_at || null,
             password: c.plainPassword || (c.passwordHash ? '••••••••' : '123456')
         }));
 
@@ -476,6 +486,8 @@ class AdminController {
         const userAddress = (address || 'النجف الأشرف').trim();
         const normalizedPhone = norm.startsWith('0') ? norm : ('0' + norm);
 
+        const rawCustTg = (data.telegramChatId || data.telegram_chat_id) ? String(data.telegramChatId || data.telegram_chat_id).trim() : null;
+
         const newCustomer = {
             customerId,
             fullName: fullName.trim(),
@@ -492,7 +504,11 @@ class AdminController {
             isActive: true,
             isBlocked: false,
             registeredAt: now,
-            createdByAdmin: true
+            createdByAdmin: true,
+            telegramChatId: rawCustTg,
+            telegram_chat_id: rawCustTg,
+            telegramLinkedAt: rawCustTg ? now : null,
+            telegram_linked_at: rawCustTg ? now : null
         };
 
         db.memoryState.customers.unshift(newCustomer);
@@ -506,10 +522,10 @@ class AdminController {
                 `, [customerId, normalizedPhone, newCustomer.email, newCustomer.fullName, passwordHash, pass, now]);
 
                 await db.pool.query(`
-                    INSERT INTO customers (customer_id, full_name, phone_number, email, route, address, plain_password, password_hash, preferred_payment_method, rating_average, total_bookings, is_active, is_blocked, created_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Cash', 5.0, 0, true, false, $9)
-                    ON CONFLICT (customer_id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number, route = EXCLUDED.route, address = EXCLUDED.address, plain_password = EXCLUDED.plain_password, password_hash = EXCLUDED.password_hash
-                `, [customerId, newCustomer.fullName, normalizedPhone, newCustomer.email, userRoute, userAddress, pass, passwordHash, now]);
+                    INSERT INTO customers (customer_id, full_name, phone_number, email, route, address, plain_password, password_hash, preferred_payment_method, rating_average, total_bookings, is_active, is_blocked, created_at, telegram_chat_id, telegram_linked_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Cash', 5.0, 0, true, false, $9, $10, $11)
+                    ON CONFLICT (customer_id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number, route = EXCLUDED.route, address = EXCLUDED.address, plain_password = EXCLUDED.plain_password, password_hash = EXCLUDED.password_hash, telegram_chat_id = COALESCE(EXCLUDED.telegram_chat_id, customers.telegram_chat_id)
+                `, [customerId, newCustomer.fullName, normalizedPhone, newCustomer.email, userRoute, userAddress, pass, passwordHash, now, rawCustTg, rawCustTg ? now : null]);
             } catch (e) {
                 console.error('[AdminController] createCustomer PG error:', e);
             }
@@ -576,13 +592,25 @@ class AdminController {
             customer.passwordHash = crypto.createHash('sha256').update(pass).digest('hex');
         }
 
+        if (data.telegramChatId !== undefined || data.telegram_chat_id !== undefined) {
+            const rawTg = String(data.telegramChatId !== undefined ? data.telegramChatId : data.telegram_chat_id).trim();
+            customer.telegramChatId = rawTg || null;
+            customer.telegram_chat_id = customer.telegramChatId;
+            if (customer.telegramChatId && !customer.telegramLinkedAt) {
+                customer.telegramLinkedAt = new Date().toISOString();
+                customer.telegram_linked_at = customer.telegramLinkedAt;
+            }
+        }
+
         if (db.isPostgresConnected && db.pool) {
             try {
                 await db.pool.query(`
                     UPDATE customers 
-                    SET full_name = $1, phone_number = $2, route = $3, address = $4, plain_password = $5, password_hash = $6
-                    WHERE customer_id = $7
-                `, [customer.fullName, customer.phoneNumber, customer.route, customer.address, customer.plainPassword, customer.passwordHash, customerId]);
+                    SET full_name = $1, phone_number = $2, route = $3, address = $4, plain_password = $5, password_hash = $6,
+                        telegram_chat_id = $7,
+                        telegram_linked_at = CASE WHEN $7 IS NOT NULL AND telegram_linked_at IS NULL THEN NOW() ELSE telegram_linked_at END
+                    WHERE customer_id = $8
+                `, [customer.fullName, customer.phoneNumber, customer.route, customer.address, customer.plainPassword, customer.passwordHash, customer.telegramChatId, customerId]);
 
                 await db.pool.query(`
                     UPDATE users 
@@ -1070,7 +1098,11 @@ class AdminController {
             permanentDropoffLat: (route && route.endLat) ? parseFloat(route.endLat) : 32.0321,
             permanentDropoffLon: (route && route.endLon) ? parseFloat(route.endLon) : 44.3725,
             permanentDropoffName: (route && route.endName) || 'جامعة الكوفة',
-            route: (route && (route.startName || route.endName)) ? `${route.startName || 'نقطة الانطلاق'} ➔ ${route.endName || 'جامعة الكوفة'}` : 'النجف ➔ جامعة الكوفة',
+            route: (typeof route === 'string' && route.trim()) ? route.trim() : ((route && (route.startName || route.endName)) ? `${route.startName || 'نقطة الانطلاق'} ➔ ${route.endName || 'جامعة الكوفة'}` : 'النجف ➔ جامعة الكوفة'),
+            telegramChatId: (data.telegramChatId || data.telegram_chat_id) ? String(data.telegramChatId || data.telegram_chat_id).trim() : null,
+            telegram_chat_id: (data.telegramChatId || data.telegram_chat_id) ? String(data.telegramChatId || data.telegram_chat_id).trim() : null,
+            telegramLinkedAt: (data.telegramChatId || data.telegram_chat_id) ? now : null,
+            telegram_linked_at: (data.telegramChatId || data.telegram_chat_id) ? now : null,
             createdAt: now,
             registeredAt: now,
             vehicles: [{
@@ -1164,11 +1196,12 @@ class AdminController {
                     ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number, password_hash = EXCLUDED.password_hash, plain_password = EXCLUDED.plain_password
                 `, [driverId, cleanPhone, cleanEmail, fullName, passwordHash, passStr, now]);
 
+                const rawTg = newDriver.telegramChatId;
                 await db.pool.query(`
-                    INSERT INTO drivers (driver_id, full_name, phone_number, email, password_hash, plain_password, license_number, vehicle_make, vehicle_model, vehicle_year, vehicle_plate, status, is_verified, is_blocked, latitude, longitude, created_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Approved', true, false, $12, $13, $14)
-                    ON CONFLICT (driver_id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number, password_hash = EXCLUDED.password_hash, plain_password = EXCLUDED.plain_password
-                `, [driverId, fullName, cleanPhone, cleanEmail, passwordHash, passStr, license, vMake, vModel, vYear, vPlate, startLat, startLon, now]);
+                    INSERT INTO drivers (driver_id, full_name, phone_number, email, password_hash, plain_password, license_number, vehicle_make, vehicle_model, vehicle_year, vehicle_plate, status, is_verified, is_blocked, latitude, longitude, created_at, telegram_chat_id, telegram_linked_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Approved', true, false, $12, $13, $14, $15, $16)
+                    ON CONFLICT (driver_id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number, password_hash = EXCLUDED.password_hash, plain_password = EXCLUDED.plain_password, telegram_chat_id = COALESCE(EXCLUDED.telegram_chat_id, drivers.telegram_chat_id)
+                `, [driverId, fullName, cleanPhone, cleanEmail, passwordHash, passStr, license, vMake, vModel, vYear, vPlate, startLat, startLon, now, rawTg, rawTg ? now : null]);
 
                 if (createdRoute) {
                     await db.pool.query(`

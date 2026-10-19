@@ -316,8 +316,10 @@ class DatabaseManager {
                     ALTER TABLE drivers ADD COLUMN IF NOT EXISTS points INT DEFAULT 0;
                     ALTER TABLE drivers ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(64);
                     ALTER TABLE drivers ADD COLUMN IF NOT EXISTS telegram_username VARCHAR(100);
+                    ALTER TABLE drivers ADD COLUMN IF NOT EXISTS telegram_linked_at TIMESTAMPTZ;
                     ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(64);
                     ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_username VARCHAR(100);
+                    ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_linked_at TIMESTAMPTZ;
                     CREATE INDEX IF NOT EXISTS idx_drivers_telegram_chat ON drivers(telegram_chat_id);
                     CREATE INDEX IF NOT EXISTS idx_customers_telegram_chat ON customers(telegram_chat_id);
                     CREATE TABLE IF NOT EXISTS trip_ratings (
@@ -750,14 +752,14 @@ class DatabaseManager {
             const table = role === 'Driver' ? 'drivers' : 'customers';
             const col = role === 'Driver' ? 'driver_id' : 'customer_id';
             await this.pool.query(
-                `UPDATE ${table} SET telegram_chat_id = $1, telegram_username = COALESCE($2, telegram_username) WHERE ${col} = $3`,
+                `UPDATE ${table} SET telegram_chat_id = $1, telegram_username = COALESCE($2, telegram_username), telegram_linked_at = NOW() WHERE ${col} = $3`,
                 [chatId ? String(chatId) : null, username || null, id]
             );
         } catch (e) {
             try {
                 const table = role === 'Driver' ? 'drivers' : 'customers';
                 const col = role === 'Driver' ? 'driver_id' : 'customer_id';
-                await this.pool.query(`UPDATE ${table} SET telegram_chat_id = $1 WHERE ${col} = $2`, [chatId ? String(chatId) : null, id]);
+                await this.pool.query(`UPDATE ${table} SET telegram_chat_id = $1, telegram_linked_at = NOW() WHERE ${col} = $2`, [chatId ? String(chatId) : null, id]);
             } catch (err) {
                 console.warn('[Database] persistTelegramChatId error:', err.message);
             }

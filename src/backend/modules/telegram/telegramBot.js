@@ -583,7 +583,11 @@ async function linkUserByPhone(chatId, rawPhone, user) {
 
     if (customer) {
         customer.telegramChatId = String(chatId);
+        customer.telegram_chat_id = String(chatId);
         customer.telegramUsername = tgUsername;
+        customer.telegram_username = tgUsername;
+        customer.telegramLinkedAt = new Date().toISOString();
+        customer.telegram_linked_at = customer.telegramLinkedAt;
         db.saveStateSnapshot();
         db.persistTelegramChatId('Customer', customer.customerId, chatId, tgUsername).catch(() => {});
 
@@ -613,7 +617,11 @@ async function linkUserByPhone(chatId, rawPhone, user) {
 
     if (driver) {
         driver.telegramChatId = String(chatId);
+        driver.telegram_chat_id = String(chatId);
         driver.telegramUsername = tgUsername;
+        driver.telegram_username = tgUsername;
+        driver.telegramLinkedAt = new Date().toISOString();
+        driver.telegram_linked_at = driver.telegramLinkedAt;
         db.saveStateSnapshot();
         db.persistTelegramChatId('Driver', driver.driverId, chatId, tgUsername).catch(() => {});
 

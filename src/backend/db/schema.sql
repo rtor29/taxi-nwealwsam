@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS drivers (
     heading NUMERIC(5, 2) DEFAULT 0,
     telegram_chat_id VARCHAR(64),
     telegram_username VARCHAR(100),
+    telegram_linked_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -82,6 +83,7 @@ CREATE TABLE IF NOT EXISTS customers (
     is_blocked BOOLEAN NOT NULL DEFAULT false,
     telegram_chat_id VARCHAR(64),
     telegram_username VARCHAR(100),
+    telegram_linked_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
