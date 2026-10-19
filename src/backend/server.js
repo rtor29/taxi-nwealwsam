@@ -2233,14 +2233,27 @@ async function startServer() {
 
             // RLS Check: Only the ride customer, assigned/candidate driver, or admin can track this ride
             const authUser = getAuthUser(req);
-            if (authUser && authUser.role === 'Customer') {
-                if (r.customerId && authUser.id && r.customerId !== authUser.id && (!authUser.phone || r.customerPhone !== authUser.phone)) {
-                    return sendJson({ success: false, error: 'غير مصرح: لا يمكنك استعراض تفاصيل مشوار لمستخدم آخر (RLS)' }, 403);
-                }
-            } else if (authUser && authUser.role === 'Driver') {
-                const isAssigned = r.assignedDriverId === authUser.id || (r.candidateDriverIds && r.candidateDriverIds.includes(authUser.id));
-                if (!isAssigned && (!authUser.phone || r.assignedDriverPhone !== authUser.phone) && r.assignedDriverId !== 'drv-sample') {
-                    return sendJson({ success: false, error: 'غير مصرح: المشوار ليس مسنداً إليك (RLS)' }, 403);
+            if (authUser) {
+                if (authUser.role === 'Customer' || authUser.role === 'customer') {
+                    const normAuth = normalizePhone(authUser.phone);
+                    const normCust = normalizePhone(r.customerPhone);
+                    const isIdMatch = r.customerId && authUser.id && (r.customerId === authUser.id || String(r.customerId).toLowerCase() === String(authUser.id).toLowerCase());
+                    const isPhoneMatch = normAuth && normCust && (normAuth === normCust || normAuth.endsWith(normCust) || normCust.endsWith(normAuth));
+                    if (r.customerId && r.customerId !== 'cust-user' && !isIdMatch && !isPhoneMatch) {
+                        return sendJson({ success: false, error: 'غير مصرح: لا يمكنك استعراض تفاصيل مشوار لمستخدم آخر (RLS)' }, 403);
+                    }
+                } else if (authUser.role === 'Driver' || authUser.role === 'driver') {
+                    const normAuth = normalizePhone(authUser.phone);
+                    const normDrv = normalizePhone(r.assignedDriverPhone);
+                    const normCust = normalizePhone(r.customerPhone);
+                    const isAssigned = r.assignedDriverId === authUser.id || 
+                        (r.candidateDriverIds && r.candidateDriverIds.includes(authUser.id)) ||
+                        (normAuth && normDrv && (normAuth === normDrv || normAuth.endsWith(normDrv) || normDrv.endsWith(normAuth))) ||
+                        (normAuth && normCust && (normAuth === normCust || normAuth.endsWith(normCust) || normCust.endsWith(normAuth))) ||
+                        r.assignedDriverId === 'drv-sample';
+                    if (!isAssigned) {
+                        return sendJson({ success: false, error: 'غير مصرح: المشوار ليس مسنداً إليك (RLS)' }, 403);
+                    }
                 }
             }
 
