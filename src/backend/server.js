@@ -13,6 +13,7 @@ const whatsappService = require('./modules/whatsapp/whatsappService');
 const telegramBot = require('./modules/telegram/telegramBot');
 const pricingService = require('./modules/pricing/pricingService');
 const complaintService = require('./modules/complaint/complaintService');
+const redisManager = require('./modules/redis/redisClient');
 const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'tawseela_production_secret_najaf_2026_!@#$%^&*';
 
@@ -2796,6 +2797,12 @@ async function startServer() {
                     console.error('[NewRide] Driver Telegram notify error:', drvTgErr.message);
                 }
 
+                // Real-time broadcast to all Redis cluster nodes for SSE drivers
+                redisManager.publishDispatchEvent({
+                    type: 'new_ride',
+                    request: newRequest
+                });
+
                 return sendJson({
                     success: true,
                     request: newRequest,
@@ -2905,6 +2912,17 @@ async function startServer() {
                         String(d.driverId) === String(driverId) || String(d.id) === String(driverId) || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
                     );
                     const actualDriverId = targetDriver ? targetDriver.driverId : driverId;
+
+                    // Redis Distributed Lock across PM2 cluster workers
+                    const lockAcquired = await redisManager.acquireRideLock(r.id, actualDriverId, 10);
+                    if (!lockAcquired) {
+                        return sendJson({
+                            success: false,
+                            alreadyAccepted: true,
+                            error: 'عذراً، المشوار تم قبوله من كابتن آخر أو جارٍ معالجته.'
+                        }, 409);
+                    }
+
                     r.status = 'Accepted';
                     r.acceptedDriverId = actualDriverId;
                     r.assignedDriverId = actualDriverId;
@@ -2957,6 +2975,9 @@ async function startServer() {
                     }
 
                     db.saveStateSnapshot();
+                    redisManager.publishRideEvent(r.id, { type: 'ride_accepted', request: r });
+                    redisManager.publishDispatchEvent({ type: 'ride_taken', requestId: r.id });
+                    redisManager.publishDriverEvent(actualDriverId, { type: 'ride_assigned', request: r });
                     return sendJson({ success: true, message: 'تم قبول المشوار بنجاح!', request: r });
                 } else {
                     const cleanPhone = String(driverId || '').replace(/[^0-9]/g, '');
@@ -2971,6 +2992,7 @@ async function startServer() {
                         r.status = 'NoDriversAvailable';
                     }
                     db.saveStateSnapshot();
+                    redisManager.publishDispatchEvent({ type: 'ride_rejected', requestId: r.id });
                     return sendJson({ success: true, message: 'تم رفض المشوار وتمرير الطلب', request: r });
                 }
             } catch (err) {
@@ -3001,6 +3023,7 @@ async function startServer() {
                 r.status = 'Arrived';
                 r.arrivedAt = new Date().toISOString();
                 db.saveStateSnapshot();
+                redisManager.publishRideEvent(r.id, { type: 'captain_arrived', status: 'Arrived', request: r });
 
                 // Stage 2: Send Telegram Notification to Passenger - Captain Arrived
                 try {
@@ -3112,6 +3135,7 @@ async function startServer() {
                 // 3. Update ride status to InProgress
                 r.status = 'InProgress';
                 r.startedAt = new Date().toISOString();
+                redisManager.publishRideEvent(r.id, { type: 'ride_started', status: 'InProgress', request: r });
 
                 // Stage 3: Send Telegram Notification to Passenger - Trip Started
                 try {
@@ -3234,6 +3258,8 @@ async function startServer() {
                 r.cancellationFee = feeApplies ? cancelFee : 0;
                 r.cancelledAt = new Date().toISOString();
                 db.saveStateSnapshot();
+                redisManager.publishRideEvent(r.id, { type: 'ride_cancelled', status: 'Cancelled', request: r });
+                redisManager.publishDispatchEvent({ type: 'ride_cancelled', requestId: r.id });
                 return sendJson({ 
                     success: true, 
                     message: feeApplies ? `تم إلغاء الرحلة. تطبق رسوم إلغاء قدرها ${cancelFee} د.ع.` : 'تم إلغاء الرحلة بنجاح', 
@@ -3270,6 +3296,8 @@ async function startServer() {
                 if (body.fare || body.finalFare) {
                     r.finalFare = body.finalFare || body.fare;
                 }
+                redisManager.publishRideEvent(r.id, { type: 'ride_completed', status: 'Completed', request: r });
+                redisManager.publishDispatchEvent({ type: 'ride_completed', requestId: r.id });
 
                 // Stage 4: Send Telegram Notification to Passenger - Trip Completed & Fare Collected
                 try {
@@ -3533,6 +3561,220 @@ async function startServer() {
             }
 
             return sendJson({ success: true, bookings: userBookings });
+        }
+
+        // Helper to extract driver pending requests list
+        const getDriverPendingList = (rawParam) => {
+            rawParam = String(rawParam || '').trim();
+            const cleanPhone = rawParam.replace(/[^0-9]/g, '');
+
+            const matchedDriver = (db.memoryState.drivers || []).find(d => 
+                String(d.driverId) === String(rawParam) || 
+                String(d.id) === String(rawParam) || 
+                String(d._id) === String(rawParam) || 
+                String(d.userId) === String(rawParam) || 
+                (cleanPhone.length >= 7 && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8))) ||
+                (cleanPhone.length >= 7 && d.phone && d.phone.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8)))
+            );
+            const targetDriverId = matchedDriver ? (matchedDriver.driverId || matchedDriver.id || matchedDriver._id) : rawParam;
+
+            let isStrictlyCommuteOrIdle = false;
+            if (matchedDriver) {
+                const dMode = String(matchedDriver.current_mode || matchedDriver.work_mode || matchedDriver.workStatus || matchedDriver.mode || '').toLowerCase().trim();
+                if (dMode === 'commute' || dMode === 'permanent' || dMode === 'خط دائمي' || dMode === 'idle' || dMode === 'خمول' || dMode === 'offline') {
+                    isStrictlyCommuteOrIdle = true;
+                }
+            }
+
+            if (isStrictlyCommuteOrIdle) return [];
+
+            return (db.memoryState.rideRequests || []).filter(r => {
+                const st = String(r.status || '').toLowerCase().trim();
+                if (st !== 'pending') return false;
+                if (r.acceptedDriverId) return false;
+                const tType = String(r.tripType || r.serviceType || 'short').toLowerCase().trim();
+                if (tType === 'daily' || tType === 'commute' || tType === 'خط دائمي' || tType === 'permanent') return false;
+                if (r.rejectedDriverIds && Array.isArray(r.rejectedDriverIds) && r.rejectedDriverIds.length > 0) {
+                    const isRejected = r.rejectedDriverIds.some(rid => {
+                        const sRid = String(rid || '').trim();
+                        if (targetDriverId && sRid === String(targetDriverId)) return true;
+                        if (rawParam && sRid === String(rawParam)) return true;
+                        if (cleanPhone.length >= 7 && sRid.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8))) return true;
+                        return false;
+                    });
+                    if (isRejected) return false;
+                }
+                return true;
+            });
+        };
+
+        const getDriverActiveRideItem = (rawParam) => {
+            rawParam = String(rawParam || '').trim();
+            const cleanPhone = rawParam.replace(/[^0-9]/g, '');
+            const matchedDriver = (db.memoryState.drivers || []).find(d => 
+                d.driverId === rawParam || d.id === rawParam || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
+            );
+            const targetDriverId = matchedDriver ? matchedDriver.driverId : rawParam;
+
+            return (db.memoryState.rideRequests || []).find(r => {
+                const isDriver = r.acceptedDriverId === targetDriverId || r.assignedDriverId === targetDriverId || r.acceptedDriverId === rawParam || r.assignedDriverId === rawParam;
+                const isActive = r.status === 'Accepted' || r.status === 'Arrived' || r.status === 'InProgress';
+                return isDriver && isActive;
+            }) || null;
+        };
+
+        // =====================================================================
+        // REAL-TIME SERVER-SENT EVENTS (SSE) STREAMING ENGINE (Tawseela IQ v72)
+        // Eliminates 2-second short polling storms across 10,000 concurrent users
+        // =====================================================================
+
+        // 1. Driver Real-time Event Stream: GET /api/driver/stream
+        if ((pathname === '/api/driver/stream' || pathname === '/driver/stream') && method === 'GET') {
+            const authUser = getAuthUser(req);
+            let driverId = parsedUrl.searchParams.get('driverId') || 
+                           parsedUrl.searchParams.get('id') || 
+                           (authUser ? (authUser.id || authUser.driverId || authUser.phone) : '');
+            driverId = String(driverId || '').trim();
+
+            if (!driverId) {
+                return sendJson({ success: false, error: 'driverId مطلوب لفتح قناة البث اللحظي' }, 400);
+            }
+
+            res.writeHead(200, {
+                'Content-Type': 'text/event-stream; charset=utf-8',
+                'Cache-Control': 'no-cache, no-transform',
+                'Connection': 'keep-alive',
+                'Access-Control-Allow-Origin': req.headers['origin'] || '*',
+                'X-Accel-Buffering': 'no'
+            });
+
+            const sendSse = (eventName, data) => {
+                try {
+                    res.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+                } catch (_) {}
+            };
+
+            sendSse('init', {
+                connected: true,
+                driverId,
+                pendingRequests: getDriverPendingList(driverId),
+                activeRide: getDriverActiveRideItem(driverId),
+                timestamp: Date.now()
+            });
+
+            const onRedisMsg = (channel, msgStr) => {
+                try {
+                    const data = JSON.parse(msgStr);
+                    if (channel === 'channel:dispatch') {
+                        sendSse('dispatch', {
+                            type: data.type,
+                            pendingRequests: getDriverPendingList(driverId),
+                            timestamp: Date.now()
+                        });
+                    } else if (channel === `channel:driver:${driverId}`) {
+                        sendSse('driver_event', {
+                            event: data,
+                            activeRide: getDriverActiveRideItem(driverId),
+                            timestamp: Date.now()
+                        });
+                    }
+                } catch (_) {}
+            };
+
+            if (redisManager.isConnected && redisManager.sub) {
+                redisManager.sub.subscribe('channel:dispatch', `channel:driver:${driverId}`).catch(() => {});
+                redisManager.sub.on('message', onRedisMsg);
+            }
+
+            const heartbeatTimer = setInterval(() => {
+                try {
+                    res.write(': keepalive\n\n');
+                } catch (_) {}
+            }, 15000);
+
+            req.on('close', () => {
+                clearInterval(heartbeatTimer);
+                if (redisManager.isConnected && redisManager.sub) {
+                    redisManager.sub.removeListener('message', onRedisMsg);
+                    redisManager.sub.unsubscribe(`channel:driver:${driverId}`).catch(() => {});
+                }
+            });
+
+            return;
+        }
+
+        // 2. Passenger Ride Status & Location Stream: GET /api/ride/stream or /api/ride/:id/stream
+        const isRideSseStream = (pathname.startsWith('/api/ride/') && pathname.endsWith('/stream')) || 
+                                pathname === '/api/ride/stream' || 
+                                pathname === '/ride/stream';
+
+        if (isRideSseStream && method === 'GET') {
+            let rideId = '';
+            const match = pathname.match(/^\/?(?:api\/)?ride\/([^\/]+)\/stream$/i);
+            if (match && match[1] && match[1] !== 'stream') {
+                rideId = decodeURIComponent(match[1]);
+            } else {
+                rideId = parsedUrl.searchParams.get('requestId') || 
+                         parsedUrl.searchParams.get('id') || 
+                         parsedUrl.searchParams.get('rideId') || '';
+            }
+            rideId = String(rideId || '').trim();
+
+            if (!rideId) {
+                return sendJson({ success: false, error: 'requestId مطلوب لفتح قناة تتبع الرحلة' }, 400);
+            }
+
+            res.writeHead(200, {
+                'Content-Type': 'text/event-stream; charset=utf-8',
+                'Cache-Control': 'no-cache, no-transform',
+                'Connection': 'keep-alive',
+                'Access-Control-Allow-Origin': req.headers['origin'] || '*',
+                'X-Accel-Buffering': 'no'
+            });
+
+            const sendSse = (eventName, data) => {
+                try {
+                    res.write(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+                } catch (_) {}
+            };
+
+            const currentRide = (db.memoryState.rideRequests || []).find(r => r.id === rideId);
+            sendSse('init', {
+                connected: true,
+                rideId,
+                request: currentRide || null,
+                timestamp: Date.now()
+            });
+
+            const onRideMsg = (channel, msgStr) => {
+                try {
+                    if (channel === `channel:ride:${rideId}`) {
+                        const data = JSON.parse(msgStr);
+                        sendSse('trip_update', data);
+                    }
+                } catch (_) {}
+            };
+
+            if (redisManager.isConnected && redisManager.sub) {
+                redisManager.sub.subscribe(`channel:ride:${rideId}`).catch(() => {});
+                redisManager.sub.on('message', onRideMsg);
+            }
+
+            const heartbeatTimer = setInterval(() => {
+                try {
+                    res.write(': keepalive\n\n');
+                } catch (_) {}
+            }, 15000);
+
+            req.on('close', () => {
+                clearInterval(heartbeatTimer);
+                if (redisManager.isConnected && redisManager.sub) {
+                    redisManager.sub.removeListener('message', onRideMsg);
+                    redisManager.sub.unsubscribe(`channel:ride:${rideId}`).catch(() => {});
+                }
+            });
+
+            return;
         }
 
         // Driver Current Active Accepted Ride
@@ -4017,6 +4259,28 @@ async function startServer() {
                 if (tripStatus !== undefined) driver.tripStatus = tripStatus;
                 driver.lastLocationUpdate = new Date().toISOString();
                 db.saveStateSnapshot();
+
+                // Redis Geospatial Index & Real-Time Stream Broadcast
+                const dLat = parseFloat(driver.currentLat);
+                const dLon = parseFloat(driver.currentLon);
+                if (!isNaN(dLat) && !isNaN(dLon)) {
+                    redisManager.updateDriverLocation(driver.driverId, dLon, dLat, driver);
+                }
+
+                const activeRide = (db.memoryState.rideRequests || []).find(r => 
+                    (r.acceptedDriverId === driver.driverId || r.assignedDriverId === driver.driverId) &&
+                    (r.status === 'Accepted' || r.status === 'Arrived' || r.status === 'InProgress')
+                );
+                if (activeRide) {
+                    redisManager.publishRideEvent(activeRide.id, {
+                        type: 'driver_location',
+                        driverId: driver.driverId,
+                        latitude: dLat,
+                        longitude: dLon,
+                        heading: driver.heading || 0,
+                        speedKmh: driver.speedKmh || 30
+                    });
+                }
             }
             return sendJson({ success: true, updated: !!driver });
         }
