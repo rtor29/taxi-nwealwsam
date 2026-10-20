@@ -2134,7 +2134,11 @@ async function startServer() {
                     pickupName, pickupLat, pickupLon,
                     dropoffName, dropoffLat, dropoffLon,
                     fare, distanceKm, durationMins, rangeKm = 25,
-                    vehicleType = 'eco'
+                    vehicleType = 'eco',
+                    isRoundTrip = false,
+                    secondDestination = '',
+                    hasSecondStop = false,
+                    stopDuration = 0
                 } = body;
 
                 // Rate limiting on ride requests
@@ -2233,7 +2237,10 @@ async function startServer() {
                     distanceKm: distanceKm || 3.5,
                     durationMins: durationMins || 8,
                     vehicleType: reqTier,
-                    promoCode: body.promoCode
+                    promoCode: body.promoCode,
+                    isRoundTrip: Boolean(isRoundTrip),
+                    hasSecondStop: Boolean(hasSecondStop || secondDestination),
+                    stopDuration: Number(stopDuration) || 0
                 });
 
                 const computedFare = dynamicPricing.fare || fare || 3000;
@@ -2255,6 +2262,10 @@ async function startServer() {
                     discountBadge: dynamicPricing.discountBadge,
                     pricingBreakdown: dynamicPricing.breakdown,
                     vehicleType: isVipTier ? 'VIP' : 'توفير',
+                    isRoundTrip: Boolean(isRoundTrip),
+                    secondDestination: secondDestination || '',
+                    hasSecondStop: Boolean(hasSecondStop || secondDestination),
+                    stopDuration: Number(stopDuration) || 0,
                     tripType: 'short',
                     serviceType: 'taxi',
                     distanceKm: distanceKm || 3.5,
@@ -2279,11 +2290,16 @@ async function startServer() {
                 db.saveStateSnapshot();
 
                 const tierBadge = isVipTier ? '👑 VIP' : '🚗 توفير';
+                let extraTgInfo = '';
+                if (newRequest.isRoundTrip) extraTgInfo += '\n🔄 <b>نوع الرحلة:</b> ذهاب وإياب (خصم 15% على العودة)';
+                if (newRequest.secondDestination) extraTgInfo += `\n📍 <b>وجهة إضافية:</b> ${newRequest.secondDestination}`;
+                if (newRequest.stopDuration) extraTgInfo += `\n⏱️ <b>توقف في الطريق:</b> ${newRequest.stopDuration} دقيقة`;
+
                 // Notify passenger via Telegram if connected
                 const custObj = (db.memoryState.customers || []).find(c => c.customerId === customerId || (customerPhone && c.phoneNumber === customerPhone));
                 if (custObj && custObj.telegramChatId) {
                     const tgMsg = `🚖 <b>تم إرسال طلبك (${tierBadge}) إلى الكباتن المتاحين بالقرب منك!</b>\n\n` +
-                        `🛣️ <b>المسار:</b> ${newRequest.pickupName} ➔ ${newRequest.dropoffName}\n` +
+                        `🛣️ <b>المسار:</b> ${newRequest.pickupName} ➔ ${newRequest.dropoffName}${extraTgInfo}\n` +
                         `💰 <b>الأجرة:</b> ${newRequest.fare} د.ع\n\n` +
                         `⏳ جاري البحث عن كابتن بانتظار الموافقة...`;
                     telegramBot.notifyUser(custObj.telegramChatId, tgMsg).catch(() => {});
@@ -2293,9 +2309,9 @@ async function startServer() {
                     const candidateIds = new Set(newRequest.candidateDriverIds || []);
                     if (assignedDriver && assignedDriver.driverId) candidateIds.add(assignedDriver.driverId);
 
-                    const drvMsg = `🔔 <b>طلب مشوار جديد!</b>\n` +
+                    const drvMsg = `🔔 <b>طلب مشوار جديد (${tierBadge})!</b>\n` +
                         `📍 الانطلاق: <b>${newRequest.pickupName || 'موقع الراكب'}</b>\n` +
-                        `🏁 الوجهة: <b>${newRequest.dropoffName || 'الوجهة المحددة'}</b>\n` +
+                        `🏁 الوجهة: <b>${newRequest.dropoffName || 'الوجهة المحددة'}</b>${extraTgInfo}\n` +
                         `💰 الأجرة التقديرية: <b>${newRequest.fare} د.ع</b>\n\n` +
                         `افتح التطبيق لقبول الطلب:\nhttps://tawseelaiq.app/?role=Driver`;
 

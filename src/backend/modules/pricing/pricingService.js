@@ -348,6 +348,9 @@ class PricingService {
         if (hasSecondStop) {
             calculatedFare += 1000; // إضافة محطة توقف إضافية
         }
+        if (options.stopDuration) {
+            calculatedFare += 500; // توقف في الطريق
+        }
 
         // 6. Discounts & Promotions
         let totalDiscount = 0;
