@@ -2019,14 +2019,14 @@ async function poll() {
                         }
 
                         // Check if command is deep link registration
-                        const isRegDeepLink = text.startsWith('/start reg_') || text.startsWith('/start%20reg_');
+                        const isRegDeepLink = text.startsWith('/start reg_') || text.startsWith('/start%20reg_') || /^\/start\s+(?:reg_)?([0-9+]+)/i.test(text);
 
                         // Mandatory Subscription Gate for private chat (Admin is exempted)
                         if (String(chatId) !== ADMIN_CHAT_ID) {
                             const sub = await checkUserSubscription(msg.from?.id || chatId);
                             if (!sub.subscribed) {
                                 if (isRegDeepLink) {
-                                    const rawPhone = text.replace('/start reg_', '').replace('/start%20reg_', '').trim();
+                                    const rawPhone = text.replace(/^\/start(?:%20|\s+)(?:reg_)?/i, '').trim();
                                     userStates.set(chatId, { pendingRegPhone: rawPhone });
                                 } else if (msg.contact && msg.contact.phone_number) {
                                     userStates.set(chatId, { pendingRegPhone: msg.contact.phone_number });
@@ -2041,7 +2041,7 @@ async function poll() {
                             await linkUserByPhone(chatId, msg.contact.phone_number, msg.from);
                         }
                         else if (isRegDeepLink) {
-                            const rawPhone = text.replace('/start reg_', '').replace('/start%20reg_', '').trim();
+                            const rawPhone = text.replace(/^\/start(?:%20|\s+)(?:reg_)?/i, '').trim();
                             await linkUserByPhone(chatId, rawPhone, msg.from);
                         }
                         else if (text === '/start' || text.startsWith('/start ')) {

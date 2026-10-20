@@ -809,6 +809,69 @@ async function startServer() {
             });
         }
 
+        // Endpoint: Check if passenger / driver has linked their Telegram
+        if ((pathname === '/api/auth/check-telegram-linked' || pathname === '/auth/check-telegram-linked') && (method === 'GET' || method === 'POST')) {
+            let phone = '';
+            let userId = '';
+            if (method === 'GET') {
+                phone = parsedUrl.searchParams.get('phone') || '';
+                userId = parsedUrl.searchParams.get('userId') || '';
+            } else {
+                const body = await parseJsonBody(req);
+                phone = body.phone || body.phoneNumber || '';
+                userId = body.userId || '';
+            }
+
+            const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
+            const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+            if (token && token.includes('_')) {
+                const parts = token.split('_');
+                if (!userId) userId = parts[1];
+            }
+
+            const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+            let norm = String(phone).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
+            if (norm.startsWith('00964')) norm = norm.substring(5);
+            else if (norm.startsWith('964')) norm = norm.substring(3);
+            if (norm.length === 10 && norm.startsWith('7')) norm = '0' + norm;
+
+            const shortDigits = norm.length >= 8 ? norm.slice(-8) : norm;
+
+            const matchPhone = (stored) => {
+                if (!stored) return false;
+                let s = String(stored).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
+                if (s.startsWith('00964')) s = s.substring(5);
+                else if (s.startsWith('964')) s = s.substring(3);
+                if (s.length === 10 && s.startsWith('7')) s = '0' + s;
+                if (s === norm) return true;
+                if (shortDigits && s.endsWith(shortDigits)) return true;
+                return false;
+            };
+
+            const customers = db.memoryState.customers || [];
+            const drivers = db.memoryState.drivers || [];
+
+            let found = null;
+            if (userId) {
+                found = customers.find(c => c.customerId === userId || c.id === userId) ||
+                        drivers.find(d => d.driverId === userId || d.id === userId);
+            }
+            if (!found && norm) {
+                found = customers.find(c => matchPhone(c.phoneNumber)) ||
+                        drivers.find(d => matchPhone(d.phoneNumber));
+            }
+
+            const linked = Boolean(found && (found.telegramChatId || found.telegram_chat_id));
+            const chatId = found ? (found.telegramChatId || found.telegram_chat_id || null) : null;
+
+            return sendJson({
+                success: true,
+                linked,
+                telegramChatId: chatId,
+                telegramUsername: found ? (found.telegramUsername || found.telegram_username || null) : null
+            });
+        }
+
         if (pathname === '/api/auth/complete-driver-registration' && method === 'POST') {
             const body = await parseJsonBody(req);
             return authController.handleCompleteDriverRegistration(req, res, body);
