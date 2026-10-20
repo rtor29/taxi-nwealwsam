@@ -246,36 +246,122 @@ async function startServer() {
             return authController.handleCompletePassengerRegistration(req, res, body);
         }
 
-        if (pathname === '/api/auth/check-phone' && method === 'GET') {
-            const phone = parsedUrl.searchParams.get('phone') || '';
-            const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-            let norm = String(phone).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
-            if (norm.startsWith('00964')) norm = norm.substring(5);
-            else if (norm.startsWith('964')) norm = norm.substring(3);
-            if (norm.length === 10 && norm.startsWith('7')) norm = '0' + norm;
+        if ((pathname === '/api/auth/check-phone' || pathname === '/auth/check-phone') && (method === 'GET' || method === 'POST')) {
+            let phone = '';
+            if (method === 'GET') {
+                phone = parsedUrl.searchParams.get('phone') || parsedUrl.searchParams.get('phoneNumber') || '';
+            } else {
+                const body = await parseJsonBody(req);
+                phone = body.phone || body.phoneNumber || '';
+            }
 
-            const cleanPhone = (p) => {
+            if (!phone || typeof phone !== 'string' || !phone.trim()) {
+                return sendJson({
+                    exists: false,
+                    role: null,
+                    roleAr: null,
+                    name: null,
+                    phoneNumber: '',
+                    message: 'رقم الهاتف مطلوب'
+                }, 400);
+            }
+
+            const normalizeIraqi = (p) => {
                 if (!p) return '';
-                let s = String(p).replace(/[٠-٩]/g, d => arabicDigits.indexOf(d)).replace(/[^0-9]/g, '');
-                if (s.startsWith('00964')) s = s.substring(5);
-                else if (s.startsWith('964')) s = s.substring(3);
-                if (s.length === 10 && s.startsWith('7')) s = '0' + s;
-                return s;
+                const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+                const persDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+                let norm = String(p)
+                    .replace(/[٠-٩]/g, d => arabicDigits.indexOf(d))
+                    .replace(/[۰-۹]/g, d => persDigits.indexOf(d))
+                    .replace(/[^0-9]/g, '');
+                if (norm.startsWith('00964')) norm = norm.substring(5);
+                else if (norm.startsWith('964')) norm = norm.substring(3);
+                if (norm.startsWith('0')) norm = norm.substring(1);
+                return norm;
             };
 
-            const foundDriver = (db.memoryState.drivers || []).find(d => cleanPhone(d.phoneNumber) === norm || (norm.length >= 6 && cleanPhone(d.phoneNumber).endsWith(norm)));
-            const foundCust = (db.memoryState.customers || []).find(c => cleanPhone(c.phoneNumber) === norm || (norm.length >= 6 && cleanPhone(c.phoneNumber).endsWith(norm)));
-            const exists = !!(foundDriver || foundCust);
-            const role = foundDriver ? 'Driver' : (foundCust ? 'Customer' : null);
-            const roleAr = foundDriver ? 'سائق (كابتن)' : (foundCust ? 'راكب' : null);
-            const userObj = foundDriver || foundCust;
+            const targetNorm = normalizeIraqi(phone);
+            if (!targetNorm || targetNorm.length < 9) {
+                return sendJson({
+                    exists: false,
+                    role: null,
+                    roleAr: null,
+                    name: null,
+                    phoneNumber: phone,
+                    message: 'رقم غير مكتمل'
+                });
+            }
+
+            // 1. الفحص في السائقين (الذاكرة وقاعدة البيانات)
+            let foundDriver = (db.memoryState.drivers || []).find(d => {
+                const dn = normalizeIraqi(d.phoneNumber || d.phone);
+                return dn === targetNorm || (targetNorm.length >= 9 && dn.length >= 9 && (dn.endsWith(targetNorm) || targetNorm.endsWith(dn)));
+            });
+
+            if (!foundDriver && db.isPostgresConnected && db.pool) {
+                try {
+                    const pgRes = await db.pool.query(
+                        `SELECT * FROM drivers WHERE phone_number LIKE $1 OR phone_number LIKE $2 LIMIT 1`,
+                        [`%${targetNorm}`, `%0${targetNorm}`]
+                    );
+                    if (pgRes.rows && pgRes.rows.length > 0) {
+                        foundDriver = pgRes.rows[0];
+                    }
+                } catch (_) {}
+            }
+
+            if (foundDriver) {
+                const driverName = foundDriver.fullName || foundDriver.name || 'كابتن توصيلة';
+                const driverPhone = foundDriver.phoneNumber || foundDriver.phone_number || ('0' + targetNorm);
+                return sendJson({
+                    exists: true,
+                    role: 'driver',
+                    roleAr: 'سائق (كابتن)',
+                    name: driverName,
+                    phoneNumber: driverPhone,
+                    message: 'هذا الرقم مسجل مسبقاً ككابتن معتمد 🚖'
+                });
+            }
+
+            // 2. الفحص في الركاب (الذاكرة وقاعدة البيانات)
+            let foundCust = (db.memoryState.customers || []).find(c => {
+                const cn = normalizeIraqi(c.phoneNumber || c.phone);
+                return cn === targetNorm || (targetNorm.length >= 9 && cn.length >= 9 && (cn.endsWith(targetNorm) || targetNorm.endsWith(cn)));
+            });
+
+            if (!foundCust && db.isPostgresConnected && db.pool) {
+                try {
+                    const pgRes = await db.pool.query(
+                        `SELECT * FROM customers WHERE phone_number LIKE $1 OR phone_number LIKE $2 LIMIT 1`,
+                        [`%${targetNorm}`, `%0${targetNorm}`]
+                    );
+                    if (pgRes.rows && pgRes.rows.length > 0) {
+                        foundCust = pgRes.rows[0];
+                    }
+                } catch (_) {}
+            }
+
+            if (foundCust) {
+                const custName = foundCust.fullName || foundCust.full_name || foundCust.name || 'راكب';
+                const custPhone = foundCust.phoneNumber || foundCust.phone_number || ('0' + targetNorm);
+                return sendJson({
+                    exists: true,
+                    role: 'passenger',
+                    roleAr: 'راكب',
+                    name: custName,
+                    phoneNumber: custPhone,
+                    message: 'هذا الرقم مسجل مسبقاً كراكب 👋'
+                });
+            }
+
+            // 3. رقم جديد
             return sendJson({
-                exists,
-                role,
-                roleAr,
-                name: userObj ? userObj.fullName : null,
-                phoneNumber: userObj ? userObj.phoneNumber : norm,
-                error: exists ? `الرقم مسجل بالفعل لدى ${roleAr}: ${userObj.fullName}. يرجى إدخال رقم هاتف آخر.` : null
+                exists: false,
+                role: null,
+                roleAr: null,
+                name: null,
+                phoneNumber: '0' + targetNorm,
+                message: 'رقم جديد (سيتم تسجيلك كحساب جديد ✨)'
             });
         }
 
