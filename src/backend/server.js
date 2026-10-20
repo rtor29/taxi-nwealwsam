@@ -619,38 +619,260 @@ async function startServer() {
             }
         }
 
+        // ===== نقطة الدخول المباشر للمستخدمين المسجلين (سائق أو راكب) دون إرسال كود واتساب =====
+        if ((pathname === '/api/auth/direct-login' || pathname === '/auth/direct-login') && method === 'POST') {
+            const body = await parseJsonBody(req);
+            const rawPhone = body.phone || body.phoneNumber || '';
+            const requestedRole = (body.requestedRole || body.role || '').toString().toLowerCase().trim();
+
+            if (!rawPhone || typeof rawPhone !== 'string' || !rawPhone.trim()) {
+                return sendJson({ success: false, error: 'رقم الهاتف مطلوب' }, 400);
+            }
+
+            const normalizeIraqi = (p) => {
+                if (!p) return '';
+                const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+                const persDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+                let norm = String(p)
+                    .replace(/[٠-٩]/g, d => arabicDigits.indexOf(d))
+                    .replace(/[۰-۹]/g, d => persDigits.indexOf(d))
+                    .replace(/[^0-9]/g, '');
+                if (norm.startsWith('00964')) norm = norm.substring(5);
+                else if (norm.startsWith('964')) norm = norm.substring(3);
+                if (norm.startsWith('0')) norm = norm.substring(1);
+                return norm;
+            };
+
+            const targetNorm = normalizeIraqi(rawPhone);
+            if (!targetNorm || targetNorm.length < 9) {
+                return sendJson({ success: false, error: 'يرجى إدخال رقم هاتف عراقي صالح' }, 400);
+            }
+
+            // 1. التحقق في جدول وسجلات الكباتن (الذاكرة وقاعدة البيانات)
+            let foundDriver = (db.memoryState.drivers || []).find(d => {
+                const dn = normalizeIraqi(d.phoneNumber || d.phone);
+                return dn === targetNorm || (targetNorm.length >= 9 && dn.length >= 9 && (dn.endsWith(targetNorm) || targetNorm.endsWith(dn)));
+            });
+
+            if (!foundDriver && db.isPostgresConnected && db.pool) {
+                try {
+                    const pgRes = await db.pool.query(
+                        `SELECT * FROM drivers WHERE phone_number LIKE $1 OR phone_number LIKE $2 LIMIT 1`,
+                        [`%${targetNorm}`, `%0${targetNorm}`]
+                    );
+                    if (pgRes.rows && pgRes.rows.length > 0) {
+                        foundDriver = pgRes.rows[0];
+                    }
+                } catch (_) {}
+            }
+
+            // إذا وُجد الكابتن (أسبقية مطلقة للسائق)
+            if (foundDriver) {
+                // إزالة أي سجل راكب مكرر لنفس الرقم لضمان عدم التعارض
+                if (db.memoryState && Array.isArray(db.memoryState.customers)) {
+                    db.memoryState.customers = db.memoryState.customers.filter(c => {
+                        const cn = normalizeIraqi(c.phoneNumber || c.phone);
+                        return !(cn === targetNorm || (targetNorm.length >= 9 && cn.length >= 9 && (cn.endsWith(targetNorm) || targetNorm.endsWith(cn))));
+                    });
+                }
+                if (db.isPostgresConnected && db.pool) {
+                    db.pool.query(`DELETE FROM customers WHERE phone_number LIKE $1 OR phone_number LIKE $2`, [`%${targetNorm}`, `%0${targetNorm}`]).catch(() => {});
+                    db.pool.query(`DELETE FROM users WHERE (phone_number LIKE $1 OR phone_number LIKE $2) AND role = 'Customer'`, [`%${targetNorm}`, `%0${targetNorm}`]).catch(() => {});
+                }
+
+                const driverId = foundDriver.driverId || foundDriver.id || ('drv_' + targetNorm);
+                const driverName = foundDriver.fullName || foundDriver.name || 'كابتن توصيلة';
+                const driverPhone = foundDriver.phoneNumber || foundDriver.phone_number || ('0' + targetNorm);
+                const token = 'jwt_driver_' + driverId;
+
+                if (!db.memoryState.drivers.some(d => d.driverId === driverId || d.id === driverId)) {
+                    db.memoryState.drivers.push(foundDriver);
+                    if (typeof db.indexDriver === 'function') db.indexDriver(foundDriver);
+                }
+
+                const userObj = {
+                    id: driverId,
+                    driverId: driverId,
+                    phoneNumber: driverPhone,
+                    fullName: driverName,
+                    role: 'Driver',
+                    status: foundDriver.status || 'Active',
+                    isVerified: true
+                };
+
+                return sendJson({
+                    success: true,
+                    direct: true,
+                    token,
+                    role: 'Driver',
+                    user: userObj,
+                    userId: driverId,
+                    fullName: driverName,
+                    redirect: '/drive'
+                });
+            }
+
+            // إذا كان المطلوب كابتن ولم يتم العثور عليه -> رفض فوري برمز 403
+            if (requestedRole === 'driver') {
+                return sendJson({
+                    success: false,
+                    error: 'عذراً، هذا الرقم غير مسجل ككابتن معتمد. يرجى مراجعة إدارة المنصة للتسجيل والتدريب.'
+                }, 403);
+            }
+
+            // 2. التحقق في جدول وسجلات الركاب (الذاكرة وقاعدة البيانات)
+            let foundCust = (db.memoryState.customers || []).find(c => {
+                const cn = normalizeIraqi(c.phoneNumber || c.phone);
+                return cn === targetNorm || (targetNorm.length >= 9 && cn.length >= 9 && (cn.endsWith(targetNorm) || targetNorm.endsWith(cn)));
+            });
+
+            if (!foundCust && db.isPostgresConnected && db.pool) {
+                try {
+                    const pgRes = await db.pool.query(
+                        `SELECT * FROM customers WHERE phone_number LIKE $1 OR phone_number LIKE $2 LIMIT 1`,
+                        [`%${targetNorm}`, `%0${targetNorm}`]
+                    );
+                    if (pgRes.rows && pgRes.rows.length > 0) {
+                        foundCust = pgRes.rows[0];
+                    }
+                } catch (_) {}
+            }
+
+            if (foundCust) {
+                const customerId = foundCust.customerId || foundCust.id || ('cust_' + targetNorm);
+                const custName = foundCust.fullName || foundCust.full_name || foundCust.name || 'راكب';
+                const custPhone = foundCust.phoneNumber || foundCust.phone_number || ('0' + targetNorm);
+                const token = 'jwt_customer_' + customerId;
+
+                if (!db.memoryState.customers.some(c => c.customerId === customerId || c.id === customerId)) {
+                    db.memoryState.customers.push(foundCust);
+                    if (typeof db.indexCustomer === 'function') db.indexCustomer(foundCust);
+                }
+
+                const userObj = {
+                    id: customerId,
+                    customerId: customerId,
+                    phoneNumber: custPhone,
+                    fullName: custName,
+                    role: 'Customer',
+                    status: foundCust.status || 'Active',
+                    isVerified: true
+                };
+
+                return sendJson({
+                    success: true,
+                    direct: true,
+                    token,
+                    role: 'Customer',
+                    user: userObj,
+                    userId: customerId,
+                    fullName: custName,
+                    redirect: '/hub'
+                });
+            }
+
+            // 3. المستخدم غير مسجل كراكب مسبقاً -> رفض الدخول المباشر ومطالبته بالتحقق عبر واتساب
+            return sendJson({
+                success: false,
+                notFound: true,
+                error: 'هذا الرقم غير مسجل كراكب مسبقاً. يرجى طلب رمز التحقق عبر واتساب لإنشاء حساب جديد.'
+            }, 404);
+        }
+
         // WhatsApp OTP Endpoints for Registration (Web & Flutter App Aliases)
-        if ((pathname === '/api/auth/send-whatsapp-otp' || pathname === '/auth/send-whatsapp-otp' || pathname === '/api/auth/send-otp' || pathname === '/auth/send-otp') && method === 'POST') {
+        if ((pathname === '/api/auth/send-whatsapp-otp' || pathname === '/auth/send-whatsapp-otp' || pathname === '/api/auth/send-otp' || pathname === '/auth/send-otp' || pathname === '/api/auth/request-otp' || pathname === '/auth/request-otp') && method === 'POST') {
             const body = await parseJsonBody(req);
             const phoneNumber = normalizeArabicDigits(body.phoneNumber || body.phone || '').trim();
+            const requestedRole = (body.role || body.requestedRole || '').toString().toLowerCase().trim();
+
             if (!phoneNumber || typeof phoneNumber !== 'string' || phoneNumber.length > 30) {
                 return sendJson({ success: false, error: 'رقم الهاتف مطلوب' }, 400);
             }
 
+            const normalizeIraqi = (p) => {
+                if (!p) return '';
+                const arabicDigits = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+                const persDigits = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+                let norm = String(p)
+                    .replace(/[٠-٩]/g, d => arabicDigits.indexOf(d))
+                    .replace(/[۰-۹]/g, d => persDigits.indexOf(d))
+                    .replace(/[^0-9]/g, '');
+                if (norm.startsWith('00964')) norm = norm.substring(5);
+                else if (norm.startsWith('964')) norm = norm.substring(3);
+                if (norm.startsWith('0')) norm = norm.substring(1);
+                return norm;
+            };
+
+            const targetNorm = normalizeIraqi(phoneNumber);
+            if (!targetNorm || targetNorm.length < 9) {
+                return sendJson({ success: false, error: 'يرجى إدخال رقم هاتف عراقي صالح (مثال: 07801234567 أو 07701234567)' }, 400);
+            }
+
+            // 1. فحص الكباتن (الذاكرة وقاعدة البيانات)
+            let isDriver = (db.memoryState.drivers || []).some(d => {
+                const dn = normalizeIraqi(d.phoneNumber || d.phone);
+                return dn === targetNorm || (targetNorm.length >= 9 && dn.length >= 9 && (dn.endsWith(targetNorm) || targetNorm.endsWith(dn)));
+            });
+
+            if (!isDriver && db.isPostgresConnected && db.pool) {
+                try {
+                    const pgRes = await db.pool.query(
+                        `SELECT id FROM drivers WHERE phone_number LIKE $1 OR phone_number LIKE $2 LIMIT 1`,
+                        [`%${targetNorm}`, `%0${targetNorm}`]
+                    );
+                    if (pgRes.rows && pgRes.rows.length > 0) isDriver = true;
+                } catch (_) {}
+            }
+
+            // إذا كان مسجلاً ككابتن معتمد: توجيه للدخول المباشر فوراً دون إرسال OTP
+            if (isDriver) {
+                return sendJson({
+                    success: false,
+                    alreadyRegistered: true,
+                    role: 'driver',
+                    message: 'هذا الرقم مسجل مسبقاً ككابتن معتمد، يمكنك تسجيل الدخول المباشر فوراً دون الحاجة لرمز التحقق.'
+                }, 400);
+            }
+
+            // إذا حاول رقم غير مسجل طلب OTP وهو في وضع الكابتن: حظر فوري ومنع إرسال الرسالة
+            if (requestedRole === 'driver') {
+                return sendJson({
+                    success: false,
+                    error: 'عذراً، هذا الرقم غير مسجل ككابتن معتمد. التسجيل والاعتماد يتم حصرياً عبر إدارة المنصة بالنجف الأشرف.'
+                }, 403);
+            }
+
+            // 2. فحص الركاب (الذاكرة وقاعدة البيانات)
+            let isCustomer = (db.memoryState.customers || []).some(c => {
+                const cn = normalizeIraqi(c.phoneNumber || c.phone);
+                return cn === targetNorm || (targetNorm.length >= 9 && cn.length >= 9 && (cn.endsWith(targetNorm) || targetNorm.endsWith(cn)));
+            });
+
+            if (!isCustomer && db.isPostgresConnected && db.pool) {
+                try {
+                    const pgRes = await db.pool.query(
+                        `SELECT id FROM customers WHERE phone_number LIKE $1 OR phone_number LIKE $2 LIMIT 1`,
+                        [`%${targetNorm}`, `%0${targetNorm}`]
+                    );
+                    if (pgRes.rows && pgRes.rows.length > 0) isCustomer = true;
+                } catch (_) {}
+            }
+
+            // إذا كان مسجلاً كراكب: توجيه للدخول المباشر فوراً دون إرسال OTP
+            if (isCustomer) {
+                return sendJson({
+                    success: false,
+                    alreadyRegistered: true,
+                    role: 'passenger',
+                    message: 'هذا الرقم مسجل مسبقاً كراكب، يمكنك تسجيل الدخول المباشر فوراً دون الحاجة لرمز التحقق.'
+                }, 400);
+            }
+
+            // 3. مسموح بإرسال كود الواتساب حصراً للأرقام الجديدة التي تسجل كركاب
             if (_otpRateLimit(phoneNumber, clientIp)) {
                 res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '60' });
                 return res.end(JSON.stringify({ success: false, error: 'تم إرسال عدة رسائل لهذا الرقم مؤخراً. يرجى الانتظار بضع دقائق.' }));
             }
-
-            const parsed = whatsappService.parseIraqiPhone(phoneNumber);
-            if (!parsed) {
-                return sendJson({ success: false, error: 'يرجى إدخال رقم هاتف عراقي صالح (مثال: 07801234567 أو 07701234567)' }, 400);
-            }
-
-            const cleanPhone = (p) => {
-                const pr = whatsappService.parseIraqiPhone(p);
-                return pr ? pr.clean : '';
-            };
-
-            const existsInDrivers = (db.memoryState.drivers || []).some(d => cleanPhone(d.phoneNumber) === parsed.clean);
-//            const existsInCustomers = (db.memoryState.customers || []).some(c => cleanPhone(c.phoneNumber) === parsed.clean);
-//            if (existsInDrivers || existsInCustomers) {
-//                return sendJson({
-//                    success: false,
-//                    duplicate: true,
-//                    error: 'هذا الرقم مسجل بالفعل في المنصة، يمكنك الانتقال لتسجيل الدخول مباشرة.'
-//                }, 400);
-//            }
 
             const result = await whatsappService.sendOtp(phoneNumber);
             if (!result.success) {
