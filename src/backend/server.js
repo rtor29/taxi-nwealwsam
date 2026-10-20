@@ -2007,16 +2007,24 @@ async function startServer() {
                 .filter(d => isDriverOnlineAndActive(d))
                 .filter(d => !requestedVehicleType || normaliseVehicleType(d) === requestedVehicleType)
                 .filter(d => {
-                    const isBoth = d.current_mode === 'both' || d.mode === 'both' || d.workStatus === 'both' || d.serviceType === 'Both';
-                    if (tripType === 'short') {
-                        // Exclude commute-only drivers
-                        if ((d.work_mode === 'خط دائمي' || d.workStatus === 'permanent' || d.current_mode === 'commute' || d.mode === 'commute') && !isBoth) return false;
-                        return isBoth || d.current_mode === 'taxi' || d.mode === 'taxi' || d.work_mode === 'مشوار قصير' || d.workStatus === 'taxi' || !d.work_mode;
+                    const cMode = String(d.current_mode || d.mode || d.work_mode || d.workStatus || '').toLowerCase();
+                    const isBoth = cMode === 'both' || cMode === 'كلاهما';
+                    
+                    if (tripType === 'daily' || tripType === 'commute') {
+                        // Strictly commute or both ONLY: Zero-Leak driver mode separation
+                        const isCommute = isBoth || cMode === 'commute' || cMode === 'permanent' || cMode === 'خط دائمي';
+                        const isTaxi = (cMode === 'taxi' || cMode === 'مشوار قصير') && !isBoth;
+                        if (isTaxi) return false;
+                        if (cMode === 'idle' || cMode === 'خمول' || cMode === 'offline') return false;
+                        return isCommute;
                     }
-                    if (tripType === 'daily') {
-                        // Exclude taxi-only drivers
-                        if ((d.work_mode === 'مشوار قصير' || d.workStatus === 'taxi' || d.current_mode === 'taxi' || d.mode === 'taxi') && !isBoth) return false;
-                        return isBoth || d.current_mode === 'commute' || d.mode === 'commute' || d.work_mode === 'خط دائمي' || d.workStatus === 'permanent' || (d.permanentLat && d.permanentLon) || !d.work_mode;
+                    if (tripType === 'short' || tripType === 'taxi') {
+                        // Strictly taxi or both ONLY: Zero-Leak driver mode separation
+                        const isTaxi = isBoth || cMode === 'taxi' || cMode === 'مشوار قصير';
+                        const isCommute = (cMode === 'commute' || cMode === 'permanent' || cMode === 'خط دائمي') && !isBoth;
+                        if (isCommute) return false;
+                        if (cMode === 'idle' || cMode === 'خمول' || cMode === 'offline') return false;
+                        return isTaxi;
                     }
                     return true;
                 })
@@ -2085,14 +2093,22 @@ async function startServer() {
             const activeDrivers = (db.memoryState.drivers || [])
                 .filter(d => isDriverOnlineAndActive(d))
                 .filter(d => {
-                    const isBoth = d.current_mode === 'both' || d.mode === 'both' || d.workStatus === 'both' || d.serviceType === 'Both';
-                    if (tripType === 'short') {
-                        if ((d.work_mode === 'خط دائمي' || d.workStatus === 'permanent' || d.current_mode === 'commute' || d.mode === 'commute') && !isBoth) return false;
-                        return isBoth || d.current_mode === 'taxi' || d.mode === 'taxi' || d.work_mode === 'مشوار قصير' || d.workStatus === 'taxi' || !d.work_mode;
+                    const cMode = String(d.current_mode || d.mode || d.work_mode || d.workStatus || '').toLowerCase();
+                    const isBoth = cMode === 'both' || cMode === 'كلاهما';
+                    
+                    if (tripType === 'daily' || tripType === 'commute') {
+                        const isCommute = isBoth || cMode === 'commute' || cMode === 'permanent' || cMode === 'خط دائمي';
+                        const isTaxi = (cMode === 'taxi' || cMode === 'مشوار قصير') && !isBoth;
+                        if (isTaxi) return false;
+                        if (cMode === 'idle' || cMode === 'خمول' || cMode === 'offline') return false;
+                        return isCommute;
                     }
-                    if (tripType === 'daily') {
-                        if ((d.work_mode === 'مشوار قصير' || d.workStatus === 'taxi' || d.current_mode === 'taxi' || d.mode === 'taxi') && !isBoth) return false;
-                        return isBoth || d.current_mode === 'commute' || d.mode === 'commute' || d.work_mode === 'خط دائمي' || d.workStatus === 'permanent' || !d.work_mode;
+                    if (tripType === 'short' || tripType === 'taxi') {
+                        const isTaxi = isBoth || cMode === 'taxi' || cMode === 'مشوار قصير';
+                        const isCommute = (cMode === 'commute' || cMode === 'permanent' || cMode === 'خط دائمي') && !isBoth;
+                        if (isCommute) return false;
+                        if (cMode === 'idle' || cMode === 'خمول' || cMode === 'offline') return false;
+                        return isTaxi;
                     }
                     return true;
                 })
@@ -3104,21 +3120,26 @@ async function startServer() {
                 const actualLat = parseFloat(latitude || lat || 0) || null;
                 const actualLng = parseFloat(longitude || lng || 0) || null;
 
-                let targetMode = workMode || work_mode || '';
-                const reqMode = String(mode || current_mode || workStatus || '').toLowerCase();
-                if (!targetMode) {
-                    if (reqMode === 'taxi' || reqMode === 'مشوار قصير') targetMode = 'مشوار قصير';
-                    else if (reqMode === 'commute' || reqMode === 'permanent' || reqMode === 'route' || reqMode === 'daily' || reqMode === 'خط دائمي') targetMode = 'خط دائمي';
-                    else if (reqMode === 'both' || reqMode === 'كلاهما') targetMode = 'كلاهما';
-                    else if (reqMode === 'idle' || reqMode === 'offline' || reqMode === 'خمول') targetMode = 'خمول';
+                let targetMode = workMode || work_mode || mode || current_mode || workStatus || '';
+                const rawMode = String(targetMode).toLowerCase().trim();
+                let canonicalMode = 'taxi';
+                if (rawMode === 'commute' || rawMode === 'permanent' || rawMode === 'route' || rawMode === 'daily' || rawMode === 'خط دائمي') {
+                    canonicalMode = 'commute';
+                } else if (rawMode === 'both' || rawMode === 'كلاهما') {
+                    canonicalMode = 'both';
+                } else if (rawMode === 'idle' || rawMode === 'offline' || rawMode === 'خمول') {
+                    canonicalMode = 'idle';
+                } else {
+                    canonicalMode = 'taxi';
                 }
 
-                const isExplicitOffline = isOnline === false || is_online === false || String(status).toLowerCase() === 'offline' || String(tripStatus).toLowerCase() === 'offline' || targetMode === 'خمول' || reqMode === 'idle';
+                const isExplicitOffline = isOnline === false || is_online === false || String(status).toLowerCase() === 'offline' || String(tripStatus).toLowerCase() === 'offline' || canonicalMode === 'idle';
 
                 const onlineBool = !isExplicitOffline;
-                const computedWorkMode = !onlineBool ? 'خمول' : (targetMode || 'مشوار قصير');
-                const computedWorkStatus = !onlineBool ? 'idle' : (computedWorkMode === 'خط دائمي' ? 'permanent' : computedWorkMode === 'كلاهما' ? 'both' : 'taxi');
-                const computedMode = !onlineBool ? 'idle' : (computedWorkMode === 'خط دائمي' ? 'commute' : computedWorkMode === 'كلاهما' ? 'both' : 'taxi');
+                const computedWorkMode = !onlineBool ? 'idle' : canonicalMode;
+                const computedWorkStatus = !onlineBool ? 'idle' : (canonicalMode === 'commute' ? 'permanent' : canonicalMode);
+                const computedMode = !onlineBool ? 'idle' : canonicalMode;
+                const computedServiceType = computedWorkStatus === 'permanent' ? 'PermanentLine' : (computedWorkStatus === 'both' ? 'Both' : 'ShortTrip');
 
                 let driver = (db.memoryState.drivers || []).find(d => 
                     (driverId && (d.driverId === driverId || d.id === driverId)) || 
@@ -3140,7 +3161,7 @@ async function startServer() {
                         mode: computedMode,
                         isVerified: true,
                         isApproved: true,
-                        serviceType: computedWorkStatus === 'permanent' ? 'PermanentLine' : 'ShortTrip',
+                        serviceType: computedServiceType,
                         vehicleMake: 'تويوتا',
                         vehicleModel: 'كورولا',
                         vehiclePlate: 'النجف',
@@ -3163,6 +3184,7 @@ async function startServer() {
                     driver.work_mode = computedWorkMode;
                     driver.current_mode = computedMode;
                     driver.mode = computedMode;
+                    driver.serviceType = computedServiceType;
                     if (actualLat && actualLng) {
                         driver.currentLat = actualLat;
                         driver.currentLon = actualLng;
