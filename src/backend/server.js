@@ -453,7 +453,10 @@ async function startServer() {
     // 1. Initialize PostgreSQL & Database state
     await db.init();
     _initBannedIps();
-    try { telegramBot.startBot(); } catch(e) { console.error('[TelegramBot] Start error:', e.message); }
+    const isPrimaryWorker = !process.env.NODE_APP_INSTANCE || process.env.NODE_APP_INSTANCE === '0';
+    if (isPrimaryWorker) {
+        try { telegramBot.startBot(); } catch(e) { console.error('[TelegramBot] Start error:', e.message); }
+    }
 
     const server = http.createServer(async (req, res) => {
         // ---[ Security Headers & Protection ]---

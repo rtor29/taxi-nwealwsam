@@ -252,7 +252,7 @@ class DatabaseManager {
                 ...this.memoryState,
                 stats: this.getComputedStats()
             };
-            const tempFile = config.dataFile + '.tmp';
+            const tempFile = `${config.dataFile}.${process.pid}.tmp`;
             const jsonStr = JSON.stringify(snapshot, null, 2);
             await fs.promises.writeFile(tempFile, jsonStr, 'utf8');
             await fs.promises.rename(tempFile, config.dataFile);
@@ -275,7 +275,7 @@ class DatabaseManager {
                 ...this.memoryState,
                 stats: this.getComputedStats()
             };
-            const tempFile = config.dataFile + '.tmp';
+            const tempFile = `${config.dataFile}.${process.pid}.tmp`;
             fs.writeFileSync(tempFile, JSON.stringify(snapshot, null, 2), 'utf8');
             fs.renameSync(tempFile, config.dataFile);
         } catch (e) {
@@ -298,80 +298,87 @@ class DatabaseManager {
             console.log('[Database] Connected to PostgreSQL successfully! 🐘');
             this.isPostgresConnected = true;
 
-            // Execute schema.sql to ensure tables exist
-            if (fs.existsSync(this.schemaPath)) {
-                const schemaSql = fs.readFileSync(this.schemaPath, 'utf8');
-                await client.query(schemaSql);
-                console.log('[Database] PostgreSQL schema verified with ON DELETE CASCADE and indexes');
+            const isPrimary = !process.env.NODE_APP_INSTANCE || process.env.NODE_APP_INSTANCE === '0';
+
+            if (isPrimary) {
+                // Execute schema.sql to ensure tables exist
+                if (fs.existsSync(this.schemaPath)) {
+                    const schemaSql = fs.readFileSync(this.schemaPath, 'utf8');
+                    await client.query(schemaSql);
+                    console.log('[Database] PostgreSQL schema verified with ON DELETE CASCADE and indexes');
+                }
+
+                // Ensure plain_password columns exist for existing databases
+                try {
+                    await client.query(`
+                        ALTER TABLE users ADD COLUMN IF NOT EXISTS plain_password TEXT;
+                        ALTER TABLE drivers ADD COLUMN IF NOT EXISTS plain_password TEXT;
+                        ALTER TABLE customers ADD COLUMN IF NOT EXISTS plain_password TEXT;
+                        ALTER TABLE drivers ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT false;
+                        ALTER TABLE drivers ADD COLUMN IF NOT EXISTS work_mode VARCHAR(50) DEFAULT 'مشوار قصير';
+                        ALTER TABLE drivers ADD COLUMN IF NOT EXISTS points INT DEFAULT 0;
+                        ALTER TABLE drivers ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(64);
+                        ALTER TABLE drivers ADD COLUMN IF NOT EXISTS telegram_username VARCHAR(100);
+                        ALTER TABLE drivers ADD COLUMN IF NOT EXISTS telegram_linked_at TIMESTAMPTZ;
+                        ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(64);
+                        ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_username VARCHAR(100);
+                        ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_linked_at TIMESTAMPTZ;
+                        ALTER TABLE bookings ADD COLUMN IF NOT EXISTS driver_phone VARCHAR(50);
+                        ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
+                        CREATE INDEX IF NOT EXISTS idx_drivers_telegram_chat ON drivers(telegram_chat_id);
+                        CREATE INDEX IF NOT EXISTS idx_customers_telegram_chat ON customers(telegram_chat_id);
+                        CREATE TABLE IF NOT EXISTS trip_ratings (
+                            id SERIAL PRIMARY KEY,
+                            ride_id VARCHAR(100),
+                            driver_id VARCHAR(100),
+                            passenger_id VARCHAR(100),
+                            passenger_name VARCHAR(150),
+                            rating INT DEFAULT 5,
+                            tags JSONB DEFAULT '[]'::jsonb,
+                            comment TEXT,
+                            points_earned INT DEFAULT 50,
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                        );
+                        CREATE INDEX IF NOT EXISTS idx_trip_ratings_driver ON trip_ratings(driver_id);
+                        CREATE INDEX IF NOT EXISTS idx_trip_ratings_ride ON trip_ratings(ride_id);
+
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS complainant_id VARCHAR(64);
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS complainant_name VARCHAR(150);
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS complainant_phone VARCHAR(50);
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS accused_id VARCHAR(64);
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS accused_name VARCHAR(150);
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS accused_phone VARCHAR(50);
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS category VARCHAR(100);
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS complaint_text TEXT;
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS admin_notes TEXT;
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS action_taken VARCHAR(100);
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS ride_id VARCHAR(64);
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS user_name VARCHAR(150);
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS target_id VARCHAR(64);
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS target_name VARCHAR(150);
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS subject VARCHAR(200);
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS details TEXT;
+                        ALTER TABLE complaints ADD COLUMN IF NOT EXISTS priority VARCHAR(50) DEFAULT 'Normal';
+                        ALTER TABLE complaints DROP CONSTRAINT IF EXISTS complaints_user_id_fkey;
+                        ALTER TABLE complaints ALTER COLUMN user_id DROP NOT NULL;
+                        ALTER TABLE complaints ALTER COLUMN description DROP NOT NULL;
+                        ALTER TABLE complaints ALTER COLUMN id TYPE VARCHAR(64);
+                        CREATE INDEX IF NOT EXISTS idx_complaints_category ON complaints(category);
+                        CREATE INDEX IF NOT EXISTS idx_complaints_complainant ON complaints(complainant_phone);
+                        CREATE INDEX IF NOT EXISTS idx_complaints_accused ON complaints(accused_phone);
+                    `);
+                } catch (_) {}
+            } else {
+                // Secondary cluster workers briefly wait for primary migration
+                await new Promise(r => setTimeout(r, 600));
             }
-
-            // Ensure plain_password columns exist for existing databases
-            try {
-                await client.query(`
-                    ALTER TABLE users ADD COLUMN IF NOT EXISTS plain_password TEXT;
-                    ALTER TABLE drivers ADD COLUMN IF NOT EXISTS plain_password TEXT;
-                    ALTER TABLE customers ADD COLUMN IF NOT EXISTS plain_password TEXT;
-                    ALTER TABLE drivers ADD COLUMN IF NOT EXISTS is_approved BOOLEAN DEFAULT false;
-                    ALTER TABLE drivers ADD COLUMN IF NOT EXISTS work_mode VARCHAR(50) DEFAULT 'مشوار قصير';
-                    ALTER TABLE drivers ADD COLUMN IF NOT EXISTS points INT DEFAULT 0;
-                    ALTER TABLE drivers ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(64);
-                    ALTER TABLE drivers ADD COLUMN IF NOT EXISTS telegram_username VARCHAR(100);
-                    ALTER TABLE drivers ADD COLUMN IF NOT EXISTS telegram_linked_at TIMESTAMPTZ;
-                    ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(64);
-                    ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_username VARCHAR(100);
-                    ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_linked_at TIMESTAMPTZ;
-                    ALTER TABLE bookings ADD COLUMN IF NOT EXISTS driver_phone VARCHAR(50);
-                    ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
-                    CREATE INDEX IF NOT EXISTS idx_drivers_telegram_chat ON drivers(telegram_chat_id);
-                    CREATE INDEX IF NOT EXISTS idx_customers_telegram_chat ON customers(telegram_chat_id);
-                    CREATE TABLE IF NOT EXISTS trip_ratings (
-                        id SERIAL PRIMARY KEY,
-                        ride_id VARCHAR(100),
-                        driver_id VARCHAR(100),
-                        passenger_id VARCHAR(100),
-                        passenger_name VARCHAR(150),
-                        rating INT DEFAULT 5,
-                        tags JSONB DEFAULT '[]'::jsonb,
-                        comment TEXT,
-                        points_earned INT DEFAULT 50,
-                        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                    );
-                    CREATE INDEX IF NOT EXISTS idx_trip_ratings_driver ON trip_ratings(driver_id);
-                    CREATE INDEX IF NOT EXISTS idx_trip_ratings_ride ON trip_ratings(ride_id);
-
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS complainant_id VARCHAR(64);
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS complainant_name VARCHAR(150);
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS complainant_phone VARCHAR(50);
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS accused_id VARCHAR(64);
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS accused_name VARCHAR(150);
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS accused_phone VARCHAR(50);
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS category VARCHAR(100);
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS complaint_text TEXT;
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS admin_notes TEXT;
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS action_taken VARCHAR(100);
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS ride_id VARCHAR(64);
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS user_name VARCHAR(150);
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS target_id VARCHAR(64);
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS target_name VARCHAR(150);
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS subject VARCHAR(200);
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS details TEXT;
-                    ALTER TABLE complaints ADD COLUMN IF NOT EXISTS priority VARCHAR(50) DEFAULT 'Normal';
-                    ALTER TABLE complaints DROP CONSTRAINT IF EXISTS complaints_user_id_fkey;
-                    ALTER TABLE complaints ALTER COLUMN user_id DROP NOT NULL;
-                    ALTER TABLE complaints ALTER COLUMN description DROP NOT NULL;
-                    ALTER TABLE complaints ALTER COLUMN id TYPE VARCHAR(64);
-                    CREATE INDEX IF NOT EXISTS idx_complaints_category ON complaints(category);
-                    CREATE INDEX IF NOT EXISTS idx_complaints_complainant ON complaints(complainant_phone);
-                    CREATE INDEX IF NOT EXISTS idx_complaints_accused ON complaints(accused_phone);
-                `);
-            } catch (_) {}
 
             // Check if we need to migrate/seed data from memoryState
             const userCountRes = await client.query('SELECT count(*) FROM users');
             const userCount = parseInt(userCountRes.rows[0].count, 10);
-            if (userCount === 0 && (this.memoryState.drivers.length > 0 || this.memoryState.customers.length > 0)) {
+            if (isPrimary && userCount === 0 && (this.memoryState.drivers.length > 0 || this.memoryState.customers.length > 0)) {
                 console.log('[Database] Initializing PostgreSQL tables with existing state records...');
                 await this.migrateMemoryToPostgres(client);
             } else if (userCount > 0) {
