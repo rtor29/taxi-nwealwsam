@@ -2539,12 +2539,12 @@ async function startServer() {
         }
 
         // Driver Trigger Horn Alert (بيب بيب 📢) to Passenger (RLS Protected)
-        if ((pathname.match(/^\/api\/trips\/[^\/]+\/horn$/) || pathname.match(/^\/api\/ride\/[^\/]+\/horn$/) || pathname === '/api/ride/horn' || pathname === '/api/trips/horn') && method === 'POST') {
+        if ((pathname.match(/^\/?(?:api\/)?(?:trips|ride)\/([^\/]+)\/horn$/) || pathname === '/api/ride/horn' || pathname === '/api/trips/horn' || pathname === '/ride/horn' || pathname === '/trips/horn') && method === 'POST') {
             try {
                 const body = await parseJsonBody(req);
                 let tripId = body.requestId || body.tripId || '';
                 if (!tripId) {
-                    const match = pathname.match(/^\/api\/(?:trips|ride)\/([^\/]+)\/horn$/);
+                    const match = pathname.match(/^\/?(?:api\/)?(?:trips|ride)\/([^\/]+)\/horn$/);
                     if (match) tripId = match[1];
                 }
                 const requests = db.memoryState.rideRequests || [];

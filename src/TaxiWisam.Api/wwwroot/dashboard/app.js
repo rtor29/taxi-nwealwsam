@@ -6277,4 +6277,88 @@ async function loadTripRatings(search = '') {
     }
 }
 
+// ==============================================================================
+// Global Dark / Light Theme Toggle for Dashboard
+// ==============================================================================
+function getDashboardThemeMode() {
+    try {
+        var saved = localStorage.getItem('tawseela_theme') || localStorage.getItem('tawseela_theme_mode');
+        if (saved === 'light' || saved === 'dark') return saved;
+        if (saved && saved.startsWith('{')) {
+            var parsed = JSON.parse(saved);
+            if (parsed.mode === 'light' || parsed.mode === 'dark') return parsed.mode;
+            if (parsed.preset === 'light') return 'light';
+        }
+    } catch (_) {}
+    return 'dark'; // Default: Dark Obsidian
+}
+
+function applyDashboardThemeMode(mode) {
+    var isLight = (mode === 'light');
+    var root = document.documentElement;
+    var body = document.body;
+
+    if (isLight) {
+        root.classList.add('light');
+        root.classList.remove('dark');
+        if (body) {
+            body.classList.add('light');
+            body.classList.remove('dark');
+        }
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', '#F8FAFC');
+        var icon = document.getElementById('theme-toggle-icon');
+        if (icon) icon.innerText = '🌙';
+        var btn = document.getElementById('btn-theme-toggle');
+        if (btn) {
+            btn.title = 'التبديل إلى الوضع الليلي (🌙)';
+        }
+    } else {
+        root.classList.add('dark');
+        root.classList.remove('light');
+        if (body) {
+            body.classList.add('dark');
+            body.classList.remove('light');
+        }
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', '#080E1A');
+        var icon = document.getElementById('theme-toggle-icon');
+        if (icon) icon.innerText = '☀️';
+        var btn = document.getElementById('btn-theme-toggle');
+        if (btn) {
+            btn.title = 'التبديل إلى الوضع النهاري (☀️)';
+        }
+    }
+
+    try {
+        localStorage.setItem('tawseela_theme', mode);
+        localStorage.setItem('tawseela_theme_mode', mode);
+    } catch (_) {}
+
+    // Update fleetMap style if loaded
+    if (typeof fleetMap !== 'undefined' && fleetMap && typeof fleetMap.setStyle === 'function') {
+        try {
+            fleetMap.setStyle(isLight ? 'mapbox://styles/mapbox/streets-v12' : 'mapbox://styles/mapbox/dark-v11');
+        } catch (_) {}
+    }
+}
+
+function toggleDashboardTheme() {
+    var current = getDashboardThemeMode();
+    var next = (current === 'dark') ? 'light' : 'dark';
+    applyDashboardThemeMode(next);
+}
+window.toggleDashboardTheme = toggleDashboardTheme;
+window.applyDashboardThemeMode = applyDashboardThemeMode;
+
+// Initialize on load
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        applyDashboardThemeMode(getDashboardThemeMode());
+    });
+} else {
+    applyDashboardThemeMode(getDashboardThemeMode());
+}
+
+
 

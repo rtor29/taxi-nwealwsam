@@ -596,3 +596,104 @@ table tbody td .flex {
     -webkit-mask-position: center;
     mask-position: center;
 }
+
+/* ==========================================================================
+   Comprehensive Light Ivory Theme Overrides (html.light / body.light)
+   ========================================================================== */
+html.light,
+html.light body,
+body.light {
+    background: #F8FAFC !important;
+    background-image: radial-gradient(circle at 50% 0%, #FFFFFF 0%, #F1F5F9 100%) !important;
+    background-attachment: fixed !important;
+    color: #0F172A !important;
+}
+
+html.light main {
+    background: transparent !important;
+    color: #0F172A !important;
+}
+
+html.light header {
+    background-color: rgba(255, 255, 255, 0.96) !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light #sidebar-drawer,
+html.light aside {
+    background-color: rgba(255, 255, 255, 0.98) !important;
+    border-left: 1px solid rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light .bg-white,
+html.light .bg-slate-50,
+html.light .bg-slate-100 {
+    background-color: #FFFFFF !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+    color: #0F172A !important;
+}
+
+html.light .text-slate-900,
+html.light .text-slate-800,
+html.light h1, html.light h2, html.light h3, html.light h4, html.light h5, html.light h6,
+html.light .font-black,
+html.light .font-extrabold {
+    color: #0F172A !important;
+}
+
+html.light .text-slate-700,
+html.light .text-slate-600 {
+    color: #334155 !important;
+}
+
+html.light .text-slate-500,
+html.light .text-slate-400 {
+    color: #64748B !important;
+}
+
+html.light input[type="text"],
+html.light input[type="number"],
+html.light input[type="tel"],
+html.light input[type="email"],
+html.light input[type="search"],
+html.light input[type="password"],
+html.light select,
+html.light textarea {
+    background-color: #F8FAFC !important;
+    border: 1px solid #CBD5E1 !important;
+    color: #0F172A !important;
+}
+
+html.light .border-slate-200,
+html.light .border-slate-100,
+html.light .border-slate-300 {
+    border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html.light .tab-btn {
+    color: #64748B !important;
+}
+
+html.light .tab-btn:hover:not(.active) {
+    background-color: rgba(0, 0, 0, 0.04) !important;
+    color: #0F172A !important;
+}
+
+html.light .mapboxgl-popup-content {
+    background: #FFFFFF !important;
+    color: #0F172A !important;
+    border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+html.light .mapboxgl-popup-tip {
+    border-top-color: #FFFFFF !important;
+    border-bottom-color: #FFFFFF !important;
+}
+
+html.light #btn-theme-toggle {
+    background-color: #FFFFFF !important;
+    color: #4F46E5 !important;
+    border-color: #E2E8F0 !important;
+}

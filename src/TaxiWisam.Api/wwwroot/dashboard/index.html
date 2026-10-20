@@ -274,6 +274,12 @@
                     <span class="sm:hidden text-[11px]">الموقع</span>
                 </a>
 
+                <!-- Theme Toggle Button (Light/Dark ☀️/🌙) - 48x48px Touch Target -->
+                <button onclick="toggleDashboardTheme()" id="btn-theme-toggle" title="التبديل إلى الوضع النهاري (☀️)" aria-label="تبديل الوضع الليلي والنهاري"
+                        class="relative flex items-center justify-center min-w-[48px] min-h-[48px] w-12 h-12 bg-slate-800/80 hover:bg-slate-700 text-amber-400 rounded-xl transition shadow-xs border border-white/10 active:scale-95 cursor-pointer">
+                    <span id="theme-toggle-icon" class="text-lg">☀️</span>
+                </button>
+
                 <!-- Notification Bell & Dropdown -->
                 <div class="relative">
                     <button onclick="toggleNotificationsDropdown()" id="btn-notification-bell" title="مركز الإشعارات والتنبيهات"
