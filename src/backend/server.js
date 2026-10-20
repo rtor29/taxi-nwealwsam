@@ -2269,6 +2269,7 @@ async function startServer() {
                     acceptedDriverId: null,
                     rejectedDriverIds: [],
                     requestedAt: Date.now(),
+                    createdAt: new Date().toISOString(),
                     stepTimeoutAt: Date.now() + 30000,
                     history: []
                 };
@@ -3070,7 +3071,15 @@ async function startServer() {
                 rawParam = decodeURIComponent(match[1]);
             }
             if (!rawParam) {
-                rawParam = parsedUrl.searchParams.get('driverId') || (authUser ? (authUser.id || authUser.driverId || authUser.phone) : '');
+                rawParam = parsedUrl.searchParams.get('driverId') || 
+                           parsedUrl.searchParams.get('id') || 
+                           parsedUrl.searchParams.get('userId') || 
+                           parsedUrl.searchParams.get('phone') || 
+                           parsedUrl.searchParams.get('phoneNumber') || 
+                           (authUser ? (authUser.id || authUser.driverId || authUser.userId || authUser._id || authUser.phone) : '') ||
+                           req.headers['x-driver-id'] ||
+                           req.headers['x-user-id'] ||
+                           '';
             }
             rawParam = String(rawParam || '').trim();
             const cleanPhone = rawParam.replace(/[^0-9]/g, '');
@@ -3078,61 +3087,54 @@ async function startServer() {
             const matchedDriver = (db.memoryState.drivers || []).find(d => 
                 String(d.driverId) === String(rawParam) || 
                 String(d.id) === String(rawParam) || 
-                (cleanPhone.length >= 7 && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8)))
+                String(d._id) === String(rawParam) || 
+                String(d.userId) === String(rawParam) || 
+                (cleanPhone.length >= 7 && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8))) ||
+                (cleanPhone.length >= 7 && d.phone && d.phone.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8)))
             );
-            const targetDriverId = matchedDriver ? (matchedDriver.driverId || matchedDriver.id) : rawParam;
+            const targetDriverId = matchedDriver ? (matchedDriver.driverId || matchedDriver.id || matchedDriver._id) : rawParam;
 
-            const list = (db.memoryState.rideRequests || []).filter(r => {
-                // 1. Case-insensitive status check
-                const st = String(r.status || '').toLowerCase();
-                if (st !== 'pending') return false;
-
-                // 2. Must not be already accepted
-                if (r.acceptedDriverId) return false;
-
-                // 3. Strictly instant/short taxi trip: exclude daily / commute
-                const tType = String(r.tripType || r.serviceType || 'short').toLowerCase();
-                if (tType === 'daily' || tType === 'commute' || tType === 'خط دائمي') return false;
-
-                // 4. Exclude if driver has already rejected this request
-                if (r.rejectedDriverIds && Array.isArray(r.rejectedDriverIds)) {
-                    const isRejected = r.rejectedDriverIds.some(rid => {
-                        const sRid = String(rid || '');
-                        if (targetDriverId && sRid === String(targetDriverId)) return true;
-                        if (rawParam && sRid === String(rawParam)) return true;
-                        if (cleanPhone.length >= 7 && sRid.includes(cleanPhone.slice(-8))) return true;
-                        return false;
-                    });
-                    if (isRejected) return false;
+            // Driver work mode verification (exclude ONLY if driver is strictly in commute or idle/offline mode)
+            let isStrictlyCommuteOrIdle = false;
+            if (matchedDriver) {
+                const dMode = String(matchedDriver.current_mode || matchedDriver.work_mode || matchedDriver.workStatus || matchedDriver.mode || '').toLowerCase().trim();
+                if (dMode === 'commute' || dMode === 'permanent' || dMode === 'خط دائمي' || dMode === 'idle' || dMode === 'خمول' || dMode === 'offline') {
+                    isStrictlyCommuteOrIdle = true;
                 }
+            }
 
-                // 5. If assigned specifically to a DIFFERENT driver, exclude unless candidate
-                if (r.assignedDriverId && r.assignedDriverId !== 'null' && String(r.assignedDriverId).trim() !== '') {
-                    const sAssigned = String(r.assignedDriverId);
-                    const isAssignedToMe = (targetDriverId && sAssigned === String(targetDriverId)) ||
-                                           (rawParam && sAssigned === String(rawParam)) ||
-                                           (cleanPhone.length >= 7 && sAssigned.includes(cleanPhone.slice(-8)));
-                    if (!isAssignedToMe) {
-                        const isCandidate = (r.candidateDriverIds || []).some(cId => {
-                            const sCId = String(cId || '');
-                            return (targetDriverId && sCId === String(targetDriverId)) ||
-                                   (rawParam && sCId === String(rawParam)) ||
-                                   (cleanPhone.length >= 7 && sCId.includes(cleanPhone.slice(-8)));
+            let list = [];
+            if (!isStrictlyCommuteOrIdle) {
+                list = (db.memoryState.rideRequests || []).filter(r => {
+                    // 1. Case-insensitive status check: must be Pending
+                    const st = String(r.status || '').toLowerCase().trim();
+                    if (st !== 'pending') return false;
+
+                    // 2. Must not be already accepted by any driver
+                    if (r.acceptedDriverId) return false;
+
+                    // 3. Strictly instant/short taxi trip: exclude daily / commute / permanent line
+                    const tType = String(r.tripType || r.serviceType || 'short').toLowerCase().trim();
+                    if (tType === 'daily' || tType === 'commute' || tType === 'خط دائمي' || tType === 'permanent') return false;
+
+                    // 4. Exclude only if driver has explicitly rejected this request
+                    if (r.rejectedDriverIds && Array.isArray(r.rejectedDriverIds) && r.rejectedDriverIds.length > 0) {
+                        const isRejected = r.rejectedDriverIds.some(rid => {
+                            const sRid = String(rid || '').trim();
+                            if (targetDriverId && sRid === String(targetDriverId)) return true;
+                            if (rawParam && sRid === String(rawParam)) return true;
+                            if (cleanPhone.length >= 7 && sRid.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8))) return true;
+                            return false;
                         });
-                        if (!isCandidate) return false;
+                        if (isRejected) return false;
                     }
-                }
 
-                // 6. Driver work mode verification (exclude if driver is strictly commute/permanent)
-                if (matchedDriver) {
-                    const dMode = String(matchedDriver.current_mode || matchedDriver.work_mode || matchedDriver.workStatus || matchedDriver.mode || '').toLowerCase();
-                    if (dMode === 'commute' || dMode === 'permanent' || dMode === 'خط دائمي') {
-                        return false;
-                    }
-                }
-
-                return true;
-            });
+                    // 5. In accordance with Najaf instant dispatch rules:
+                    // candidateDriverIds & assignedDriverId restrictions are removed for pending requests
+                    // so that all available taxi captains in Najaf receive the ride request immediately!
+                    return true;
+                });
+            }
 
             console.log(`[Dispatch] Driver ${targetDriverId || rawParam || 'unknown'} polled: ${list.length} pending rides`);
 
@@ -3503,10 +3505,15 @@ async function startServer() {
         }
 
         // Driver Live Location Update Broadcast
-        if ((pathname === '/api/driver/location' || pathname === '/api/driver/update-location') && method === 'POST') {
+        if ((pathname === '/api/driver/location' || pathname === '/api/driver/update-location' || pathname === '/driver/location' || pathname === '/driver/update-location') && method === 'POST') {
             const body = await parseJsonBody(req);
             const { driverId, latitude, longitude, lat, lon, heading, speedKmh, tripStatus } = body;
-            const driver = db.memoryState.drivers.find(d => d.driverId === driverId);
+            const cleanPhone = String(driverId || '').replace(/[^0-9]/g, '');
+            const driver = (db.memoryState.drivers || []).find(d => 
+                String(d.driverId) === String(driverId) || 
+                String(d.id) === String(driverId) || 
+                (cleanPhone.length >= 7 && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8)))
+            );
             if (driver) {
                 driver.currentLat = latitude !== undefined ? latitude : (lat !== undefined ? lat : driver.currentLat);
                 driver.currentLon = longitude !== undefined ? longitude : (lon !== undefined ? lon : driver.currentLon);
