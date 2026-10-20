@@ -2240,10 +2240,12 @@ async function startServer() {
                     status: 'Pending',
                     candidateDriverIds: candidateDriverIds.length > 0 ? candidateDriverIds : (assignedDriver ? [assignedDriver.driverId] : []),
                     currentDriverIndex: 0,
-                    assignedDriverId: assignedDriver ? assignedDriver.driverId : null,
-                    assignedDriverName: assignedDriver ? assignedDriver.fullName : null,
-                    assignedDriverPhone: assignedDriver ? assignedDriver.phoneNumber : null,
-                    assignedDriverVehicle: assignedDriver ? `${assignedDriver.vehicleMake||'تويوتا'} ${assignedDriver.vehicleModel||'كورولا'}` : 'تويوتا كورولا',
+                    assignedDriverId: null, // Strictly null until a driver actually accepts
+                    assignedDriverName: null,
+                    assignedDriverPhone: null,
+                    assignedDriverVehicle: null,
+                    acceptedDriverId: null,
+                    rejectedDriverIds: [],
                     requestedAt: Date.now(),
                     stepTimeoutAt: Date.now() + 30000,
                     history: []
@@ -2256,14 +2258,11 @@ async function startServer() {
                 const tierBadge = isVipTier ? '👑 VIP' : '🚗 توفير';
                 // Notify passenger via Telegram if connected
                 const custObj = (db.memoryState.customers || []).find(c => c.customerId === customerId || (customerPhone && c.phoneNumber === customerPhone));
-                if (custObj && custObj.telegramChatId && assignedDriver) {
-                    const tgMsg = `🚖 <b>تم إرسال طلبك (${tierBadge}) لأقرب كابتن متواجد!</b>\n\n` +
-                        `👤 <b>الكابتن:</b> ${assignedDriver.fullName}\n` +
-                        `🚗 <b>المركبة:</b> ${newRequest.assignedDriverVehicle}\n` +
-                        `📞 <b>الهاتف:</b> ${assignedDriver.phoneNumber}\n` +
+                if (custObj && custObj.telegramChatId) {
+                    const tgMsg = `🚖 <b>تم إرسال طلبك (${tierBadge}) إلى الكباتن المتاحين بالقرب منك!</b>\n\n` +
                         `🛣️ <b>المسار:</b> ${newRequest.pickupName} ➔ ${newRequest.dropoffName}\n` +
                         `💰 <b>الأجرة:</b> ${newRequest.fare} د.ع\n\n` +
-                        `⏳ جاري انتظار قبول السائق.`;
+                        `⏳ جاري البحث عن كابتن بانتظار الموافقة...`;
                     telegramBot.notifyUser(custObj.telegramChatId, tgMsg).catch(() => {});
                 }
                 // Notify all candidate drivers with telegramChatId
@@ -2291,7 +2290,7 @@ async function startServer() {
                     success: true,
                     request: newRequest,
                     candidateCount: newRequest.candidateDriverIds.length,
-                    assignedDriver,
+                    assignedDriver: null, // strictly null until driver accepts!
                     pricing: dynamicPricing
                 });
             } catch (err) {
@@ -2385,17 +2384,35 @@ async function startServer() {
                 if (action === 'accept') {
                     const cleanPhone = String(driverId || '').replace(/[^0-9]/g, '');
                     const targetDriver = (db.memoryState.drivers || []).find(d => 
-                        d.driverId === driverId || d.id === driverId || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
+                        String(d.driverId) === String(driverId) || String(d.id) === String(driverId) || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
                     );
                     const actualDriverId = targetDriver ? targetDriver.driverId : driverId;
                     r.status = 'Accepted';
                     r.acceptedDriverId = actualDriverId;
+                    r.assignedDriverId = actualDriverId;
                     r.acceptedAt = new Date().toISOString();
-                    if (targetDriver) {
-                        r.assignedDriverId = actualDriverId;
-                        r.assignedDriverName = targetDriver.fullName || 'كابتن توصيله';
-                        r.assignedDriverPhone = targetDriver.phoneNumber || '';
-                        r.assignedDriverVehicle = `${targetDriver.vehicleMake||'تويوتا'} ${targetDriver.vehicleModel||'كورولا'}`;
+                    r.assignedDriverName = targetDriver?.fullName || 'كابتن توصيله';
+                    r.assignedDriverPhone = targetDriver?.phoneNumber || targetDriver?.phone || cleanPhone || '';
+                    r.assignedDriverVehicle = targetDriver ? `${targetDriver.vehicleMake||'تويوتا'} ${targetDriver.vehicleModel||'كورولا'}` : 'تويوتا كورولا';
+                    r.driverPlate = targetDriver?.plateNumber || '١١٣٤٠ ة - النجف';
+                    r.driverRating = targetDriver?.rating || 5.0;
+
+                    // Update in PostgreSQL if connected
+                    if (db.isPostgresConnected && db.pool) {
+                        try {
+                            await db.pool.query(`
+                                UPDATE rides 
+                                SET status = 'Accepted', 
+                                    driver_id = $1, 
+                                    accepted_at = NOW(),
+                                    driver_name = $2,
+                                    driver_phone = $3,
+                                    vehicle_info = $4
+                                WHERE id = $5
+                            `, [actualDriverId, r.assignedDriverName, r.assignedDriverPhone, r.assignedDriverVehicle, r.id]);
+                        } catch (pgErr) {
+                            console.error('[RideAccepted] PG Update error:', pgErr.message);
+                        }
                     }
 
                     // Initial welcome chat message
@@ -2424,20 +2441,19 @@ async function startServer() {
                     db.saveStateSnapshot();
                     return sendJson({ success: true, message: 'تم قبول المشوار بنجاح!', request: r });
                 } else {
-                    r.currentDriverIndex += 1;
-                    if (r.currentDriverIndex < r.candidateDriverIds.length) {
-                        const nextDriverId = r.candidateDriverIds[r.currentDriverIndex];
-                        const nextDriver = (db.memoryState.drivers || []).find(d => d.driverId === nextDriverId);
-                        r.assignedDriverId = nextDriverId;
-                        r.assignedDriverName = nextDriver ? nextDriver.fullName : 'كابتن توصيله';
-                        r.assignedDriverPhone = nextDriver ? nextDriver.phoneNumber : '';
-                        r.assignedDriverVehicle = nextDriver ? `${nextDriver.vehicleMake||'تويوتا'} ${nextDriver.vehicleModel||'كورولا'}` : 'تويوتا';
+                    const cleanPhone = String(driverId || '').replace(/[^0-9]/g, '');
+                    r.rejectedDriverIds = r.rejectedDriverIds || [];
+                    if (driverId && !r.rejectedDriverIds.includes(driverId)) r.rejectedDriverIds.push(driverId);
+                    if (cleanPhone && !r.rejectedDriverIds.includes(cleanPhone)) r.rejectedDriverIds.push(cleanPhone);
+
+                    r.currentDriverIndex = (r.currentDriverIndex || 0) + 1;
+                    if (r.candidateDriverIds && r.currentDriverIndex < r.candidateDriverIds.length) {
                         r.stepTimeoutAt = Date.now() + 30000;
-                    } else {
+                    } else if (r.candidateDriverIds && r.rejectedDriverIds.length >= r.candidateDriverIds.length) {
                         r.status = 'NoDriversAvailable';
                     }
                     db.saveStateSnapshot();
-                    return sendJson({ success: true, message: 'تم التمرير للسائق التالي', request: r });
+                    return sendJson({ success: true, message: 'تم رفض المشوار وتمرير الطلب', request: r });
                 }
             } catch (err) {
                 return sendJson({ success: false, error: err.message }, 500);
@@ -3025,16 +3041,38 @@ async function startServer() {
             const rawParam = decodeURIComponent(parts[parts.length - 2]);
             const cleanPhone = rawParam.replace(/[^0-9]/g, '');
             const matchedDriver = (db.memoryState.drivers || []).find(d => 
-                d.driverId === rawParam || d.id === rawParam || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
+                String(d.driverId) === String(rawParam) || String(d.id) === String(rawParam) || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
             );
             const targetDriverId = matchedDriver ? matchedDriver.driverId : rawParam;
 
             const list = (db.memoryState.rideRequests || []).filter(r => {
                 if (r.status !== 'Pending') return false;
-                if (r.assignedDriverId === targetDriverId || r.assignedDriverId === rawParam) return true;
-                if (r.candidateDriverIds && (r.candidateDriverIds.includes(targetDriverId) || r.candidateDriverIds.includes(rawParam))) return true;
+                if (r.acceptedDriverId) return false;
+
+                // 1. Exclude if this driver has already rejected this request
+                if (r.rejectedDriverIds && (
+                    r.rejectedDriverIds.some(rid => String(rid) === String(targetDriverId) || String(rid) === String(rawParam)) ||
+                    (cleanPhone && r.rejectedDriverIds.some(rid => String(rid).includes(cleanPhone)))
+                )) {
+                    return false;
+                }
+
+                // 2. If assigned to someone else explicitly, skip
+                if (r.assignedDriverId && String(r.assignedDriverId) !== String(targetDriverId) && String(r.assignedDriverId) !== String(rawParam)) {
+                    return false;
+                }
+
+                // 3. Match candidate IDs (type safe)
+                const isCandidate = (r.candidateDriverIds || []).some(cId => 
+                    String(cId) === String(targetDriverId) || 
+                    String(cId) === String(rawParam) || 
+                    (cleanPhone && String(cId).includes(cleanPhone))
+                );
+                if (isCandidate) return true;
+
+                // 4. Any active taxi driver polling in Najaf receives pending open requests
                 if (!r.assignedDriverId || r.assignedDriverId === 'null') return true;
-                if (matchedDriver && isDriverOnlineAndActive(matchedDriver) && (matchedDriver.work_mode === 'مشوار قصير' || matchedDriver.current_mode === 'taxi')) {
+                if (matchedDriver && (matchedDriver.work_mode === 'مشوار قصير' || matchedDriver.workStatus === 'taxi' || matchedDriver.current_mode === 'taxi' || !matchedDriver.work_mode)) {
                     return true;
                 }
                 return false;
@@ -3594,7 +3632,16 @@ async function startServer() {
             }
             driverBookings = deduplicatedDriverBookings;
 
-            return sendJson(driverBookings);
+            const confirmedSubs = driverBookings.filter(b => b.status === 'Confirmed' || b.status === 'Active' || b.cancellationPending);
+            const pendingBookings = driverBookings.filter(b => b.status === 'Pending' || b.status === 'pending_approval' || b.status === 'pending');
+
+            return sendJson({
+                success: true,
+                subscribers: confirmedSubs,
+                pendingBookings: pendingBookings,
+                bookings: driverBookings,
+                total: driverBookings.length
+            });
         }
 
         // Driver Pending Requests (Customer booking requests awaiting driver approval)

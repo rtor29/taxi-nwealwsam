@@ -79,8 +79,10 @@ const config = {
     }
 };
 
-if (!fs.existsSync(config.uploadsDir)) {
-    fs.mkdirSync(config.uploadsDir, { recursive: true });
-}
+try {
+    if (!fs.existsSync(config.uploadsDir)) {
+        fs.mkdirSync(config.uploadsDir, { recursive: true });
+    }
+} catch (_) {}
 
 module.exports = config;
