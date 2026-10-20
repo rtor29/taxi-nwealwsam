@@ -13,6 +13,25 @@ const whatsappService = require('./modules/whatsapp/whatsappService');
 const telegramBot = require('./modules/telegram/telegramBot');
 const pricingService = require('./modules/pricing/pricingService');
 const complaintService = require('./modules/complaint/complaintService');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || 'tawseela_production_secret_najaf_2026_!@#$%^&*';
+
+// --- Cryptographic JWT Token Generation ---
+function generateSignedToken(payload) {
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' });
+}
+
+// --- Server-side Haversine Distance Validation ---
+function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
 
 // ---[ Honeypot WAF & IP Ban Shield ]---
 const _bannedIpSet = new Set();
@@ -129,9 +148,48 @@ function getAuthUser(req) {
     }
     if (!token) return null;
 
-    if (token.startsWith('jwt_admin_') || token === 'admin' || token.includes('admin')) {
-        return { role: 'Admin', id: 'admin', token };
+    // 1. First verify cryptographic JWT (new signed tokens)
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if (decoded && decoded.role) {
+            const role = (decoded.role === 'Admin' || decoded.role === 'admin') ? 'Admin'
+                       : (decoded.role === 'Driver' || decoded.role === 'driver') ? 'Driver'
+                       : 'Customer';
+            if (role === 'Admin') {
+                return { role: 'Admin', id: decoded.id || 'admin_root', username: decoded.username || 'Super Admin', token };
+            }
+            if (role === 'Driver') {
+                const driver = db.findDriver(decoded.id) || (decoded.phone ? db.findDriver(decoded.phone) : null);
+                return {
+                    role: 'Driver',
+                    id: driver?.driverId || decoded.id,
+                    phone: driver?.phoneNumber || driver?.phone || decoded.phone || '',
+                    name: driver?.fullName || decoded.name || 'كابتن توصيلة',
+                    driver,
+                    token
+                };
+            }
+            if (role === 'Customer') {
+                const customer = db.findCustomer(decoded.id) || (decoded.phone ? db.findCustomer(decoded.phone) : null);
+                return {
+                    role: 'Customer',
+                    id: customer?.customerId || decoded.id,
+                    phone: customer?.phoneNumber || customer?.phone || decoded.phone || '',
+                    name: customer?.fullName || decoded.name || 'راكب توصيلة',
+                    customer,
+                    token
+                };
+            }
+        }
+    } catch (_jwtErr) {
+        // Not a signed JWT or invalid signature - proceed to strictly controlled legacy fallback
     }
+
+    // 2. Controlled Legacy Token fallback (ELIMINATING the dangerous token.includes('admin'))
+    if (process.env.ADMIN_STATIC_TOKEN && token === process.env.ADMIN_STATIC_TOKEN) {
+        return { role: 'Admin', id: 'admin_root', username: 'Super Admin', token };
+    }
+
     if (token.startsWith('jwt_driver_')) {
         const id = token.replace('jwt_driver_', '').trim();
         const driver = db.findDriver(id);
@@ -167,6 +225,15 @@ function getAuthUser(req) {
     }
 
     return null;
+}
+
+// ---[ Strict Admin Authorization Guard ]---
+function requireAdminAuth(req) {
+    const authUser = getAuthUser(req);
+    if (!authUser || authUser.role !== 'Admin') {
+        return null;
+    }
+    return authUser;
 }
 
 /**
@@ -497,6 +564,37 @@ async function startServer() {
             res.end(JSON.stringify(data));
         };
 
+        // ---[ Authorization Helpers: Missing Token = 401, Invalid Role = 403 ]---
+        const checkAdminAuth = () => {
+            const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
+            const token = authHeader && authHeader.replace(/^Bearer\s+/i, '').trim();
+            if (!token) {
+                sendJson({ success: false, error: 'جلسة الدخول مطلوبة (Missing Token)' }, 401);
+                return null;
+            }
+            const authUser = getAuthUser(req);
+            if (!authUser || authUser.role !== 'Admin') {
+                sendJson({ success: false, error: 'غير مصرح: صلاحيات الإدارة مطلوبة حصراً' }, 403);
+                return null;
+            }
+            return authUser;
+        };
+
+        const checkDriverAuth = () => {
+            const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
+            const token = authHeader && authHeader.replace(/^Bearer\s+/i, '').trim();
+            if (!token) {
+                sendJson({ success: false, error: 'جلسة الدخول مطلوبة (Missing Token)' }, 401);
+                return null;
+            }
+            const authUser = getAuthUser(req);
+            if (!authUser || (authUser.role !== 'Driver' && authUser.role !== 'driver')) {
+                sendJson({ success: false, error: 'غير مصرح: الحساب ليس كابتن معتمد' }, 403);
+                return null;
+            }
+            return authUser;
+        };
+
         // ---------------------------------------------------------------------
         // 0. HEALTH CHECK & SEO / AGENTIC FILES
         // ---------------------------------------------------------------------
@@ -683,7 +781,12 @@ async function startServer() {
                 const driverId = foundDriver.driverId || foundDriver.id || ('drv_' + targetNorm);
                 const driverName = foundDriver.fullName || foundDriver.name || 'كابتن توصيلة';
                 const driverPhone = foundDriver.phoneNumber || foundDriver.phone_number || ('0' + targetNorm);
-                const token = 'jwt_driver_' + driverId;
+                const token = generateSignedToken({
+                    id: driverId,
+                    phone: driverPhone,
+                    role: 'Driver',
+                    name: driverName
+                });
 
                 if (!db.memoryState.drivers.some(d => d.driverId === driverId || d.id === driverId)) {
                     db.memoryState.drivers.push(foundDriver);
@@ -742,7 +845,12 @@ async function startServer() {
                 const customerId = foundCust.customerId || foundCust.id || ('cust_' + targetNorm);
                 const custName = foundCust.fullName || foundCust.full_name || foundCust.name || 'راكب';
                 const custPhone = foundCust.phoneNumber || foundCust.phone_number || ('0' + targetNorm);
-                const token = 'jwt_customer_' + customerId;
+                const token = generateSignedToken({
+                    id: customerId,
+                    phone: custPhone,
+                    role: 'Customer',
+                    name: custName
+                });
 
                 if (!db.memoryState.customers.some(c => c.customerId === customerId || c.id === customerId)) {
                     db.memoryState.customers.push(foundCust);
@@ -1223,7 +1331,7 @@ async function startServer() {
                 if (!password || (cleanAdminPass !== adminPass && attemptHash !== adminHash)) {
                     return sendJson({ success: false, error: 'كلمة مرور المدير غير صحيحة.' }, 401);
                 }
-                const adminToken = 'jwt_admin_' + crypto.randomBytes(16).toString('hex');
+                const adminToken = generateSignedToken({ id: 'usr-admin', role: 'Admin', username: 'مدير المنصة' });
                 return sendJson({
                     success: true,
                     token: adminToken,
@@ -1495,7 +1603,12 @@ async function startServer() {
             }
 
             const id = user.driverId || user.customerId;
-            const token = `jwt_${userRole.toLowerCase()}_` + id;
+            const token = generateSignedToken({
+                id,
+                phone: user.phoneNumber,
+                role: userRole,
+                name: user.fullName || ''
+            });
             return sendJson({
                 success: true,
                 token,
@@ -1613,7 +1726,12 @@ async function startServer() {
                 }
 
                 db.saveStateSnapshot();
-                const token = 'jwt_driver_' + driverId;
+                const token = generateSignedToken({
+                    id: driverId,
+                    phone: newDriver.phoneNumber,
+                    role: 'Driver',
+                    name: newDriver.fullName
+                });
                 return sendJson({
                     success: true,
                     token,
@@ -1649,7 +1767,12 @@ async function startServer() {
                 }
 
                 db.saveStateSnapshot();
-                const token = 'jwt_customer_' + customerId;
+                const token = generateSignedToken({
+                    id: customerId,
+                    phone: newCustomer.phoneNumber,
+                    role: 'Customer',
+                    name: newCustomer.fullName
+                });
                 return sendJson({
                     success: true,
                     token,
@@ -1798,6 +1921,7 @@ async function startServer() {
         }
 
         if (pathname === '/api/admin/drivers/pending-verifications') {
+            if (!checkAdminAuth()) return;
             const pending = await adminController.getPendingVerifications();
             return sendJson(pending);
         }
@@ -1813,6 +1937,7 @@ async function startServer() {
         }
 
         if (pathname.startsWith('/api/admin/documents/') && pathname.endsWith('/verify') && method === 'POST') {
+            if (!checkAdminAuth()) return;
             const parts = pathname.split('/');
             const docId = parts[parts.length - 2];
             const body = await parseJsonBody(req);
@@ -1822,6 +1947,9 @@ async function startServer() {
 
         // Driver Status Endpoint: POST /api/admin/drivers/:id/status, /api/drivers/:id/status, /drivers/:id/status
         if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/') || pathname.startsWith('/drivers/')) && pathname.endsWith('/status') && method === 'POST') {
+            if (pathname.startsWith('/api/admin/')) {
+                if (!checkAdminAuth()) return;
+            }
             const parts = pathname.split('/');
             const driverId = parts[parts.length - 2];
             const body = await parseJsonBody(req);
@@ -1837,6 +1965,7 @@ async function startServer() {
 
         // Driver Block Endpoint: POST /api/admin/drivers/:id/block or /api/drivers/:id/block
         if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/')) && pathname.endsWith('/block') && method === 'POST') {
+            if (!checkAdminAuth()) return;
             const parts = pathname.split('/');
             const driverId = parts[parts.length - 2];
             const body = await parseJsonBody(req);
@@ -1846,6 +1975,7 @@ async function startServer() {
 
         // Driver Approve Endpoint: POST /api/admin/drivers/:id/approve
         if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/')) && pathname.endsWith('/approve') && method === 'POST') {
+            if (!checkAdminAuth()) return;
             const parts = pathname.split('/');
             const driverId = parts[parts.length - 2];
             const body = await parseJsonBody(req);
@@ -1864,6 +1994,7 @@ async function startServer() {
 
         // Driver Delete (Cascade): DELETE /api/admin/drivers/:id or /api/drivers/:id
         if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/')) && method === 'DELETE') {
+            if (!checkAdminAuth()) return;
             const driverId = pathname.replace('/api/admin/drivers/', '').replace('/api/drivers/', '').trim();
             const result = await adminController.deleteDriver(driverId);
             return sendJson(result);
@@ -1979,6 +2110,7 @@ async function startServer() {
 
         // Drivers List: GET /api/admin/drivers
         if ((pathname === '/api/admin/drivers' || pathname === '/api/admin/admin/drivers' || pathname === '/api/drivers') && method === 'GET') {
+            if (!checkAdminAuth()) return;
             const search = sanitizeInput(parsedUrl.searchParams.get('search') || '', 100);
             const result = await adminController.getDrivers(search);
             return sendJson(result);
@@ -1986,6 +2118,7 @@ async function startServer() {
 
         // Driver Create (Admin): POST /api/admin/drivers
         if ((pathname === '/api/admin/drivers' || pathname === '/api/admin/admin/drivers' || pathname === '/api/drivers') && method === 'POST') {
+            if (!checkAdminAuth()) return;
             const body = await parseJsonBody(req);
             const result = await adminController.createDriver(body);
             return sendJson(result, result.success ? 201 : 400);
@@ -1993,6 +2126,7 @@ async function startServer() {
 
         // Driver Update: POST /api/admin/drivers/:id/update or /api/drivers/:id/update
         if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/')) && pathname.endsWith('/update') && method === 'POST') {
+            if (!checkAdminAuth()) return;
             const parts = pathname.split('/');
             const driverId = parts[parts.length - 2];
             const body = await parseJsonBody(req);
@@ -2002,6 +2136,7 @@ async function startServer() {
 
         // Customer Create: POST /api/admin/customers or /api/customers/create
         if ((pathname === '/api/admin/customers' || pathname === '/api/admin/admin/customers' || pathname === '/api/customers/create' || pathname === '/api/admin/customers/create') && method === 'POST') {
+            if (!checkAdminAuth()) return;
             const body = await parseJsonBody(req);
             const result = await adminController.createCustomer(body);
             return sendJson(result, result.success ? 201 : 400);
@@ -2009,6 +2144,7 @@ async function startServer() {
 
         // Customer Block Endpoint: POST /api/admin/customers/:id/block or /api/customers/:id/block
         if ((pathname.startsWith('/api/admin/customers/') || pathname.startsWith('/api/customers/')) && pathname.endsWith('/block') && method === 'POST') {
+            if (!checkAdminAuth()) return;
             const parts = pathname.split('/');
             const customerId = parts[parts.length - 2];
             const body = await parseJsonBody(req);
@@ -2018,6 +2154,7 @@ async function startServer() {
 
         // Customer Update: POST /api/admin/customers/:id/update or /api/customers/:id/update
         if ((pathname.startsWith('/api/admin/customers/') || pathname.startsWith('/api/customers/')) && pathname.endsWith('/update') && method === 'POST') {
+            if (!checkAdminAuth()) return;
             const parts = pathname.split('/');
             const customerId = parts[parts.length - 2];
             const body = await parseJsonBody(req);
@@ -2027,6 +2164,7 @@ async function startServer() {
 
         // Customer Delete (Cascade): DELETE /api/admin/customers/:id
         if (pathname.startsWith('/api/admin/customers/') && method === 'DELETE') {
+            if (!checkAdminAuth()) return;
             const customerId = pathname.replace('/api/admin/customers/', '').trim();
             const result = await adminController.deleteCustomer(customerId);
             return sendJson(result);
@@ -2034,10 +2172,7 @@ async function startServer() {
 
         // Customers & Passengers List: GET /api/admin/customers or /api/admin/passengers (Instant Lean Cache)
         if ((pathname === '/api/admin/customers' || pathname === '/api/admin/passengers' || pathname === '/api/customers' || pathname === '/api/passengers') && method === 'GET') {
-            const authUser = getAuthUser(req);
-            if (authUser && authUser.role !== 'Admin') {
-                return sendJson({ success: false, error: 'غير مصرح: صلاحيات المسؤول مطلوبة فقط (RLS)' }, 403);
-            }
+            if (!checkAdminAuth()) return;
             const search = sanitizeInput(parsedUrl.searchParams.get('search') || '', 100);
             const result = await adminController.getCustomers(search);
             return sendJson({
@@ -2147,7 +2282,8 @@ async function startServer() {
                     ip: clientIp,
                     userAgent: req.headers['user-agent'] || ''
                 });
-                return sendJson({ success: true, message: 'تم التحقق وتسجيل الدخول بنجاح' });
+                const adminToken = generateSignedToken({ id: 'admin_root', role: 'Admin', username: username || 'Super Admin' });
+                return sendJson({ success: true, message: 'تم التحقق وتسجيل الدخول بنجاح', token: adminToken });
             } else {
                 await adminController.logAuditEvent({
                     action: 'AdminLoginFailed',
@@ -2551,14 +2687,26 @@ async function startServer() {
                 const candidateDriverIds = effectiveCandidates.map(c => c.driverId);
                 const assignedDriver = effectiveCandidates[0] || (driverCandidates[0] || null);
 
+                // SECURITY: Server-side geospatial distance validation (prevent client fare manipulation)
+                const dLat = parseFloat(dropoffLat) || 32.0321;
+                const dLon = parseFloat(dropoffLon) || 44.3725;
+                const straightLineKm = calculateHaversineDistance(pLat, pLon, dLat, dLon);
+                const roadEstimatedKm = Math.max(1.0, straightLineKm * 1.3); // Najaf road curvature factor
+                let validatedDistanceKm = Number(distanceKm);
+                if (!validatedDistanceKm || validatedDistanceKm < (straightLineKm * 0.85)) {
+                    validatedDistanceKm = roadEstimatedKm;
+                }
+                if (validatedDistanceKm > 200) validatedDistanceKm = roadEstimatedKm;
+                const validatedDurationMins = Number(durationMins) || Math.max(5, Math.round(validatedDistanceKm * 2.5));
+
                 // Calculate dynamic surge pricing server-side for this instant taxi ride
                 const dynamicPricing = pricingService.calculateInstantRideFare({
                     pickupLat: pLat,
                     pickupLon: pLon,
-                    dropoffLat: parseFloat(dropoffLat) || 32.0321,
-                    dropoffLon: parseFloat(dropoffLon) || 44.3725,
-                    distanceKm: distanceKm || 3.5,
-                    durationMins: durationMins || 8,
+                    dropoffLat: dLat,
+                    dropoffLon: dLon,
+                    distanceKm: validatedDistanceKm,
+                    durationMins: validatedDurationMins,
                     vehicleType: reqTier,
                     promoCode: body.promoCode,
                     isRoundTrip: Boolean(isRoundTrip),
@@ -2577,8 +2725,8 @@ async function startServer() {
                     pickupLat: pLat,
                     pickupLon: pLon,
                     dropoffName: dropoffName || 'وجهة الوصول',
-                    dropoffLat: parseFloat(dropoffLat) || 32.0321,
-                    dropoffLon: parseFloat(dropoffLon) || 44.3725,
+                    dropoffLat: dLat,
+                    dropoffLon: dLon,
                     fare: computedFare,
                     surgeMultiplier: dynamicPricing.multipliers ? dynamicPricing.multipliers.cappedMultiplier : 1.0,
                     surgeBadge: dynamicPricing.surgeBadge,
@@ -2591,8 +2739,8 @@ async function startServer() {
                     stopDuration: Number(stopDuration) || 0,
                     tripType: 'short',
                     serviceType: 'taxi',
-                    distanceKm: distanceKm || 3.5,
-                    durationMins: durationMins || 8,
+                    distanceKm: validatedDistanceKm,
+                    durationMins: validatedDurationMins,
                     status: 'Pending',
                     candidateDriverIds: candidateDriverIds.length > 0 ? candidateDriverIds : (assignedDriver ? [assignedDriver.driverId] : []),
                     currentDriverIndex: 0,
@@ -2744,6 +2892,14 @@ async function startServer() {
                 if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
 
                 if (action === 'accept') {
+                    // Atomic Acceptance Lock: prevent race condition if already accepted or cancelled
+                    if (r.status !== 'Pending') {
+                        return sendJson({
+                            success: false,
+                            alreadyAccepted: true,
+                            error: 'عذراً، المشوار تم قبوله من كابتن آخر أو لم يعد متاحاً.'
+                        }, 409);
+                    }
                     const cleanPhone = String(driverId || '').replace(/[^0-9]/g, '');
                     const targetDriver = (db.memoryState.drivers || []).find(d => 
                         String(d.driverId) === String(driverId) || String(d.id) === String(driverId) || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
