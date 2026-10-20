@@ -2007,13 +2007,16 @@ async function startServer() {
                 .filter(d => isDriverOnlineAndActive(d))
                 .filter(d => !requestedVehicleType || normaliseVehicleType(d) === requestedVehicleType)
                 .filter(d => {
+                    const isBoth = d.current_mode === 'both' || d.mode === 'both' || d.workStatus === 'both' || d.serviceType === 'Both';
                     if (tripType === 'short') {
-                        if (d.work_mode === 'خط دائمي' || d.workStatus === 'permanent' || d.current_mode === 'commute' || d.mode === 'commute') return false;
-                        return d.current_mode === 'taxi' || d.mode === 'taxi' || d.work_mode === 'مشوار قصير' || d.workStatus === 'taxi' || d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.work_mode;
+                        // Exclude commute-only drivers
+                        if ((d.work_mode === 'خط دائمي' || d.workStatus === 'permanent' || d.current_mode === 'commute' || d.mode === 'commute') && !isBoth) return false;
+                        return isBoth || d.current_mode === 'taxi' || d.mode === 'taxi' || d.work_mode === 'مشوار قصير' || d.workStatus === 'taxi' || !d.work_mode;
                     }
                     if (tripType === 'daily') {
-                        if ((d.work_mode === 'مشوار قصير' || d.workStatus === 'taxi' || d.current_mode === 'taxi') && d.current_mode !== 'commute' && d.mode !== 'commute' && d.work_mode !== 'خط دائمي') return false;
-                        return d.current_mode === 'commute' || d.mode === 'commute' || d.work_mode === 'خط دائمي' || d.workStatus === 'permanent' || d.serviceType === 'PermanentLine' || d.serviceType === 'Both' || (d.permanentLat && d.permanentLon) || (d.route && d.route.length > 0) || !d.work_mode;
+                        // Exclude taxi-only drivers
+                        if ((d.work_mode === 'مشوار قصير' || d.workStatus === 'taxi' || d.current_mode === 'taxi' || d.mode === 'taxi') && !isBoth) return false;
+                        return isBoth || d.current_mode === 'commute' || d.mode === 'commute' || d.work_mode === 'خط دائمي' || d.workStatus === 'permanent' || (d.permanentLat && d.permanentLon) || !d.work_mode;
                     }
                     return true;
                 })
@@ -2082,13 +2085,14 @@ async function startServer() {
             const activeDrivers = (db.memoryState.drivers || [])
                 .filter(d => isDriverOnlineAndActive(d))
                 .filter(d => {
+                    const isBoth = d.current_mode === 'both' || d.mode === 'both' || d.workStatus === 'both' || d.serviceType === 'Both';
                     if (tripType === 'short') {
-                        if (d.work_mode === 'خط دائمي' || d.workStatus === 'permanent' || d.current_mode === 'commute' || d.mode === 'commute') return false;
-                        return d.current_mode === 'taxi' || d.mode === 'taxi' || d.work_mode === 'مشوار قصير' || d.workStatus === 'taxi' || d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.work_mode;
+                        if ((d.work_mode === 'خط دائمي' || d.workStatus === 'permanent' || d.current_mode === 'commute' || d.mode === 'commute') && !isBoth) return false;
+                        return isBoth || d.current_mode === 'taxi' || d.mode === 'taxi' || d.work_mode === 'مشوار قصير' || d.workStatus === 'taxi' || !d.work_mode;
                     }
                     if (tripType === 'daily') {
-                        if ((d.work_mode === 'مشوار قصير' || d.workStatus === 'taxi' || d.current_mode === 'taxi') && d.current_mode !== 'commute' && d.mode !== 'commute' && d.work_mode !== 'خط دائمي') return false;
-                        return d.current_mode === 'commute' || d.mode === 'commute' || d.work_mode === 'خط دائمي' || d.workStatus === 'permanent' || d.serviceType === 'PermanentLine' || d.serviceType === 'Both' || !d.work_mode;
+                        if ((d.work_mode === 'مشوار قصير' || d.workStatus === 'taxi' || d.current_mode === 'taxi' || d.mode === 'taxi') && !isBoth) return false;
+                        return isBoth || d.current_mode === 'commute' || d.mode === 'commute' || d.work_mode === 'خط دائمي' || d.workStatus === 'permanent' || !d.work_mode;
                     }
                     return true;
                 })
@@ -3070,9 +3074,9 @@ async function startServer() {
                 );
                 if (isCandidate) return true;
 
-                // 4. Any active taxi driver polling in Najaf receives pending open requests
+                // 4. Any active taxi/both driver polling in Najaf receives pending open requests
                 if (!r.assignedDriverId || r.assignedDriverId === 'null') return true;
-                if (matchedDriver && (matchedDriver.work_mode === 'مشوار قصير' || matchedDriver.workStatus === 'taxi' || matchedDriver.current_mode === 'taxi' || !matchedDriver.work_mode)) {
+                if (matchedDriver && (matchedDriver.work_mode === 'مشوار قصير' || matchedDriver.workStatus === 'taxi' || matchedDriver.current_mode === 'taxi' || matchedDriver.current_mode === 'both' || matchedDriver.mode === 'both' || matchedDriver.workStatus === 'both' || !matchedDriver.work_mode)) {
                     return true;
                 }
                 return false;
@@ -3105,6 +3109,7 @@ async function startServer() {
                 if (!targetMode) {
                     if (reqMode === 'taxi' || reqMode === 'مشوار قصير') targetMode = 'مشوار قصير';
                     else if (reqMode === 'commute' || reqMode === 'permanent' || reqMode === 'route' || reqMode === 'daily' || reqMode === 'خط دائمي') targetMode = 'خط دائمي';
+                    else if (reqMode === 'both' || reqMode === 'كلاهما') targetMode = 'كلاهما';
                     else if (reqMode === 'idle' || reqMode === 'offline' || reqMode === 'خمول') targetMode = 'خمول';
                 }
 
@@ -3112,8 +3117,8 @@ async function startServer() {
 
                 const onlineBool = !isExplicitOffline;
                 const computedWorkMode = !onlineBool ? 'خمول' : (targetMode || 'مشوار قصير');
-                const computedWorkStatus = !onlineBool ? 'idle' : (computedWorkMode === 'خط دائمي' ? 'permanent' : 'taxi');
-                const computedMode = !onlineBool ? 'idle' : (computedWorkMode === 'خط دائمي' ? 'commute' : 'taxi');
+                const computedWorkStatus = !onlineBool ? 'idle' : (computedWorkMode === 'خط دائمي' ? 'permanent' : computedWorkMode === 'كلاهما' ? 'both' : 'taxi');
+                const computedMode = !onlineBool ? 'idle' : (computedWorkMode === 'خط دائمي' ? 'commute' : computedWorkMode === 'كلاهما' ? 'both' : 'taxi');
 
                 let driver = (db.memoryState.drivers || []).find(d => 
                     (driverId && (d.driverId === driverId || d.id === driverId)) || 
@@ -3810,7 +3815,7 @@ async function startServer() {
             const candidateCleanPhone = candidateRawPhone.replace(/[^0-9]/g, '');
 
             const existingActiveBooking = (db.memoryState.bookings || []).find(b => {
-                const isActive = b.status === 'Confirmed' || b.status === 'Pending' || b.status === 'Active' || !b.status;
+                const isActive = b.status === 'Confirmed' || b.status === 'Pending' || b.status === 'Active' || b.status === 'cancel_requested_by_passenger' || b.status === 'cancel_requested_by_driver' || !b.status;
                 if (!isActive) return false;
 
                 // 1. Match customer by ID or Phone number
@@ -3820,15 +3825,8 @@ async function startServer() {
                                        (candidateCleanPhone.length >= 7 && bPhone.length >= 7 && (bPhone.endsWith(candidateCleanPhone.slice(-8)) || candidateCleanPhone.endsWith(bPhone.slice(-8))));
                 if (!isSameCustomer) return false;
 
-                // 2. Match Route or Driver
-                const bRouteId = String(b.routeId || '');
-                const currentRouteId = String(routeId || (targetRoute ? (targetRoute.id || targetRoute.routeId) : '') || '');
-                const isSameRoute = currentRouteId && bRouteId && currentRouteId === bRouteId;
-
-                const bDriverId = String(b.driverId || '');
-                const isSameDriver = resolvedDriverId && bDriverId && (bDriverId === resolvedDriverId || (targetDriver && bDriverId === targetDriver.driverId));
-
-                return isSameRoute || isSameDriver;
+                // 2. Any active commute subscription (single subscription restriction)
+                return true;
             });
 
             if (existingActiveBooking) {
@@ -3836,7 +3834,7 @@ async function startServer() {
                     success: false,
                     alreadySubscribed: true,
                     existingBookingId: existingActiveBooking.id || existingActiveBooking.bookingId,
-                    error: 'أنت مشترك بالفعل في هذا الخط، لا يمكنك تكرار الحجز.'
+                    error: 'لديك اشتراك خط دائمي حالي. يجب إلغاء اشتراكك الحالي وتأكيد إلغائه قبل الاشتراك في خط آخر.'
                 }, 409);
             }
 
