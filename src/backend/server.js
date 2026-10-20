@@ -2176,7 +2176,7 @@ async function startServer() {
                 let driverCandidates = (db.memoryState.drivers || [])
                     .filter(d => isDriverOnlineAndActive(d))
                     .filter(d => d.work_mode !== 'خط دائمي' && d.current_mode !== 'commute' && d.workStatus !== 'permanent')
-                    .filter(d => (d.current_mode === 'taxi' || d.mode === 'taxi' || d.work_mode === 'مشوار قصير' || d.workStatus === 'taxi' || d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.work_mode));
+                    .filter(d => (d.current_mode === 'taxi' || d.mode === 'taxi' || d.work_mode === 'مشوار قصير' || d.work_mode === 'taxi' || d.workStatus === 'taxi' || d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.work_mode));
                 if (driverCandidates.length === 0) {
                     driverCandidates = (db.memoryState.drivers || [])
                         .filter(d => isDriverOnlineAndActive(d) && d.work_mode !== 'خط دائمي' && d.current_mode !== 'commute' && d.workStatus !== 'permanent');
@@ -2255,6 +2255,8 @@ async function startServer() {
                     discountBadge: dynamicPricing.discountBadge,
                     pricingBreakdown: dynamicPricing.breakdown,
                     vehicleType: isVipTier ? 'VIP' : 'توفير',
+                    tripType: 'short',
+                    serviceType: 'taxi',
                     distanceKm: distanceKm || 3.5,
                     durationMins: durationMins || 8,
                     status: 'Pending',
@@ -3055,49 +3057,91 @@ async function startServer() {
             return sendJson({ success: true, activeRide: active || null });
         }
 
-        // Driver Pending Requests List
-        if ((pathname.startsWith('/api/driver/') || pathname.startsWith('/driver/')) && pathname.endsWith('/pending-requests') && method === 'GET') {
-            const parts = pathname.split('/');
-            const rawParam = decodeURIComponent(parts[parts.length - 2]);
+        // Driver Pending Requests List (Robust matching, flexible extraction, unified response)
+        const isPendingRequestsRoute = (
+            (pathname.startsWith('/api/driver/') || pathname.startsWith('/driver/')) && pathname.endsWith('/pending-requests')
+        ) || pathname === '/api/driver/pending-requests' || pathname === '/driver/pending-requests';
+
+        if (isPendingRequestsRoute && method === 'GET') {
+            const authUser = getAuthUser(req);
+            let rawParam = '';
+            const match = pathname.match(/^\/?(?:api\/)?driver(?:\/([^\/]+))?\/pending-requests$/i);
+            if (match && match[1] && match[1] !== 'pending-requests' && match[1] !== 'driver') {
+                rawParam = decodeURIComponent(match[1]);
+            }
+            if (!rawParam) {
+                rawParam = parsedUrl.searchParams.get('driverId') || (authUser ? (authUser.id || authUser.driverId || authUser.phone) : '');
+            }
+            rawParam = String(rawParam || '').trim();
             const cleanPhone = rawParam.replace(/[^0-9]/g, '');
+
             const matchedDriver = (db.memoryState.drivers || []).find(d => 
-                String(d.driverId) === String(rawParam) || String(d.id) === String(rawParam) || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
+                String(d.driverId) === String(rawParam) || 
+                String(d.id) === String(rawParam) || 
+                (cleanPhone.length >= 7 && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8)))
             );
-            const targetDriverId = matchedDriver ? matchedDriver.driverId : rawParam;
+            const targetDriverId = matchedDriver ? (matchedDriver.driverId || matchedDriver.id) : rawParam;
 
             const list = (db.memoryState.rideRequests || []).filter(r => {
-                if (r.status !== 'Pending') return false;
+                // 1. Case-insensitive status check
+                const st = String(r.status || '').toLowerCase();
+                if (st !== 'pending') return false;
+
+                // 2. Must not be already accepted
                 if (r.acceptedDriverId) return false;
 
-                // 1. Exclude if this driver has already rejected this request
-                if (r.rejectedDriverIds && (
-                    r.rejectedDriverIds.some(rid => String(rid) === String(targetDriverId) || String(rid) === String(rawParam)) ||
-                    (cleanPhone && r.rejectedDriverIds.some(rid => String(rid).includes(cleanPhone)))
-                )) {
-                    return false;
+                // 3. Strictly instant/short taxi trip: exclude daily / commute
+                const tType = String(r.tripType || r.serviceType || 'short').toLowerCase();
+                if (tType === 'daily' || tType === 'commute' || tType === 'خط دائمي') return false;
+
+                // 4. Exclude if driver has already rejected this request
+                if (r.rejectedDriverIds && Array.isArray(r.rejectedDriverIds)) {
+                    const isRejected = r.rejectedDriverIds.some(rid => {
+                        const sRid = String(rid || '');
+                        if (targetDriverId && sRid === String(targetDriverId)) return true;
+                        if (rawParam && sRid === String(rawParam)) return true;
+                        if (cleanPhone.length >= 7 && sRid.includes(cleanPhone.slice(-8))) return true;
+                        return false;
+                    });
+                    if (isRejected) return false;
                 }
 
-                // 2. If assigned to someone else explicitly, skip
-                if (r.assignedDriverId && String(r.assignedDriverId) !== String(targetDriverId) && String(r.assignedDriverId) !== String(rawParam)) {
-                    return false;
+                // 5. If assigned specifically to a DIFFERENT driver, exclude unless candidate
+                if (r.assignedDriverId && r.assignedDriverId !== 'null' && String(r.assignedDriverId).trim() !== '') {
+                    const sAssigned = String(r.assignedDriverId);
+                    const isAssignedToMe = (targetDriverId && sAssigned === String(targetDriverId)) ||
+                                           (rawParam && sAssigned === String(rawParam)) ||
+                                           (cleanPhone.length >= 7 && sAssigned.includes(cleanPhone.slice(-8)));
+                    if (!isAssignedToMe) {
+                        const isCandidate = (r.candidateDriverIds || []).some(cId => {
+                            const sCId = String(cId || '');
+                            return (targetDriverId && sCId === String(targetDriverId)) ||
+                                   (rawParam && sCId === String(rawParam)) ||
+                                   (cleanPhone.length >= 7 && sCId.includes(cleanPhone.slice(-8)));
+                        });
+                        if (!isCandidate) return false;
+                    }
                 }
 
-                // 3. Match candidate IDs (type safe)
-                const isCandidate = (r.candidateDriverIds || []).some(cId => 
-                    String(cId) === String(targetDriverId) || 
-                    String(cId) === String(rawParam) || 
-                    (cleanPhone && String(cId).includes(cleanPhone))
-                );
-                if (isCandidate) return true;
-
-                // 4. Any active taxi/both driver polling in Najaf receives pending open requests
-                if (!r.assignedDriverId || r.assignedDriverId === 'null') return true;
-                if (matchedDriver && (matchedDriver.work_mode === 'مشوار قصير' || matchedDriver.workStatus === 'taxi' || matchedDriver.current_mode === 'taxi' || matchedDriver.current_mode === 'both' || matchedDriver.mode === 'both' || matchedDriver.workStatus === 'both' || !matchedDriver.work_mode)) {
-                    return true;
+                // 6. Driver work mode verification (exclude if driver is strictly commute/permanent)
+                if (matchedDriver) {
+                    const dMode = String(matchedDriver.current_mode || matchedDriver.work_mode || matchedDriver.workStatus || matchedDriver.mode || '').toLowerCase();
+                    if (dMode === 'commute' || dMode === 'permanent' || dMode === 'خط دائمي') {
+                        return false;
+                    }
                 }
-                return false;
+
+                return true;
             });
-            return sendJson({ success: true, requests: list });
+
+            console.log(`[Dispatch] Driver ${targetDriverId || rawParam || 'unknown'} polled: ${list.length} pending rides`);
+
+            return sendJson({
+                success: true,
+                pendingRequests: list,
+                requests: list,
+                data: list
+            });
         }
 
         // Driver Toggle Online/Offline & Work Mode (taxi / permanent / idle)
