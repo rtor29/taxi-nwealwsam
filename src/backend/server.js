@@ -2494,6 +2494,60 @@ async function startServer() {
             }
         }
 
+        // Driver Trigger Horn Alert (بيب بيب 📢) to Passenger (RLS Protected)
+        if ((pathname.match(/^\/api\/trips\/[^\/]+\/horn$/) || pathname.match(/^\/api\/ride\/[^\/]+\/horn$/) || pathname === '/api/ride/horn' || pathname === '/api/trips/horn') && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                let tripId = body.requestId || body.tripId || '';
+                if (!tripId) {
+                    const match = pathname.match(/^\/api\/(?:trips|ride)\/([^\/]+)\/horn$/);
+                    if (match) tripId = match[1];
+                }
+                const requests = db.memoryState.rideRequests || [];
+                const r = requests.find(item => item.id === tripId || item.requestId === tripId);
+                if (!r) return sendJson({ success: false, error: 'المشوار غير موجود' }, 404);
+
+                // Driver Authorization Check
+                const authUser = getAuthUser(req);
+                const isAuthorized = isDriverAuthorizedForRide(r, authUser, body);
+                if (!isAuthorized) {
+                    return sendJson({ 
+                        success: false, 
+                        error: 'غير مصرح: يجب أن يكون الكابتن المعتمد لهذه الرحلة فقط لإرسال التنبيه' 
+                    }, 403);
+                }
+
+                r.hornSequence = (r.hornSequence || 0) + 1;
+                r.lastHornAt = new Date().toISOString();
+
+                // Send in-app chat arrival message / horn alert from driver to passenger
+                db.memoryState.chatMessages = db.memoryState.chatMessages || [];
+                const hornMsg = {
+                    id: 'horn-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+                    requestId: r.id,
+                    senderId: r.assignedDriverId || 'driver',
+                    senderRole: 'Driver',
+                    senderName: r.assignedDriverName || 'الكابتن',
+                    text: '🚖 بيب بيب! الكابتن وصل وينبهك لوصوله بالهورن 📢',
+                    isHornAlert: true,
+                    hornSequence: r.hornSequence,
+                    createdAt: new Date().toISOString(),
+                    timestamp: new Date().toISOString()
+                };
+                db.memoryState.chatMessages.push(hornMsg);
+                db.saveStateSnapshot();
+
+                return sendJson({ 
+                    success: true, 
+                    message: 'تم إرسال التنبيه للراكب بنجاح 🚖', 
+                    tripId: r.id,
+                    hornSequence: r.hornSequence 
+                });
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
         // Driver Start Ride - Navigate to Destination (RLS Protected)
         if ((pathname === '/api/ride/start' || pathname === '/api/ride/startRide' || pathname === '/api/ride/start-ride' || pathname === '/api/ride/navigate') && method === 'POST') {
             try {
