@@ -4035,6 +4035,13 @@ async function startServer() {
             return sendJson(result, result.success ? 200 : 400);
         }
 
+        // Driver Force-Cancel a Subscriber (Driver-initiated cancellation)
+        if ((pathname === '/api/driver/cancel-subscriber' || pathname === '/driver/cancel-subscriber') && method === 'POST') {
+            const body = await parseJsonBody(req).catch(() => ({}));
+            const result = await adminController.driverCancelSubscriber(body);
+            return sendJson(result, result.success ? 200 : 400);
+        }
+
         // Admin Passenger Cancellation Requests List
         if ((pathname === '/api/admin/cancellation-requests' || pathname === '/api/cancellation-requests') && method === 'GET') {
             res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');

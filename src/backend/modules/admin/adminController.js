@@ -1738,88 +1738,60 @@ class AdminController {
         const reason = data.reason || 'ظروف شخصية';
         const details = data.details || '';
 
-        booking.status = 'cancellation_pending';
-        booking.cancellationPending = true;
-        booking.cancellationRequested = true;
-        booking.cancellation_requested = true;
-        booking.cancellationStatus = 'pending';
-        booking.cancellation_status = 'pending';
+        // Immediately cancel the booking (no driver approval needed)
+        booking.status = 'Cancelled';
+        booking.cancellationPending = false;
+        booking.cancellationRequested = false;
+        booking.cancellation_requested = false;
+        booking.cancellationStatus = 'auto_approved';
+        booking.cancellation_status = 'auto_approved';
         booking.cancellationReason = reason;
         booking.cancellation_reason = reason;
         booking.cancellationDetails = details;
         booking.cancellation_details = details;
         booking.cancellationRequestedAt = new Date().toISOString();
+        booking.cancelledAt = new Date().toISOString();
 
-        const requestId = 'cnl-' + Math.random().toString(36).substr(2, 9);
-        const newRequest = {
-            id: requestId,
-            requestId: requestId,
-            bookingId: booking.id || booking.bookingId,
-            driverId: booking.driverId || targetDriverId,
-            driverName: booking.driverName || 'الكابتن',
-            driverPhone: booking.driverPhone || '',
-            customerId: booking.customerId || candidateCustomerId,
-            customerName: booking.customerName || 'الراكب',
-            customerPhone: booking.customerPhone || data.customerPhone || '',
-            routeId: booking.routeId || '',
-            route: booking.pickupLocation ? `${booking.pickupLocation} ➔ ${booking.dropoffLocation}` : (data.route || 'مسار الخط'),
-            passengerReason: reason,
-            passengerDetails: details,
-            reason: reason,
-            driverDecision: 'pending',
-            driverApprovalReason: null,
-            status: 'Pending',
-            createdAt: new Date().toISOString()
-        };
+        // Free seat in route
+        const targetRoute = (db.memoryState.routes || []).find(r =>
+            r.id === booking.routeId || r.routeId === booking.routeId
+        );
+        if (targetRoute) {
+            const totalCap = targetRoute.totalSeats || 4;
+            const freedSeats = parseInt(booking.seatsBooked || 1, 10);
+            targetRoute.availableSeats = Math.min(totalCap, (targetRoute.availableSeats || 0) + freedSeats);
+        }
 
-        const existIdx = db.memoryState.cancellationRequests.findIndex(r => r.bookingId === newRequest.bookingId && r.status === 'Pending');
-        if (existIdx >= 0) {
-            db.memoryState.cancellationRequests[existIdx] = newRequest;
-        } else {
-            db.memoryState.cancellationRequests.unshift(newRequest);
+        // Unlink customer from driver
+        const cust = (db.memoryState.customers || []).find(c =>
+            c.customerId === booking.customerId ||
+            (candidatePhone && c.phoneNumber && c.phoneNumber.replace(/[^0-9]/g, '').endsWith(candidatePhone.slice(-8)))
+        );
+        if (cust) {
+            cust.assignedDriverId = null;
+            cust.driverId = null;
+            cust.bookingConfirmed = false;
         }
 
         if (db.isPostgresConnected && db.pool) {
             try {
-                await db.pool.query(`
-                    UPDATE bookings 
-                    SET status = 'cancellation_pending', 
-                        cancellation_requested = true,
-                        cancellation_status = 'pending',
-                        cancellation_reason = $1,
-                        cancellation_details = $2,
-                        updated_at = NOW() 
-                    WHERE id = $3
-                `, [reason, details, booking.id || booking.bookingId]);
-
-                await db.pool.query(`
-                    INSERT INTO cancellation_requests (id, booking_id, customer_id, customer_name, customer_phone, driver_id, driver_name, driver_phone, route_id, route_name, passenger_reason, passenger_details, driver_decision, status, created_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', 'Pending', NOW())
-                    ON CONFLICT (id) DO UPDATE SET passenger_reason = EXCLUDED.passenger_reason, passenger_details = EXCLUDED.passenger_details, status = 'Pending'
-                `, [requestId, booking.id || booking.bookingId, newRequest.customerId, newRequest.customerName, newRequest.customerPhone, newRequest.driverId, newRequest.driverName, newRequest.driverPhone, newRequest.routeId, newRequest.route, reason, details]);
+                await db.pool.query(
+                    `UPDATE bookings SET status = 'Cancelled', cancellation_requested = false, cancellation_status = 'auto_approved', cancellation_reason = $1, cancellation_details = $2, updated_at = NOW() WHERE id = $3`,
+                    [reason, details, booking.id || booking.bookingId]
+                );
+                if (targetRoute) {
+                    await db.pool.query(`UPDATE routes SET available_seats = $1 WHERE id = $2`, [targetRoute.availableSeats, targetRoute.id]);
+                }
             } catch (pgErr) {
                 console.error('[AdminController] PG requestRouteCancellation error:', pgErr.message);
-                try {
-                    await db.pool.query(`
-                        UPDATE bookings 
-                        SET status = 'cancellation_pending', 
-                            cancellation_requested = true,
-                            cancellation_status = 'pending',
-                            cancellation_reason = $1,
-                            cancellation_details = $2
-                        WHERE id = $3
-                    `, [reason, details, booking.id || booking.bookingId]);
-                } catch (fallbackErr) {
-                    console.error('[AdminController] PG fallback update error:', fallbackErr.message);
-                }
             }
         }
 
         db.saveStateSnapshot();
         return {
             success: true,
-            message: 'تم إرسال طلب الإلغاء للسائق للمراجعة',
-            request: newRequest
+            message: 'تم إلغاء اشتراكك في الخط الدائمي بنجاح وتحرير مقعدك',
+            bookingId: booking.id || booking.bookingId
         };
     }
 
@@ -1973,6 +1945,72 @@ class AdminController {
                 action: 'rejected'
             };
         }
+    }
+
+    // 15. Driver Force-Cancel a Subscriber
+    async driverCancelSubscriber(data) {
+        db.memoryState.bookings = db.memoryState.bookings || [];
+        const bookingId = data.bookingId;
+        const targetDriverId = String(data.driverId || '');
+        const reason = data.reason || 'إلغاء من الكابتن';
+
+        let booking = (db.memoryState.bookings || []).find(b =>
+            b.id === bookingId || b.bookingId === bookingId
+        );
+
+        if (!booking) {
+            return { success: false, error: 'الحجز غير موجود' };
+        }
+
+        // Cancel the booking immediately
+        booking.status = 'Cancelled';
+        booking.cancellationPending = false;
+        booking.cancellation_requested = false;
+        booking.cancellation_status = 'driver_cancelled';
+        booking.cancellationApproved = true;
+        booking.cancellationReason = reason;
+        booking.cancelledAt = new Date().toISOString();
+
+        // Free seat in route
+        const targetRoute = (db.memoryState.routes || []).find(r =>
+            r.id === booking.routeId || r.routeId === booking.routeId
+        );
+        if (targetRoute) {
+            const totalCap = targetRoute.totalSeats || 4;
+            const freedSeats = parseInt(booking.seatsBooked || 1, 10);
+            targetRoute.availableSeats = Math.min(totalCap, (targetRoute.availableSeats || 0) + freedSeats);
+        }
+
+        // Unlink customer from driver
+        const cust = (db.memoryState.customers || []).find(c =>
+            c.customerId === booking.customerId || c.phoneNumber === booking.customerPhone
+        );
+        if (cust) {
+            cust.assignedDriverId = null;
+            cust.driverId = null;
+            cust.bookingConfirmed = false;
+        }
+
+        if (db.isPostgresConnected && db.pool) {
+            try {
+                await db.pool.query(
+                    `UPDATE bookings SET status = 'Cancelled', cancellation_requested = false, cancellation_status = 'driver_cancelled', cancellation_reason = $1, updated_at = NOW() WHERE id = $2`,
+                    [reason, bookingId]
+                );
+                if (targetRoute) {
+                    await db.pool.query(`UPDATE routes SET available_seats = $1 WHERE id = $2`, [targetRoute.availableSeats, targetRoute.id]);
+                }
+            } catch (pgErr) {
+                console.error('[AdminController] PG driverCancelSubscriber error:', pgErr.message);
+            }
+        }
+
+        db.saveStateSnapshot();
+        return {
+            success: true,
+            message: 'تم إلغاء اشتراك الراكب وتحرير مقعده بنجاح',
+            bookingId
+        };
     }
 }
 
