@@ -4,6 +4,71 @@ const auditService = require('../audit/auditService');
 const pricingService = require('../pricing/pricingService');
 const complaintService = require('../complaint/complaintService');
 
+// In-Memory Lean Cache for Instant Dashboard Response (<5ms)
+let _leanDriversCache = null;
+let _leanDriversCacheTime = 0;
+let _leanCustomersCache = null;
+let _leanCustomersCacheTime = 0;
+const DASHBOARD_CACHE_TTL = 30000; // 30 seconds with instant mutation invalidation
+
+function invalidateDriversCache() {
+    _leanDriversCache = null;
+    _leanDriversCacheTime = 0;
+}
+
+function invalidateCustomersCache() {
+    _leanCustomersCache = null;
+    _leanCustomersCacheTime = 0;
+}
+
+function toLeanDriver(d) {
+    const routeObj = (db.memoryState.routes || []).find(r => r.driverId === d.driverId);
+    const routeName = (routeObj ? (routeObj.name || `${routeObj.startName} - ${routeObj.endName}`) : null) || d.route || 'غير محدد';
+    return {
+        id: d.id || d.driverId,
+        driverId: d.driverId,
+        fullName: d.fullName || d.name || 'كابتن توصيلة',
+        phoneNumber: d.phoneNumber || d.phone || '',
+        email: d.email || '',
+        vehicleMake: d.vehicleMake || (d.vehicles && d.vehicles[0] && d.vehicles[0].make) || 'تويوتا',
+        vehicleModel: d.vehicleModel || (d.vehicles && d.vehicles[0] && d.vehicles[0].model) || 'كورولا',
+        vehiclePlate: d.vehiclePlate || d.plateNumber || (d.vehicles && d.vehicles[0] && d.vehicles[0].plateNumber) || 'النجف',
+        vehicleColor: d.vehicleColor || (d.vehicles && d.vehicles[0] && d.vehicles[0].color) || 'أبيض',
+        vehicleType: d.vehicleType || 'eco',
+        serviceType: d.serviceType || 'Both',
+        isActive: d.isActive !== false && d.status !== 'Inactive',
+        status: d.status || 'Active',
+        approvalStatus: d.approvalStatus || (d.isVerified ? 'Approved' : 'Pending'),
+        rating: parseFloat(d.rating || 5.0),
+        points: parseInt(d.points || d.rewardScore || 0, 10),
+        isBlocked: !!d.isBlocked,
+        route: routeName,
+        createdAt: d.createdAt || d.registeredAt || new Date().toISOString(),
+        telegramChatId: d.telegramChatId || d.telegram_chat_id || '',
+        telegramUsername: d.telegramUsername || d.telegram_username || '',
+        telegramLinkedAt: d.telegramLinkedAt || d.telegram_linked_at || null,
+        workMode: d.work_mode || d.workMode || 'كلاهما'
+    };
+}
+
+function toLeanCustomer(c) {
+    return {
+        id: c.id || c.customerId || c.userId,
+        customerId: c.customerId || c.id || c.userId,
+        fullName: c.fullName || c.name || 'راكب',
+        phoneNumber: c.phoneNumber || c.phone || '',
+        email: c.email || '',
+        isActive: c.isActive !== false && !c.isBlocked,
+        isBlocked: !!c.isBlocked,
+        route: c.route || c.preferredRoute || c.area || 'النجف الأشرف',
+        address: c.address || c.area || 'النجف الأشرف',
+        createdAt: c.createdAt || new Date().toISOString(),
+        telegramChatId: c.telegramChatId || c.telegram_chat_id || '',
+        telegramUsername: c.telegramUsername || c.telegram_username || '',
+        telegramLinkedAt: c.telegramLinkedAt || c.telegram_linked_at || null
+    };
+}
+
 class AdminController {
     // 1. Dynamic Stats (Calculated on the fly from current active records)
     async getStats() {
@@ -21,36 +86,28 @@ class AdminController {
         };
     }
 
-    // 3. Drivers Management
+    // 3. Drivers Management (Instant In-Memory Lean Cache)
     async getDrivers(search = '') {
-        let drivers = [...db.memoryState.drivers];
+        const now = Date.now();
+        if (!_leanDriversCache || now - _leanDriversCacheTime > DASHBOARD_CACHE_TTL) {
+            _leanDriversCache = (db.memoryState.drivers || []).map(toLeanDriver);
+            _leanDriversCacheTime = now;
+        }
+
+        let drivers = _leanDriversCache;
         if (search) {
             const q = search.toLowerCase();
             drivers = drivers.filter(d => 
                 (d.fullName && d.fullName.toLowerCase().includes(q)) ||
                 (d.phoneNumber && d.phoneNumber.includes(q)) ||
-                (d.licenseNumber && d.licenseNumber.toLowerCase().includes(q))
+                (d.vehiclePlate && d.vehiclePlate.toLowerCase().includes(q))
             );
         }
 
-        const enrichedDrivers = drivers.map(d => {
-            const routeObj = db.memoryState.routes.find(r => r.driverId === d.driverId);
-            const routeName = (routeObj ? (routeObj.name || `${routeObj.startName} - ${routeObj.endName}`) : null) || d.route || 'غير محدد';
-            return {
-                ...d,
-                route: routeName,
-                password: d.plainPassword || (d.passwordHash ? '••••••••' : '123456'),
-                points: parseInt(d.points || d.rewardScore || 0, 10),
-                telegramChatId: d.telegramChatId || d.telegram_chat_id || '',
-                telegramUsername: d.telegramUsername || d.telegram_username || '',
-                telegramLinkedAt: d.telegramLinkedAt || d.telegram_linked_at || null
-            };
-        });
-
         return {
             success: true,
-            total: enrichedDrivers.length,
-            drivers: enrichedDrivers
+            total: drivers.length,
+            drivers: drivers
         };
     }
 
@@ -80,7 +137,20 @@ class AdminController {
         if (!driver) return { success: false, error: 'السائق غير موجود' };
 
         if (data.fullName !== undefined) driver.fullName = String(data.fullName).trim();
-        if (data.phoneNumber !== undefined) driver.phoneNumber = String(data.phoneNumber).trim();
+        if (data.phoneNumber !== undefined) {
+            const rawP = String(data.phoneNumber).trim();
+            driver.phoneNumber = rawP;
+            const normP = rawP.replace(/[^0-9]/g, '');
+            if (normP.length >= 7) {
+                db.memoryState.customers = (db.memoryState.customers || []).filter(c => {
+                    const cn = String(c.phoneNumber || c.phone || '').replace(/[^0-9]/g, '');
+                    return !(cn === normP || (cn.length >= 7 && (cn.endsWith(normP) || normP.endsWith(cn))));
+                });
+                if (db.isPostgresConnected && db.pool) {
+                    db.pool.query('DELETE FROM customers WHERE phone_number LIKE $1 OR phone_number LIKE $2', [`%${normP}`, `%0${normP}`]).catch(() => {});
+                }
+            }
+        }
         if (data.governorate !== undefined) driver.governorate = String(data.governorate).trim();
         if (data.vehicleType !== undefined) driver.vehicleType = String(data.vehicleType).toLowerCase() === 'vip' ? 'vip' : 'eco';
         if (data.telegramChatId !== undefined || data.telegram_chat_id !== undefined) {
@@ -328,6 +398,8 @@ class AdminController {
 
         db.addAuditLog(isBlocked ? 'DriverBlocked' : 'DriverUnblocked', 'Driver', driverId, { isBlocked });
         db.saveStateSnapshot();
+        invalidateDriversCache();
+        invalidateCustomersCache();
 
         return { success: true, isBlocked: driver.isBlocked, status: driver.status };
     }
@@ -416,9 +488,15 @@ class AdminController {
         return await db.setDriverStatus(driver ? driver.driverId : doc.driverId, newStatus, rejectionReason);
     }
 
-    // 5. Customers Management
+    // 5. Customers Management (Instant In-Memory Lean Cache)
     async getCustomers(search = '') {
-        let customers = [...db.memoryState.customers];
+        const now = Date.now();
+        if (!_leanCustomersCache || now - _leanCustomersCacheTime > DASHBOARD_CACHE_TTL) {
+            _leanCustomersCache = (db.memoryState.customers || []).map(toLeanCustomer);
+            _leanCustomersCacheTime = now;
+        }
+
+        let customers = _leanCustomersCache;
         if (search) {
             const q = search.toLowerCase();
             customers = customers.filter(c =>
@@ -428,20 +506,10 @@ class AdminController {
             );
         }
 
-        const enrichedCustomers = customers.map(c => ({
-            ...c,
-            route: c.route || c.preferredRoute || c.area || 'النجف الأشرف',
-            address: c.address || c.area || 'النجف الأشرف',
-            telegramChatId: c.telegramChatId || c.telegram_chat_id || '',
-            telegramUsername: c.telegramUsername || c.telegram_username || '',
-            telegramLinkedAt: c.telegramLinkedAt || c.telegram_linked_at || null,
-            password: c.plainPassword || (c.passwordHash ? '••••••••' : '123456')
-        }));
-
         return {
             success: true,
-            total: enrichedCustomers.length,
-            customers: enrichedCustomers
+            total: customers.length,
+            customers: customers
         };
     }
 
@@ -539,6 +607,8 @@ class AdminController {
             address: userAddress
         });
         db.saveStateSnapshot();
+        invalidateDriversCache();
+        invalidateCustomersCache();
 
         return {
             success: true,
@@ -681,6 +751,8 @@ class AdminController {
 
         db.addAuditLog(isBlocked ? 'CustomerBlocked' : 'CustomerUnblocked', 'Customer', customerId, { isBlocked });
         db.saveStateSnapshot();
+        invalidateDriversCache();
+        invalidateCustomersCache();
 
         return { success: true, isBlocked: customer.isBlocked, isActive: customer.isActive };
     }
@@ -1026,10 +1098,20 @@ class AdminController {
         const existingDriver = (db.memoryState.drivers || []).find(d => cleanPhoneFunc(d.phoneNumber) === normPhone || (normPhone.length >= 6 && cleanPhoneFunc(d.phoneNumber).endsWith(normPhone)));
         const existingCust = (db.memoryState.customers || []).find(c => cleanPhoneFunc(c.phoneNumber) === normPhone || (normPhone.length >= 6 && cleanPhoneFunc(c.phoneNumber).endsWith(normPhone)));
 
-        if (existingDriver || existingCust) {
-            const roleAr = existingDriver ? 'سائق (كابتن)' : 'راكب';
-            const name = (existingDriver || existingCust).fullName;
-            return { success: false, duplicate: true, error: `الرقم مسجل بالفعل لدى ${roleAr}: ${name}. يرجى إدخال رقم هاتف آخر.` };
+        if (existingDriver) {
+            return { success: false, duplicate: true, error: `الرقم مسجل بالفعل لدى سائق آخر: ${existingDriver.fullName}. يرجى إدخال رقم هاتف آخر.` };
+        }
+
+        // أولوية صفة السائق المطلقة (Driver Precedence): إذا كان الرقم مسجلاً كراكب يتم تحويله وحذف سجل الراكب فورياً
+        if (existingCust) {
+            db.memoryState.customers = (db.memoryState.customers || []).filter(c => {
+                const cn = cleanPhoneFunc(c.phoneNumber || c.phone);
+                return !(cn === normPhone || (normPhone.length >= 6 && (cn.endsWith(normPhone) || normPhone.endsWith(cn))));
+            });
+            if (db.isPostgresConnected && db.pool) {
+                db.pool.query('DELETE FROM customers WHERE phone_number LIKE $1 OR phone_number LIKE $2', [`%${normPhone}`, `%0${normPhone}`]).catch(() => {});
+                db.pool.query("DELETE FROM users WHERE (phone_number LIKE $1 OR phone_number LIKE $2) AND role = 'Customer'", [`%${normPhone}`, `%0${normPhone}`]).catch(() => {});
+            }
         }
 
         const crypto = require('crypto');
@@ -1225,6 +1307,8 @@ class AdminController {
         });
 
         db.saveStateSnapshot();
+        invalidateDriversCache();
+        invalidateCustomersCache();
 
         return {
             success: true,
@@ -1272,6 +1356,8 @@ class AdminController {
 
         db.memoryState.cancellationRequests.unshift(newRequest);
         db.saveStateSnapshot();
+        invalidateDriversCache();
+        invalidateCustomersCache();
 
         return {
             success: true,
@@ -1569,6 +1655,8 @@ class AdminController {
         });
 
         db.saveStateSnapshot();
+        invalidateDriversCache();
+        invalidateCustomersCache();
 
         return {
             success: true,
@@ -1665,6 +1753,8 @@ class AdminController {
         } catch (_) {}
 
         db.saveStateSnapshot();
+        invalidateDriversCache();
+        invalidateCustomersCache();
 
         return {
             success: true,

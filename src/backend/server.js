@@ -842,6 +842,18 @@ async function startServer() {
             }
 
             if (foundDriver) {
+                // أولوية السائق المطلقة: إزالة أي سجل راكب مكرر لنفس الرقم لضمان عدم التعارض
+                if (db.memoryState && Array.isArray(db.memoryState.customers)) {
+                    db.memoryState.customers = db.memoryState.customers.filter(c => {
+                        const cn = normalizeIraqi(c.phoneNumber || c.phone);
+                        return !(cn === targetNorm || (targetNorm.length >= 9 && cn.length >= 9 && (cn.endsWith(targetNorm) || targetNorm.endsWith(cn))));
+                    });
+                }
+                if (db.isPostgresConnected && db.pool) {
+                    db.pool.query(`DELETE FROM customers WHERE phone_number LIKE $1 OR phone_number LIKE $2`, [`%${targetNorm}`, `%0${targetNorm}`]).catch(() => {});
+                    db.pool.query(`DELETE FROM users WHERE (phone_number LIKE $1 OR phone_number LIKE $2) AND role = 'Customer'`, [`%${targetNorm}`, `%0${targetNorm}`]).catch(() => {});
+                }
+
                 const driverName = foundDriver.fullName || foundDriver.name || 'كابتن توصيلة';
                 const driverPhone = foundDriver.phoneNumber || foundDriver.phone_number || ('0' + targetNorm);
                 return sendJson({
@@ -1798,15 +1810,18 @@ async function startServer() {
             return sendJson(result);
         }
 
-        // Customers List: GET /api/admin/customers (Admin RLS Restricted)
-        if (pathname === '/api/admin/customers' && method === 'GET') {
+        // Customers & Passengers List: GET /api/admin/customers or /api/admin/passengers (Instant Lean Cache)
+        if ((pathname === '/api/admin/customers' || pathname === '/api/admin/passengers' || pathname === '/api/customers' || pathname === '/api/passengers') && method === 'GET') {
             const authUser = getAuthUser(req);
             if (authUser && authUser.role !== 'Admin') {
                 return sendJson({ success: false, error: 'غير مصرح: صلاحيات المسؤول مطلوبة فقط (RLS)' }, 403);
             }
             const search = sanitizeInput(parsedUrl.searchParams.get('search') || '', 100);
             const result = await adminController.getCustomers(search);
-            return sendJson(result);
+            return sendJson({
+                ...result,
+                passengers: result.customers
+            });
         }
 
         // Routes & Bookings
