@@ -14,6 +14,7 @@ const telegramBot = require('./modules/telegram/telegramBot');
 const pricingService = require('./modules/pricing/pricingService');
 const complaintService = require('./modules/complaint/complaintService');
 const redisManager = require('./modules/redis/redisClient');
+const systemSettingsService = require('./modules/systemSettings/systemSettingsService');
 const {
     RIDE_STATES,
     ALLOWED_TRANSITIONS,
@@ -604,7 +605,9 @@ async function startServer() {
                 'Content-Type': 'application/json; charset=utf-8',
                 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
                 'Pragma': 'no-cache',
-                'Expires': '0'
+                'Expires': '0',
+                'X-Worker-PID': String(process.pid),
+                'X-Worker-Instance': String(process.env.NODE_APP_INSTANCE !== undefined ? process.env.NODE_APP_INSTANCE : '0')
             });
             res.end(JSON.stringify(data));
         };
@@ -2964,9 +2967,10 @@ async function startServer() {
                     stopDuration = 0
                 } = body;
 
-                // Rate limiting on ride requests: 5 requests per 30s per user/IP
-                const riderKey = `ride_req_${clientIp}_${customerId || customerPhone || ''}`;
-                if (!checkRateLimit(riderKey, 5, 30000) || _orderRateLimit(clientIp, customerId || customerPhone)) {
+                // Rate limiting on ride requests: 5 requests per 30s per user/IP across PM2 cluster
+                const riderKey = `rate:ride:create:${customerId || customerPhone || clientIp}`;
+                const clusterRate = await redisManager.checkRateLimitCluster(riderKey, 5, 30);
+                if (!clusterRate.allowed || _orderRateLimit(clientIp, customerId || customerPhone)) {
                     return sendJson({
                         success: false,
                         error: '⚠️ لقد أرسلت طلبات كثيرة في وقت قصير. يرجى الانتظار دقيقة قبل إرسال طلب جديد.'
@@ -2975,15 +2979,24 @@ async function startServer() {
 
                 const pLat = parseFloat(pickupLat);
                 const pLon = parseFloat(pickupLon);
-                const dLat = parseFloat(dropoffLat);
-                const dLon = parseFloat(dropoffLon);
+                const dLat = dropoffLat !== undefined && dropoffLat !== null && dropoffLat !== '' ? parseFloat(dropoffLat) : NaN;
+                const dLon = dropoffLon !== undefined && dropoffLon !== null && dropoffLon !== '' ? parseFloat(dropoffLon) : NaN;
 
-                // Input validation: lat/lon ranges, non-empty dropoff, string length caps
+                // Strict input validation: lat/lon ranges, non-empty dropoff, string length caps
                 if (isNaN(pLat) || pLat < -90 || pLat > 90 || isNaN(pLon) || pLon < -180 || pLon > 180) {
                     return sendJson({ success: false, error: 'إحداثيات موقع الانطلاق غير صحيحة' }, 400);
                 }
-                if (!dropoffName && (isNaN(dLat) || isNaN(dLon))) {
-                    return sendJson({ success: false, error: 'وجهة الوصول مطلوبة' }, 400);
+                if (!isNaN(dLat) && (dLat < -90 || dLat > 90 || isNaN(dLon) || dLon < -180 || dLon > 180)) {
+                    return sendJson({ success: false, error: 'إحداثيات الوجهة غير صحيحة' }, 400);
+                }
+                if (!dropoffName || typeof dropoffName !== 'string' || dropoffName.trim().length < 2 || dropoffName.trim().length > 200) {
+                    return sendJson({ success: false, error: 'وجهة الوصول مطلوبة ويجب أن تتراوح بين 2 و 200 حرف' }, 400);
+                }
+                if (pickupName && (typeof pickupName !== 'string' || pickupName.length > 200)) {
+                    return sendJson({ success: false, error: 'اسم موقع الانطلاق يجب ألا يتجاوز 200 حرف' }, 400);
+                }
+                if (body.notes && (typeof body.notes !== 'string' || body.notes.length > 500)) {
+                    return sendJson({ success: false, error: 'ملاحظات المشوار يجب ألا تتجاوز 500 حرف' }, 400);
                 }
 
                 // Check if passenger already has an active ride across Redis, memory, and PostgreSQL
@@ -3139,7 +3152,7 @@ async function startServer() {
                     requestedAt: Date.now(),
                     offeredAt: new Date().toISOString(),
                     createdAt: new Date().toISOString(),
-                    stepTimeoutAt: Date.now() + 20000, // 20-second countdown calculated by server
+                    stepTimeoutAt: Date.now() + ((systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 20) * 1000), // Step countdown calculated by server
                     history: []
                 };
 
@@ -3164,6 +3177,8 @@ async function startServer() {
                 if (newRequest.isRoundTrip) extraTgInfo += '\n🔄 <b>نوع الرحلة:</b> ذهاب وإياب (خصم 15% على العودة)';
                 if (newRequest.secondDestination) extraTgInfo += `\n📍 <b>وجهة إضافية:</b> ${newRequest.secondDestination}`;
                 if (newRequest.stopDuration) extraTgInfo += `\n⏱️ <b>توقف في الطريق:</b> ${newRequest.stopDuration} دقيقة`;
+
+                console.log('[TelegramDispatch] New ride created, dispatching notification for ride:', newRequest.id);
 
                 // Notify passenger via Telegram if connected
                 const custObj = (db.memoryState.customers || []).find(c => c.customerId === customerId || (customerPhone && c.phoneNumber === customerPhone));
@@ -3361,7 +3376,30 @@ async function startServer() {
             }
             try {
                 const r = await findRideById(rideId);
-                return sendJson({ success: true, ride: r || null, request: r || null }, 200);
+                if (!r) {
+                    return sendJson({ success: true, ride: null, request: null }, 200);
+                }
+
+                // RLS Authorization Check: Unassigned driver reading ride or unrelated customer -> 403 Forbidden
+                const authUser = getAuthUser(req);
+                if (authUser && authUser.role !== 'Admin') {
+                    if (authUser.role === 'Driver') {
+                        const isAssigned = (authUser.id && (String(authUser.id) === String(r.assignedDriverId) || String(authUser.id) === String(r.acceptedDriverId))) ||
+                                           (authUser.phone && r.assignedDriverPhone && normalizePhone(authUser.phone) === normalizePhone(r.assignedDriverPhone)) ||
+                                           (r.candidateDriverIds && r.candidateDriverIds.includes(authUser.id));
+                        if (!isAssigned) {
+                            return sendJson({ success: false, error: 'غير مصرح: لا يمكنك الاطلاع على تفاصيل مشوار لم تُعين له (RLS)' }, 403);
+                        }
+                    } else if (authUser.role === 'Customer') {
+                        const isOwner = (authUser.id && r.customerId && String(authUser.id) === String(r.customerId)) ||
+                                        (authUser.phone && r.customerPhone && normalizePhone(authUser.phone) === normalizePhone(r.customerPhone));
+                        if (!isOwner) {
+                            return sendJson({ success: false, error: 'غير مصرح: لا يمكنك الاطلاع على تفاصيل مشوار عميل آخر (RLS)' }, 403);
+                        }
+                    }
+                }
+
+                return sendJson({ success: true, ride: r, request: r }, 200);
             } catch (err) {
                 console.error('[SingleRideRoute] Error:', err.message);
                 return sendJson({ success: true, ride: null, request: null }, 200);
@@ -3380,6 +3418,17 @@ async function startServer() {
                 const { requestId, driverId, action } = body;
                 if (!requestId || requestId === 'undefined' || requestId === 'null') {
                     return sendJson({ success: false, notFound: true, alreadyAccepted: true, error: 'معرّف الطلب مطلوب' }, 200);
+                }
+
+                // Rate limiting for driver accept attempts across PM2 cluster (10 attempts / 10s)
+                if (action === 'accept' && driverId) {
+                    const acceptRate = await redisManager.checkRateLimitCluster(`rate:driver:accept:${driverId}`, 10, 10);
+                    if (!acceptRate.allowed) {
+                        return sendJson({
+                            success: false,
+                            error: '⚠️ لقد قمت بمحاولات قبول متكررة في وقت وجيز. يرجى الانتظار بضع ثوانٍ.'
+                        }, 429);
+                    }
                 }
 
                 let r = await findRideById(requestId);
@@ -3499,9 +3548,22 @@ async function startServer() {
                     if (cleanPhone && !r.rejectedDriverIds.includes(cleanPhone)) r.rejectedDriverIds.push(cleanPhone);
 
                     r.currentDriverIndex = (r.currentDriverIndex || 0) + 1;
+                    const stepTimeoutSec = systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 20;
+
                     if (r.candidateDriverIds && r.currentDriverIndex < r.candidateDriverIds.length) {
-                        r.stepTimeoutAt = Date.now() + 20000;
+                        r.stepTimeoutAt = Date.now() + (stepTimeoutSec * 1000);
                         const nextDriverId = r.candidateDriverIds[r.currentDriverIndex];
+                        r.assignedDriverId = nextDriverId;
+                        const nextDriver = (db.memoryState.drivers || []).find(d => String(d.driverId) === String(nextDriverId) || String(d.id) === String(nextDriverId));
+                        if (nextDriver) {
+                            r.assignedDriverName = nextDriver.fullName || 'كابتن توصيله';
+                            r.assignedDriverPhone = nextDriver.phoneNumber || '';
+                        }
+                        if (redisManager.isConnected && redisManager.client) {
+                            const rStr = JSON.stringify(r);
+                            await redisManager.client.hset('pending:rides', String(r.id), rStr);
+                            await redisManager.client.set('ride:request:' + r.id, rStr, 'EX', 1200);
+                        }
                         redisManager.publishDriverEvent(nextDriverId, {
                             type: 'new_ride',
                             event: 'new_ride',
@@ -3509,7 +3571,7 @@ async function startServer() {
                             requestId: r.id,
                             request: { ...r, customerPhone: maskPhoneNumber(r.customerPhone) }
                         });
-                    } else if (r.candidateDriverIds && r.rejectedDriverIds.length >= r.candidateDriverIds.length) {
+                    } else {
                         await transitionRideState(
                             redisManager,
                             r.id,
@@ -3562,15 +3624,17 @@ async function startServer() {
                     }, 403);
                 }
 
-                // Proximity verification (radius check: 350m / 500m threshold)
+                // Proximity verification (radius check: from system_settings, default 1000m)
                 const dLat = parseFloat(driverLat || lat);
                 const dLon = parseFloat(driverLon || lon);
                 if (!isNaN(dLat) && !isNaN(dLon) && r.pickupLat && r.pickupLon) {
                     const distKm = calculateDistanceKm(r.pickupLat, r.pickupLon, dLat, dLon);
-                    if (distKm > 1.0) {
+                    const maxRadiusMeters = systemSettingsService ? systemSettingsService.getProximityRadiusMeters() : 1000;
+                    const maxRadiusKm = maxRadiusMeters / 1000.0;
+                    if (distKm > maxRadiusKm) {
                         return sendJson({
                             success: false,
-                            error: `أنت بعيد عن موقع الانطلاق (${Math.round(distKm * 1000)} متر). يرجى الاقتراب من موقع الراكب لتأكيد الوصول.`
+                            error: `أنت بعيد عن موقع الانطلاق (${Math.round(distKm * 1000)} متر). يرجى الاقتراب ضمن نطاق ${maxRadiusMeters} متر لتأكيد الوصول.`
                         }, 400);
                     }
                 }
@@ -3806,10 +3870,11 @@ async function startServer() {
                     const waitMs = new Date(r.startedAt).getTime() - new Date(r.arrivedAt).getTime();
                     waitMinutes = Math.max(0, Math.round(waitMs / 60000) - 5);
                 }
-                const waitFee = waitMinutes * 250;
+                const roundingMultiple = systemSettingsService ? systemSettingsService.getFareRoundingMultipleIqd() : 250;
+                const waitFee = waitMinutes * roundingMultiple;
 
                 const rawFare = baseFare + (actualDistKm * kmRate) + (actualMinutes * minRate) + waitFee;
-                const finalFare = Math.round(Math.max(baseFare, rawFare) / 250) * 250;
+                const finalFare = Math.round(Math.max(baseFare, rawFare) / roundingMultiple) * roundingMultiple;
 
                 // Atomic State Transition: IN_TRIP -> ARRIVED_DESTINATION
                 const transRes = await transitionRideState(
@@ -3968,14 +4033,133 @@ async function startServer() {
                     return sendJson({ success: false, error: 'غير مصرح: لا يمكنك إلغاء مشوار لمستخدم آخر (RLS)' }, 403);
                 }
 
-                const cancelledBy = isDriver ? 'driver' : 'rider';
-                const targetState = isDriver ? RIDE_STATES.CANCELLED_BY_DRIVER : RIDE_STATES.CANCELLED_BY_RIDER;
+                if (isDriver) {
+                    const prevDriverId = r.assignedDriverId || r.acceptedDriverId || body.driverId || authUser?.id;
+                    r.cancelledDriverIds = r.cancelledDriverIds || [];
+                    if (prevDriverId && !r.cancelledDriverIds.includes(prevDriverId)) r.cancelledDriverIds.push(prevDriverId);
+                    r.rejectedDriverIds = r.rejectedDriverIds || [];
+                    if (prevDriverId && !r.rejectedDriverIds.includes(prevDriverId)) r.rejectedDriverIds.push(prevDriverId);
 
-                // Cancellation fee logic
-                const pSettings = pricingService.getPricingSettings();
-                const cancelFee = pSettings.cancellationFee || 1500;
+                    // Look for alternative candidate drivers
+                    let altCandidates = (r.candidateDriverIds || []).filter(cId => !r.cancelledDriverIds.includes(cId) && !r.rejectedDriverIds.includes(cId));
+                    if (altCandidates.length === 0) {
+                        const maxDist = 25;
+                        const freshDrivers = await getAvailableOnlineDrivers(parseFloat(r.pickupLat || 0), parseFloat(r.pickupLon || 0), maxDist);
+                        altCandidates = freshDrivers
+                            .map(d => d.driverId || d.id)
+                            .filter(dId => dId && !r.cancelledDriverIds.includes(dId) && !r.rejectedDriverIds.includes(dId));
+                    }
+
+                    if (altCandidates.length > 0) {
+                        const nextDriverId = altCandidates[0];
+                        const nextDriver = (db.memoryState.drivers || []).find(d => String(d.driverId) === String(nextDriverId) || String(d.id) === String(nextDriverId));
+                        const stepTimeoutSec = systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 20;
+                        const stepTimeoutAt = Date.now() + (stepTimeoutSec * 1000);
+
+                        const transRes = await transitionRideState(
+                            redisManager,
+                            r.id,
+                            RIDE_STATES.OFFERED,
+                            { id: prevDriverId, role: 'Driver' },
+                            {
+                                assignedDriverId: nextDriverId,
+                                acceptedDriverId: null,
+                                assignedDriverName: nextDriver ? nextDriver.fullName : 'كابتن توصيله',
+                                assignedDriverPhone: nextDriver ? nextDriver.phoneNumber : '',
+                                assignedDriverVehicle: nextDriver ? `${nextDriver.vehicleMake||'تويوتا'} ${nextDriver.vehicleModel||'كورولا'}` : 'تويوتا',
+                                stepTimeoutAt,
+                                prevDriverId,
+                                cancelledDriverId: prevDriverId,
+                                candidateDriverIds: altCandidates,
+                                currentDriverIndex: 0
+                            }
+                        );
+
+                        if (!transRes.success) {
+                            return sendJson({
+                                success: false,
+                                conflict: true,
+                                status: 409,
+                                error: transRes.error || 'تعذر إعادة عرض الرحلة على كابتن بديل'
+                            }, 409);
+                        }
+
+                        r = transRes.ride;
+                        normalizeAddresses(r);
+
+                        // Broadcast to next candidate driver and dispatch
+                        await redisManager.publishDriverEvent(nextDriverId, {
+                            type: 'new_ride',
+                            event: 'new_ride',
+                            rideId: r.id,
+                            requestId: r.id,
+                            request: { ...r, customerPhone: maskPhoneNumber(r.customerPhone) }
+                        });
+                        await redisManager.publishDispatchEvent({
+                            type: 'ride_reoffered',
+                            event: 'ride_reoffered',
+                            rideId: r.id,
+                            requestId: r.id
+                        });
+                        await redisManager.publishRideEvent(r.id, {
+                            type: 'driver_cancelled_reoffering',
+                            event: 'driver_cancelled_reoffering',
+                            status: RIDE_STATES.OFFERED,
+                            message: 'اعتذر الكابتن، جاري تحويل طلبك لكابتن آخر بالقرب منك'
+                        });
+
+                        return sendJson({
+                            success: true,
+                            reoffered: true,
+                            message: 'تم إلغاء قبول المشوار وإعادة عرضه على كابتن بديل',
+                            status: RIDE_STATES.OFFERED,
+                            request: r,
+                            ride: r
+                        });
+                    } else {
+                        // No alternatives -> NO_DRIVERS
+                        const transRes = await transitionRideState(
+                            redisManager,
+                            r.id,
+                            RIDE_STATES.NO_DRIVERS,
+                            { id: prevDriverId, role: 'Driver' },
+                            {
+                                cancelledAt: new Date().toISOString(),
+                                cancelReason: reason || 'اعتذار الكابتن وعدم توفر كباتن بدلاء',
+                                cancelledBy: 'driver',
+                                prevDriverId
+                            }
+                        );
+                        if (!transRes.success) {
+                            return sendJson({
+                                success: false,
+                                conflict: true,
+                                status: 409,
+                                error: transRes.error || 'تعذر إلغاء الرحلة'
+                            }, 409);
+                        }
+                        r = transRes.ride;
+                        normalizeAddresses(r);
+                        await redisManager.publishRideEvent(r.id, {
+                            type: 'no_drivers_available',
+                            event: 'no_drivers_available',
+                            rideId: r.id
+                        });
+                        return sendJson({
+                            success: true,
+                            reoffered: false,
+                            message: 'اعتذر الكابتن ولا يتوفر كباتن بدلاء حالياً',
+                            status: RIDE_STATES.NO_DRIVERS,
+                            request: r,
+                            ride: r
+                        });
+                    }
+                }
+
+                // Rider cancellation branch
+                const cancelFee = systemSettingsService ? systemSettingsService.getCancellationFeeIqd() : 1500;
                 let feeApplies = false;
-                if (!isDriver && r.assignedDriverId) {
+                if (r.assignedDriverId) {
                     const reqTime = r.requestedAt ? Number(r.requestedAt) : (r.createdAt ? new Date(r.createdAt).getTime() : Date.now());
                     const elapsedMinutes = (Date.now() - reqTime) / 60000;
                     feeApplies = Boolean(elapsedMinutes >= 2 || r.status === RIDE_STATES.DRIVER_ARRIVED || r.status === 'Arrived');
@@ -3984,12 +4168,12 @@ async function startServer() {
                 const transRes = await transitionRideState(
                     redisManager,
                     r.id,
-                    targetState,
-                    { id: authUser?.id || (isDriver ? (r.assignedDriverId || r.driverId) : r.customerId), role: isDriver ? 'Driver' : 'Customer' },
+                    RIDE_STATES.CANCELLED_BY_RIDER,
+                    { id: authUser?.id || r.customerId, role: 'Customer' },
                     {
                         cancelledAt: new Date().toISOString(),
                         cancelReason: reason,
-                        cancelledBy,
+                        cancelledBy: 'rider',
                         cancellationFee: feeApplies ? cancelFee : 0
                     }
                 );
@@ -4054,7 +4238,8 @@ async function startServer() {
                 const finalFare = Number(r.finalFare || r.fare || 0);
                 const recAmt = receivedAmount !== undefined ? parseFloat(receivedAmount) : finalFare;
                 const fareDiff = Math.abs(recAmt - finalFare);
-                const reviewFlag = fareDiff > 500;
+                const discrepancyThreshold = systemSettingsService ? systemSettingsService.getFareDiscrepancyThresholdIqd() : 500;
+                const reviewFlag = fareDiff > discrepancyThreshold;
                 const reconciliationStatus = reviewFlag ? 'pending_review' : 'settled';
 
                 // Atomic State Transition: ARRIVED_DESTINATION (or IN_TRIP) -> COMPLETED
@@ -4090,6 +4275,7 @@ async function startServer() {
                 redisManager.publishDispatchEvent({ type: 'ride_completed', requestId: r.id });
 
                 // Stage 4: Send Telegram Notification to Passenger - Trip Completed & Fare Collected
+                console.log('[TelegramDispatch] Ride completed, dispatching notification for ride:', r.id);
                 try {
                     if (typeof telegramBot.notifyTripCompleted === 'function') {
                         telegramBot.notifyTripCompleted(r, recAmt || finalFare).catch(err => console.error('[RideComplete] Telegram notify error:', err.message));
@@ -4454,6 +4640,28 @@ async function startServer() {
                 return sendJson({ success: false, error: 'driverId مطلوب لفتح قناة البث اللحظي' }, 400);
             }
 
+            // Identity & Authorization Check (RLS): Must be authenticated driver and match requested driverId
+            if (!authUser) {
+                return sendJson({ success: false, error: 'غير مصرح: تسجيل الدخول مطلوب للاشتراك في قناة بث الكابتن' }, 403);
+            }
+            if (authUser.role !== 'Admin') {
+                if (authUser.role === 'Customer') {
+                    return sendJson({ success: false, error: 'غير مصرح: لا يمكن للراكب الاشتراك في قناة بث الكابتن' }, 403);
+                }
+                if (authUser.role === 'Driver') {
+                    const cleanAuthId = String(authUser.id || '').trim();
+                    const cleanAuthPhone = normalizePhone(authUser.phone || authUser.driver?.phoneNumber || '');
+                    const cleanReqDriverId = String(driverId || '').trim();
+                    const cleanReqPhone = normalizePhone(driverId);
+                    const isMatch = (cleanAuthId && cleanAuthId === cleanReqDriverId) || 
+                                    (cleanAuthPhone && cleanReqPhone && cleanAuthPhone === cleanReqPhone) ||
+                                    (cleanAuthId && cleanReqPhone && cleanAuthId === cleanReqPhone);
+                    if (!isMatch) {
+                        return sendJson({ success: false, error: 'غير مصرح: لا يمكنك الاشتراك في قناة كابتن آخر (RLS)' }, 403);
+                    }
+                }
+            }
+
             res.writeHead(200, {
                 'Content-Type': 'text/event-stream; charset=utf-8',
                 'Cache-Control': 'no-cache, no-transform',
@@ -4546,6 +4754,34 @@ async function startServer() {
                 return sendJson({ success: false, error: 'requestId مطلوب لفتح قناة تتبع الرحلة' }, 400);
             }
 
+            // Identity & Authorization Check (RLS): Must be authenticated participant (customer, assigned/candidate driver, or Admin)
+            const authUser = getAuthUser(req);
+            if (!authUser) {
+                return sendJson({ success: false, error: 'غير مصرح: تسجيل الدخول مطلوب للاشتراك في قناة تتبع المشوار' }, 403);
+            }
+
+            const currentRide = await findRideById(rideId);
+            if (!currentRide) {
+                return sendJson({ success: false, notFound: true, error: 'المشوار غير موجود' }, 200);
+            }
+
+            if (authUser.role !== 'Admin') {
+                if (authUser.role === 'Customer') {
+                    const isRiderOwner = (authUser.id && currentRide.customerId && String(authUser.id) === String(currentRide.customerId)) ||
+                                         (authUser.phone && currentRide.customerPhone && normalizePhone(authUser.phone) === normalizePhone(currentRide.customerPhone));
+                    if (!isRiderOwner) {
+                        return sendJson({ success: false, error: 'غير مصرح: لا يمكنك تتبع مشوار عميل آخر (RLS)' }, 403);
+                    }
+                } else if (authUser.role === 'Driver') {
+                    const isAssigned = (authUser.id && (String(authUser.id) === String(currentRide.assignedDriverId) || String(authUser.id) === String(currentRide.acceptedDriverId))) ||
+                                       (authUser.phone && currentRide.assignedDriverPhone && normalizePhone(authUser.phone) === normalizePhone(currentRide.assignedDriverPhone)) ||
+                                       (currentRide.candidateDriverIds && currentRide.candidateDriverIds.includes(authUser.id));
+                    if (!isAssigned) {
+                        return sendJson({ success: false, error: 'غير مصرح: لست الكابتن المعتمد لهذا المشوار (RLS)' }, 403);
+                    }
+                }
+            }
+
             res.writeHead(200, {
                 'Content-Type': 'text/event-stream; charset=utf-8',
                 'Cache-Control': 'no-cache, no-transform',
@@ -4560,7 +4796,6 @@ async function startServer() {
                 } catch (_) {}
             };
 
-            const currentRide = (db.memoryState.rideRequests || []).find(r => r.id === rideId);
             sendSse('init', {
                 connected: true,
                 rideId,
@@ -5052,6 +5287,35 @@ async function startServer() {
         if ((pathname === '/api/driver/location' || pathname === '/api/driver/update-location' || pathname === '/driver/location' || pathname === '/driver/update-location') && method === 'POST') {
             const body = await parseJsonBody(req);
             const { driverId, latitude, longitude, lat, lon, heading, speedKmh, tripStatus } = body;
+
+            // Identity & Authorization Check (RLS): Driver can only update their own location
+            const authUser = getAuthUser(req);
+            if (authUser && authUser.role !== 'Admin') {
+                if (authUser.role === 'Customer') {
+                    return sendJson({ success: false, error: 'غير مصرح: لا يمكن للراكب إرسال إحداثيات كابتن (RLS)' }, 403);
+                }
+                if (authUser.role === 'Driver') {
+                    const authDriverId = String(authUser.id || '').trim();
+                    const authPhone = normalizePhone(authUser.phone || authUser.driver?.phoneNumber || '');
+                    const reqDriverId = String(driverId || '').trim();
+                    const reqPhone = normalizePhone(driverId);
+                    const isMatch = (authDriverId && authDriverId === reqDriverId) || 
+                                    (authPhone && reqPhone && authPhone === reqPhone) ||
+                                    (authDriverId && reqPhone && authDriverId === reqPhone);
+                    if (!isMatch) {
+                        return sendJson({ success: false, error: 'غير مصرح: لا يمكنك تحديث موقع كابتن آخر (RLS)' }, 403);
+                    }
+                }
+            }
+
+            // Rate limiting per driver across PM2 cluster: 30 requests per 30s (max 1 req/sec)
+            if (driverId) {
+                const locRate = await redisManager.checkRateLimitCluster(`rate:driver:loc:${driverId}`, 30, 30);
+                if (!locRate.allowed) {
+                    return sendJson({ success: false, error: 'تم تجاوز معدل تحديث الموقع المسموح به (حد أقصى 1 طلب في الثانية)' }, 429);
+                }
+            }
+
             const cleanPhone = String(driverId || '').replace(/[^0-9]/g, '');
             let driver = (db.memoryState.drivers || []).find(d => 
                 String(d.driverId) === String(driverId) || 

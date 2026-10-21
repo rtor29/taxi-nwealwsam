@@ -12,6 +12,7 @@
 
 const db = require('../../db');
 const auditService = require('../audit/auditService');
+const systemSettingsService = require('../systemSettings/systemSettingsService');
 
 const RIDE_STATES = {
     REQUESTED: 'REQUESTED',
@@ -45,7 +46,9 @@ const ALLOWED_TRANSITIONS = {
         RIDE_STATES.DRIVER_ARRIVED, 
         RIDE_STATES.CANCELLED_BY_RIDER, 
         RIDE_STATES.CANCELLED_BY_DRIVER,
-        RIDE_STATES.REQUESTED // Re-dispatch to alternative candidate
+        RIDE_STATES.REQUESTED, // Re-dispatch to alternative candidate
+        RIDE_STATES.OFFERED,
+        RIDE_STATES.NO_DRIVERS
     ],
     [RIDE_STATES.DRIVER_ARRIVED]: [
         RIDE_STATES.IN_TRIP, 
@@ -149,7 +152,7 @@ function calculateDistanceKm(lat1, lon1, lat2, lon2) {
 }
 
 /**
- * Validate speed jump between coordinate updates (Rejects > 140 km/h)
+ * Validate speed jump between coordinate updates (Rejects > configured limit, default 140 km/h)
  */
 function validateLocationSpeed(prevLat, prevLon, prevTime, nextLat, nextLon, nextTime) {
     if (!prevLat || !prevLon || !prevTime || !nextTime || nextTime <= prevTime) return { valid: true };
@@ -157,12 +160,13 @@ function validateLocationSpeed(prevLat, prevLon, prevTime, nextLat, nextLon, nex
     const hours = (nextTime - prevTime) / 3600000;
     if (hours <= 0) return { valid: true };
     const speedKmh = distKm / hours;
-    if (speedKmh > 140) {
+    const maxSpeedLimit = systemSettingsService ? systemSettingsService.getSpeedJumpLimitKmh() : 140;
+    if (speedKmh > maxSpeedLimit) {
         return {
             valid: false,
             speedKmh: Math.round(speedKmh),
             distKm,
-            reason: `سرعة غير منطقية (${Math.round(speedKmh)} كم/س)`
+            reason: `سرعة غير منطقية (${Math.round(speedKmh)} كم/س تتجاوز الحد الأقصى ${maxSpeedLimit} كم/س)`
         };
     }
     return { valid: true, speedKmh: Math.round(speedKmh) };
@@ -433,7 +437,12 @@ async function transitionRideState(redisManager, rideId, targetStatus, actorInfo
                 if (riderId) pipeline.del('rider:active:' + riderId);
                 if (cleanRiderPhone) pipeline.del('rider:active:' + cleanRiderPhone);
             } else if (toStatus === RIDE_STATES.REQUESTED || toStatus === RIDE_STATES.OFFERED) {
-                // Pending status
+                // Pending status - clear previous active keys if transitioning from accepted
+                pipeline.del('ride:active:' + sId);
+                if (driverId) pipeline.del('driver:active:' + driverId);
+                if (cleanDriverPhone) pipeline.del('driver:active:' + cleanDriverPhone);
+                if (extraData && extraData.prevDriverId) pipeline.del('driver:active:' + extraData.prevDriverId);
+                if (extraData && extraData.cancelledDriverId) pipeline.del('driver:active:' + extraData.cancelledDriverId);
                 pipeline.hset('pending:rides', sId, rideStr);
                 pipeline.set('ride:request:' + sId, rideStr, 'EX', 1200);
             } else {

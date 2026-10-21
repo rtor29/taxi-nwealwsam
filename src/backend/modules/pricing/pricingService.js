@@ -16,6 +16,7 @@
 
 const db = require('../../db');
 const auditService = require('../audit/auditService');
+const systemSettingsService = require('../systemSettings/systemSettingsService');
 
 const DEFAULT_PRICING = {
     baseFare: 1000,                // فتح العداد د.ع (معيار تسعيرة بلي القياسية)
@@ -48,7 +49,7 @@ class PricingService {
                     kmRate: Number(parsed.kmRate ?? parsed.per_km_rate_iqd ?? parsed.PerKmRateIqd ?? DEFAULT_PRICING.kmRate),
                     minuteRate: Number(parsed.minuteRate ?? parsed.per_minute_rate_iqd ?? parsed.PerMinuteWaitIqd ?? DEFAULT_PRICING.minuteRate),
                     minFare: Number(parsed.minFare ?? parsed.min_fare_iqd ?? DEFAULT_PRICING.minFare),
-                    cancellationFee: Number(parsed.cancellationFee ?? parsed.cancellation_fee_iqd ?? DEFAULT_PRICING.cancellationFee),
+                    cancellationFee: Number(parsed.cancellationFee ?? parsed.cancellation_fee_iqd ?? (systemSettingsService ? systemSettingsService.getCancellationFeeIqd() : DEFAULT_PRICING.cancellationFee)),
                     enableDynamicSurge: parsed.enableDynamicSurge !== undefined ? Boolean(parsed.enableDynamicSurge) : DEFAULT_PRICING.enableDynamicSurge,
                     maxSurgeMultiplier: Number(parsed.maxSurgeMultiplier ?? parsed.surge_multiplier_max ?? parsed.SurgeMultiplierMax ?? DEFAULT_PRICING.maxSurgeMultiplier),
                     nightSurgePercent: Number(parsed.nightSurgePercent ?? DEFAULT_PRICING.nightSurgePercent),
@@ -179,10 +180,11 @@ class PricingService {
     }
 
     /**
-     * Round amount to the nearest 250 Iraqi Dinars UPWARD (Math.ceil) according to Iraqi cash convention
+     * Round amount to the configured multiple of Iraqi Dinars UPWARD (Math.ceil)
      */
     roundToNearest250(amount) {
-        return Math.ceil(Number(amount) / 250) * 250;
+        const mult = systemSettingsService ? systemSettingsService.getFareRoundingMultipleIqd() : 250;
+        return Math.ceil(Number(amount) / mult) * mult;
     }
 
     /**

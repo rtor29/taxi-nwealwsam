@@ -276,6 +276,35 @@ class RedisManager {
             return [];
         }
     }
+
+    // ---[ 5. Cluster-Wide Rate Limiter via Atomic Redis INCR & EXPIRE ]---
+    /**
+     * Check and enforce rate limit across all PM2 cluster instances
+     * @param {string} key Redis rate limit key (e.g. rate:ride:create:${riderId})
+     * @param {number} maxRequests Maximum allowed requests in window
+     * @param {number} windowSec Time window in seconds
+     * @returns {Promise<{ allowed: boolean, current: number, max: number, ttl: number }>}
+     */
+    async checkRateLimitCluster(key, maxRequests = 5, windowSec = 30) {
+        if (!this.isConnected || !this.client) {
+            return { allowed: true, current: 1, max: maxRequests, ttl: windowSec };
+        }
+        try {
+            const count = await this.client.incr(key);
+            if (count === 1) {
+                await this.client.expire(key, windowSec);
+            }
+            const ttl = await this.client.ttl(key);
+            return {
+                allowed: count <= maxRequests,
+                current: count,
+                max: maxRequests,
+                ttl: ttl > 0 ? ttl : windowSec
+            };
+        } catch (err) {
+            return { allowed: true, current: 1, max: maxRequests, ttl: windowSec };
+        }
+    }
 }
 
 const redisManager = new RedisManager();

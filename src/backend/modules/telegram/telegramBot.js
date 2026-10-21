@@ -206,6 +206,8 @@ function tgRequest(method, body) {
 }
 
 function sendMessage(chatId, text, opts = {}) {
+    const maskedChatId = String(chatId).length > 4 ? `${String(chatId).slice(0, 3)}****` : '****';
+    console.log(`[TelegramBot] Dispatching message to chatId: ${maskedChatId}`);
     return tgRequest('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', ...opts });
 }
 
@@ -2308,7 +2310,9 @@ async function notifyTripCompleted(ride, fareInput) {
             `💰 المبلغ المستلم: ${formattedFare} دينار عراقي\n\n` +
             `نتمنى لك وقتاً طيباً، ويسعدنا تقييمك للكابتن عبر التطبيق ⭐`;
 
-        await sendMessage(chatId, msg, { parse_mode: '' });
+        console.log(`[TelegramBot] notifyTripCompleted dispatching for ride: ${ride.id}`);
+        const res = await sendMessage(chatId, msg, { parse_mode: '' });
+        console.log(`[TelegramBot] notifyTripCompleted dispatched successfully for ride: ${ride.id}`);
         return { success: true, fare: finalFareNum };
     } catch (err) {
         console.error('[TelegramBot] notifyTripCompleted error:', err.message);
