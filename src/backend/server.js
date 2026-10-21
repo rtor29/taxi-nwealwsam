@@ -2954,8 +2954,16 @@ async function startServer() {
             try {
                 const body = await parseJsonBody(req);
                 const idempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || body.idempotencyKey;
-                if (idempotencyKey && idempotencyStore.has(idempotencyKey)) {
-                    return sendJson(idempotencyStore.get(idempotencyKey).response);
+                if (idempotencyKey) {
+                    if (redisManager.isConnected && redisManager.client) {
+                        try {
+                            const cached = await redisManager.client.get(`idem:${idempotencyKey}`);
+                            if (cached) return sendJson(JSON.parse(cached));
+                        } catch (_) {}
+                    }
+                    if (idempotencyStore.has(idempotencyKey)) {
+                        return sendJson(idempotencyStore.get(idempotencyKey).response);
+                    }
                 }
 
                 const {
@@ -3261,6 +3269,9 @@ async function startServer() {
 
                 if (idempotencyKey) {
                     idempotencyStore.set(idempotencyKey, { response: responsePayload, timestamp: Date.now() });
+                    if (redisManager.isConnected && redisManager.client) {
+                        redisManager.client.set(`idem:${idempotencyKey}`, JSON.stringify(responsePayload), 'EX', 3600).catch(() => {});
+                    }
                 }
 
                 return sendJson(responsePayload);
@@ -3398,13 +3409,20 @@ async function startServer() {
                 }
             }
 
+            // Security / Privacy: Mask customer phone for candidate drivers who have not accepted yet
+            let outputRide = r;
+            const isDriverCandidate = authUser && (authUser.role === 'Driver' || authUser.role === 'driver') && r.acceptedDriverId !== authUser.id;
+            if (isDriverCandidate && r.customerPhone) {
+                outputRide = { ...r, customerPhone: maskPhoneNumber(r.customerPhone) };
+            }
+
             const secondsRemaining = Math.max(0, Math.round(((r.stepTimeoutAt || 0) - Date.now()) / 1000));
             return sendJson({
                 success: true,
                 notFound: false,
-                request: r,
-                ride: r,
-                activeRide: r,
+                request: outputRide,
+                ride: outputRide,
+                activeRide: outputRide,
                 secondsRemaining,
                 currentDriverIndex: r.currentDriverIndex || 0,
                 totalCandidates: (r.candidateDriverIds || []).length
@@ -3460,8 +3478,16 @@ async function startServer() {
             try {
                 const body = await parseJsonBody(req);
                 const idempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || body.idempotencyKey;
-                if (idempotencyKey && idempotencyStore.has(idempotencyKey)) {
-                    return sendJson(idempotencyStore.get(idempotencyKey).response);
+                if (idempotencyKey) {
+                    if (redisManager.isConnected && redisManager.client) {
+                        try {
+                            const cached = await redisManager.client.get(`idem:${idempotencyKey}`);
+                            if (cached) return sendJson(JSON.parse(cached));
+                        } catch (_) {}
+                    }
+                    if (idempotencyStore.has(idempotencyKey)) {
+                        return sendJson(idempotencyStore.get(idempotencyKey).response);
+                    }
                 }
 
                 const action = body.action || (pathname.includes('/accept') ? 'accept' : 'reject');
