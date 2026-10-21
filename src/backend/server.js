@@ -2775,7 +2775,7 @@ async function startServer() {
         // Universal Customer Active Ride Resolver (Unified Redis + Memory + DB - Zero 404s)
         const findActiveRideForCustomer = async (rawCustomerId, rawPhone) => {
             const customerId = String(rawCustomerId || '').trim();
-            const cleanPhone = String(rawPhone || customerId).replace(/[^0-9]/g, '');
+            const cleanPhone = String(rawPhone || '').replace(/[^0-9]/g, '');
             if (!customerId && !cleanPhone) return null;
 
             let active = null;
@@ -2798,7 +2798,8 @@ async function startServer() {
                                 const r = JSON.parse(rJson);
                                 const rCustId = String(r.customerId || r.riderId || '');
                                 const rCustPhone = String(r.customerPhone || r.riderPhone || '').replace(/[^0-9]/g, '');
-                                if ((customerId && rCustId === customerId) || (cleanPhone && (rCustPhone.endsWith(cleanPhone) || cleanPhone.endsWith(rCustPhone)))) {
+                                const isPhoneMatch = cleanPhone.length >= 7 && rCustPhone.length >= 7 && (rCustPhone.endsWith(cleanPhone.slice(-8)) || cleanPhone.endsWith(rCustPhone.slice(-8)));
+                                if ((customerId && rCustId === customerId) || isPhoneMatch) {
                                     active = r;
                                     break;
                                 }
@@ -2813,7 +2814,8 @@ async function startServer() {
                 active = (db.memoryState.rideRequests || []).find(r => {
                     const rCustId = String(r.customerId || r.riderId || '');
                     const rCustPhone = String(r.customerPhone || r.riderPhone || '').replace(/[^0-9]/g, '');
-                    const isMatch = (customerId && rCustId === customerId) || (cleanPhone && (rCustPhone.endsWith(cleanPhone) || cleanPhone.endsWith(rCustPhone)));
+                    const isPhoneMatch = cleanPhone.length >= 7 && rCustPhone.length >= 7 && (rCustPhone.endsWith(cleanPhone.slice(-8)) || cleanPhone.endsWith(rCustPhone.slice(-8)));
+                    const isMatch = (customerId && rCustId === customerId) || isPhoneMatch;
                     const st = String(r.status || '').toLowerCase();
                     const isActive = ['pending', 'requested', 'offered', 'accepted', 'arrived', 'driver_arrived', 'inprogress', 'in_progress', 'in_trip', 'arrived_destination'].includes(st);
                     return isMatch && isActive;
