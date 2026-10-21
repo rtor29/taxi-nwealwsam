@@ -3411,7 +3411,7 @@ async function startServer() {
         }
 
         // Driver Respond to Request (Accept / Reject) - Atomic State Transition & Distributed Lock
-        if ((pathname === '/api/ride/respond' || pathname === '/ride/respond') && method === 'POST') {
+        if ((pathname === '/api/ride/respond' || pathname === '/ride/respond' || pathname === '/api/ride/accept' || pathname === '/ride/accept') && method === 'POST') {
             try {
                 const body = await parseJsonBody(req);
                 const idempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || body.idempotencyKey;
@@ -3419,7 +3419,9 @@ async function startServer() {
                     return sendJson(idempotencyStore.get(idempotencyKey).response);
                 }
 
-                const { requestId, driverId, action } = body;
+                const action = body.action || (pathname.includes('/accept') ? 'accept' : 'reject');
+                const requestId = body.requestId || body.rideId || body.id;
+                const driverId = body.driverId;
                 if (!requestId || requestId === 'undefined' || requestId === 'null') {
                     return sendJson({ success: false, notFound: true, alreadyAccepted: true, error: 'معرّف الطلب مطلوب' }, 200);
                 }
