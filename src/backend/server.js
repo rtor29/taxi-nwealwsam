@@ -4532,7 +4532,7 @@ async function startServer() {
                     rideId: r.id,
                     requestId: r.id,
                     reason: reason,
-                    cancelledBy,
+                    cancelledBy: 'rider',
                     timestamp: Date.now()
                 });
 
