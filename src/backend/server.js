@@ -2816,6 +2816,96 @@ async function startServer() {
             return active || null;
         };
 
+        // Universal Driver Locator across Redis Geospatial + PostgreSQL + Memory (Zero Cluster Desync)
+        const getAvailableOnlineDrivers = async (pLat, pLon, maxDist = 25) => {
+            const driversMap = new Map();
+
+            // 1. From Redis geospatial index
+            if (redisManager.isConnected && redisManager.client) {
+                try {
+                    const nearby = await redisManager.findNearbyDriverIds(pLon, pLat, maxDist);
+                    for (const item of nearby) {
+                        const meta = await redisManager.client.hgetall(`driver:${item.driverId}:meta`);
+                        if (meta && meta.id) {
+                            driversMap.set(String(item.driverId), {
+                                driverId: String(item.driverId),
+                                fullName: meta.fullName || 'كابتن توصيله',
+                                phoneNumber: meta.phone || '',
+                                status: meta.status || 'Online',
+                                isOnline: true,
+                                work_mode: meta.workMode || 'taxi',
+                                vehicleType: meta.vehicleType || 'eco',
+                                dist: item.distKm
+                            });
+                        } else {
+                            driversMap.set(String(item.driverId), {
+                                driverId: String(item.driverId),
+                                fullName: 'كابتن توصيله',
+                                status: 'Online',
+                                isOnline: true,
+                                work_mode: 'taxi',
+                                vehicleType: 'eco',
+                                dist: item.distKm
+                            });
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            // 2. From PostgreSQL
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    const pgDrivers = await db.pool.query(
+                        `SELECT * FROM drivers 
+                         WHERE (status = 'Online' OR is_online = true) 
+                         AND (is_blocked IS NOT TRUE)`
+                    );
+                    if (pgDrivers && pgDrivers.rows) {
+                        for (const d of pgDrivers.rows) {
+                            const id = String(d.driver_id || d.id);
+                            if (!driversMap.has(id)) {
+                                const dLat = parseFloat(d.latitude || d.current_lat || pLat);
+                                const dLon = parseFloat(d.longitude || d.current_lon || pLon);
+                                const dist = calculateDistanceKm(pLat, pLon, dLat, dLon);
+                                if (dist <= maxDist) {
+                                    driversMap.set(id, {
+                                        driverId: id,
+                                        fullName: d.full_name || d.name || 'كابتن توصيله',
+                                        phoneNumber: d.phone_number || d.phone || '',
+                                        status: 'Online',
+                                        isOnline: true,
+                                        work_mode: d.work_mode || 'taxi',
+                                        vehicleType: d.vehicle_type || 'eco',
+                                        dist
+                                    });
+                                }
+                            }
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            // 3. From Memory
+            for (const d of (db.memoryState.drivers || [])) {
+                if (isDriverOnlineAndActive(d)) {
+                    const id = String(d.driverId || d.id);
+                    if (!driversMap.has(id)) {
+                        const dLat = parseFloat(d.currentLat || d.latitude || pLat);
+                        const dLon = parseFloat(d.currentLon || d.longitude || pLon);
+                        const dist = calculateDistanceKm(pLat, pLon, dLat, dLon);
+                        if (dist <= maxDist) {
+                            driversMap.set(id, {
+                                ...d,
+                                dist
+                            });
+                        }
+                    }
+                }
+            }
+
+            return Array.from(driversMap.values()).sort((a, b) => a.dist - b.dist);
+        };
+
         // ---------------------------------------------------------------------
         // REAL-TIME RIDE DISPATCH & 20-SECOND AUTO-ESCALATION (Stage 1 & 4)
         // ---------------------------------------------------------------------
@@ -2886,10 +2976,13 @@ async function startServer() {
                 };
 
                 const maxDist = parseFloat(rangeKm) || 25;
-                let driverCandidates = (db.memoryState.drivers || [])
-                    .filter(d => isDriverOnlineAndActive(d))
-                    .filter(d => d.work_mode !== 'خط دائمي' && d.current_mode !== 'commute' && d.workStatus !== 'permanent')
-                    .filter(d => (d.current_mode === 'taxi' || d.mode === 'taxi' || d.work_mode === 'مشوار قصير' || d.work_mode === 'taxi' || d.workStatus === 'taxi' || d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.work_mode));
+                let driverCandidates = await getAvailableOnlineDrivers(pLat, pLon, maxDist);
+                if (driverCandidates.length === 0) {
+                    driverCandidates = (db.memoryState.drivers || [])
+                        .filter(d => isDriverOnlineAndActive(d))
+                        .filter(d => d.work_mode !== 'خط دائمي' && d.current_mode !== 'commute' && d.workStatus !== 'permanent')
+                        .filter(d => (d.current_mode === 'taxi' || d.mode === 'taxi' || d.work_mode === 'مشوار قصير' || d.work_mode === 'taxi' || d.workStatus === 'taxi' || d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.work_mode));
+                }
                 if (driverCandidates.length === 0) {
                     driverCandidates = (db.memoryState.drivers || [])
                         .filter(d => isDriverOnlineAndActive(d) && d.work_mode !== 'خط دائمي' && d.current_mode !== 'commute' && d.workStatus !== 'permanent');
@@ -4664,25 +4757,61 @@ async function startServer() {
                     db.saveStateSnapshot();
                 }
 
+                // Sync to Redis Geospatial Index & Real-time Hash across PM2 cluster
+                if (onlineBool && driver) {
+                    await redisManager.updateDriverLocation(
+                        driver.driverId,
+                        parseFloat(driver.currentLon || actualLng || 44.3285),
+                        parseFloat(driver.currentLat || actualLat || 32.0298),
+                        driver
+                    );
+                } else if (!onlineBool && driver) {
+                    await redisManager.removeDriverLocation(driver.driverId);
+                }
+
                 // Persist directly to PostgreSQL database
                 if (db.isPostgresConnected && db.pool && (driverId || actualPhone)) {
                     try {
-                        await db.pool.query(`
+                        const upRes = await db.pool.query(`
                             UPDATE drivers 
                             SET status = $1, 
                                 work_mode = $2, 
                                 latitude = COALESCE($3, latitude), 
                                 longitude = COALESCE($4, longitude),
+                                is_online = $5,
                                 updated_at = NOW()
-                            WHERE driver_id = $5 OR phone_number = $6
+                            WHERE driver_id = $6 OR phone_number = $7
                         `, [
                             onlineBool ? 'Online' : 'Offline',
                             computedWorkMode,
                             actualLat,
                             actualLng,
+                            onlineBool,
                             driverId || '',
                             actualPhone || ''
                         ]);
+                        if (upRes.rowCount === 0 && driverId) {
+                            await db.pool.query(`
+                                INSERT INTO drivers (driver_id, full_name, phone_number, status, work_mode, latitude, longitude, is_online, created_at, updated_at)
+                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+                                ON CONFLICT (driver_id) DO UPDATE SET
+                                    status = EXCLUDED.status,
+                                    work_mode = EXCLUDED.work_mode,
+                                    is_online = EXCLUDED.is_online,
+                                    latitude = EXCLUDED.latitude,
+                                    longitude = EXCLUDED.longitude,
+                                    updated_at = NOW()
+                            `, [
+                                driverId,
+                                driver?.fullName || driverName || 'كابتن توصيله',
+                                actualPhone || driver?.phoneNumber || '',
+                                onlineBool ? 'Online' : 'Offline',
+                                computedWorkMode,
+                                actualLat || 32.0298,
+                                actualLng || 44.3285,
+                                onlineBool
+                            ]);
+                        }
                     } catch (pgErr) {
                         console.warn('[DriverToggleMode] PostgreSQL update error:', pgErr.message);
                     }
