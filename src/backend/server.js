@@ -29,7 +29,7 @@ const {
     transitionRideState
 } = require('./modules/ride/rideStateMachine');
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || 'tawseela_production_secret_najaf_2026_!@#$%^&*';
+const JWT_SECRET = process.env.JWT_SECRET || 'tawseela_production_secret_key_najaf_2026_!@#';
 
 // --- Privacy Masking: Hide rider phone until accepted ---
 function maskPhoneNumber(phone) {
@@ -5290,6 +5290,10 @@ async function startServer() {
 
             // Identity & Authorization Check (RLS): Driver can only update their own location
             const authUser = getAuthUser(req);
+            const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
+            if (authHeader && !authUser) {
+                return sendJson({ success: false, error: 'غير مصرح: رمز الدخول غير صالح (RLS)' }, 403);
+            }
             if (authUser && authUser.role !== 'Admin') {
                 if (authUser.role === 'Customer') {
                     return sendJson({ success: false, error: 'غير مصرح: لا يمكن للراكب إرسال إحداثيات كابتن (RLS)' }, 403);
