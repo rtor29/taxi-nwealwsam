@@ -194,9 +194,18 @@ async function main() {
         // Test 3: Financial Rounding on Live One-Way Ride
         // =====================================================================
         console.log('⏳ Running Test 3: Live One-Way Ride finalFare % 250 === 0...');
-        // Seed driver location
-        await redisManager.client.geoadd('drivers:geo', 44.3168, 31.9961, testDriverId);
-        await redisManager.client.hset(`driver:${testDriverId}`, 'is_online', 'true', 'status', 'available');
+        // Seed driver location in drivers:locations
+        if (redisManager.isConnected && redisManager.client) {
+            await redisManager.client.geoadd('drivers:locations', 44.3170, 31.9970, testDriverId);
+            await redisManager.client.hmset(`driver:${testDriverId}:meta`, {
+                id: testDriverId,
+                fullName: 'Captain B26',
+                phone: testDriverPhone,
+                status: 'Online',
+                workMode: 'taxi',
+                vehicleType: 'eco'
+            });
+        }
 
         const createOneWay = await request('POST', '/api/ride/request', {
             customerId: testCustomerId,
@@ -351,7 +360,9 @@ async function main() {
             await db.pool.query('DELETE FROM rides WHERE id = $1', [rId]).catch(() => {});
         }
         await redisManager.client.del(`driver:${testDriverId}`);
+        await redisManager.client.del(`driver:${testDriverId}:meta`);
         await redisManager.client.del(`sse:history:driver:${testDriverId}`);
+        await redisManager.client.zrem('drivers:locations', testDriverId);
         await redisManager.client.zrem('drivers:geo', testDriverId);
         await db.pool.query('DELETE FROM audit_logs WHERE action LIKE $1', ['RIDE_STATE_%']).catch(() => {});
         await db.pool.query('DELETE FROM audit_logs WHERE entity_id = ANY($1)', [createdRideIds]).catch(() => {});
