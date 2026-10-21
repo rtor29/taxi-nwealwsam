@@ -12,6 +12,8 @@
  */
 
 require('../src/backend/config');
+const fs = require('fs');
+const path = require('path');
 const http = require('http');
 const jwt = require('jsonwebtoken');
 const db = require('../src/backend/db');
@@ -73,6 +75,8 @@ async function runBatch2Tests() {
     console.log('========================================================================');
     console.log('🚀 Starting Batch 2/4 Verification: Round-Trip & External Navigation');
     console.log('========================================================================\n');
+
+    await db.init();
 
     let passed = 0;
     let failed = 0;
@@ -416,6 +420,33 @@ async function runBatch2Tests() {
                         await db.pool.query(`DELETE FROM rides WHERE id IN (${ridePlaceholders})`, validRides);
                     }
                 }
+            }
+
+            // Clean operational arrays in state.json
+            const statePath = path.join(__dirname, '../data/state.json');
+            if (fs.existsSync(statePath)) {
+                try {
+                    const s = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+                    s.bookings = [];
+                    s.rideRequests = [];
+                    s.drivers = [];
+                    s.customers = [];
+                    s.routes = [];
+                    s.complaints = [];
+                    s.auditLogs = [];
+                    s.notifications = [];
+                    s.stats = {
+                        totalUsers: 0,
+                        totalDrivers: 0,
+                        verifiedDrivers: 0,
+                        pendingVerifications: 0,
+                        activeRoutes: 0,
+                        totalBookings: 0,
+                        pendingComplaints: 0,
+                        totalRevenue: 0
+                    };
+                    fs.writeFileSync(statePath, JSON.stringify(s, null, 2), 'utf8');
+                } catch (_) {}
             }
         } catch (cleanupErr) {
             console.error('Cleanup notice:', cleanupErr.message);
