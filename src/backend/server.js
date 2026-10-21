@@ -4290,58 +4290,16 @@ async function startServer() {
         }
 
         // Customer Current Active Ride (Persist across refreshes/reconnects & PM2 cluster)
-        if (pathname.startsWith('/api/customer/') && pathname.endsWith('/active-ride') && method === 'GET') {
+        if ((pathname.startsWith('/api/customer/') || pathname.startsWith('/customer/')) && pathname.endsWith('/active-ride') && method === 'GET') {
             const parts = pathname.split('/');
-            const customerId = decodeURIComponent(parts[parts.length - 2]);
-            const cleanPhone = customerId.replace(/[^0-9]/g, '');
-            let active = (db.memoryState.rideRequests || []).find(r => {
-                const rCustId = String(r.customerId || '');
-                const rCustPhone = String(r.customerPhone || '').replace(/[^0-9]/g, '');
-                const isMatch = rCustId === customerId || (cleanPhone && (rCustPhone.endsWith(cleanPhone) || cleanPhone.endsWith(rCustPhone)));
-                const isActive = ['pending', 'accepted', 'arrived', 'inprogress'].includes(String(r.status || '').toLowerCase());
-                return isMatch && isActive;
-            });
-
-            // Check Redis if absent
-            if (!active && redisManager.isConnected && redisManager.client) {
-                try {
-                    const pendingRaw = await redisManager.client.hgetall('pending:rides');
-                    if (pendingRaw) {
-                        for (const [, rJson] of Object.entries(pendingRaw)) {
-                            const r = JSON.parse(rJson);
-                            const rCustId = String(r.customerId || '');
-                            const rCustPhone = String(r.customerPhone || '').replace(/[^0-9]/g, '');
-                            if (rCustId === customerId || (cleanPhone && (rCustPhone.endsWith(cleanPhone) || cleanPhone.endsWith(rCustPhone)))) {
-                                active = r;
-                                break;
-                            }
-                        }
-                    }
-                } catch (_) {}
+            const rawParam = decodeURIComponent(parts[parts.length - 2]);
+            try {
+                const active = await findActiveRideForCustomer(rawParam, rawParam);
+                return sendJson({ success: true, activeRide: active || null }, 200);
+            } catch (err) {
+                console.error('[CustomerActiveRide] Error:', err.message);
+                return sendJson({ success: true, activeRide: null }, 200);
             }
-
-            // Check PostgreSQL if absent
-            if (!active && db.isPostgresConnected && db.pool) {
-                try {
-                    const pgRes = await db.pool.query(
-                        `SELECT * FROM rides 
-                         WHERE (customer_id = $1 OR customer_phone = $1 OR customer_id = $2 OR customer_phone = $2) 
-                         AND status IN ('Pending', 'Accepted', 'Arrived', 'InProgress', 'pending', 'accepted', 'arrived', 'in_progress')
-                         ORDER BY created_at DESC LIMIT 1`,
-                        [customerId, cleanPhone || customerId]
-                    );
-                    if (pgRes && pgRes.rows && pgRes.rows.length > 0) {
-                        active = pgRes.rows[0];
-                    }
-                } catch (_) {}
-            }
-
-            if (active) {
-                active.pickupName = active.pickupName || active.pickupAddress || active.pickup_title || 'موقع الركوب';
-                active.dropoffName = active.dropoffName || active.dropoffAddress || active.dropoff_title || active.destination || active.destinationAddress || 'وجهة الوصول';
-            }
-
-            return sendJson({ success: true, activeRide: active || null });
         }
 
         // Customer Subscriptions / Bookings List
