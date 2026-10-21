@@ -4628,11 +4628,14 @@ async function startServer() {
         const isDriverSseRoute = (pathname === '/api/driver/stream' || pathname === '/driver/stream' || pathname.startsWith('/api/events/driver/') || pathname.startsWith('/events/driver/'));
         if (isDriverSseRoute && method === 'GET') {
             const authUser = getAuthUser(req);
-            let driverId = parsedUrl.searchParams.get('driverId') || 
+            let driverId = '';
+            if (pathname.startsWith('/api/events/driver/') || pathname.startsWith('/events/driver/')) {
+                driverId = pathname.replace(/^\/?(?:api\/)?events\/driver\//, '').trim();
+            }
+            if (!driverId) {
+                driverId = parsedUrl.searchParams.get('driverId') || 
                            parsedUrl.searchParams.get('id') || 
                            (authUser ? (authUser.id || authUser.driverId || authUser.phone) : '');
-            if (!driverId && (pathname.startsWith('/api/events/driver/') || pathname.startsWith('/events/driver/'))) {
-                driverId = pathname.replace(/^\/?(?:api\/)?events\/driver\//, '').trim();
             }
             driverId = String(driverId || '').trim();
 
