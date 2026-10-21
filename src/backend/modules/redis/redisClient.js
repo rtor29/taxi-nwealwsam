@@ -204,6 +204,76 @@ class RedisManager {
             return false;
         }
     }
+
+    // ---[ 4. Unified Distributed Pending Rides Management ]---
+    /**
+     * Save a new pending ride atomically to Redis Hash and Key
+     */
+    async savePendingRide(ride) {
+        if (!this.isConnected || !ride || !ride.id) return false;
+        try {
+            const payload = typeof ride === 'string' ? ride : JSON.stringify(ride);
+            const key = `ride:request:${ride.id}`;
+            await Promise.all([
+                this.client.set(key, payload, 'EX', 600), // 10 minutes expiry
+                this.client.hset('pending:rides', String(ride.id), payload)
+            ]);
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    /**
+     * Remove a pending ride atomically from Redis Hash, Key, and Lock
+     */
+    async removePendingRide(rideId) {
+        if (!this.isConnected || !rideId) return false;
+        try {
+            const sId = String(rideId);
+            await Promise.all([
+                this.client.del(`ride:request:${sId}`),
+                this.client.hdel('pending:rides', sId),
+                this.client.del(`ride:lock:${sId}`)
+            ]);
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    /**
+     * Retrieve all fresh (< 3 mins) pending rides from Redis Hash
+     */
+    async getPendingRides() {
+        if (!this.isConnected) return null;
+        try {
+            const rawMap = await this.client.hgetall('pending:rides');
+            if (!rawMap) return [];
+            const rides = [];
+            const now = Date.now();
+            const maxAgeMs = 3 * 60 * 1000; // 3 minutes maximum age
+            for (const [id, jsonStr] of Object.entries(rawMap)) {
+                try {
+                    const r = JSON.parse(jsonStr);
+                    const reqTime = r.requestedAt ? Number(r.requestedAt) : (r.createdAt ? new Date(r.createdAt).getTime() : now);
+                    const isPending = String(r.status || '').toLowerCase().trim() === 'pending';
+                    const isFresh = (now - reqTime) <= maxAgeMs;
+
+                    if (isPending && isFresh) {
+                        rides.push(r);
+                    } else {
+                        // Stale or non-pending: prune atomically from Redis hash
+                        this.client.hdel('pending:rides', id).catch(() => {});
+                        this.client.del(`ride:request:${id}`).catch(() => {});
+                    }
+                } catch (_) {}
+            }
+            return rides;
+        } catch (_) {
+            return null;
+        }
+    }
 }
 
 const redisManager = new RedisManager();

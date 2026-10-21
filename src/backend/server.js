@@ -2803,6 +2803,9 @@ async function startServer() {
                 db.memoryState.rideRequests.unshift(newRequest);
                 db.saveStateSnapshot();
 
+                // Save atomically to Redis distributed hash for cluster-wide consistency
+                await redisManager.savePendingRide(newRequest);
+
                 const tierBadge = isVipTier ? '👑 VIP' : '🚗 توفير';
                 let extraTgInfo = '';
                 if (newRequest.isRoundTrip) extraTgInfo += '\n🔄 <b>نوع الرحلة:</b> ذهاب وإياب (خصم 15% على العودة)';
@@ -2840,8 +2843,11 @@ async function startServer() {
                 }
 
                 // Real-time broadcast to all Redis cluster nodes for SSE drivers
-                redisManager.publishDispatchEvent({
+                await redisManager.publishDispatchEvent({
                     type: 'new_ride',
+                    event: 'new_ride',
+                    rideId: newRequest.id,
+                    requestId: newRequest.id,
                     request: newRequest
                 });
 
@@ -3017,9 +3023,10 @@ async function startServer() {
                     }
 
                     db.saveStateSnapshot();
-                    redisManager.publishRideEvent(r.id, { type: 'ride_accepted', request: r });
-                    redisManager.publishDispatchEvent({ type: 'ride_taken', requestId: r.id });
-                    redisManager.publishDriverEvent(actualDriverId, { type: 'ride_assigned', request: r });
+                    await redisManager.removePendingRide(r.id);
+                    await redisManager.publishRideEvent(r.id, { type: 'ride_accepted', event: 'ride_accepted', request: r });
+                    await redisManager.publishDispatchEvent({ type: 'ride_taken', event: 'ride_taken', rideId: r.id, requestId: r.id });
+                    await redisManager.publishDriverEvent(actualDriverId, { type: 'ride_assigned', event: 'ride_assigned', request: r });
                     return sendJson({ success: true, message: 'تم قبول المشوار بنجاح!', request: r });
                 } else {
                     const cleanPhone = String(driverId || '').replace(/[^0-9]/g, '');
@@ -3282,31 +3289,84 @@ async function startServer() {
             }
         }
 
-        // Passenger or Driver Cancel Ride
-        if (pathname === '/api/ride/cancel' && method === 'POST') {
+        // Passenger or Driver Cancel Ride (Unified & Atomically Cleared across Redis & PM2 Cluster)
+        const isRideCancelRoute = (
+            pathname === '/api/ride/cancel' || 
+            pathname === '/api/ride/passenger/cancel' || 
+            pathname === '/ride/cancel' || 
+            pathname === '/ride/passenger/cancel'
+        );
+        if (isRideCancelRoute && method === 'POST') {
             try {
                 const body = await parseJsonBody(req);
-                const { requestId, reason } = body;
+                const rideId = String(body.rideId || body.requestId || body.id || '').trim();
+                const reason = body.reason || 'إلغاء من قبل المستخدم';
+
+                if (!rideId) {
+                    return sendJson({ success: false, error: 'معرف المشوار مطلوب للإلغاء' }, 400);
+                }
+
                 const requests = db.memoryState.rideRequests || [];
-                const r = requests.find(item => item.id === requestId);
-                if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
+                const r = requests.find(item => String(item.id) === rideId);
+
                 const pSettings = pricingService.getPricingSettings();
                 const cancelFee = pSettings.cancellationFee || 1500;
-                const reqTime = r.requestedAt ? Number(r.requestedAt) : (r.createdAt ? new Date(r.createdAt).getTime() : Date.now());
-                const elapsedMinutes = (Date.now() - reqTime) / 60000;
-                const feeApplies = Boolean(r.assignedDriverId && (elapsedMinutes >= 2 || r.status === 'Arrived'));
-                r.status = 'Cancelled';
-                r.cancelReason = reason || 'إلغاء من قبل المستخدم';
-                r.cancellationFee = feeApplies ? cancelFee : 0;
-                r.cancelledAt = new Date().toISOString();
-                db.saveStateSnapshot();
-                redisManager.publishRideEvent(r.id, { type: 'ride_cancelled', status: 'Cancelled', request: r });
-                redisManager.publishDispatchEvent({ type: 'ride_cancelled', requestId: r.id });
+                let feeApplies = false;
+
+                if (r) {
+                    const reqTime = r.requestedAt ? Number(r.requestedAt) : (r.createdAt ? new Date(r.createdAt).getTime() : Date.now());
+                    const elapsedMinutes = (Date.now() - reqTime) / 60000;
+                    feeApplies = Boolean(r.assignedDriverId && (elapsedMinutes >= 2 || r.status === 'Arrived'));
+                    r.status = 'Cancelled';
+                    r.cancelReason = reason;
+                    r.cancellationFee = feeApplies ? cancelFee : 0;
+                    r.cancelledAt = new Date().toISOString();
+                    db.saveStateSnapshot();
+                }
+
+                // Update in PostgreSQL if connected
+                if (db.isPostgresConnected && db.pool) {
+                    try {
+                        await db.pool.query(`
+                            UPDATE rides 
+                            SET status = 'Cancelled', 
+                                cancel_reason = $1, 
+                                cancelled_at = NOW() 
+                            WHERE id = $2
+                        `, [reason, rideId]);
+                    } catch (_) {}
+                }
+
+                // Atomically clear from Redis hash, key and acceptance lock
+                await redisManager.removePendingRide(rideId);
+
+                // Broadcast instant cancellation event to all drivers via dispatch channel
+                const cancelPayload = {
+                    event: 'ride_cancelled',
+                    type: 'ride_cancelled',
+                    rideId: rideId,
+                    requestId: rideId,
+                    reason: reason,
+                    timestamp: Date.now()
+                };
+                await redisManager.publishDispatchEvent(cancelPayload);
+
+                if (r) {
+                    await redisManager.publishRideEvent(r.id, { 
+                        type: 'ride_cancelled', 
+                        event: 'ride_cancelled', 
+                        status: 'Cancelled', 
+                        rideId: r.id, 
+                        requestId: r.id, 
+                        request: r 
+                    });
+                }
+
                 return sendJson({ 
                     success: true, 
                     message: feeApplies ? `تم إلغاء الرحلة. تطبق رسوم إلغاء قدرها ${cancelFee} د.ع.` : 'تم إلغاء الرحلة بنجاح', 
-                    cancellationFee: r.cancellationFee,
-                    request: r 
+                    cancellationFee: r ? r.cancellationFee : 0,
+                    request: r || { id: rideId, status: 'Cancelled' } 
                 });
             } catch (err) {
                 return sendJson({ success: false, error: err.message }, 500);
@@ -3605,8 +3665,8 @@ async function startServer() {
             return sendJson({ success: true, bookings: userBookings });
         }
 
-        // Helper to extract driver pending requests list
-        const getDriverPendingList = (rawParam) => {
+        // Helper to extract driver pending requests list (Unified Redis + Memory with Strict 3-Minute TTL)
+        const getDriverPendingList = async (rawParam) => {
             rawParam = String(rawParam || '').trim();
             const cleanPhone = rawParam.replace(/[^0-9]/g, '');
 
@@ -3630,9 +3690,23 @@ async function startServer() {
 
             if (isStrictlyCommuteOrIdle) return [];
 
-            return (db.memoryState.rideRequests || []).filter(r => {
+            // 1. Read from Redis cluster hash first for 100% consistency across all 6 PM2 workers
+            const redisList = await redisManager.getPendingRides();
+            const sourceList = (redisList && Array.isArray(redisList) && redisList.length > 0) 
+                ? redisList 
+                : (db.memoryState.rideRequests || []);
+
+            const now = Date.now();
+            const maxAgeMs = 3 * 60 * 1000; // strictly within 3 minutes
+
+            return sourceList.filter(r => {
                 const st = String(r.status || '').toLowerCase().trim();
                 if (st !== 'pending') return false;
+
+                // Freshness check: strictly within 3 minutes
+                const reqTime = r.requestedAt ? Number(r.requestedAt) : (r.createdAt ? new Date(r.createdAt).getTime() : now);
+                if ((now - reqTime) > maxAgeMs) return false;
+
                 if (r.acceptedDriverId) return false;
                 const tType = String(r.tripType || r.serviceType || 'short').toLowerCase().trim();
                 if (tType === 'daily' || tType === 'commute' || tType === 'خط دائمي' || tType === 'permanent') return false;
@@ -3696,21 +3770,29 @@ async function startServer() {
                 } catch (_) {}
             };
 
-            sendSse('init', {
-                connected: true,
-                driverId,
-                pendingRequests: getDriverPendingList(driverId),
-                activeRide: getDriverActiveRideItem(driverId),
-                timestamp: Date.now()
-            });
+            (async () => {
+                const initialPending = await getDriverPendingList(driverId);
+                sendSse('init', {
+                    connected: true,
+                    driverId,
+                    pendingRequests: initialPending,
+                    activeRide: getDriverActiveRideItem(driverId),
+                    timestamp: Date.now()
+                });
+            })();
 
-            const onRedisMsg = (channel, msgStr) => {
+            const onRedisMsg = async (channel, msgStr) => {
                 try {
                     const data = JSON.parse(msgStr);
                     if (channel === 'channel:dispatch') {
+                        const updatedPending = await getDriverPendingList(driverId);
                         sendSse('dispatch', {
-                            type: data.type,
-                            pendingRequests: getDriverPendingList(driverId),
+                            ...data,
+                            type: data.type || data.event,
+                            event: data.event || data.type,
+                            rideId: data.rideId || data.requestId,
+                            requestId: data.requestId || data.rideId,
+                            pendingRequests: updatedPending,
                             timestamp: Date.now()
                         });
                     } else if (channel === `channel:driver:${driverId}`) {
@@ -3887,38 +3969,7 @@ async function startServer() {
                 }
             }
 
-            let list = [];
-            if (!isStrictlyCommuteOrIdle) {
-                list = (db.memoryState.rideRequests || []).filter(r => {
-                    // 1. Case-insensitive status check: must be Pending
-                    const st = String(r.status || '').toLowerCase().trim();
-                    if (st !== 'pending') return false;
-
-                    // 2. Must not be already accepted by any driver
-                    if (r.acceptedDriverId) return false;
-
-                    // 3. Strictly instant/short taxi trip: exclude daily / commute / permanent line
-                    const tType = String(r.tripType || r.serviceType || 'short').toLowerCase().trim();
-                    if (tType === 'daily' || tType === 'commute' || tType === 'خط دائمي' || tType === 'permanent') return false;
-
-                    // 4. Exclude only if driver has explicitly rejected this request
-                    if (r.rejectedDriverIds && Array.isArray(r.rejectedDriverIds) && r.rejectedDriverIds.length > 0) {
-                        const isRejected = r.rejectedDriverIds.some(rid => {
-                            const sRid = String(rid || '').trim();
-                            if (targetDriverId && sRid === String(targetDriverId)) return true;
-                            if (rawParam && sRid === String(rawParam)) return true;
-                            if (cleanPhone.length >= 7 && sRid.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8))) return true;
-                            return false;
-                        });
-                        if (isRejected) return false;
-                    }
-
-                    // 5. In accordance with Najaf instant dispatch rules:
-                    // candidateDriverIds & assignedDriverId restrictions are removed for pending requests
-                    // so that all available taxi captains in Najaf receive the ride request immediately!
-                    return true;
-                });
-            }
+            const list = await getDriverPendingList(targetDriverId || rawParam);
 
             console.log(`[Dispatch] Driver ${targetDriverId || rawParam || 'unknown'} polled: ${list.length} pending rides`);
 
