@@ -88,17 +88,17 @@ async function runBatch2Tests() {
     }
 
     const nonce = Date.now();
-    const driver1 = { id: `drv-rt1-${nonce}`, role: 'Driver', phone: '07705550001', fullName: 'كابتن مرتضى (ذهاب وإياب)' };
-    const driver2 = { id: `drv-rt2-${nonce}`, role: 'Driver', phone: '07705550002', fullName: 'كابتن سعد (إلغاء انتظار)' };
-    const driver3 = { id: `drv-rt3-${nonce}`, role: 'Driver', phone: '07705550003', fullName: 'كابتن كرار (ملاحة خارجية)' };
-    const foreignDriver = { id: `drv-foreign-${nonce}`, role: 'Driver', phone: '07709990011', fullName: 'كابتن غريب' };
+    const driver1 = { id: `drv-rt1-${nonce}`, role: 'Driver', phone: '0770' + String(nonce).slice(-7), fullName: 'كابتن مرتضى (ذهاب وإياب)' };
+    const driver2 = { id: `drv-rt2-${nonce}`, role: 'Driver', phone: '0771' + String(nonce).slice(-7), fullName: 'كابتن سعد (إلغاء انتظار)' };
+    const driver3 = { id: `drv-rt3-${nonce}`, role: 'Driver', phone: '0772' + String(nonce).slice(-7), fullName: 'كابتن كرار (ملاحة خارجية)' };
+    const foreignDriver = { id: `drv-foreign-${nonce}`, role: 'Driver', phone: '0779' + String(nonce).slice(-7), fullName: 'كابتن غريب' };
 
     const drv1Token = signToken(driver1);
     const drv2Token = signToken(driver2);
     const drv3Token = signToken(driver3);
     const foreignDrvToken = signToken(foreignDriver);
 
-    const testDrivers = [driver1.id, driver2.id, driver3.id, foreignDriver.id];
+    const testDrivers = [driver1, driver2, driver3, foreignDriver];
     const testCustomers = [];
     const testRides = [];
 
@@ -135,8 +135,8 @@ async function runBatch2Tests() {
         // Test 1: Complete Round-Trip Canonical Lifecycle
         // =====================================================================
         console.log('⏳ Running Test 1: Full Round-Trip Canonical Lifecycle...');
-        const cust1 = { id: `cust-rt1-${nonce}`, role: 'Customer', phone: '07804443322' };
-        testCustomers.push(cust1.id);
+        const cust1 = { id: `cust-rt1-${nonce}`, role: 'Customer', phone: '0780' + String(nonce).slice(-7) };
+        testCustomers.push(cust1);
         const cust1Token = signToken(cust1);
 
         // Step 1: Request Round-Trip Ride
@@ -237,8 +237,8 @@ async function runBatch2Tests() {
         // Test 2: Mid-Wait Cancellation (Leg 1 + Wait Fee charged, Leg 2 omitted)
         // =====================================================================
         console.log('⏳ Running Test 2: Mid-Wait Cancellation by Passenger...');
-        const cust2 = { id: `cust-rt2-${nonce}`, role: 'Customer', phone: '07804443323' };
-        testCustomers.push(cust2.id);
+        const cust2 = { id: `cust-rt2-${nonce}`, role: 'Customer', phone: '0781' + String(nonce).slice(-7) };
+        testCustomers.push(cust2);
         const cust2Token = signToken(cust2);
 
         const createRes2 = await request('POST', '/api/ride/request', {
@@ -282,8 +282,8 @@ async function runBatch2Tests() {
         // Test 3: Driver External Navigation State Management
         // =====================================================================
         console.log('⏳ Running Test 3: Driver External Navigation Lifecycle...');
-        const cust3 = { id: `cust-rt3-${nonce}`, role: 'Customer', phone: '07804443324' };
-        testCustomers.push(cust3.id);
+        const cust3 = { id: `cust-rt3-${nonce}`, role: 'Customer', phone: '0782' + String(nonce).slice(-7) };
+        testCustomers.push(cust3);
         const cust3Token = signToken(cust3);
 
         const createRes3 = await request('POST', '/api/ride/request', {
@@ -376,32 +376,37 @@ async function runBatch2Tests() {
         console.log('🧹 Cleaning up Batch 2 test data from Redis and PostgreSQL...');
         try {
             if (redisManager.isConnected && redisManager.client) {
-                for (const dId of testDrivers) {
-                    await redisManager.client.zrem('drivers:locations', dId);
-                    await redisManager.client.del(`driver:${dId}:meta`);
-                    await redisManager.client.del(`driver:${dId}:external_nav`);
-                    await redisManager.client.del(`driver:active:${dId}`);
+                for (const d of testDrivers) {
+                    await redisManager.client.zrem('drivers:locations', d.id);
+                    await redisManager.client.del(`driver:${d.id}:meta`);
+                    await redisManager.client.del(`driver:${d.id}:external_nav`);
+                    await redisManager.client.del(`driver:active:${d.id}`);
+                    if (d.phone) await redisManager.client.del(`driver:active:${d.phone}`);
                 }
-                for (const cId of testCustomers) {
-                    await redisManager.client.del(`rate:ride:create:${cId}`);
-                    await redisManager.client.del(`rider:active:${cId}`);
+                for (const c of testCustomers) {
+                    await redisManager.client.del(`rate:ride:create:${c.id}`);
+                    await redisManager.client.del(`rider:active:${c.id}`);
+                    if (c.phone) await redisManager.client.del(`rider:active:${c.phone}`);
                 }
                 for (const rId of testRides) {
                     if (rId) {
                         await redisManager.client.hdel('pending:rides', String(rId));
                         await redisManager.client.del(`ride:${rId}`);
+                        await redisManager.client.del(`ride:request:${rId}`);
                         await redisManager.client.del(`ride:active:${rId}`);
                         await redisManager.client.del(`ride:lock:${rId}`);
                     }
                 }
             }
             if (db.pool && db.isPostgresConnected) {
-                const driverPlaceholders = testDrivers.map((_, i) => `$${i + 1}`).join(',');
-                await db.pool.query(`DELETE FROM drivers WHERE driver_id IN (${driverPlaceholders})`, testDrivers);
+                const driverIds = testDrivers.map(d => d.id);
+                const driverPlaceholders = driverIds.map((_, i) => `$${i + 1}`).join(',');
+                await db.pool.query(`DELETE FROM drivers WHERE driver_id IN (${driverPlaceholders})`, driverIds);
                 if (testCustomers.length > 0) {
-                    const custPlaceholders = testCustomers.map((_, i) => `$${i + 1}`).join(',');
-                    await db.pool.query(`DELETE FROM rides WHERE customer_id IN (${custPlaceholders})`, testCustomers);
-                    await db.pool.query(`DELETE FROM users WHERE id IN (${custPlaceholders})`, testCustomers);
+                    const custIds = testCustomers.map(c => c.id);
+                    const custPlaceholders = custIds.map((_, i) => `$${i + 1}`).join(',');
+                    await db.pool.query(`DELETE FROM rides WHERE rider_id IN (${custPlaceholders})`, custIds);
+                    await db.pool.query(`DELETE FROM users WHERE id IN (${custPlaceholders})`, custIds);
                 }
                 if (testRides.length > 0) {
                     const validRides = testRides.filter(Boolean);
