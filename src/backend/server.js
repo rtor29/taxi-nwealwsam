@@ -3134,11 +3134,19 @@ async function startServer() {
                     discountBadge: dynamicPricing.discountBadge,
                     pricingBreakdown: dynamicPricing.breakdown,
                     vehicleType: isVipTier ? 'VIP' : 'توفير',
-                    isRoundTrip: Boolean(isRoundTrip),
+                    isRoundTrip: Boolean(isRoundTrip || body.tripType === 'ROUND_TRIP'),
+                    tripType: (isRoundTrip || body.tripType === 'ROUND_TRIP') ? 'ROUND_TRIP' : 'ONE_WAY',
+                    expectedWaitMinutes: Number(body.expectedWaitMinutes || stopDuration || 0),
+                    actualWaitMinutes: 0,
+                    returnDestination: body.returnDestination || null,
+                    leg1Distance: validatedDistanceKm,
+                    leg1Duration: validatedDurationMins,
+                    leg2Distance: 0,
+                    leg2Duration: 0,
+                    waitFee: 0,
                     secondDestination: secondDestination || '',
                     hasSecondStop: Boolean(hasSecondStop || secondDestination),
                     stopDuration: Number(stopDuration) || 0,
-                    tripType: 'short',
                     serviceType: 'taxi',
                     distanceKm: validatedDistanceKm,
                     durationMins: validatedDurationMins,
@@ -3926,6 +3934,47 @@ async function startServer() {
                     telegramBot.notifyUser(custObj.telegramChatId, tgMsg).catch(() => {});
                 }
 
+                // Round-Trip: Transition from ARRIVED_DESTINATION -> WAITING_AT_DESTINATION automatically
+                const isRound = Boolean(r.isRoundTrip || r.tripType === 'ROUND_TRIP');
+                if (isRound) {
+                    const waitTrans = await transitionRideState(
+                        redisManager,
+                        r.id,
+                        RIDE_STATES.WAITING_AT_DESTINATION,
+                        { id: driverId || authUser?.id, role: 'Driver' },
+                        {
+                            waitStartedAt: new Date().toISOString(),
+                            leg1Distance: r.distanceKm || actualDistKm,
+                            leg1Duration: actualMinutes,
+                            leg1Fare: finalFare
+                        }
+                    );
+                    if (waitTrans.success) {
+                        r = waitTrans.ride;
+                        normalizeAddresses(r);
+                        redisManager.publishRideEvent(r.id, {
+                            type: 'captain_waiting_at_destination',
+                            event: 'captain_waiting_at_destination',
+                            status: RIDE_STATES.WAITING_AT_DESTINATION,
+                            waitStartedAt: r.waitStartedAt,
+                            freeWaitMinutes: systemSettingsService ? systemSettingsService.getFreeWaitMinutes() : 5,
+                            leg1Fare: finalFare,
+                            request: r,
+                            ride: r
+                        });
+                        return sendJson({
+                            success: true,
+                            message: 'وصلتم إلى المحطة الأولى وبدأ وقت الانتظار ⏳',
+                            status: RIDE_STATES.WAITING_AT_DESTINATION,
+                            waitStartedAt: r.waitStartedAt,
+                            freeWaitMinutes: systemSettingsService ? systemSettingsService.getFreeWaitMinutes() : 5,
+                            leg1Fare: finalFare,
+                            request: r,
+                            ride: r
+                        });
+                    }
+                }
+
                 return sendJson({
                     success: true,
                     message: 'وصلتم إلى الوجهة بنجاح 🏁',
@@ -3933,6 +3982,265 @@ async function startServer() {
                     finalFare,
                     request: r,
                     ride: r
+                });
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // ROUND-TRIP LIFECYCLE ENDPOINTS (Batch 2/4)
+        // ---------------------------------------------------------------------
+        // 1. Start Return Leg (WAITING_AT_DESTINATION -> IN_TRIP_RETURN)
+        if (pathname === '/api/ride/return/start' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const { requestId, driverId, tripId } = body;
+                const rId = requestId || tripId || body.id;
+                if (!rId) return sendJson({ success: false, notFound: true, error: 'requestId مطلوب' }, 200);
+
+                let r = await findRideById(rId);
+                if (!r) return sendJson({ success: false, notFound: true, error: 'المشوار غير موجود' }, 200);
+
+                const authUser = getAuthUser(req);
+                const isAuthorized = isDriverAuthorizedForRide(r, authUser, body);
+                if (!isAuthorized) {
+                    return sendJson({ success: false, error: 'غير مصرح: يجب أن يكون الكابتن المعتمد للمشوار (RLS)' }, 403);
+                }
+
+                // Calculate actual wait time and fee
+                const waitStart = r.waitStartedAt ? new Date(r.waitStartedAt).getTime() : Date.now();
+                const elapsedWaitMs = Math.max(0, Date.now() - waitStart);
+                const actualWaitMinutes = Math.max(0, Math.round(elapsedWaitMs / 60000));
+                const waitDetails = pricingService.calculateWaitFee(actualWaitMinutes);
+
+                // Atomic State Transition: WAITING_AT_DESTINATION -> IN_TRIP_RETURN
+                const transRes = await transitionRideState(
+                    redisManager,
+                    r.id,
+                    RIDE_STATES.IN_TRIP_RETURN,
+                    { id: driverId || authUser?.id, role: 'Driver' },
+                    {
+                        returnStartedAt: new Date().toISOString(),
+                        actualWaitMinutes,
+                        waitFee: waitDetails.waitFee,
+                        billableWaitMinutes: waitDetails.billableWaitMinutes,
+                        freeWaitMinutes: waitDetails.freeWaitMinutes
+                    }
+                );
+
+                if (!transRes.success) {
+                    return sendJson({
+                        success: false,
+                        conflict: true,
+                        status: 409,
+                        error: transRes.error || 'تعذر بدء رحلة العودة'
+                    }, 409);
+                }
+
+                r = transRes.ride;
+                normalizeAddresses(r);
+                redisManager.publishRideEvent(r.id, {
+                    type: 'return_trip_started',
+                    status: RIDE_STATES.IN_TRIP_RETURN,
+                    actualWaitMinutes,
+                    waitFee: waitDetails.waitFee,
+                    request: r,
+                    ride: r
+                });
+
+                return sendJson({
+                    success: true,
+                    message: 'تم بدء رحلة العودة بنجاح 🔄',
+                    status: RIDE_STATES.IN_TRIP_RETURN,
+                    actualWaitMinutes,
+                    waitFee: waitDetails.waitFee,
+                    request: r,
+                    ride: r
+                });
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        // 2. Arrive Return Destination (IN_TRIP_RETURN -> ARRIVED_RETURN)
+        if (pathname === '/api/ride/return/arrived' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const { requestId, driverId, tripId } = body;
+                const rId = requestId || tripId || body.id;
+                if (!rId) return sendJson({ success: false, notFound: true, error: 'requestId مطلوب' }, 200);
+
+                let r = await findRideById(rId);
+                if (!r) return sendJson({ success: false, notFound: true, error: 'المشوار غير موجود' }, 200);
+
+                const authUser = getAuthUser(req);
+                const isAuthorized = isDriverAuthorizedForRide(r, authUser, body);
+                if (!isAuthorized) {
+                    return sendJson({ success: false, error: 'غير مصرح: يجب أن يكون الكابتن المعتمد للمشوار (RLS)' }, 403);
+                }
+
+                const returnStartTime = r.returnStartedAt ? new Date(r.returnStartedAt).getTime() : Date.now();
+                const leg2Duration = Math.max(1, Math.round((Date.now() - returnStartTime) / 60000));
+                const leg2Distance = Number(body.leg2Distance || r.leg1Distance || r.distanceKm || 3.0);
+
+                // Calculate comprehensive round-trip fare: leg1 + waitFee + leg2
+                const roundTripPricing = pricingService.calculateRoundTripFare({
+                    leg1DistanceKm: r.leg1Distance || r.distanceKm,
+                    leg1DurationMins: r.leg1Duration || r.durationMins,
+                    leg2DistanceKm: leg2Distance,
+                    leg2DurationMins: leg2Duration,
+                    actualWaitMinutes: r.actualWaitMinutes || 0,
+                    vehicleType: r.vehicleType
+                });
+
+                const finalFare = roundTripPricing.totalFare;
+
+                // Atomic State Transition: IN_TRIP_RETURN -> ARRIVED_RETURN
+                const transRes = await transitionRideState(
+                    redisManager,
+                    r.id,
+                    RIDE_STATES.ARRIVED_RETURN,
+                    { id: driverId || authUser?.id, role: 'Driver' },
+                    {
+                        returnArrivedAt: new Date().toISOString(),
+                        leg2Distance,
+                        leg2Duration,
+                        leg2Fare: roundTripPricing.leg2Fare,
+                        waitFee: roundTripPricing.waitFee,
+                        finalFare: finalFare,
+                        fare: finalFare,
+                        pricingBreakdown: roundTripPricing
+                    }
+                );
+
+                if (!transRes.success) {
+                    return sendJson({
+                        success: false,
+                        conflict: true,
+                        status: 409,
+                        error: transRes.error || 'تعذر تأكيد الوصول لنقطة العودة'
+                    }, 409);
+                }
+
+                r = transRes.ride;
+                normalizeAddresses(r);
+                redisManager.publishRideEvent(r.id, {
+                    type: 'return_trip_arrived',
+                    status: RIDE_STATES.ARRIVED_RETURN,
+                    finalFare: finalFare,
+                    request: r,
+                    ride: r
+                });
+
+                return sendJson({
+                    success: true,
+                    message: 'تم الوصول إلى نقطة العودة بسلام 🏁',
+                    status: RIDE_STATES.ARRIVED_RETURN,
+                    finalFare: finalFare,
+                    breakdown: roundTripPricing,
+                    request: r,
+                    ride: r
+                });
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // EXTERNAL NAVIGATION STATE MANAGEMENT (Google Maps / Waze)
+        // ---------------------------------------------------------------------
+        // 3. Start External Navigation
+        if (pathname === '/api/ride/external-nav/start' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const { requestId, driverId, app = 'Google Maps' } = body;
+                const rId = requestId || body.rideId || body.id;
+                if (!rId) return sendJson({ success: false, notFound: true, error: 'requestId مطلوب' }, 200);
+
+                let r = await findRideById(rId);
+                if (!r) return sendJson({ success: false, notFound: true, error: 'المشوار غير موجود' }, 200);
+
+                const authUser = getAuthUser(req);
+                const isAuthorized = isDriverAuthorizedForRide(r, authUser, body);
+                if (!isAuthorized) {
+                    return sendJson({ success: false, error: 'غير مصرح: يجب أن يكون الكابتن المعتمد للمشوار (RLS)' }, 403);
+                }
+
+                const dId = driverId || authUser?.id || r.assignedDriverId;
+                const timeoutMins = systemSettingsService ? systemSettingsService.getExternalNavTimeoutMinutes() : 15;
+                const ttlSec = timeoutMins * 60;
+
+                await redisManager.setDriverExternalNav(dId, { app, rideId: r.id, startedAt: Date.now() }, ttlSec);
+
+                r.isExternalNavActive = true;
+                r.externalNavApp = app;
+                r.externalNavStartedAt = Date.now();
+
+                // Save snapshot & broadcast SSE to both passenger and driver streams
+                db.saveStateSnapshot();
+                const navEvent = {
+                    type: 'external_nav_active',
+                    event: 'external_nav_active',
+                    rideId: r.id,
+                    driverId: dId,
+                    app,
+                    startedAt: r.externalNavStartedAt,
+                    timeoutMinutes: timeoutMins
+                };
+                redisManager.publishRideEvent(r.id, navEvent);
+                redisManager.publishDriverEvent(dId, navEvent);
+
+                return sendJson({
+                    success: true,
+                    isExternalNavActive: true,
+                    app,
+                    timeoutMinutes: timeoutMins,
+                    rideId: r.id
+                });
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
+        // 4. End External Navigation
+        if (pathname === '/api/ride/external-nav/end' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const { requestId, driverId } = body;
+                const rId = requestId || body.rideId || body.id;
+                if (!rId) return sendJson({ success: false, notFound: true, error: 'requestId مطلوب' }, 200);
+
+                let r = await findRideById(rId);
+                if (!r) return sendJson({ success: false, notFound: true, error: 'المشوار غير موجود' }, 200);
+
+                const authUser = getAuthUser(req);
+                const isAuthorized = isDriverAuthorizedForRide(r, authUser, body);
+                if (!isAuthorized) {
+                    return sendJson({ success: false, error: 'غير مصرح: يجب أن يكون الكابتن المعتمد للمشوار (RLS)' }, 403);
+                }
+
+                const dId = driverId || authUser?.id || r.assignedDriverId;
+                await redisManager.clearDriverExternalNav(dId);
+
+                r.isExternalNavActive = false;
+                r.externalNavEndedAt = Date.now();
+
+                db.saveStateSnapshot();
+                const navEndEvent = {
+                    type: 'external_nav_ended',
+                    event: 'external_nav_ended',
+                    rideId: r.id,
+                    driverId: dId,
+                    endedAt: r.externalNavEndedAt
+                };
+                redisManager.publishRideEvent(r.id, navEndEvent);
+                redisManager.publishDriverEvent(dId, navEndEvent);
+
+                return sendJson({
+                    success: true,
+                    isExternalNavActive: false,
+                    rideId: r.id
                 });
             } catch (err) {
                 return sendJson({ success: false, error: err.message }, 500);
@@ -4171,6 +4479,25 @@ async function startServer() {
                     feeApplies = Boolean(elapsedMinutes >= 2 || r.status === RIDE_STATES.DRIVER_ARRIVED || r.status === 'Arrived');
                 }
 
+                // Round-trip mid-wait cancellation: charge leg 1 fare + actual wait fee (no return leg charged)
+                let waitFeeCharge = 0;
+                const isWaitCancellation = Boolean(
+                    (r.status === RIDE_STATES.WAITING_AT_DESTINATION || r.status === RIDE_STATES.ARRIVED_DESTINATION) &&
+                    (r.isRoundTrip || r.tripType === 'ROUND_TRIP')
+                );
+
+                if (isWaitCancellation) {
+                    const waitStart = r.waitStartedAt ? new Date(r.waitStartedAt).getTime() : Date.now();
+                    const elapsedWaitMs = Math.max(0, Date.now() - waitStart);
+                    const actualWaitMinutes = Math.max(0, Math.round(elapsedWaitMs / 60000));
+                    const waitDetails = pricingService.calculateWaitFee(actualWaitMinutes);
+                    waitFeeCharge = waitDetails.waitFee;
+                    r.actualWaitMinutes = actualWaitMinutes;
+                    r.waitFee = waitFeeCharge;
+                    const leg1Fare = Number(r.leg1Fare || r.fare || 0);
+                    r.finalFare = leg1Fare + waitFeeCharge;
+                }
+
                 const transRes = await transitionRideState(
                     redisManager,
                     r.id,
@@ -4178,9 +4505,11 @@ async function startServer() {
                     { id: authUser?.id || r.customerId, role: 'Customer' },
                     {
                         cancelledAt: new Date().toISOString(),
-                        cancelReason: reason,
+                        cancelReason: reason || (isWaitCancellation ? 'إلغاء رحلة العودة والاكتفاء بالذهاب والانتظار' : 'إلغاء بواسطة الراكب'),
                         cancelledBy: 'rider',
-                        cancellationFee: feeApplies ? cancelFee : 0
+                        cancellationFee: isWaitCancellation ? r.finalFare : (feeApplies ? cancelFee : 0),
+                        finalFare: isWaitCancellation ? r.finalFare : (feeApplies ? cancelFee : 0),
+                        waitFee: waitFeeCharge
                     }
                 );
 
@@ -4207,9 +4536,21 @@ async function startServer() {
                     timestamp: Date.now()
                 });
 
+                const cancelMsg = isWaitCancellation 
+                    ? `تم إلغاء رحلة العودة والاكتفاء بالذهاب. المبلغ المستحق للذهاب والانتظار: ${r.finalFare} د.ع.`
+                    : (feeApplies ? `تم إلغاء الرحلة. تطبق رسوم إلغاء قدرها ${cancelFee} د.ع.` : 'تم إلغاء الرحلة بنجاح');
+
                 return sendJson({ 
                     success: true, 
-                    message: feeApplies ? `تم إلغاء الرحلة. تطبق رسوم إلغاء قدرها ${cancelFee} د.ع.` : 'تم إلغاء الرحلة بنجاح', 
+                    message: cancelMsg,
+                    status: RIDE_STATES.CANCELLED_BY_RIDER,
+                    cancellationFee: isWaitCancellation ? r.finalFare : (feeApplies ? cancelFee : 0),
+                    finalFare: r.finalFare,
+                    waitFee: waitFeeCharge,
+                    isWaitCancellation,
+                    request: r,
+                    ride: r
+                });
                     cancellationFee: feeApplies ? cancelFee : 0,
                     status: targetState,
                     request: r,

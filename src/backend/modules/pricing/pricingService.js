@@ -481,6 +481,92 @@ class PricingService {
             discountBadge
         };
     }
+
+    /**
+     * Calculate waiting fee based on actual waiting minutes and system settings
+     * Formula: Math.max(0, actualWaitMinutes - freeWaitMinutes) * minuteWaitRate
+     * @param {number} actualWaitMinutes
+     * @returns {{ waitFee: number, actualWaitMinutes: number, billableWaitMinutes: number, freeWaitMinutes: number, minuteWaitRate: number }}
+     */
+    calculateWaitFee(actualWaitMinutes = 0) {
+        const actualMins = Math.max(0, parseInt(actualWaitMinutes || 0, 10));
+        const freeWaitMins = systemSettingsService ? systemSettingsService.getFreeWaitMinutes() : 5;
+        const minuteWaitRate = systemSettingsService ? systemSettingsService.getMinuteWaitRateIqd() : 100;
+        const billableMinutes = Math.max(0, actualMins - freeWaitMins);
+        const rawFee = billableMinutes * minuteWaitRate;
+        const waitFee = this.roundToNearest250(rawFee);
+
+        return {
+            waitFee,
+            rawFee,
+            actualWaitMinutes: actualMins,
+            billableWaitMinutes: billableMinutes,
+            freeWaitMinutes: freeWaitMins,
+            minuteWaitRate
+        };
+    }
+
+    /**
+     * Calculate comprehensive Round-Trip fare:
+     * Total = Leg 1 (outbound) + Waiting Fee + Leg 2 (return with optional discount)
+     * All rounded to nearest 250 IQD multiple.
+     * @param {Object} options
+     * @param {number} options.leg1DistanceKm
+     * @param {number} options.leg1DurationMins
+     * @param {number} options.leg2DistanceKm
+     * @param {number} options.leg2DurationMins
+     * @param {number} options.actualWaitMinutes
+     * @param {string} options.vehicleType
+     */
+    calculateRoundTripFare(options = {}) {
+        const leg1Dist = Math.max(0.5, Number(options.leg1DistanceKm || options.distanceKm || 3.0));
+        const leg1Dur = Math.max(3, Number(options.leg1DurationMins || options.durationMins || Math.round(leg1Dist * 2.5)));
+        const leg2Dist = Math.max(0.5, Number(options.leg2DistanceKm || leg1Dist));
+        const leg2Dur = Math.max(3, Number(options.leg2DurationMins || leg1Dur));
+        const actualWaitMins = Math.max(0, parseInt(options.actualWaitMinutes || 0, 10));
+
+        // 1. Leg 1 Standard Instant Fare
+        const leg1Calc = this.calculateInstantRideFare({
+            ...options,
+            distanceKm: leg1Dist,
+            durationMins: leg1Dur,
+            isRoundTrip: false
+        });
+        const leg1Fare = leg1Calc.fare;
+
+        // 2. Waiting Fee Calculation
+        const waitDetails = this.calculateWaitFee(actualWaitMins);
+        const waitFee = waitDetails.waitFee;
+
+        // 3. Leg 2 (Return) Fare with round_trip_discount_percent
+        const discountPercent = systemSettingsService ? systemSettingsService.getRoundTripDiscountPercent() : 0;
+        const leg2Calc = this.calculateInstantRideFare({
+            ...options,
+            distanceKm: leg2Dist,
+            durationMins: leg2Dur,
+            isRoundTrip: false
+        });
+        const discountFactor = Math.max(0, (100 - discountPercent) / 100.0);
+        const leg2Fare = this.roundToNearest250(leg2Calc.fare * discountFactor);
+
+        // 4. Combined Round-Trip Fare
+        const totalFare = this.roundToNearest250(leg1Fare + waitFee + leg2Fare);
+
+        return {
+            totalFare,
+            fare: totalFare,
+            leg1Fare,
+            leg2Fare,
+            waitFee,
+            actualWaitMinutes: actualWaitMins,
+            billableWaitMinutes: waitDetails.billableWaitMinutes,
+            freeWaitMinutes: waitDetails.freeWaitMinutes,
+            minuteWaitRate: waitDetails.minuteWaitRate,
+            roundTripDiscountPercent: discountPercent,
+            leg1: { distanceKm: leg1Dist, durationMins: leg1Dur, fare: leg1Fare },
+            leg2: { distanceKm: leg2Dist, durationMins: leg2Dur, fare: leg2Fare }
+        };
+    }
 }
 
 module.exports = new PricingService();

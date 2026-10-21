@@ -21,6 +21,9 @@ const RIDE_STATES = {
     DRIVER_ARRIVED: 'DRIVER_ARRIVED',
     IN_TRIP: 'IN_TRIP',
     ARRIVED_DESTINATION: 'ARRIVED_DESTINATION',
+    WAITING_AT_DESTINATION: 'WAITING_AT_DESTINATION',
+    IN_TRIP_RETURN: 'IN_TRIP_RETURN',
+    ARRIVED_RETURN: 'ARRIVED_RETURN',
     COMPLETED: 'COMPLETED',
     CANCELLED_BY_RIDER: 'CANCELLED_BY_RIDER',
     CANCELLED_BY_DRIVER: 'CANCELLED_BY_DRIVER',
@@ -58,11 +61,32 @@ const ALLOWED_TRANSITIONS = {
     ],
     [RIDE_STATES.IN_TRIP]: [
         RIDE_STATES.ARRIVED_DESTINATION, 
+        RIDE_STATES.WAITING_AT_DESTINATION,
         RIDE_STATES.COMPLETED, 
         RIDE_STATES.CANCELLED_BY_RIDER, 
         RIDE_STATES.CANCELLED_BY_DRIVER
     ],
     [RIDE_STATES.ARRIVED_DESTINATION]: [
+        RIDE_STATES.WAITING_AT_DESTINATION,
+        RIDE_STATES.IN_TRIP_RETURN,
+        RIDE_STATES.COMPLETED,
+        RIDE_STATES.CANCELLED_BY_RIDER,
+        RIDE_STATES.CANCELLED_BY_DRIVER
+    ],
+    [RIDE_STATES.WAITING_AT_DESTINATION]: [
+        RIDE_STATES.IN_TRIP_RETURN,
+        RIDE_STATES.ARRIVED_RETURN,
+        RIDE_STATES.COMPLETED,
+        RIDE_STATES.CANCELLED_BY_RIDER,
+        RIDE_STATES.CANCELLED_BY_DRIVER
+    ],
+    [RIDE_STATES.IN_TRIP_RETURN]: [
+        RIDE_STATES.ARRIVED_RETURN,
+        RIDE_STATES.COMPLETED,
+        RIDE_STATES.CANCELLED_BY_RIDER,
+        RIDE_STATES.CANCELLED_BY_DRIVER
+    ],
+    [RIDE_STATES.ARRIVED_RETURN]: [
         RIDE_STATES.COMPLETED
     ],
     [RIDE_STATES.COMPLETED]: [],
@@ -82,6 +106,9 @@ function toCanonicalState(status) {
     if (s === 'ARRIVED' || s === 'DRIVER_ARRIVED') return RIDE_STATES.DRIVER_ARRIVED;
     if (s === 'INPROGRESS' || s === 'IN_PROGRESS' || s === 'STARTED' || s === 'ONTHEWAY' || s === 'IN_TRIP') return RIDE_STATES.IN_TRIP;
     if (s === 'ARRIVED_DESTINATION' || s === 'ARRIVEDDESTINATION') return RIDE_STATES.ARRIVED_DESTINATION;
+    if (s === 'WAITING' || s === 'WAITING_AT_DESTINATION' || s === 'WAITINGATDESTINATION') return RIDE_STATES.WAITING_AT_DESTINATION;
+    if (s === 'IN_TRIP_RETURN' || s === 'INTRIPRETURN' || s === 'RETURNING' || s === 'RETURN') return RIDE_STATES.IN_TRIP_RETURN;
+    if (s === 'ARRIVED_RETURN' || s === 'ARRIVEDRETURN') return RIDE_STATES.ARRIVED_RETURN;
     if (s === 'COMPLETED') return RIDE_STATES.COMPLETED;
     if (s === 'CANCELLED' || s === 'CANCELED' || s === 'CANCELLED_BY_RIDER') return RIDE_STATES.CANCELLED_BY_RIDER;
     if (s === 'CANCELLED_BY_DRIVER') return RIDE_STATES.CANCELLED_BY_DRIVER;
@@ -216,6 +243,9 @@ async function persistFinalRideToPostgres(ride) {
                 payment_method, payment_status, reconciliation_status,
                 idempotency_key, requested_at, offered_at, accepted_at,
                 arrived_at, started_at, arrived_destination_at, completed_at, cancelled_at,
+                trip_type, expected_wait_minutes, actual_wait_minutes, return_destination,
+                leg1_distance, leg1_duration, leg2_distance, leg2_duration, wait_fee,
+                wait_started_at, return_started_at, return_arrived_at,
                 created_at, updated_at
             ) VALUES (
                 $1, $2, $3, $4,
@@ -228,6 +258,9 @@ async function persistFinalRideToPostgres(ride) {
                 $30, $31, $32,
                 $33, $34, $35, $36,
                 $37, $38, $39, $40, $41,
+                $42, $43, $44, $45,
+                $46, $47, $48, $49, $50,
+                $51, $52, $53,
                 NOW(), NOW()
             )
             ON CONFLICT (id) DO UPDATE SET
@@ -253,6 +286,18 @@ async function persistFinalRideToPostgres(ride) {
                 arrived_destination_at = EXCLUDED.arrived_destination_at,
                 completed_at = EXCLUDED.completed_at,
                 cancelled_at = EXCLUDED.cancelled_at,
+                trip_type = EXCLUDED.trip_type,
+                expected_wait_minutes = EXCLUDED.expected_wait_minutes,
+                actual_wait_minutes = EXCLUDED.actual_wait_minutes,
+                return_destination = EXCLUDED.return_destination,
+                leg1_distance = EXCLUDED.leg1_distance,
+                leg1_duration = EXCLUDED.leg1_duration,
+                leg2_distance = EXCLUDED.leg2_distance,
+                leg2_duration = EXCLUDED.leg2_duration,
+                wait_fee = EXCLUDED.wait_fee,
+                wait_started_at = EXCLUDED.wait_started_at,
+                return_started_at = EXCLUDED.return_started_at,
+                return_arrived_at = EXCLUDED.return_arrived_at,
                 updated_at = NOW()`,
             [
                 String(ride.id),
@@ -295,7 +340,19 @@ async function persistFinalRideToPostgres(ride) {
                 ride.startedAt ? new Date(ride.startedAt) : null,
                 ride.arrivedDestinationAt ? new Date(ride.arrivedDestinationAt) : null,
                 ride.completedAt ? new Date(ride.completedAt) : null,
-                ride.cancelledAt ? new Date(ride.cancelledAt) : null
+                ride.cancelledAt ? new Date(ride.cancelledAt) : null,
+                ride.tripType || (ride.isRoundTrip ? 'ROUND_TRIP' : 'ONE_WAY'),
+                parseInt(ride.expectedWaitMinutes, 10) || 0,
+                parseInt(ride.actualWaitMinutes, 10) || 0,
+                ride.returnDestination ? JSON.stringify(ride.returnDestination) : null,
+                parseFloat(ride.leg1Distance || ride.leg1_distance || ride.distanceKm) || 0,
+                parseFloat(ride.leg1Duration || ride.leg1_duration || ride.durationMins) || 0,
+                parseFloat(ride.leg2Distance || ride.leg2_distance || 0) || 0,
+                parseFloat(ride.leg2Duration || ride.leg2_duration || 0) || 0,
+                parseFloat(ride.waitFee || ride.wait_fee || 0) || 0,
+                ride.waitStartedAt ? new Date(ride.waitStartedAt) : null,
+                ride.returnStartedAt ? new Date(ride.returnStartedAt) : null,
+                ride.returnArrivedAt ? new Date(ride.returnArrivedAt) : null
             ]
         );
     } catch (err) {

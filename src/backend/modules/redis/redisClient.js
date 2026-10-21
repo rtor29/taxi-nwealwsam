@@ -324,6 +324,57 @@ class RedisManager {
             return { allowed: true, current: 1, max: maxRequests, ttl: windowSec };
         }
     }
+
+    // ---[ 6. Driver External Navigation State Management (Batch 2) ]---
+    async setDriverExternalNav(driverId, data = {}, ttlSec = 900) {
+        if (!this.isConnected || !this.client || !driverId) return false;
+        try {
+            const key = `driver:${driverId}:external_nav`;
+            const payload = JSON.stringify({
+                driverId,
+                app: data.app || 'Google Maps',
+                rideId: data.rideId || null,
+                startedAt: data.startedAt || Date.now()
+            });
+            await this.client.set(key, payload, 'EX', ttlSec);
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    async clearDriverExternalNav(driverId) {
+        if (!this.isConnected || !this.client || !driverId) return false;
+        try {
+            const key = `driver:${driverId}:external_nav`;
+            await this.client.del(key);
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    async getDriverExternalNav(driverId) {
+        if (!this.isConnected || !this.client || !driverId) return null;
+        try {
+            const key = `driver:${driverId}:external_nav`;
+            const val = await this.client.get(key);
+            return val ? JSON.parse(val) : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    async isDriverNavigatingExternal(driverId) {
+        if (!this.isConnected || !this.client || !driverId) return false;
+        try {
+            const key = `driver:${driverId}:external_nav`;
+            const exists = await this.client.exists(key);
+            return exists === 1;
+        } catch (_) {
+            return false;
+        }
+    }
 }
 
 const redisManager = new RedisManager();
