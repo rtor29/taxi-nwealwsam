@@ -4551,11 +4551,6 @@ async function startServer() {
                     request: r,
                     ride: r
                 });
-                    cancellationFee: feeApplies ? cancelFee : 0,
-                    status: targetState,
-                    request: r,
-                    ride: r
-                });
             } catch (err) {
                 return sendJson({ success: false, error: err.message }, 500);
             }
