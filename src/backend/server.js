@@ -3280,6 +3280,16 @@ async function startServer() {
                 return sendJson({ success: true, notFound: true, ride: null, request: null, activeRide: null }, 200);
             }
 
+            // Sync external nav state from Redis
+            if (r.assignedDriverId && redisManager.isConnected && redisManager.client) {
+                try {
+                    const isNav = await redisManager.isDriverNavigatingExternal(r.assignedDriverId);
+                    if (isNav) {
+                        r.isExternalNavActive = true;
+                    }
+                } catch (_) {}
+            }
+
             // Sync to local memory
             db.memoryState.rideRequests = db.memoryState.rideRequests || [];
             const existingIdx = db.memoryState.rideRequests.findIndex(item => String(item.id) === String(r.id));
@@ -4227,6 +4237,20 @@ async function startServer() {
                 r.externalNavApp = app;
                 r.externalNavStartedAt = Date.now();
 
+                // Atomically update ride in Redis active key so all PM2 workers see external nav status
+                if (redisManager.isConnected && redisManager.client) {
+                    try {
+                        const actStr = await redisManager.client.get('ride:active:' + r.id);
+                        if (actStr) {
+                            const actObj = JSON.parse(actStr);
+                            actObj.isExternalNavActive = true;
+                            actObj.externalNavApp = app;
+                            actObj.externalNavStartedAt = r.externalNavStartedAt;
+                            await redisManager.client.set('ride:active:' + r.id, JSON.stringify(actObj), 'EX', 7200);
+                        }
+                    } catch (_) {}
+                }
+
                 const lastKnownLocation = {
                     lat: parseFloat(r.driverLat || r.currentLat || r.pickupLat || 32.0),
                     lon: parseFloat(r.driverLon || r.currentLon || r.pickupLon || 44.3)
@@ -4290,6 +4314,19 @@ async function startServer() {
 
                 r.isExternalNavActive = false;
                 r.externalNavEndedAt = Date.now();
+
+                // Atomically update ride in Redis active key
+                if (redisManager.isConnected && redisManager.client) {
+                    try {
+                        const actStr = await redisManager.client.get('ride:active:' + r.id);
+                        if (actStr) {
+                            const actObj = JSON.parse(actStr);
+                            actObj.isExternalNavActive = false;
+                            actObj.externalNavEndedAt = r.externalNavEndedAt;
+                            await redisManager.client.set('ride:active:' + r.id, JSON.stringify(actObj), 'EX', 7200);
+                        }
+                    } catch (_) {}
+                }
 
                 db.saveStateSnapshot();
                 const navEndEvent = {

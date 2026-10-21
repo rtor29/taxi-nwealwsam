@@ -546,7 +546,9 @@ async function runBatch25Tests() {
         report('B2.5-8', '3-G: PM2 Cluster Multi-PID Execution for External Nav Start/End', passMultiPid,
             `Observed ${pidsObserved.size} distinct worker PIDs across requests: [${Array.from(pidsObserved).join(', ')}]`);
 
-        // Complete ride D cleanly
+        // Complete ride D cleanly through legal lifecycle
+        await request('POST', '/api/ride/arrived', { requestId: rideIdD, driverId: driverMain.id, driverLat: 31.9961, driverLon: 44.3168 }, { Authorization: `Bearer ${drvMainToken}` });
+        await request('POST', '/api/ride/start', { requestId: rideIdD, driverId: driverMain.id }, { Authorization: `Bearer ${drvMainToken}` });
         await request('POST', '/api/ride/destination-arrived', { requestId: rideIdD, driverId: driverMain.id }, { Authorization: `Bearer ${drvMainToken}` });
         await request('POST', '/api/ride/complete', { requestId: rideIdD, driverId: driverMain.id }, { Authorization: `Bearer ${drvMainToken}` });
 
@@ -591,10 +593,14 @@ async function runBatch25Tests() {
         // 11. Test 3-J: Normal One-Way Ride Lifecycle Regression
         // =====================================================================
         console.log('⏳ Running Test 11 (3-J): One-Way Ride Full Canonical Lifecycle Regression...');
+        const custJ = { id: `cust-b25-j-${nonce}`, role: 'Customer', phone: '0783' + String(nonce).slice(-7), fullName: 'راكب مشوار عادي' };
+        testCustomers.push(custJ);
+        const custJToken = signToken(custJ);
+
         const createResJ = await request('POST', '/api/ride/request', {
-            customerId: customerMain.id,
-            customerName: customerMain.fullName,
-            customerPhone: customerMain.phone,
+            customerId: custJ.id,
+            customerName: custJ.fullName,
+            customerPhone: custJ.phone,
             pickupName: 'حي الاشتراكي',
             pickupLat: 31.9961,
             pickupLon: 44.3168,
@@ -605,7 +611,7 @@ async function runBatch25Tests() {
             durationMins: 11,
             tripType: 'single',
             isRoundTrip: false
-        }, { Authorization: `Bearer ${custMainToken}` });
+        }, { Authorization: `Bearer ${custJToken}` });
 
         const rideIdJ = createResJ.body?.request?.id;
         testRides.push(rideIdJ);
