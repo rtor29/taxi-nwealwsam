@@ -404,8 +404,10 @@ async function runBatch2Tests() {
                         const ridePlaceholders = validRides.map((_, i) => `$${i + 1}`).join(',');
                         await db.pool.query(`DELETE FROM ride_events WHERE ride_id IN (${ridePlaceholders})`, validRides);
                         await db.pool.query(`DELETE FROM rides WHERE id IN (${ridePlaceholders})`, validRides);
+                        await db.pool.query(`DELETE FROM audit_logs WHERE entity_id IN (${ridePlaceholders})`, validRides).catch(() => {});
                     }
                 }
+                await db.pool.query(`DELETE FROM audit_logs WHERE action LIKE 'RIDE_STATE_%' OR entity_name = 'ride'`).catch(() => {});
             }
 
             // Clean operational arrays in state.json

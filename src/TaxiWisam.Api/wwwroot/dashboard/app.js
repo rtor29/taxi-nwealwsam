@@ -420,28 +420,45 @@ window.switchTab = switchTab;
 function switchSubRouteTab(subTab) {
     const btnRoutes = document.getElementById('sub-btn-routes');
     const btnBookings = document.getElementById('sub-btn-bookings');
+    const btnRides = document.getElementById('sub-btn-rides');
     const viewRoutes = document.getElementById('sub-view-routes');
     const viewBookings = document.getElementById('sub-view-bookings');
+    const viewRides = document.getElementById('sub-view-rides');
     const bSub = document.getElementById('breadcrumb-sub');
     const bDivider = document.getElementById('breadcrumb-divider');
 
     if (bDivider) bDivider.classList.remove('hidden');
 
+    const defaultBtnClass = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all';
+    const activeBtnClass = 'px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#1B4965] text-white shadow-xs transition-all';
+
+    if (btnRoutes) btnRoutes.className = defaultBtnClass;
+    if (btnBookings) btnBookings.className = defaultBtnClass;
+    if (btnRides) btnRides.className = defaultBtnClass;
+
+    if (viewRoutes) viewRoutes.classList.add('hidden');
+    if (viewBookings) viewBookings.classList.add('hidden');
+    if (viewRides) viewRides.classList.add('hidden');
+
     if (subTab === 'routes-list') {
-        if (btnRoutes) btnRoutes.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#1B4965] text-white shadow-xs transition-all';
-        if (btnBookings) btnBookings.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all';
+        if (btnRoutes) btnRoutes.className = activeBtnClass;
         if (viewRoutes) viewRoutes.classList.remove('hidden');
-        if (viewBookings) viewBookings.classList.add('hidden');
         if (bSub) {
             bSub.classList.remove('hidden');
             bSub.textContent = 'خطوط السير';
         }
         loadRoutes();
+    } else if (subTab === 'rides-list') {
+        if (btnRides) btnRides.className = activeBtnClass;
+        if (viewRides) viewRides.classList.remove('hidden');
+        if (bSub) {
+            bSub.classList.remove('hidden');
+            bSub.textContent = 'مشاوير التكسي الفورية';
+        }
+        loadAdminRides();
     } else {
-        if (btnBookings) btnBookings.className = 'px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#1B4965] text-white shadow-xs transition-all';
-        if (btnRoutes) btnRoutes.className = 'px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all';
+        if (btnBookings) btnBookings.className = activeBtnClass;
         if (viewBookings) viewBookings.classList.remove('hidden');
-        if (viewRoutes) viewRoutes.classList.add('hidden');
         if (bSub) {
             bSub.classList.remove('hidden');
             bSub.textContent = 'سجل الحجوزات';
@@ -1603,6 +1620,88 @@ async function declineBookingFromAdmin(bookingId) {
         showToast('خطأ في الاتصال بالخادم', true);
     }
 }
+
+async function loadAdminRides() {
+    const tbody = document.getElementById('rides-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400 text-xs font-semibold">جاري تحميل سجل مشاوير التكسي...</td></tr>';
+
+    try {
+        const res = await fetch(`${API_BASE}/admin/rides`);
+        const data = await res.json();
+        tbody.innerHTML = '';
+
+        const ridesList = Array.isArray(data) ? data : (data.rides || []);
+        if (ridesList.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400 text-xs">لا توجد مشاوير مسجلة حالياً</td></tr>';
+            return;
+        }
+
+        ridesList.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80';
+
+            const isRound = r.isRoundTrip === true || r.tripType === 'ROUND_TRIP';
+            const tripTypeBadge = isRound
+                ? '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200 shadow-xs">ذهاب وإياب 🔄</span>'
+                : '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">ذهاب فقط 🚖</span>';
+
+            const totalFare = Number(r.totalFare || r.fare || 0);
+            const waitFee = Number(r.waitFee || 0);
+            const actualWait = Number(r.actualWaitMinutes || 0);
+            let fareDetailsHtml = `<div class="font-bold text-slate-900">${totalFare.toLocaleString()} <span class="text-xs font-normal text-slate-500">د.ع</span></div>`;
+            if (isRound && waitFee > 0) {
+                fareDetailsHtml += `<div class="text-[11px] text-amber-700 mt-0.5">انتظار: ${waitFee.toLocaleString()} د.ع (${actualWait} د)</div>`;
+            }
+
+            const reviewFlagHtml = r.needsReconciliationReview
+                ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-xs" title="${escapeHtml(r.reconciliationReviewReason || 'بانتظار التسوية المالية')}"><i class="fa-solid fa-triangle-exclamation text-rose-500"></i>⚠️ بانتظار التسوية</span><div class="text-[10px] text-rose-600 mt-0.5">${escapeHtml(r.reconciliationReviewReason || '')}</div>`
+                : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><i class="fa-solid fa-circle-check text-emerald-500"></i>معتمدة</span>`;
+
+            const dateStr = r.createdAt ? new Date(r.createdAt).toLocaleString('ar-IQ') : '-';
+            const pickup = r.pickupName || 'موقع الانطلاق';
+            const dropoff = r.dropoffName || 'الوجهة';
+
+            let statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700">${escapeHtml(r.status || 'UNKNOWN')}</span>`;
+            if (r.status === 'COMPLETED') {
+                statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">مكتمل ✓</span>';
+            } else if (r.status === 'WAITING_AT_DESTINATION') {
+                statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">في انتظار العودة ⏳</span>';
+            } else if (r.status === 'IN_TRIP' || r.status === 'IN_TRIP_RETURN') {
+                statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">على الطريق 🚗</span>';
+            } else if (r.status === 'CANCELLED') {
+                statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">ملغي ✕</span>';
+            }
+
+            tr.innerHTML = `
+                <td class="py-3.5 px-4">
+                    <div class="font-mono text-xs font-bold text-slate-900">${escapeHtml(r.id || r.requestId || '-')}</div>
+                    <div class="text-[10px] text-slate-400 mt-0.5">${escapeHtml(dateStr)}</div>
+                </td>
+                <td class="py-3.5 px-4">
+                    <div class="font-bold text-slate-900 text-xs">${escapeHtml(r.customerName || 'الراكب')}</div>
+                    <div class="text-[11px] text-slate-500 mt-0.5">الكابتن: ${escapeHtml(r.driverName || 'غير معيَّن')}</div>
+                </td>
+                <td class="py-3.5 px-4 text-center">${tripTypeBadge}</td>
+                <td class="py-3.5 px-4">
+                    <div class="text-xs text-slate-700 flex items-center gap-1">
+                        <span class="font-semibold">${escapeHtml(pickup)}</span>
+                        <i class="fa-solid fa-arrow-left text-[10px] text-slate-400"></i>
+                        <span class="font-semibold">${escapeHtml(dropoff)}</span>
+                    </div>
+                    ${actualWait > 0 ? `<div class="text-[10px] text-slate-500 mt-0.5">وقت الانتظار: ${actualWait} دقيقة</div>` : ''}
+                </td>
+                <td class="py-3.5 px-4">${fareDetailsHtml}</td>
+                <td class="py-3.5 px-4 text-center">${reviewFlagHtml}</td>
+                <td class="py-3.5 px-4 text-center">${statusBadge}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-rose-500 font-semibold">فشل في الاتصال بالخادم</td></tr>';
+    }
+}
+window.loadAdminRides = loadAdminRides;
 
 // -----------------------------------------------------------------------------
 // 6. Complaints & Reports Management (Modern SaaS System)

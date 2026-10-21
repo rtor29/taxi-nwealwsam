@@ -711,6 +711,7 @@
                     <div class="flex items-center space-x-2 space-x-reverse bg-slate-100 p-1 rounded-xl border border-slate-200/60">
                         <button onclick="switchSubRouteTab('routes-list')" id="sub-btn-routes" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#1B4965] text-white shadow-xs transition-all">خطوط السير</button>
                         <button onclick="switchSubRouteTab('bookings-list')" id="sub-btn-bookings" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all">سجل الحجوزات</button>
+                        <button onclick="switchSubRouteTab('rides-list')" id="sub-btn-rides" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition-all">مشاوير التكسي الفورية</button>
                     </div>
                 </div>
 
@@ -752,6 +753,27 @@
                             </thead>
                             <tbody id="bookings-table-body" class="divide-y divide-slate-100">
                                 <!-- Dynamic Bookings -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="sub-view-rides" class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-right text-sm border-collapse min-w-[850px]">
+                            <thead class="bg-slate-50/90 text-slate-500 font-semibold text-xs tracking-wider uppercase border-b border-slate-200/80">
+                                <tr>
+                                    <th class="py-3.5 px-4 text-right">معرّف المشوار والوقت</th>
+                                    <th class="py-3.5 px-4 text-right">الراكب / الكابتن</th>
+                                    <th class="py-3.5 px-4 text-center">نوع الرحلة</th>
+                                    <th class="py-3.5 px-4 text-right">المسار والانتظار</th>
+                                    <th class="py-3.5 px-4 text-right">مكوّنات الأجرة</th>
+                                    <th class="py-3.5 px-4 text-center">المراجعة والتسوية</th>
+                                    <th class="py-3.5 px-4 text-center">الحالة</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rides-table-body" class="divide-y divide-slate-100">
+                                <!-- Dynamic Rides -->
                             </tbody>
                         </table>
                     </div>

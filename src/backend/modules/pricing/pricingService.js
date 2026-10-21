@@ -180,11 +180,11 @@ class PricingService {
     }
 
     /**
-     * Round amount to the configured multiple of Iraqi Dinars UPWARD (Math.ceil)
+     * Round amount to the configured multiple of Iraqi Dinars (Nearest multiple: Math.round)
      */
     roundToNearest250(amount) {
         const mult = systemSettingsService ? systemSettingsService.getFareRoundingMultipleIqd() : 250;
-        return Math.ceil(Number(amount) / mult) * mult;
+        return Math.round(Number(amount) / mult) * mult;
     }
 
     /**
