@@ -2751,6 +2751,16 @@ async function startServer() {
                 } catch (_) {}
             }
 
+            // Validate with Redis (Single Source of Truth) - if ride is finished, it must not be active
+            if (active && redisManager.isConnected && redisManager.client) {
+                try {
+                    const isStillActive = await redisManager.client.exists('ride:active:' + active.id);
+                    if (!isStillActive) {
+                        active = null;
+                    }
+                } catch (_) {}
+            }
+
             // Address normalization: ensure both pickup and dropoff fields are always populated
             if (active) {
                 normalizeAddresses(active);
@@ -2819,6 +2829,17 @@ async function startServer() {
                     );
                     if (pgRes && pgRes.rows && pgRes.rows.length > 0) {
                         active = pgRes.rows[0];
+                    }
+                } catch (_) {}
+            }
+
+            // Validate with Redis (Single Source of Truth) - if ride is finished, it must not be active
+            if (active && redisManager.isConnected && redisManager.client) {
+                try {
+                    const isStillActive = await redisManager.client.exists('ride:active:' + active.id);
+                    const isStillPending = await redisManager.client.hexists('pending:rides', active.id);
+                    if (!isStillActive && !isStillPending) {
+                        active = null;
                     }
                 } catch (_) {}
             }
