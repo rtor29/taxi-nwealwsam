@@ -2967,10 +2967,11 @@ async function startServer() {
                     stopDuration = 0
                 } = body;
 
-                // Rate limiting on ride requests: 5 requests per 30s per user/IP across PM2 cluster
-                const riderKey = `rate:ride:create:${customerId || customerPhone || clientIp}`;
+                // Rate limiting on ride requests: 5 requests per 30s per rider across PM2 cluster
+                const riderIdKey = customerId || customerPhone || clientIp;
+                const riderKey = `rate:ride:create:${riderIdKey}`;
                 const clusterRate = await redisManager.checkRateLimitCluster(riderKey, 5, 30);
-                if (!clusterRate.allowed || _orderRateLimit(clientIp, customerId || customerPhone)) {
+                if (!clusterRate.allowed) {
                     return sendJson({
                         success: false,
                         error: '⚠️ لقد أرسلت طلبات كثيرة في وقت قصير. يرجى الانتظار دقيقة قبل إرسال طلب جديد.'
