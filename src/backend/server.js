@@ -3323,7 +3323,8 @@ async function startServer() {
                         r.assignedDriverName = nextDriver ? nextDriver.fullName : 'كابتن توصيله';
                         r.assignedDriverPhone = nextDriver ? nextDriver.phoneNumber : '';
                         r.assignedDriverVehicle = nextDriver ? `${nextDriver.vehicleMake||'تويوتا'} ${nextDriver.vehicleModel||'كورولا'}` : 'تويوتا';
-                        r.stepTimeoutAt = now + 20000;
+                        const stepTimeoutSec = systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 20;
+                        r.stepTimeoutAt = now + (stepTimeoutSec * 1000);
                         db.saveStateSnapshot();
                         if (redisManager.isConnected && redisManager.client) {
                             redisManager.client.hset('pending:rides', String(r.id), JSON.stringify(r)).catch(() => {});
@@ -4242,7 +4243,8 @@ async function startServer() {
                 const recAmt = receivedAmount !== undefined ? parseFloat(receivedAmount) : finalFare;
                 const fareDiff = Math.abs(recAmt - finalFare);
                 const discrepancyThreshold = systemSettingsService ? systemSettingsService.getFareDiscrepancyThresholdIqd() : 500;
-                const reviewFlag = fareDiff > discrepancyThreshold;
+                const riderConfirmed = body.riderConfirmed !== undefined ? Boolean(body.riderConfirmed) : null;
+                const reviewFlag = (fareDiff > discrepancyThreshold) || (riderConfirmed === false);
                 const reconciliationStatus = reviewFlag ? 'pending_review' : 'settled';
 
                 // Atomic State Transition: ARRIVED_DESTINATION (or IN_TRIP) -> COMPLETED
@@ -4256,6 +4258,7 @@ async function startServer() {
                         finalFare: finalFare,
                         receivedAmount: recAmt,
                         fareDifference: fareDiff,
+                        riderConfirmed: riderConfirmed !== null ? riderConfirmed : null,
                         reviewFlag,
                         reconciliationStatus,
                         paymentMethod: 'Cash',
@@ -4303,6 +4306,81 @@ async function startServer() {
             }
         }
 
+        // Passenger Confirm or Dispute Final Fare
+        if (pathname === '/api/ride/confirm-fare' && method === 'POST') {
+            try {
+                const body = await parseJsonBody(req);
+                const { requestId, rideId, confirmed, note } = body;
+                const targetId = requestId || rideId;
+                if (!targetId) return sendJson({ success: false, error: 'requestId مطلوب' }, 400);
+
+                let r = await findRideById(targetId);
+                if (!r) return sendJson({ success: false, notFound: true, error: 'المشوار غير موجود' }, 200);
+
+                const authUser = getAuthUser(req);
+                if (!authUser) {
+                    return sendJson({ success: false, error: 'غير مصرح: تسجيل الدخول مطلوب' }, 403);
+                }
+
+                // Customer RLS
+                if (authUser.role !== 'Admin') {
+                    const isOwner = (authUser.id && r.customerId && String(authUser.id) === String(r.customerId)) ||
+                                    (authUser.phone && r.customerPhone && normalizePhone(authUser.phone) === normalizePhone(r.customerPhone));
+                    if (!isOwner) {
+                        return sendJson({ success: false, error: 'غير مصرح: المشوار ليس مسجلاً باسمك' }, 403);
+                    }
+                }
+
+                const isConfirmed = confirmed !== undefined ? Boolean(confirmed) : false;
+                r.riderConfirmed = isConfirmed;
+                if (!isConfirmed) {
+                    r.reviewFlag = true;
+                    r.reconciliationStatus = 'pending_review';
+                    r.disputeNote = String(note || 'الراكب اعترض على الكروة أو لم يؤكد استلام المبلغ');
+                } else {
+                    const discrepancyThreshold = systemSettingsService ? systemSettingsService.getFareDiscrepancyThresholdIqd() : 500;
+                    if ((r.fareDifference || 0) <= discrepancyThreshold) {
+                        r.reviewFlag = false;
+                        r.reconciliationStatus = 'settled';
+                    }
+                }
+
+                // Update in Redis
+                if (redisManager.isConnected && redisManager.client) {
+                    await redisManager.client.hset('pending:rides', String(r.id), JSON.stringify(r));
+                }
+
+                // Update in PostgreSQL
+                if (db.pool && db.isPostgresConnected) {
+                    try {
+                        await db.pool.query(
+                            `UPDATE rides SET reconciliation_status = $1, review_flag = $2 WHERE id = $3`,
+                            [r.reconciliationStatus, r.reviewFlag, r.id]
+                        );
+                    } catch (_) {}
+                }
+
+                db.saveStateSnapshot();
+                redisManager.publishRideEvent(r.id, {
+                    type: 'fare_confirmation_updated',
+                    rideId: r.id,
+                    riderConfirmed: isConfirmed,
+                    reconciliationStatus: r.reconciliationStatus,
+                    reviewFlag: r.reviewFlag
+                });
+
+                return sendJson({
+                    success: true,
+                    requestId: r.id,
+                    riderConfirmed: isConfirmed,
+                    reconciliationStatus: r.reconciliationStatus,
+                    reviewFlag: r.reviewFlag
+                }, 200);
+            } catch (err) {
+                return sendJson({ success: false, error: err.message }, 500);
+            }
+        }
+
         // Passenger Rate Captain & Award Points (Customer-to-Driver Rating System)
         if ((pathname === '/api/customer/rate-driver' || pathname === '/api/customer/rate' || pathname === '/api/driver/rate-trip' || pathname === '/api/ride/rate') && method === 'POST') {
             try {
@@ -4313,10 +4391,9 @@ async function startServer() {
                     return sendJson({ success: false, error: 'معرّف المشوار (rideId) مطلوب للتقييم' }, 400);
                 }
 
-                const requests = db.memoryState.rideRequests || [];
-                const r = requests.find(item => item.id === rideId);
+                let r = await findRideById(rideId);
                 if (!r) {
-                    return sendJson({ success: false, error: 'الرحلة المطلوبة غير موجودة' }, 404);
+                    return sendJson({ success: false, notFound: true, error: 'الرحلة المطلوبة غير موجودة' }, 200);
                 }
 
                 // Security Check (RLS): Ensure caller is the passenger of this completed trip

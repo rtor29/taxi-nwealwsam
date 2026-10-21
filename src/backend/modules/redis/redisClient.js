@@ -277,9 +277,17 @@ class RedisManager {
         }
     }
 
-    // ---[ 5. Cluster-Wide Rate Limiter via Atomic Redis INCR & EXPIRE ]---
+    // ---[ 5. Cluster-Wide Rate Limiter via Atomic Redis Lua Script ]---
     /**
      * Check and enforce rate limit across all PM2 cluster instances
+     * Uses atomic Lua script to guarantee INCR and EXPIRE are executed atomically,
+     * preventing orphan keys without TTL (ttl == -1).
+     * 
+     * Fail-Open Architecture Note:
+     * If Redis is disconnected, unreachable, or throws an error, this method returns
+     * { allowed: true } by design (fail-open) so that transient caching or network issues
+     * do not disrupt active ride booking or captain operations in production.
+     * 
      * @param {string} key Redis rate limit key (e.g. rate:ride:create:${riderId})
      * @param {number} maxRequests Maximum allowed requests in window
      * @param {number} windowSec Time window in seconds
@@ -290,11 +298,21 @@ class RedisManager {
             return { allowed: true, current: 1, max: maxRequests, ttl: windowSec };
         }
         try {
-            const count = await this.client.incr(key);
-            if (count === 1) {
-                await this.client.expire(key, windowSec);
-            }
-            const ttl = await this.client.ttl(key);
+            const luaScript = `
+                local current = redis.call('INCR', KEYS[1])
+                if current == 1 then
+                    redis.call('EXPIRE', KEYS[1], ARGV[1])
+                end
+                local ttl = redis.call('TTL', KEYS[1])
+                if ttl == -1 then
+                    redis.call('EXPIRE', KEYS[1], ARGV[1])
+                    ttl = tonumber(ARGV[1])
+                end
+                return { current, ttl }
+            `;
+            const res = await this.client.eval(luaScript, 1, key, windowSec);
+            const count = Number(res[0]);
+            const ttl = Number(res[1]);
             return {
                 allowed: count <= maxRequests,
                 current: count,
@@ -302,6 +320,7 @@ class RedisManager {
                 ttl: ttl > 0 ? ttl : windowSec
             };
         } catch (err) {
+            // Fail-open: allow request if Redis operation fails
             return { allowed: true, current: 1, max: maxRequests, ttl: windowSec };
         }
     }

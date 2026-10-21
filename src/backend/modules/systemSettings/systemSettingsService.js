@@ -7,12 +7,20 @@
 const db = require('../../db');
 
 const DEFAULTS = {
+    // Dispatch & Safety
     proximity_radius_meters: 1000,
+    speed_jump_limit_kmh: 140,
+    step_timeout_seconds: 20,
+    // Reconciliation & Cancellation
     fare_discrepancy_threshold_iqd: 500,
     fare_rounding_multiple_iqd: 250,
     cancellation_fee_iqd: 1500,
-    speed_jump_limit_kmh: 140,
-    step_timeout_seconds: 20
+    // Round Trip & External Nav (Batch 2)
+    minute_wait_rate_iqd: 100,
+    free_wait_minutes: 5,
+    max_wait_minutes: 60,
+    round_trip_discount_percent: 0,
+    external_nav_timeout_minutes: 15
 };
 
 class SystemSettingsService {
@@ -40,11 +48,19 @@ class SystemSettingsService {
                         'fare_rounding_multiple_iqd',
                         'cancellation_fee_iqd',
                         'speed_jump_limit_kmh',
-                        'step_timeout_seconds'
+                        'step_timeout_seconds',
+                        'minute_wait_rate_iqd',
+                        'free_wait_minutes',
+                        'max_wait_minutes',
+                        'round_trip_discount_percent',
+                        'external_nav_timeout_minutes'
                     )`
                 );
 
-                for (const row of res.rows) {
+                // Priority Rule:
+                // 1. First parse legacy composite rows as fallback
+                const compositeKeys = ['dispatch_constants', 'reconciliation_constants'];
+                for (const row of res.rows.filter(r => compositeKeys.includes(r.key))) {
                     try {
                         const parsed = typeof row.value_json === 'string' ? JSON.parse(row.value_json) : row.value_json;
                         if (!parsed) continue;
@@ -57,8 +73,18 @@ class SystemSettingsService {
                             if (parsed.fare_discrepancy_threshold_iqd !== undefined) this._cache.fare_discrepancy_threshold_iqd = Number(parsed.fare_discrepancy_threshold_iqd);
                             if (parsed.fare_rounding_multiple_iqd !== undefined) this._cache.fare_rounding_multiple_iqd = Number(parsed.fare_rounding_multiple_iqd);
                             if (parsed.cancellation_fee_iqd !== undefined) this._cache.cancellation_fee_iqd = Number(parsed.cancellation_fee_iqd);
-                        } else if (parsed.value !== undefined) {
-                            this._cache[row.key] = Number(parsed.value);
+                        }
+                    } catch (_) {}
+                }
+
+                // 2. Then apply individual keys (SINGLE SOURCE OF TRUTH - overrides composite values)
+                for (const row of res.rows.filter(r => !compositeKeys.includes(r.key))) {
+                    try {
+                        const parsed = typeof row.value_json === 'string' ? JSON.parse(row.value_json) : row.value_json;
+                        if (parsed === null || parsed === undefined) continue;
+                        const val = parsed.value !== undefined ? parsed.value : parsed;
+                        if (typeof val === 'number' || (typeof val === 'string' && !isNaN(Number(val)))) {
+                            this._cache[row.key] = Number(val);
                         }
                     } catch (_) {}
                 }
@@ -109,6 +135,26 @@ class SystemSettingsService {
         return this.getConstant('step_timeout_seconds', DEFAULTS.step_timeout_seconds);
     }
 
+    getMinuteWaitRateIqd() {
+        return this.getConstant('minute_wait_rate_iqd', DEFAULTS.minute_wait_rate_iqd);
+    }
+
+    getFreeWaitMinutes() {
+        return this.getConstant('free_wait_minutes', DEFAULTS.free_wait_minutes);
+    }
+
+    getMaxWaitMinutes() {
+        return this.getConstant('max_wait_minutes', DEFAULTS.max_wait_minutes);
+    }
+
+    getRoundTripDiscountPercent() {
+        return this.getConstant('round_trip_discount_percent', DEFAULTS.round_trip_discount_percent);
+    }
+
+    getExternalNavTimeoutMinutes() {
+        return this.getConstant('external_nav_timeout_minutes', DEFAULTS.external_nav_timeout_minutes);
+    }
+
     getAllConstants() {
         return {
             proximity_radius_meters: this.getProximityRadiusMeters(),
@@ -116,7 +162,12 @@ class SystemSettingsService {
             fare_rounding_multiple_iqd: this.getFareRoundingMultipleIqd(),
             cancellation_fee_iqd: this.getCancellationFeeIqd(),
             speed_jump_limit_kmh: this.getSpeedJumpLimitKmh(),
-            step_timeout_seconds: this.getStepTimeoutSeconds()
+            step_timeout_seconds: this.getStepTimeoutSeconds(),
+            minute_wait_rate_iqd: this.getMinuteWaitRateIqd(),
+            free_wait_minutes: this.getFreeWaitMinutes(),
+            max_wait_minutes: this.getMaxWaitMinutes(),
+            round_trip_discount_percent: this.getRoundTripDiscountPercent(),
+            external_nav_timeout_minutes: this.getExternalNavTimeoutMinutes()
         };
     }
 }
