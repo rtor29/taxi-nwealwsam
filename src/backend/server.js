@@ -4789,9 +4789,10 @@ async function startServer() {
                             actualPhone || ''
                         ]);
                         if (upRes.rowCount === 0 && driverId) {
+                            const licenseNum = driver?.licenseNumber || ('IRQ-NJF-' + (String(driverId).replace(/[^0-9]/g, '').slice(-4) || '1000'));
                             await db.pool.query(`
-                                INSERT INTO drivers (driver_id, full_name, phone_number, status, work_mode, latitude, longitude, created_at, updated_at)
-                                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+                                INSERT INTO drivers (driver_id, full_name, phone_number, license_number, status, work_mode, latitude, longitude, created_at, updated_at)
+                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
                                 ON CONFLICT (driver_id) DO UPDATE SET
                                     status = EXCLUDED.status,
                                     work_mode = EXCLUDED.work_mode,
@@ -4802,6 +4803,7 @@ async function startServer() {
                                 driverId,
                                 driver?.fullName || driverName || 'كابتن توصيله',
                                 actualPhone || driver?.phoneNumber || '',
+                                licenseNum,
                                 onlineBool ? 'Online' : 'Offline',
                                 computedWorkMode,
                                 actualLat || 32.0298,

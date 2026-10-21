@@ -6,6 +6,34 @@ const db = require('../../db');
  */
 class AuditService {
     /**
+     * Compatibility alias for logAuditEvent
+     */
+    async logEvent(params = {}) {
+        const {
+            action,
+            entityType,
+            targetType,
+            entityId,
+            targetId,
+            actor,
+            userId,
+            details,
+            ip,
+            userAgent
+        } = params;
+
+        return this.logAuditEvent({
+            action,
+            entityType: entityType || targetType || 'System',
+            entityId: entityId || targetId || 'N/A',
+            actor: actor || userId || 'System',
+            details: details || {},
+            ip: ip || '127.0.0.1',
+            userAgent: userAgent || ''
+        });
+    }
+
+    /**
      * Records an audit event both in PostgreSQL (persistent) and in-memory cache
      */
     async logAuditEvent({

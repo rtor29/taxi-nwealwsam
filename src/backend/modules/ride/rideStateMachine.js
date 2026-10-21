@@ -479,13 +479,15 @@ async function transitionRideState(redisManager, rideId, targetStatus, actorInfo
 
         // 7. Audit log for sensitive transitions
         if ([RIDE_STATES.ACCEPTED, RIDE_STATES.COMPLETED, RIDE_STATES.CANCELLED_BY_RIDER, RIDE_STATES.CANCELLED_BY_DRIVER].includes(toStatus)) {
-            await auditService.logEvent({
-                action: `RIDE_STATE_${toStatus}`,
-                targetType: 'ride',
-                targetId: sId,
-                userId: actorInfo.id || 'system',
-                details: { fromStatus, toStatus, fare: ride.finalFare || ride.fare, receivedAmount: ride.receivedAmount }
-            });
+            try {
+                await auditService.logAuditEvent({
+                    action: `RIDE_STATE_${toStatus}`,
+                    entityType: 'ride',
+                    entityId: sId,
+                    actor: actorInfo.role || 'System',
+                    details: { fromStatus, toStatus, fare: ride.finalFare || ride.fare, receivedAmount: ride.receivedAmount }
+                });
+            } catch (_) {}
         }
 
         // 8. Publish real-time events via Redis Pub/Sub
