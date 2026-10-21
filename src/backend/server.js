@@ -3222,11 +3222,11 @@ async function startServer() {
                 return sendJson({ success: true, ride: null, request: null }, 200);
             }
 
-            // Sync to local memory if absent
+            // Sync to local memory
             db.memoryState.rideRequests = db.memoryState.rideRequests || [];
             const existingIdx = db.memoryState.rideRequests.findIndex(item => String(item.id) === String(r.id));
             if (existingIdx >= 0) {
-                r = db.memoryState.rideRequests[existingIdx];
+                db.memoryState.rideRequests[existingIdx] = r;
             } else {
                 db.memoryState.rideRequests.unshift(r);
             }
@@ -3364,11 +3364,11 @@ async function startServer() {
                     }, 200);
                 }
 
-                // Ensure local memory has reference to r
+                // Ensure local memory has updated reference to r
                 db.memoryState.rideRequests = db.memoryState.rideRequests || [];
                 const memIdx = db.memoryState.rideRequests.findIndex(item => String(item.id) === String(r.id));
                 if (memIdx >= 0) {
-                    r = db.memoryState.rideRequests[memIdx];
+                    db.memoryState.rideRequests[memIdx] = r;
                 } else {
                     db.memoryState.rideRequests.unshift(r);
                 }
@@ -3513,11 +3513,11 @@ async function startServer() {
                 let r = await findRideById(requestId);
                 if (!r) return sendJson({ success: false, notFound: true, error: 'الطلب غير متاح حالياً' }, 200);
 
-                // Ensure local memory has reference to r
+                // Ensure local memory has updated reference to r
                 db.memoryState.rideRequests = db.memoryState.rideRequests || [];
                 const memIdx = db.memoryState.rideRequests.findIndex(item => String(item.id) === String(r.id));
                 if (memIdx >= 0) {
-                    r = db.memoryState.rideRequests[memIdx];
+                    db.memoryState.rideRequests[memIdx] = r;
                 } else {
                     db.memoryState.rideRequests.unshift(r);
                 }
@@ -3662,11 +3662,11 @@ async function startServer() {
                 let r = await findRideById(requestId);
                 if (!r) return sendJson({ success: false, notFound: true, error: 'الطلب غير متاح حالياً' }, 200);
 
-                // Ensure local memory has reference to r
+                // Ensure local memory has updated reference to r
                 db.memoryState.rideRequests = db.memoryState.rideRequests || [];
                 const memIdx = db.memoryState.rideRequests.findIndex(item => String(item.id) === String(r.id));
                 if (memIdx >= 0) {
-                    r = db.memoryState.rideRequests[memIdx];
+                    db.memoryState.rideRequests[memIdx] = r;
                 } else {
                     db.memoryState.rideRequests.unshift(r);
                 }
