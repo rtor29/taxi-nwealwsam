@@ -2652,20 +2652,24 @@ async function startServer() {
             return sendJson({ success: true, drivers: activeDrivers });
         }
 
-        // Universal Ride Resolver: Searches Memory, Redis (active & pending), and PostgreSQL
+        // Universal Ride Resolver: Searches Redis (Single Source of Truth), Memory, and PostgreSQL
         const findRideById = async (rideId) => {
             if (!rideId || rideId === 'undefined' || rideId === 'null') return null;
             const sId = String(rideId).trim();
             
-            // 1. In memory
-            const inMem = (db.memoryState.rideRequests || []).find(item => String(item.id) === sId);
-            if (inMem) return inMem;
-
-            // 2. In Redis (active or pending)
+            // 1. In Redis (Single Source of Truth across PM2 cluster)
             if (redisManager.isConnected && redisManager.client) {
                 try {
                     const activeStr = await redisManager.client.get('ride:active:' + sId);
-                    if (activeStr) return JSON.parse(activeStr);
+                    if (activeStr) {
+                        const ride = JSON.parse(activeStr);
+                        if (db.memoryState && Array.isArray(db.memoryState.rideRequests)) {
+                            const idx = db.memoryState.rideRequests.findIndex(item => String(item.id) === sId);
+                            if (idx >= 0) db.memoryState.rideRequests[idx] = ride;
+                            else db.memoryState.rideRequests.unshift(ride);
+                        }
+                        return ride;
+                    }
 
                     const pendingStr = await redisManager.client.hget('pending:rides', sId);
                     if (pendingStr) return JSON.parse(pendingStr);
@@ -2674,6 +2678,10 @@ async function startServer() {
                     if (reqStr) return JSON.parse(reqStr);
                 } catch (_) {}
             }
+
+            // 2. In memory fallback
+            const inMem = (db.memoryState.rideRequests || []).find(item => String(item.id) === sId);
+            if (inMem) return inMem;
 
             // 3. In PostgreSQL
             if (db.isPostgresConnected && db.pool) {
