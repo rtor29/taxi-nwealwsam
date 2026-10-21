@@ -1084,7 +1084,7 @@ async function rejectCurrentDocument() {
 async function loadDrivers(search = '') {
     const tbody = document.getElementById('drivers-table-body');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-slate-400">جاري التحميل...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400">جاري التحميل...</td></tr>';
 
     try {
         const res = await fetch(`${API_BASE}/drivers?search=${encodeURIComponent(search)}`, { headers: authHeaders() });
@@ -1092,7 +1092,7 @@ async function loadDrivers(search = '') {
         tbody.innerHTML = '';
 
         if (!data.drivers || data.drivers.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-slate-400">لا يوجد سائقون مطابقون</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400">لا يوجد سائقون مطابقون</td></tr>';
             return;
         }
 
@@ -1183,7 +1183,7 @@ async function loadDrivers(search = '') {
                     <span class="inline-flex items-center px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200/60 rounded-md text-xs font-medium">${escapeHtml(d.workMode || 'مشوار قصير')}</span> 
                     <span class="inline-flex items-center px-2 py-0.5 text-xs rounded-md font-semibold ${d.vehicleType === 'vip' ? 'bg-amber-50 text-amber-800 border border-amber-200/60' : 'bg-slate-100 text-slate-700 border border-slate-200/60'}">${d.vehicleType === 'vip' ? '👑 VIP' : '🚕 توفير'}</span>
                 </td>
-                <td class="py-3.5 px-4"><span class="px-2 py-1 bg-slate-50 text-slate-700 font-mono text-xs rounded border border-slate-200 font-medium select-all" title="كلمة المرور">${escapeHtml(d.password || '••••••••')}</span></td>
+
                 <td class="py-3.5 px-4">
                     <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200/60 shadow-2xs">
                         <i class="fa-solid fa-star text-amber-500 text-[10px]"></i>
@@ -1213,7 +1213,7 @@ async function loadDrivers(search = '') {
             tbody.appendChild(tr);
         });
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-rose-500">فشل في الاتصال بقاعدة البيانات</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-rose-500">فشل في الاتصال بقاعدة البيانات</td></tr>';
     }
 }
 
