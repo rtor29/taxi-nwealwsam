@@ -252,17 +252,23 @@ async function runBatch2Tests() {
         const ride2 = createRes2.body?.request;
         const rideId2 = ride2?.id;
         testRides.push(rideId2);
+        console.log(`   Ride 2 created: ${rideId2} (status ${createRes2.status})`);
 
-        await request('POST', '/api/ride/accept', { requestId: rideId2, driverId: driver.id }, { Authorization: `Bearer ${drvToken}` });
-        await request('POST', '/api/ride/arrived', { requestId: rideId2, driverId: driver.id, driverLat: 31.9962, driverLon: 44.3169 }, { Authorization: `Bearer ${drvToken}` });
-        await request('POST', '/api/ride/start', { requestId: rideId2, driverId: driver.id }, { Authorization: `Bearer ${drvToken}` });
-        await request('POST', '/api/ride/destination-arrived', { requestId: rideId2, driverId: driver.id }, { Authorization: `Bearer ${drvToken}` });
+        const accRes2 = await request('POST', '/api/ride/accept', { requestId: rideId2, driverId: driver.id }, { Authorization: `Bearer ${drvToken}` });
+        console.log(`   Ride 2 accept: ${accRes2.status}, ${accRes2.body?.error || accRes2.body?.success}`);
+        const arrRes2 = await request('POST', '/api/ride/arrived', { requestId: rideId2, driverId: driver.id, driverLat: 31.9962, driverLon: 44.3169 }, { Authorization: `Bearer ${drvToken}` });
+        console.log(`   Ride 2 arrived: ${arrRes2.status}, ${arrRes2.body?.error || arrRes2.body?.success}`);
+        const strRes2 = await request('POST', '/api/ride/start', { requestId: rideId2, driverId: driver.id }, { Authorization: `Bearer ${drvToken}` });
+        console.log(`   Ride 2 start: ${strRes2.status}, ${strRes2.body?.error || strRes2.body?.success}`);
+        const dstRes2 = await request('POST', '/api/ride/destination-arrived', { requestId: rideId2, driverId: driver.id }, { Authorization: `Bearer ${drvToken}` });
+        console.log(`   Ride 2 dest arrived: ${dstRes2.status}, status=${dstRes2.body?.status}, ${dstRes2.body?.error}`);
 
         // Passenger cancels during WAITING_AT_DESTINATION
         const cancelRes = await request('POST', '/api/ride/cancel', {
             requestId: rideId2,
             reason: 'انتهت حاجتي ولن أعود بالسيارة'
         }, { Authorization: `Bearer ${cust2Token}` });
+        console.log(`   Ride 2 cancel: ${cancelRes.status}, body:`, cancelRes.body);
 
         const passWaitCancel = (cancelRes.body?.status === 'CANCELLED_BY_RIDER' &&
                                 cancelRes.body?.isWaitCancellation === true &&
