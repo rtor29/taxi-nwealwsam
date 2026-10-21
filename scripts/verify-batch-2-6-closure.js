@@ -150,7 +150,6 @@ async function main() {
     console.log('========================================================================\n');
 
     await db.init();
-    await redisManager.connect();
 
     const createdRideIds = [];
     const testDriverId = 'drv-b26-test-' + Date.now();
