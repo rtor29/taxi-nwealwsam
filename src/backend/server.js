@@ -306,8 +306,8 @@ function isDriverAuthorizedForRide(ride, authUser, body) {
         return false;
     }
 
-    const currentDriverId = String(body?.driverId || authUser?.id || body?.driverPhone || '').trim();
-    const currentDriverPhone = normalizePhone(body?.driverPhone || body?.driverId || authUser?.phone || authUser?.driver?.phoneNumber || '');
+    const currentDriverId = String(body?.driverId || authUser?.id || '').trim();
+    const currentDriverPhone = normalizePhone(body?.driverPhone || authUser?.phone || authUser?.driver?.phoneNumber || '');
 
     // Security: reject if current caller matches the customer of this ride
     const custId = String(ride.customerId || ride.customer_id || '').trim();
@@ -317,6 +317,12 @@ function isDriverAuthorizedForRide(ride, authUser, body) {
     }
     if (custPhone && currentDriverPhone && custPhone === currentDriverPhone) {
         return false;
+    }
+
+    // Strict ID check if assigned driver ID is present
+    const assignedDriverId = String(ride.assignedDriverId || ride.acceptedDriverId || ride.driver_id || ride.driverId || '').trim();
+    if (assignedDriverId && currentDriverId) {
+        return assignedDriverId.toLowerCase() === currentDriverId.toLowerCase();
     }
 
     // 1. Direct loose equality check: (ride.driver_id == req.body.driverId)
@@ -3587,7 +3593,7 @@ async function startServer() {
                 db.memoryState.chatMessages.push(arrivalMsg);
                 db.saveStateSnapshot();
 
-                return sendJson({ success: true, message: 'تم إشعار الراكب بوصولك إلى الموقع 📍', request: r, ride: r });
+                return sendJson({ success: true, message: 'تم إشعار الراكب بوصولك إلى الموقع 📍', status: RIDE_STATES.DRIVER_ARRIVED, request: r, ride: r });
             } catch (err) {
                 return sendJson({ success: false, error: err.message }, 500);
             }
