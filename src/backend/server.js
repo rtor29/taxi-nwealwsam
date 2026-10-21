@@ -2857,7 +2857,7 @@ async function startServer() {
                 try {
                     const pgDrivers = await db.pool.query(
                         `SELECT * FROM drivers 
-                         WHERE (status = 'Online' OR is_online = true) 
+                         WHERE status = 'Online' 
                          AND (is_blocked IS NOT TRUE)`
                     );
                     if (pgDrivers && pgDrivers.rows) {
@@ -4778,26 +4778,23 @@ async function startServer() {
                                 work_mode = $2, 
                                 latitude = COALESCE($3, latitude), 
                                 longitude = COALESCE($4, longitude),
-                                is_online = $5,
                                 updated_at = NOW()
-                            WHERE driver_id = $6 OR phone_number = $7
+                            WHERE driver_id = $5 OR phone_number = $6
                         `, [
                             onlineBool ? 'Online' : 'Offline',
                             computedWorkMode,
                             actualLat,
                             actualLng,
-                            onlineBool,
                             driverId || '',
                             actualPhone || ''
                         ]);
                         if (upRes.rowCount === 0 && driverId) {
                             await db.pool.query(`
-                                INSERT INTO drivers (driver_id, full_name, phone_number, status, work_mode, latitude, longitude, is_online, created_at, updated_at)
-                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+                                INSERT INTO drivers (driver_id, full_name, phone_number, status, work_mode, latitude, longitude, created_at, updated_at)
+                                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
                                 ON CONFLICT (driver_id) DO UPDATE SET
                                     status = EXCLUDED.status,
                                     work_mode = EXCLUDED.work_mode,
-                                    is_online = EXCLUDED.is_online,
                                     latitude = EXCLUDED.latitude,
                                     longitude = EXCLUDED.longitude,
                                     updated_at = NOW()
@@ -4808,8 +4805,7 @@ async function startServer() {
                                 onlineBool ? 'Online' : 'Offline',
                                 computedWorkMode,
                                 actualLat || 32.0298,
-                                actualLng || 44.3285,
-                                onlineBool
+                                actualLng || 44.3285
                             ]);
                         }
                     } catch (pgErr) {
@@ -5062,39 +5058,58 @@ async function startServer() {
             const body = await parseJsonBody(req);
             const { driverId, latitude, longitude, lat, lon, heading, speedKmh, tripStatus } = body;
             const cleanPhone = String(driverId || '').replace(/[^0-9]/g, '');
-            const driver = (db.memoryState.drivers || []).find(d => 
+            let driver = (db.memoryState.drivers || []).find(d => 
                 String(d.driverId) === String(driverId) || 
                 String(d.id) === String(driverId) || 
                 (cleanPhone.length >= 7 && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8)))
             );
-            if (driver) {
-                const now = Date.now();
-                const dLat = latitude !== undefined ? parseFloat(latitude) : (lat !== undefined ? parseFloat(lat) : parseFloat(driver.currentLat));
-                const dLon = longitude !== undefined ? parseFloat(longitude) : (lon !== undefined ? parseFloat(lon) : parseFloat(driver.currentLon));
 
-                // Speed jump validation (> 140 km/h) & log to audit_logs
-                if (!isNaN(dLat) && !isNaN(dLon) && driver.currentLat && driver.currentLon && driver.lastLocationTimestamp) {
-                    const speedCheck = validateLocationSpeed(
-                        parseFloat(driver.currentLat),
-                        parseFloat(driver.currentLon),
-                        driver.lastLocationTimestamp,
-                        dLat,
-                        dLon,
-                        now
-                    );
-                    if (!speedCheck.valid) {
+            const now = Date.now();
+            let prevLat = driver?.currentLat ? parseFloat(driver.currentLat) : null;
+            let prevLon = driver?.currentLon ? parseFloat(driver.currentLon) : null;
+            let prevTime = driver?.lastLocationTimestamp || null;
+
+            // Across PM2 Cluster: Check Redis for driver meta if memory lacks previous location/timestamp
+            if (redisManager && redisManager.isConnected && (!prevLat || !prevTime)) {
+                try {
+                    const meta = await redisManager.client.hgetall(`driver:${driverId}:meta`);
+                    if (meta && meta.lat && meta.lon && meta.updatedAt) {
+                        prevLat = parseFloat(meta.lat);
+                        prevLon = parseFloat(meta.lon);
+                        prevTime = parseInt(meta.updatedAt, 10);
+                    }
+                } catch (_) {}
+            }
+
+            const dLat = latitude !== undefined ? parseFloat(latitude) : (lat !== undefined ? parseFloat(lat) : (prevLat !== null ? prevLat : 0));
+            const dLon = longitude !== undefined ? parseFloat(longitude) : (lon !== undefined ? parseFloat(lon) : (prevLon !== null ? prevLon : 0));
+
+            // Speed jump validation (> 140 km/h) & log to audit_logs
+            if (!isNaN(dLat) && !isNaN(dLon) && prevLat !== null && prevLon !== null && prevTime && (now - prevTime) < 300000) {
+                const speedCheck = validateLocationSpeed(
+                    prevLat,
+                    prevLon,
+                    prevTime,
+                    dLat,
+                    dLon,
+                    now
+                );
+                if (!speedCheck.valid) {
+                    try {
                         const auditService = require('./modules/audit/auditService');
-                        auditService.logEvent({
+                        await auditService.logEvent({
                             action: 'SPEED_JUMP_REJECTED',
                             targetType: 'driver',
-                            targetId: driver.driverId,
-                            userId: driver.driverId,
+                            targetId: driverId,
+                            userId: driverId,
                             details: { speedKmh: speedCheck.speedKmh, distKm: speedCheck.distKm, reason: speedCheck.reason }
-                        }).catch(() => {});
-                        return sendJson({ success: false, error: 'تم رفض إحداثيات الموقع: ' + speedCheck.reason }, 400);
-                    }
+                        });
+                    } catch (e) {}
+                    return sendJson({ success: false, error: 'تم رفض إحداثيات الموقع: ' + speedCheck.reason }, 400);
                 }
+            }
 
+            if (driver) {
                 driver.currentLat = dLat;
                 driver.currentLon = dLon;
                 driver.lastLocationTimestamp = now;
@@ -5103,28 +5118,30 @@ async function startServer() {
                 if (tripStatus !== undefined) driver.tripStatus = tripStatus;
                 driver.lastLocationUpdate = new Date().toISOString();
                 db.saveStateSnapshot();
-
-                // Redis Geospatial Index & Real-Time Stream Broadcast
-                if (!isNaN(dLat) && !isNaN(dLon)) {
-                    redisManager.updateDriverLocation(driver.driverId, dLon, dLat, driver);
-                }
-
-                const activeRide = (db.memoryState.rideRequests || []).find(r => 
-                    (r.acceptedDriverId === driver.driverId || r.assignedDriverId === driver.driverId) &&
-                    (r.status === 'Accepted' || r.status === 'Arrived' || r.status === 'InProgress')
-                );
-                if (activeRide) {
-                    redisManager.publishRideEvent(activeRide.id, {
-                        type: 'driver_location',
-                        driverId: driver.driverId,
-                        latitude: dLat,
-                        longitude: dLon,
-                        heading: driver.heading || 0,
-                        speedKmh: driver.speedKmh || 30
-                    });
-                }
             }
-            return sendJson({ success: true, updated: !!driver });
+
+            // Redis Geospatial Index & Real-Time Stream Broadcast across PM2 cluster
+            if (!isNaN(dLat) && !isNaN(dLon)) {
+                await redisManager.updateDriverLocation(driverId, dLon, dLat, driver || { id: driverId });
+            }
+
+            const activeRide = (db.memoryState.rideRequests || []).find(r => 
+                (r.acceptedDriverId === driverId || r.assignedDriverId === driverId) &&
+                (r.status === 'Accepted' || r.status === 'Arrived' || r.status === 'InProgress' ||
+                 r.status === 'ACCEPTED' || r.status === 'DRIVER_ARRIVED' || r.status === 'IN_TRIP')
+            );
+            if (activeRide) {
+                redisManager.publishRideEvent(activeRide.id, {
+                    type: 'driver_location',
+                    driverId: driverId,
+                    latitude: dLat,
+                    longitude: dLon,
+                    heading: heading || 0,
+                    speedKmh: speedKmh || 30
+                });
+            }
+
+            return sendJson({ success: true, updated: true });
         }
 
         // Single Driver Live Position (for Passenger Real-time Tracking)
