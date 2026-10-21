@@ -354,8 +354,21 @@ async function transitionRideState(redisManager, rideId, targetStatus, actorInfo
         // Check if transition is allowed
         const allowed = ALLOWED_TRANSITIONS[fromStatus] || [];
         if (!allowed.includes(toStatus)) {
-            // Already in desired status? (Idempotent return)
+            // Already in desired status? (Idempotent return only for same actor; conflict if different driver attempts accept)
             if (fromStatus === toStatus) {
+                if (toStatus === RIDE_STATES.ACCEPTED) {
+                    const existingDriver = ride.assignedDriverId || ride.acceptedDriverId;
+                    const incomingDriver = actorInfo.id || extraData.assignedDriverId || extraData.acceptedDriverId;
+                    if (existingDriver && incomingDriver && String(existingDriver) !== String(incomingDriver)) {
+                        return {
+                            success: false,
+                            conflict: true,
+                            alreadyAccepted: true,
+                            status: 409,
+                            error: 'عذراً، المشوار تم قبوله من كابتن آخر أو لم يعد متاحاً.'
+                        };
+                    }
+                }
                 return { success: true, ride, idempotent: true };
             }
             return {
