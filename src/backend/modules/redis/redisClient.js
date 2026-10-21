@@ -243,35 +243,37 @@ class RedisManager {
     }
 
     /**
-     * Retrieve all fresh (< 3 mins) pending rides from Redis Hash
+     * Retrieve all fresh (< 2 mins) pending rides strictly from Redis Hash
+     * Prunes expired or non-pending rides atomically
      */
     async getPendingRides() {
-        if (!this.isConnected) return null;
+        if (!this.isConnected || !this.client) return [];
         try {
             const rawMap = await this.client.hgetall('pending:rides');
             if (!rawMap) return [];
             const rides = [];
             const now = Date.now();
-            const maxAgeMs = 3 * 60 * 1000; // 3 minutes maximum age
+            const maxAgeMs = 120000; // strictly within 2 minutes (120,000 ms)
             for (const [id, jsonStr] of Object.entries(rawMap)) {
                 try {
                     const r = JSON.parse(jsonStr);
-                    const reqTime = r.requestedAt ? Number(r.requestedAt) : (r.createdAt ? new Date(r.createdAt).getTime() : now);
+                    const reqTime = r.requestedAt ? Number(r.requestedAt) : (r.createdAt ? new Date(r.createdAt).getTime() : (r.timestamp ? Number(r.timestamp) : now));
                     const isPending = String(r.status || '').toLowerCase().trim() === 'pending';
-                    const isFresh = (now - reqTime) <= maxAgeMs;
+                    const age = now - reqTime;
+                    const isFresh = age < maxAgeMs;
 
-                    if (isPending && isFresh) {
+                    if (isPending && isFresh && !r.acceptedDriverId) {
                         rides.push(r);
-                    } else {
-                        // Stale or non-pending: prune atomically from Redis hash
-                        this.client.hdel('pending:rides', id).catch(() => {});
+                    } else if (age >= maxAgeMs || !isPending || r.acceptedDriverId) {
+                        // Stale, accepted, or non-pending: prune atomically from Redis hash
+                        this.client.hdel('pending:rides', String(id)).catch(() => {});
                         this.client.del(`ride:request:${id}`).catch(() => {});
                     }
                 } catch (_) {}
             }
             return rides;
         } catch (_) {
-            return null;
+            return [];
         }
     }
 }

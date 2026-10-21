@@ -3338,14 +3338,21 @@ async function startServer() {
                 }
 
                 // Atomically clear from Redis hash, key and acceptance lock
+                if (redisManager.isConnected && redisManager.client) {
+                    await Promise.all([
+                        redisManager.client.hdel('pending:rides', String(rideId)).catch(() => {}),
+                        redisManager.client.del(`ride:lock:${rideId}`).catch(() => {}),
+                        redisManager.client.del(`ride:request:${rideId}`).catch(() => {})
+                    ]);
+                }
                 await redisManager.removePendingRide(rideId);
 
                 // Broadcast instant cancellation event to all drivers via dispatch channel
                 const cancelPayload = {
                     event: 'ride_cancelled',
                     type: 'ride_cancelled',
-                    rideId: rideId,
-                    requestId: rideId,
+                    rideId: String(rideId),
+                    requestId: String(rideId),
                     reason: reason,
                     timestamp: Date.now()
                 };
@@ -3690,11 +3697,10 @@ async function startServer() {
 
             if (isStrictlyCommuteOrIdle) return [];
 
-            // 1. Read from Redis cluster hash first for 100% consistency across all 6 PM2 workers
+            // 1. Read strictly from Redis cluster hash for 100% consistency across all 6 PM2 workers
+            // ZERO in-memory fallback to eliminate cluster round-robin state flapping
             const redisList = await redisManager.getPendingRides();
-            const sourceList = (redisList && Array.isArray(redisList) && redisList.length > 0) 
-                ? redisList 
-                : (db.memoryState.rideRequests || []);
+            const sourceList = Array.isArray(redisList) ? redisList : [];
 
             const now = Date.now();
             const maxAgeMs = 3 * 60 * 1000; // strictly within 3 minutes
@@ -3924,61 +3930,48 @@ async function startServer() {
             return sendJson({ success: true, activeRide: active || null });
         }
 
-        // Driver Pending Requests List (Robust matching, flexible extraction, unified response)
+        // Driver Pending Requests List (Strictly Read from Redis Hash 'pending:rides' - Zero In-Memory State)
         const isPendingRequestsRoute = (
             (pathname.startsWith('/api/driver/') || pathname.startsWith('/driver/')) && pathname.endsWith('/pending-requests')
         ) || pathname === '/api/driver/pending-requests' || pathname === '/driver/pending-requests';
 
         if (isPendingRequestsRoute && method === 'GET') {
-            const authUser = getAuthUser(req);
-            let rawParam = '';
-            const match = pathname.match(/^\/?(?:api\/)?driver(?:\/([^\/]+))?\/pending-requests$/i);
-            if (match && match[1] && match[1] !== 'pending-requests' && match[1] !== 'driver') {
-                rawParam = decodeURIComponent(match[1]);
-            }
-            if (!rawParam) {
-                rawParam = parsedUrl.searchParams.get('driverId') || 
-                           parsedUrl.searchParams.get('id') || 
-                           parsedUrl.searchParams.get('userId') || 
-                           parsedUrl.searchParams.get('phone') || 
-                           parsedUrl.searchParams.get('phoneNumber') || 
-                           (authUser ? (authUser.id || authUser.driverId || authUser.userId || authUser._id || authUser.phone) : '') ||
-                           req.headers['x-driver-id'] ||
-                           req.headers['x-user-id'] ||
-                           '';
-            }
-            rawParam = String(rawParam || '').trim();
-            const cleanPhone = rawParam.replace(/[^0-9]/g, '');
+            try {
+                // Unified Redis read ensures 100% identical responses across all 6 PM2 cluster workers
+                const now = Date.now();
+                const validRides = [];
 
-            const matchedDriver = (db.memoryState.drivers || []).find(d => 
-                String(d.driverId) === String(rawParam) || 
-                String(d.id) === String(rawParam) || 
-                String(d._id) === String(rawParam) || 
-                String(d.userId) === String(rawParam) || 
-                (cleanPhone.length >= 7 && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8))) ||
-                (cleanPhone.length >= 7 && d.phone && d.phone.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8)))
-            );
-            const targetDriverId = matchedDriver ? (matchedDriver.driverId || matchedDriver.id || matchedDriver._id) : rawParam;
+                if (redisManager.isConnected && redisManager.client) {
+                    const pendingRaw = await redisManager.client.hgetall('pending:rides');
+                    if (pendingRaw) {
+                        for (const [id, rideJson] of Object.entries(pendingRaw)) {
+                            try {
+                                const ride = JSON.parse(rideJson);
+                                const reqTime = ride.requestedAt ? Number(ride.requestedAt) : (ride.createdAt ? new Date(ride.createdAt).getTime() : (ride.timestamp ? Number(ride.timestamp) : now));
+                                const age = now - reqTime;
+                                const isPending = String(ride.status || '').toLowerCase().trim() === 'pending';
 
-            // Driver work mode verification (exclude ONLY if driver is strictly in commute or idle/offline mode)
-            let isStrictlyCommuteOrIdle = false;
-            if (matchedDriver) {
-                const dMode = String(matchedDriver.current_mode || matchedDriver.work_mode || matchedDriver.workStatus || matchedDriver.mode || '').toLowerCase().trim();
-                if (dMode === 'commute' || dMode === 'permanent' || dMode === 'خط دائمي' || dMode === 'idle' || dMode === 'خمول' || dMode === 'offline') {
-                    isStrictlyCommuteOrIdle = true;
+                                if (isPending && age < 120000 && !ride.acceptedDriverId) {
+                                    validRides.push(ride);
+                                } else if (age >= 120000 || !isPending || ride.acceptedDriverId) {
+                                    // Automatic self-cleaning of expired or accepted rides
+                                    await redisManager.client.hdel('pending:rides', String(id)).catch(() => {});
+                                    await redisManager.client.del(`ride:request:${id}`).catch(() => {});
+                                }
+                            } catch (e) {}
+                        }
+                    }
                 }
+
+                return sendJson({
+                    success: true,
+                    pendingRequests: validRides,
+                    requests: validRides,
+                    data: validRides
+                });
+            } catch (err) {
+                return sendJson({ success: false, pendingRequests: [] }, 500);
             }
-
-            const list = await getDriverPendingList(targetDriverId || rawParam);
-
-            console.log(`[Dispatch] Driver ${targetDriverId || rawParam || 'unknown'} polled: ${list.length} pending rides`);
-
-            return sendJson({
-                success: true,
-                pendingRequests: list,
-                requests: list,
-                data: list
-            });
         }
 
         // Driver Toggle Online/Offline & Work Mode (taxi / permanent / idle)
