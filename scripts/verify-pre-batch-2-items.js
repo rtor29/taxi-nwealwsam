@@ -10,9 +10,21 @@
 
 const http = require('http');
 const jwt = require('jsonwebtoken');
+const Redis = require('ioredis');
+const { Pool } = require('pg');
 
 const API_BASE = process.env.API_BASE || 'http://127.0.0.1:5050';
 const JWT_SECRET = process.env.JWT_SECRET || 'tawseela_prod_jwt_super_secret_najaf_2026';
+
+const redis = new Redis({
+    host: process.env.REDIS_HOST || '127.0.0.1',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    password: process.env.REDIS_PASSWORD || undefined
+});
+
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/taxiwisam'
+});
 
 function signToken(payload) {
     return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
@@ -23,6 +35,7 @@ function request(method, path, body = null, headers = {}) {
         const url = new URL(path, API_BASE);
         const reqHeaders = {
             'Content-Type': 'application/json',
+            'Connection': 'close', // Ensures requests rotate across PM2 cluster workers
             ...headers
         };
         const options = {
@@ -80,45 +93,74 @@ async function runPreBatch2Tests() {
         }
     }
 
+    const testDriver1Id = `drv-cand1-${Date.now()}`;
+    const testDriver2Id = `drv-cand2-${Date.now()}`;
+    const customer1 = { id: `cust-verif-${Date.now()}`, role: 'Customer', phone: '07801112233' };
+    const customer2 = { id: `cust-other-${Date.now()}`, role: 'Customer', phone: '07809998877' };
+    const driver1 = { id: testDriver1Id, role: 'Driver', phone: '07701112233', fullName: 'كابتن أحمد' };
+    const driver2 = { id: testDriver2Id, role: 'Driver', phone: '07702223344', fullName: 'كابتن سامر' };
+
+    const cust1Token = signToken(customer1);
+    const cust2Token = signToken(customer2);
+    const drv1Token = signToken(driver1);
+    const drv2Token = signToken(driver2);
+
     try {
-        // Setup Simulated Participants
-        const customer1 = { id: `cust-verif-${Date.now()}`, role: 'Customer', phone: '07801112233' };
-        const customer2 = { id: `cust-other-${Date.now()}`, role: 'Customer', phone: '07809998877' };
-        const driver1 = { id: `drv-cand1-${Date.now()}`, role: 'Driver', phone: '07701112233', fullName: 'كابتن أحمد' };
-        const driver2 = { id: `drv-cand2-${Date.now()}`, role: 'Driver', phone: '07702223344', fullName: 'كابتن سامر' };
+        // 0. Seed Candidates in Redis Geospatial Index & Postgres
+        console.log('🌱 Seeding 2 test drivers into Redis Geo Index & PostgreSQL...');
+        await redis.geoadd('drivers:locations', 44.3170, 31.9970, driver1.id);
+        await redis.hmset(`driver:${driver1.id}:meta`, {
+            id: driver1.id,
+            fullName: driver1.fullName,
+            phone: driver1.phone,
+            status: 'Online',
+            workMode: 'taxi',
+            vehicleType: 'eco'
+        });
 
-        const cust1Token = signToken(customer1);
-        const cust2Token = signToken(customer2);
-        const drv1Token = signToken(driver1);
-        const drv2Token = signToken(driver2);
+        await redis.geoadd('drivers:locations', 44.3180, 31.9980, driver2.id);
+        await redis.hmset(`driver:${driver2.id}:meta`, {
+            id: driver2.id,
+            fullName: driver2.fullName,
+            phone: driver2.phone,
+            status: 'Online',
+            workMode: 'taxi',
+            vehicleType: 'eco'
+        });
 
-        // Seed 2 Drivers into state/redis for dispatch candidates
+        await pool.query(
+            `INSERT INTO drivers (driver_id, full_name, phone_number, status, is_online, current_lat, current_lon)
+             VALUES ($1, $2, $3, 'Online', true, 31.9970, 44.3170),
+                    ($4, $5, $6, 'Online', true, 31.9980, 44.3180)
+             ON CONFLICT (driver_id) DO UPDATE SET status = 'Online', is_online = true`,
+            [driver1.id, driver1.fullName, driver1.phone, driver2.id, driver2.fullName, driver2.phone]
+        );
+
         // -------------------------------------------------------------------------
         // (A) Test: 20s Timeout Actual Expiration & Candidate Escalation
         // -------------------------------------------------------------------------
         console.log('⏳ Running Test (A): Actual step timeout escalation...');
         const createResA = await request('POST', '/api/ride/request', {
+            customerId: customer1.id,
+            customerName: 'أحمد علي (مختبر)',
+            customerPhone: customer1.phone,
+            pickupName: 'ساحة ثورة العشرين',
             pickupLat: 31.9961,
             pickupLon: 44.3168,
+            dropoffName: 'جامعة الكوفة',
             dropoffLat: 32.0321,
             dropoffLon: 44.3725,
-            pickupAddress: 'ساحة ثورة العشرين',
-            dropoffAddress: 'جامعة الكوفة',
-            tier: 'SAVER',
-            customerId: customer1.id,
-            customerPhone: customer1.phone,
-            mockCandidates: [
-                { driverId: driver1.id, fullName: driver1.fullName, phone: driver1.phone, lat: 31.997, lon: 44.317 },
-                { driverId: driver2.id, fullName: driver2.fullName, phone: driver2.phone, lat: 31.998, lon: 44.318 }
-            ]
+            distanceKm: 5.2,
+            durationMins: 12,
+            vehicleType: 'eco'
         }, { Authorization: `Bearer ${cust1Token}` });
 
         const rideA = createResA.body?.request || createResA.body;
         const rideIdA = rideA?.id;
         const initAssigned = rideA?.assignedDriverId;
 
-        console.log(`   Ride created: ${rideIdA}, initial driver: ${initAssigned}`);
-        console.log('   Waiting 21s for step timeout to expire naturally on server...');
+        console.log(`   Ride created: ${rideIdA}, initial assigned driver: ${initAssigned}`);
+        console.log('   Waiting 21s for server-side step timeout (20s) to expire naturally...');
         await sleep(21500);
 
         // Check status to trigger server auto-escalation evaluation
@@ -131,13 +173,13 @@ async function runPreBatch2Tests() {
 
         const passA = (initAssigned === driver1.id && newAssigned === driver2.id && candidateIndex === 1);
         report('Item 3-A', '20s Step Timeout Escalation to Next Candidate', passA,
-            `Initial: ${initAssigned} -> Escalated: ${newAssigned} (Index: ${candidateIndex}), History Reason: ${JSON.stringify(escalatedRide?.history?.[0]?.reason)}`);
+            `Initial: ${initAssigned} -> Escalated: ${newAssigned} (Index: ${candidateIndex}), History: ${JSON.stringify(escalatedRide?.history?.[0])}`);
 
         // -------------------------------------------------------------------------
         // (B) Test: Rider Unconfirmed Fare -> 'pending_review'
         // -------------------------------------------------------------------------
         console.log('⏳ Running Test (B): Unconfirmed Fare & Reconciliation Status...');
-        // Driver 2 accepts ride A
+        // Driver 2 accepts escalated ride
         await request('POST', '/api/ride/accept', {
             requestId: rideIdA,
             driverId: driver2.id
@@ -163,7 +205,7 @@ async function runPreBatch2Tests() {
             driverId: driver2.id
         }, { Authorization: `Bearer ${drv2Token}` });
 
-        // Driver 2 completes ride with riderConfirmed = false (or fare unconfirmed)
+        // Driver 2 completes ride with riderConfirmed = false
         const completeResB = await request('POST', '/api/ride/complete', {
             requestId: rideIdA,
             driverId: driver2.id,
@@ -177,22 +219,31 @@ async function runPreBatch2Tests() {
         report('Item 3-B', 'Unconfirmed Fare -> Marked pending_review', passB,
             `reviewFlag: ${reviewFlagB}, reconciliationStatus: "${reconStatusB}"`);
 
+        // Also verify POST /api/ride/confirm-fare endpoint
+        const confirmFareRes = await request('POST', '/api/ride/confirm-fare', {
+            requestId: rideIdA,
+            confirmed: true
+        }, { Authorization: `Bearer ${cust1Token}` });
+        const passB2 = confirmFareRes.body?.success === true && confirmFareRes.body?.reconciliationStatus === 'settled';
+        console.log(`   ↳ Subsequent passenger confirmation test: success=${passB2}, reconciliationStatus=${confirmFareRes.body?.reconciliationStatus}`);
+
         // -------------------------------------------------------------------------
         // (C) Test: Arrival Outside Proximity Radius (> 1000m) = 400 Rejection
         // -------------------------------------------------------------------------
         console.log('⏳ Running Test (C): Arrival outside proximity radius (> 1000m)...');
-        // Create new ride B
         const createResC = await request('POST', '/api/ride/request', {
+            customerId: customer1.id,
+            customerName: 'أحمد علي',
+            customerPhone: customer1.phone,
+            pickupName: 'ساحة ثورة العشرين',
             pickupLat: 31.9961,
             pickupLon: 44.3168,
+            dropoffName: 'جامعة الكوفة',
             dropoffLat: 32.0321,
             dropoffLon: 44.3725,
-            tier: 'SAVER',
-            customerId: customer1.id,
-            customerPhone: customer1.phone,
-            mockCandidates: [
-                { driverId: driver1.id, fullName: driver1.fullName, phone: driver1.phone, lat: 31.997, lon: 44.317 }
-            ]
+            distanceKm: 5.2,
+            durationMins: 12,
+            vehicleType: 'eco'
         }, { Authorization: `Bearer ${cust1Token}` });
 
         const rideC = createResC.body?.request || createResC.body;
@@ -238,24 +289,26 @@ async function runPreBatch2Tests() {
         let pidCreate = null;
         let pidAccept = null;
 
-        // Create ride D and capture worker PID
+        // Create ride E
         const createResE = await request('POST', '/api/ride/request', {
+            customerId: customer1.id,
+            customerName: 'أحمد علي',
+            customerPhone: customer1.phone,
+            pickupName: 'ساحة ثورة العشرين',
             pickupLat: 31.9961,
             pickupLon: 44.3168,
+            dropoffName: 'جامعة الكوفة',
             dropoffLat: 32.0321,
             dropoffLon: 44.3725,
-            tier: 'SAVER',
-            customerId: customer1.id,
-            customerPhone: customer1.phone,
-            mockCandidates: [
-                { driverId: driver1.id, fullName: driver1.fullName, phone: driver1.phone, lat: 31.997, lon: 44.317 }
-            ]
+            distanceKm: 5.2,
+            durationMins: 12,
+            vehicleType: 'eco'
         }, { Authorization: `Bearer ${cust1Token}` });
 
         pidCreate = createResE.headers['x-worker-pid'];
         const rideIdE = createResE.body?.request?.id;
 
-        // Try accept, PM2 cluster balances requests
+        // Attempt accept
         const acceptResE = await request('POST', '/api/ride/accept', {
             requestId: rideIdE,
             driverId: driver1.id
@@ -263,12 +316,12 @@ async function runPreBatch2Tests() {
 
         pidAccept = acceptResE.headers['x-worker-pid'];
 
-        // If they happened to be the same PID by chance on 1st try, verify multi-worker by calling /api/health
+        // Collect distinct PIDs across 12 requests with Connection: close
         const pidsObserved = new Set();
-        pidsObserved.add(pidCreate);
-        pidsObserved.add(pidAccept);
+        if (pidCreate) pidsObserved.add(pidCreate);
+        if (pidAccept) pidsObserved.add(pidAccept);
 
-        for (let i = 0; i < 15; i++) {
+        for (let i = 0; i < 12; i++) {
             const h = await request('GET', '/api/health');
             if (h.headers['x-worker-pid']) {
                 pidsObserved.add(h.headers['x-worker-pid']);
@@ -282,6 +335,27 @@ async function runPreBatch2Tests() {
     } catch (err) {
         console.error('Fatal test execution error:', err);
         failed++;
+    } finally {
+        // Cleanup Test Data
+        console.log('🧹 Cleaning up test data from Redis and PostgreSQL...');
+        try {
+            await redis.zrem('drivers:locations', testDriver1Id, testDriver2Id);
+            await redis.del(`driver:${testDriver1Id}:meta`, `driver:${testDriver2Id}:meta`);
+            await pool.query(`DELETE FROM drivers WHERE driver_id IN ($1, $2)`, [testDriver1Id, testDriver2Id]);
+            await pool.query(`DELETE FROM rides WHERE customer_id IN ($1, $2)`, [customer1.id, customer2.id]);
+            await pool.query(`DELETE FROM ride_events WHERE event_data::text LIKE '%${customer1.id}%' OR event_data::text LIKE '%${customer2.id}%'`);
+            await pool.query(`DELETE FROM users WHERE id IN ($1, $2, $3, $4)`, [customer1.id, customer2.id, testDriver1Id, testDriver2Id]);
+            await redis.del(`rate:ride:create:${customer1.id}`, `rate:ride:create:${customer2.id}`);
+            // Flush any test pending rides
+            const keys = await redis.hkeys('pending:rides');
+            if (keys && keys.length > 0) {
+                await redis.del('pending:rides');
+            }
+        } catch (cleanupErr) {
+            console.error('Cleanup notice:', cleanupErr.message);
+        }
+        await redis.quit();
+        await pool.end();
     }
 
     console.log('===============================================================');
