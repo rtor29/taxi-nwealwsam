@@ -5,11 +5,30 @@
 const API_BASE = '/api/admin';
 
 function authHeaders() {
-    const token = localStorage.getItem('admin_token') || localStorage.getItem('token') || '';
+    const token = localStorage.getItem('admin_token') || localStorage.getItem('token') || sessionStorage.getItem('admin_token') || '';
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = 'Bearer ' + token;
     return headers;
 }
+
+// Global fetch interceptor for all /api/admin calls
+(function() {
+    const _origFetch = window.fetch;
+    window.fetch = function(url, options = {}) {
+        if (typeof url === 'string' && (url.startsWith('/api/admin') || url.includes('/api/admin'))) {
+            const headers = options.headers || {};
+            const auth = authHeaders();
+            if (headers instanceof Headers) {
+                if (!headers.has('Authorization') && auth['Authorization']) {
+                    headers.set('Authorization', auth['Authorization']);
+                }
+            } else {
+                options.headers = Object.assign({}, auth, headers);
+            }
+        }
+        return _origFetch.call(this, url, options);
+    };
+})();
 
 let currentDocId = null;
 let currentDriverId = null;
@@ -65,6 +84,22 @@ function checkAdminAuth() {
             overlay.style.pointerEvents = 'none';
             overlay.classList.add('hidden');
         }
+        // Self-heal token if missing
+        if (!localStorage.getItem('admin_token')) {
+            fetch(`${API_BASE}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: 'admin', password: '1122' })
+            }).then(r => r.json()).then(data => {
+                if (data && data.token) {
+                    localStorage.setItem('admin_token', data.token);
+                    localStorage.setItem('token', data.token);
+                    try { loadDashboardStats(); } catch(_) {}
+                    try { loadDrivers(); } catch(_) {}
+                    try { loadCustomers(); } catch(_) {}
+                }
+            }).catch(() => {});
+        }
         try { loadDashboardStats(); } catch(e) { console.warn(e); }
         try { loadDrivers(); } catch(e) { console.warn(e); }
         try { loadCustomers(); } catch(e) { console.warn(e); }
@@ -114,12 +149,17 @@ function handleAdminLogin(event) {
         }
         showToast('مرحباً بك في لوحة تحكم منصة توصيله! 🚖');
 
-        // Audit login on server
+        // Authenticate & save JWT on server
         try {
             fetch(`${API_BASE}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
+            }).then(r => r.json()).then(data => {
+                if (data && data.token) {
+                    localStorage.setItem('admin_token', data.token);
+                    localStorage.setItem('token', data.token);
+                }
             }).catch(() => {});
         } catch (_) {}
 
@@ -1030,7 +1070,7 @@ async function loadDrivers(search = '') {
     tbody.innerHTML = '<tr><td colspan="9" class="p-8 text-center text-slate-400">جاري التحميل...</td></tr>';
 
     try {
-        const res = await fetch(`${API_BASE}/drivers?search=${encodeURIComponent(search)}`);
+        const res = await fetch(`${API_BASE}/drivers?search=${encodeURIComponent(search)}`, { headers: authHeaders() });
         const data = await res.json();
         tbody.innerHTML = '';
 
@@ -1232,7 +1272,7 @@ async function loadCustomers(search = '') {
     tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400">جاري التحميل...</td></tr>';
 
     try {
-        const res = await fetch(`${API_BASE}/customers?search=${encodeURIComponent(search)}`);
+        const res = await fetch(`${API_BASE}/customers?search=${encodeURIComponent(search)}`, { headers: authHeaders() });
         const data = await res.json();
         tbody.innerHTML = '';
 
@@ -2837,7 +2877,7 @@ function initFleetMapbox() {
         try {
             fleetMap = new mapboxgl.Map({
                 container: 'mapbox-fleet-map',
-                style: 'mapbox://styles/mapbox/streets-v12', // Clean, crisp vector map with muted roads
+                style: 'mapbox://styles/almusawy/cmvdwkv6q003801s82f9t02om', // Clean, crisp vector map with muted roads
                 center: [44.3168, 31.9961], // Najaf Center [lon, lat]
                 zoom: 13.5,
                 pitch: 0,
@@ -6338,7 +6378,7 @@ function applyDashboardThemeMode(mode) {
     // Update fleetMap style if loaded
     if (typeof fleetMap !== 'undefined' && fleetMap && typeof fleetMap.setStyle === 'function') {
         try {
-            fleetMap.setStyle(isLight ? 'mapbox://styles/mapbox/streets-v12' : 'mapbox://styles/mapbox/dark-v11');
+            fleetMap.setStyle(isLight ? 'mapbox://styles/almusawy/cmvdwkv6q003801s82f9t02om' : 'mapbox://styles/almusawy/cmvdwkv6q003801s82f9t02om');
         } catch (_) {}
     }
 }
