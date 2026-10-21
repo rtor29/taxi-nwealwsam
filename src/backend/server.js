@@ -721,6 +721,7 @@ async function startServer() {
             return sendJson({
                 status: 'Healthy',
                 version: '2.0.0',
+                pid: process.pid,
                 uptime: Math.round(process.uptime()),
                 timestamp: new Date().toISOString(),
                 postgres: {
@@ -3884,7 +3885,7 @@ async function startServer() {
         }
 
         // Driver Arrived at Destination - Server Calculates Authoritative Final Fare (RLS Protected)
-        if ((pathname === '/api/ride/destination-arrived' || pathname === '/api/ride/destinationArrived' || pathname === '/ride/destination-arrived') && method === 'POST') {
+        if ((pathname === '/api/ride/destination-arrived' || pathname === '/api/ride/destinationArrived' || pathname === '/ride/destination-arrived' || pathname === '/api/ride/arrive-destination' || pathname === '/ride/arrive-destination') && method === 'POST') {
             try {
                 const body = await parseJsonBody(req);
                 const { requestId, driverId, tripId } = body;
