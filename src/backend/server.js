@@ -2625,6 +2625,110 @@ async function startServer() {
             return sendJson({ success: true, drivers: activeDrivers });
         }
 
+        // Universal Ride Resolver: Searches Memory, Redis (active & pending), and PostgreSQL
+        const findRideById = async (rideId) => {
+            if (!rideId || rideId === 'undefined' || rideId === 'null') return null;
+            const sId = String(rideId).trim();
+            
+            // 1. In memory
+            const inMem = (db.memoryState.rideRequests || []).find(item => String(item.id) === sId);
+            if (inMem) return inMem;
+
+            // 2. In Redis (active or pending)
+            if (redisManager.isConnected && redisManager.client) {
+                try {
+                    const activeStr = await redisManager.client.get('ride:active:' + sId);
+                    if (activeStr) return JSON.parse(activeStr);
+
+                    const pendingStr = await redisManager.client.hget('pending:rides', sId);
+                    if (pendingStr) return JSON.parse(pendingStr);
+
+                    const reqStr = await redisManager.client.get('ride:request:' + sId);
+                    if (reqStr) return JSON.parse(reqStr);
+                } catch (_) {}
+            }
+
+            // 3. In PostgreSQL
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    const pgRes = await db.pool.query('SELECT * FROM rides WHERE id = $1 LIMIT 1', [sId]);
+                    if (pgRes && pgRes.rows && pgRes.rows.length > 0) {
+                        return pgRes.rows[0];
+                    }
+                } catch (_) {}
+            }
+
+            return null;
+        };
+
+        // Universal Driver Active Ride Resolver (Unified Redis + Memory + DB - Zero 404s)
+        const findActiveRideForDriver = async (rawParam) => {
+            rawParam = String(rawParam || '').trim();
+            if (!rawParam || rawParam === 'undefined' || rawParam === 'null') return null;
+            const cleanPhone = rawParam.replace(/[^0-9]/g, '');
+            const matchedDriver = (db.memoryState.drivers || []).find(d => 
+                d.driverId === rawParam || d.id === rawParam || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
+            );
+            const targetDriverId = matchedDriver ? matchedDriver.driverId : rawParam;
+
+            let active = null;
+
+            // 1. Check Redis first for instant cross-PM2 cluster consistency
+            if (redisManager.isConnected && redisManager.client) {
+                try {
+                    const activeStr = await redisManager.client.get('driver:active:' + String(targetDriverId));
+                    if (activeStr) {
+                        active = JSON.parse(activeStr);
+                    } else if (cleanPhone) {
+                        const activePhoneStr = await redisManager.client.get('driver:active:' + cleanPhone);
+                        if (activePhoneStr) active = JSON.parse(activePhoneStr);
+                    }
+                } catch (_) {}
+            }
+
+            // 2. Check memory
+            if (!active) {
+                active = (db.memoryState.rideRequests || []).find(r => {
+                    const isDriver = r.acceptedDriverId === targetDriverId || 
+                                    r.assignedDriverId === targetDriverId || 
+                                    r.acceptedDriverId === rawParam || 
+                                    r.assignedDriverId === rawParam ||
+                                    (cleanPhone && String(r.driverPhone || r.acceptedDriverPhone || '').replace(/[^0-9]/g, '').endsWith(cleanPhone));
+                    const st = String(r.status || '').toLowerCase();
+                    const isActive = ['accepted', 'arrived', 'inprogress', 'in_progress', 'started', 'ontheway'].includes(st);
+                    return isDriver && isActive;
+                });
+            }
+
+            // 3. Check PostgreSQL
+            if (!active && db.isPostgresConnected && db.pool) {
+                try {
+                    const pgRes = await db.pool.query(
+                        `SELECT * FROM rides 
+                         WHERE (driver_id = $1 OR driver_phone = $1 OR driver_id = $2 OR driver_phone = $2) 
+                         AND status IN ('Accepted', 'Arrived', 'InProgress', 'accepted', 'arrived', 'in_progress', 'started', 'ontheway')
+                         ORDER BY created_at DESC LIMIT 1`,
+                        [targetDriverId, cleanPhone || targetDriverId]
+                    );
+                    if (pgRes && pgRes.rows && pgRes.rows.length > 0) {
+                        active = pgRes.rows[0];
+                    }
+                } catch (_) {}
+            }
+
+            // Address normalization: ensure both pickup and dropoff fields are always populated
+            if (active) {
+                active.pickupName = active.pickupName || active.pickupAddress || active.pickup_title || 'موقعي الحالي عبر الـ GPS';
+                active.pickupAddress = active.pickupAddress || active.pickupName || active.pickup_title || 'موقعي الحالي عبر الـ GPS';
+                active.dropoffName = active.dropoffName || active.dropoffAddress || active.dropoff_title || active.destination || active.destinationAddress || 'الوجهة المحددة';
+                active.dropoffAddress = active.dropoffAddress || active.dropoffName || active.dropoff_title || active.destination || active.destinationAddress || 'الوجهة المحددة';
+                active.destination = active.destination || active.dropoffName || active.dropoffAddress;
+                active.destinationAddress = active.destinationAddress || active.dropoffAddress || active.dropoffName;
+            }
+
+            return active || null;
+        };
+
         // ---------------------------------------------------------------------
         // REAL-TIME RIDE DISPATCH & 30-SECOND AUTO-ESCALATION (Stage 1 & 4)
         // ---------------------------------------------------------------------
@@ -2765,9 +2869,15 @@ async function startServer() {
                     customerName: customerName || 'راكب توصيله',
                     customerPhone: customerPhone || '',
                     pickupName: pickupName || 'موقع الركوب',
+                    pickupAddress: pickupName || 'موقع الركوب',
+                    pickup_title: pickupName || 'موقع الركوب',
                     pickupLat: pLat,
                     pickupLon: pLon,
                     dropoffName: dropoffName || 'وجهة الوصول',
+                    dropoffAddress: dropoffName || 'وجهة الوصول',
+                    dropoff_title: dropoffName || 'وجهة الوصول',
+                    destination: dropoffName || 'وجهة الوصول',
+                    destinationAddress: dropoffName || 'وجهة الوصول',
                     dropoffLat: dLat,
                     dropoffLon: dLon,
                     fare: computedFare,
@@ -2863,14 +2973,25 @@ async function startServer() {
             }
         }
 
-        // Check Ride Status & Auto-Escalate if 30s elapsed
-        if (pathname.startsWith('/api/ride/status/') && method === 'GET') {
-            const reqId = pathname.replace('/api/ride/status/', '').trim();
-            const requests = db.memoryState.rideRequests || [];
-            const r = requests.find(item => item.id === reqId);
+        // Check Ride Status & Auto-Escalate if 30s elapsed (Multi-tier Lookup - Zero 404s)
+        if ((pathname.startsWith('/api/ride/status/') || pathname.startsWith('/ride/status/')) && method === 'GET') {
+            const reqId = pathname.replace(/^\/?(?:api\/)?ride\/status\//, '').trim();
+            if (!reqId || reqId === 'undefined' || reqId === 'null') {
+                return sendJson({ success: true, ride: null, request: null }, 200);
+            }
 
+            let r = await findRideById(reqId);
             if (!r) {
-                return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
+                return sendJson({ success: true, ride: null, request: null }, 200);
+            }
+
+            // Sync to local memory if absent
+            db.memoryState.rideRequests = db.memoryState.rideRequests || [];
+            const existingIdx = db.memoryState.rideRequests.findIndex(item => String(item.id) === String(r.id));
+            if (existingIdx >= 0) {
+                r = db.memoryState.rideRequests[existingIdx];
+            } else {
+                db.memoryState.rideRequests.unshift(r);
             }
 
             // RLS Check: Only the ride customer, assigned/candidate driver, or admin can track this ride
@@ -2902,11 +3023,12 @@ async function startServer() {
             // 30s Countdown and Auto-escalation check
             if (r.status === 'Pending' && r.candidateDriverIds && r.candidateDriverIds.length > 0) {
                 const now = Date.now();
-                if (now > r.stepTimeoutAt) {
-                    r.currentDriverIndex += 1;
+                if (now > (r.stepTimeoutAt || 0)) {
+                    r.currentDriverIndex = (r.currentDriverIndex || 0) + 1;
                     if (r.currentDriverIndex < r.candidateDriverIds.length) {
                         const nextDriverId = r.candidateDriverIds[r.currentDriverIndex];
                         const nextDriver = (db.memoryState.drivers || []).find(d => d.driverId === nextDriverId);
+                        r.history = r.history || [];
                         r.history.push({
                             driverId: r.assignedDriverId,
                             reason: 'Timeout30s',
@@ -2926,25 +3048,66 @@ async function startServer() {
                 }
             }
 
-            const secondsRemaining = Math.max(0, Math.round((r.stepTimeoutAt - Date.now()) / 1000));
+            const secondsRemaining = Math.max(0, Math.round(((r.stepTimeoutAt || 0) - Date.now()) / 1000));
             return sendJson({
                 success: true,
                 request: r,
+                ride: r,
                 secondsRemaining,
-                currentDriverIndex: r.currentDriverIndex,
+                currentDriverIndex: r.currentDriverIndex || 0,
                 totalCandidates: (r.candidateDriverIds || []).length
             });
         }
 
-        // Driver Respond to Request (Accept / Reject)
+        // Single Ride Details Resolver: GET /api/ride/:id or /ride/:id (Always 200 - Zero 404s)
+        const isSingleRideRoute = (pathname.startsWith('/api/ride/') || pathname.startsWith('/ride/')) && 
+            method === 'GET' && 
+            !pathname.includes('/stream') && 
+            !pathname.includes('/status') && 
+            !pathname.endsWith('/active-ride') &&
+            !pathname.endsWith('/pending-requests');
+        if (isSingleRideRoute) {
+            const rideId = pathname.replace(/^\/?(?:api\/)?ride\//, '').trim();
+            if (!rideId || rideId === 'undefined' || rideId === 'null') {
+                return sendJson({ success: true, ride: null, request: null }, 200);
+            }
+            try {
+                const r = await findRideById(rideId);
+                return sendJson({ success: true, ride: r || null, request: r || null }, 200);
+            } catch (err) {
+                console.error('[SingleRideRoute] Error:', err.message);
+                return sendJson({ success: true, ride: null, request: null }, 200);
+            }
+        }
+
+        // Driver Respond to Request (Accept / Reject) - Multi-Tier Resolver & Redis Sync
         if ((pathname === '/api/ride/respond' || pathname === '/ride/respond') && method === 'POST') {
             try {
                 const body = await parseJsonBody(req);
                 const { requestId, driverId, action } = body;
-                const requests = db.memoryState.rideRequests || [];
-                const r = requests.find(item => item.id === requestId);
+                if (!requestId || requestId === 'undefined' || requestId === 'null') {
+                    return sendJson({ success: false, notFound: true, alreadyAccepted: true, error: 'معرّف الطلب مطلوب' }, 200);
+                }
 
-                if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
+                let r = await findRideById(requestId);
+
+                if (!r) {
+                    return sendJson({ 
+                        success: false, 
+                        notFound: true, 
+                        alreadyAccepted: true, 
+                        error: 'عذراً، المشوار تم قبوله من كابتن آخر أو لم يعد متاحاً.' 
+                    }, 200);
+                }
+
+                // Ensure local memory has reference to r
+                db.memoryState.rideRequests = db.memoryState.rideRequests || [];
+                const memIdx = db.memoryState.rideRequests.findIndex(item => String(item.id) === String(r.id));
+                if (memIdx >= 0) {
+                    r = db.memoryState.rideRequests[memIdx];
+                } else {
+                    db.memoryState.rideRequests.unshift(r);
+                }
 
                 if (action === 'accept') {
                     // Atomic Acceptance Lock: prevent race condition if already accepted or cancelled
@@ -2953,7 +3116,7 @@ async function startServer() {
                             success: false,
                             alreadyAccepted: true,
                             error: 'عذراً، المشوار تم قبوله من كابتن آخر أو لم يعد متاحاً.'
-                        }, 409);
+                        }, 200);
                     }
                     const cleanPhone = String(driverId || '').replace(/[^0-9]/g, '');
                     const targetDriver = (db.memoryState.drivers || []).find(d => 
@@ -2968,7 +3131,7 @@ async function startServer() {
                             success: false,
                             alreadyAccepted: true,
                             error: 'عذراً، المشوار تم قبوله من كابتن آخر أو جارٍ معالجته.'
-                        }, 409);
+                        }, 200);
                     }
 
                     r.status = 'Accepted';
@@ -2980,6 +3143,14 @@ async function startServer() {
                     r.assignedDriverVehicle = targetDriver ? `${targetDriver.vehicleMake||'تويوتا'} ${targetDriver.vehicleModel||'كورولا'}` : 'تويوتا كورولا';
                     r.driverPlate = targetDriver?.plateNumber || '١١٣٤٠ ة - النجف';
                     r.driverRating = targetDriver?.rating || 5.0;
+
+                    // Address normalization: ensure both pickup and dropoff fields are always populated
+                    r.pickupName = r.pickupName || r.pickupAddress || r.pickup_title || 'موقع الركوب';
+                    r.pickupAddress = r.pickupAddress || r.pickupName || r.pickup_title || 'موقع الركوب';
+                    r.dropoffName = r.dropoffName || r.dropoffAddress || r.dropoff_title || r.destination || r.destinationAddress || 'وجهة الوصول';
+                    r.dropoffAddress = r.dropoffAddress || r.dropoffName || r.dropoff_title || r.destination || r.destinationAddress || 'وجهة الوصول';
+                    r.destination = r.destination || r.dropoffName || r.dropoffAddress;
+                    r.destinationAddress = r.destinationAddress || r.dropoffAddress || r.dropoffName;
 
                     // Update in PostgreSQL if connected
                     if (db.isPostgresConnected && db.pool) {
@@ -3024,6 +3195,21 @@ async function startServer() {
 
                     db.saveStateSnapshot();
                     await redisManager.removePendingRide(r.id);
+
+                    // Sync to Redis active keys for cluster-wide active-ride polling
+                    if (redisManager.isConnected && redisManager.client) {
+                        try {
+                            const rJson = JSON.stringify(r);
+                            await Promise.all([
+                                redisManager.client.set('driver:active:' + String(actualDriverId), rJson, 'EX', 7200),
+                                cleanPhone ? redisManager.client.set('driver:active:' + cleanPhone, rJson, 'EX', 7200) : Promise.resolve(),
+                                redisManager.client.set('ride:active:' + String(r.id), rJson, 'EX', 7200)
+                            ]);
+                        } catch (eActive) {
+                            console.error('[RideAccepted] Redis set active error:', eActive.message);
+                        }
+                    }
+
                     await redisManager.publishRideEvent(r.id, { type: 'ride_accepted', event: 'ride_accepted', request: r });
                     await redisManager.publishDispatchEvent({ type: 'ride_taken', event: 'ride_taken', rideId: r.id, requestId: r.id });
                     await redisManager.publishDriverEvent(actualDriverId, { type: 'ride_assigned', event: 'ride_assigned', request: r });
@@ -3049,14 +3235,24 @@ async function startServer() {
             }
         }
 
-        // Driver Arrived at Passenger Pickup (RLS Protected)
+        // Driver Arrived at Passenger Pickup (RLS Protected - Multi-tier Lookup)
         if (pathname === '/api/ride/arrived' && method === 'POST') {
             try {
                 const body = await parseJsonBody(req);
                 const { requestId, driverId } = body;
-                const requests = db.memoryState.rideRequests || [];
-                const r = requests.find(item => item.id === requestId);
-                if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
+                if (!requestId) return sendJson({ success: false, notFound: true, error: 'requestId is required' }, 200);
+
+                let r = await findRideById(requestId);
+                if (!r) return sendJson({ success: false, notFound: true, error: 'الطلب غير متاح حالياً' }, 200);
+
+                // Ensure local memory has reference to r
+                db.memoryState.rideRequests = db.memoryState.rideRequests || [];
+                const memIdx = db.memoryState.rideRequests.findIndex(item => String(item.id) === String(r.id));
+                if (memIdx >= 0) {
+                    r = db.memoryState.rideRequests[memIdx];
+                } else {
+                    db.memoryState.rideRequests.unshift(r);
+                }
 
                 // Driver Authorization Check
                 const authUser = getAuthUser(req);
@@ -3072,6 +3268,19 @@ async function startServer() {
                 r.status = 'Arrived';
                 r.arrivedAt = new Date().toISOString();
                 db.saveStateSnapshot();
+
+                // Update Redis active ride
+                if (redisManager.isConnected && redisManager.client) {
+                    try {
+                        const rJson = JSON.stringify(r);
+                        const dId = String(r.assignedDriverId || r.acceptedDriverId || driverId);
+                        await Promise.all([
+                            redisManager.client.set('driver:active:' + dId, rJson, 'EX', 7200),
+                            redisManager.client.set('ride:active:' + String(r.id), rJson, 'EX', 7200)
+                        ]);
+                    } catch (_) {}
+                }
+
                 redisManager.publishRideEvent(r.id, { type: 'captain_arrived', status: 'Arrived', request: r });
 
                 // Stage 2: Send Telegram Notification to Passenger - Captain Arrived
@@ -3114,9 +3323,8 @@ async function startServer() {
                     const match = pathname.match(/^\/?(?:api\/)?(?:trips|ride)\/([^\/]+)\/horn$/);
                     if (match) tripId = match[1];
                 }
-                const requests = db.memoryState.rideRequests || [];
-                const r = requests.find(item => item.id === tripId || item.requestId === tripId);
-                if (!r) return sendJson({ success: false, error: 'المشوار غير موجود' }, 404);
+                let r = await findRideById(tripId);
+                if (!r) return sendJson({ success: false, notFound: true, error: 'المشوار غير متاح حالياً' }, 200);
 
                 // Driver Authorization Check
                 const authUser = getAuthUser(req);
@@ -3159,16 +3367,24 @@ async function startServer() {
             }
         }
 
-        // Driver Start Ride - Navigate to Destination (RLS Protected)
+        // Driver Start Ride - Navigate to Destination (RLS Protected - Multi-tier Lookup)
         if ((pathname === '/api/ride/start' || pathname === '/api/ride/startRide' || pathname === '/api/ride/start-ride' || pathname === '/api/ride/navigate') && method === 'POST') {
             try {
                 const body = await parseJsonBody(req);
                 const { requestId, driverId } = body;
-                if (!requestId) return sendJson({ success: false, error: 'requestId is required' }, 400);
+                if (!requestId) return sendJson({ success: false, notFound: true, error: 'requestId is required' }, 200);
 
-                const requests = db.memoryState.rideRequests || [];
-                const r = requests.find(item => item.id === requestId);
-                if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
+                let r = await findRideById(requestId);
+                if (!r) return sendJson({ success: false, notFound: true, error: 'الطلب غير متاح حالياً' }, 200);
+
+                // Ensure local memory has reference to r
+                db.memoryState.rideRequests = db.memoryState.rideRequests || [];
+                const memIdx = db.memoryState.rideRequests.findIndex(item => String(item.id) === String(r.id));
+                if (memIdx >= 0) {
+                    r = db.memoryState.rideRequests[memIdx];
+                } else {
+                    db.memoryState.rideRequests.unshift(r);
+                }
 
                 // Authentication & Driver Authorization Check
                 const authUser = getAuthUser(req);
@@ -3184,6 +3400,19 @@ async function startServer() {
                 // 3. Update ride status to InProgress
                 r.status = 'InProgress';
                 r.startedAt = new Date().toISOString();
+
+                // Update Redis active ride
+                if (redisManager.isConnected && redisManager.client) {
+                    try {
+                        const rJson = JSON.stringify(r);
+                        const dId = String(r.assignedDriverId || r.acceptedDriverId || driverId);
+                        await Promise.all([
+                            redisManager.client.set('driver:active:' + dId, rJson, 'EX', 7200),
+                            redisManager.client.set('ride:active:' + String(r.id), rJson, 'EX', 7200)
+                        ]);
+                    } catch (_) {}
+                }
+
                 redisManager.publishRideEvent(r.id, { type: 'ride_started', status: 'InProgress', request: r });
 
                 // Stage 3: Send Telegram Notification to Passenger - Trip Started
@@ -3342,7 +3571,9 @@ async function startServer() {
                     await Promise.all([
                         redisManager.client.hdel('pending:rides', String(rideId)).catch(() => {}),
                         redisManager.client.del(`ride:lock:${rideId}`).catch(() => {}),
-                        redisManager.client.del(`ride:request:${rideId}`).catch(() => {})
+                        redisManager.client.del(`ride:request:${rideId}`).catch(() => {}),
+                        redisManager.client.del(`ride:active:${rideId}`).catch(() => {}),
+                        r ? redisManager.client.del(`driver:active:${r.assignedDriverId || r.acceptedDriverId}`).catch(() => {}) : Promise.resolve()
                     ]);
                 }
                 await redisManager.removePendingRide(rideId);
@@ -3380,14 +3611,24 @@ async function startServer() {
             }
         }
 
-        // Driver Complete Ride (RLS Protected)
+        // Driver Complete Ride (RLS Protected - Multi-tier Lookup)
         if (pathname === '/api/ride/complete' && method === 'POST') {
             try {
                 const body = await parseJsonBody(req);
                 const { requestId, driverId } = body;
-                const requests = db.memoryState.rideRequests || [];
-                const r = requests.find(item => item.id === requestId);
-                if (!r) return sendJson({ success: false, error: 'الطلب غير موجود' }, 404);
+                if (!requestId) return sendJson({ success: false, notFound: true, error: 'requestId is required' }, 200);
+
+                let r = await findRideById(requestId);
+                if (!r) return sendJson({ success: false, notFound: true, error: 'الطلب غير متاح حالياً' }, 200);
+
+                // Ensure local memory has reference to r
+                db.memoryState.rideRequests = db.memoryState.rideRequests || [];
+                const memIdx = db.memoryState.rideRequests.findIndex(item => String(item.id) === String(r.id));
+                if (memIdx >= 0) {
+                    r = db.memoryState.rideRequests[memIdx];
+                } else {
+                    db.memoryState.rideRequests.unshift(r);
+                }
 
                 // Security Check: Driver Authorization
                 const authUser = getAuthUser(req);
@@ -3405,6 +3646,18 @@ async function startServer() {
                 if (body.fare || body.finalFare) {
                     r.finalFare = body.finalFare || body.fare;
                 }
+
+                // Remove active keys from Redis
+                if (redisManager.isConnected && redisManager.client) {
+                    try {
+                        const dId = String(r.assignedDriverId || r.acceptedDriverId || driverId);
+                        await Promise.all([
+                            redisManager.client.del('driver:active:' + dId).catch(() => {}),
+                            redisManager.client.del('ride:active:' + String(r.id)).catch(() => {})
+                        ]);
+                    } catch (_) {}
+                }
+
                 redisManager.publishRideEvent(r.id, { type: 'ride_completed', status: 'Completed', request: r });
                 redisManager.publishDispatchEvent({ type: 'ride_completed', requestId: r.id });
 
@@ -3599,18 +3852,58 @@ async function startServer() {
             });
         }
 
-        // Customer Current Active Ride (Persist across refreshes/reconnects)
+        // Customer Current Active Ride (Persist across refreshes/reconnects & PM2 cluster)
         if (pathname.startsWith('/api/customer/') && pathname.endsWith('/active-ride') && method === 'GET') {
             const parts = pathname.split('/');
             const customerId = decodeURIComponent(parts[parts.length - 2]);
             const cleanPhone = customerId.replace(/[^0-9]/g, '');
-            const active = (db.memoryState.rideRequests || []).find(r => {
+            let active = (db.memoryState.rideRequests || []).find(r => {
                 const rCustId = String(r.customerId || '');
                 const rCustPhone = String(r.customerPhone || '').replace(/[^0-9]/g, '');
                 const isMatch = rCustId === customerId || (cleanPhone && (rCustPhone.endsWith(cleanPhone) || cleanPhone.endsWith(rCustPhone)));
-                const isActive = r.status === 'Pending' || r.status === 'Accepted' || r.status === 'Arrived' || r.status === 'InProgress';
+                const isActive = ['pending', 'accepted', 'arrived', 'inprogress'].includes(String(r.status || '').toLowerCase());
                 return isMatch && isActive;
             });
+
+            // Check Redis if absent
+            if (!active && redisManager.isConnected && redisManager.client) {
+                try {
+                    const pendingRaw = await redisManager.client.hgetall('pending:rides');
+                    if (pendingRaw) {
+                        for (const [, rJson] of Object.entries(pendingRaw)) {
+                            const r = JSON.parse(rJson);
+                            const rCustId = String(r.customerId || '');
+                            const rCustPhone = String(r.customerPhone || '').replace(/[^0-9]/g, '');
+                            if (rCustId === customerId || (cleanPhone && (rCustPhone.endsWith(cleanPhone) || cleanPhone.endsWith(rCustPhone)))) {
+                                active = r;
+                                break;
+                            }
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            // Check PostgreSQL if absent
+            if (!active && db.isPostgresConnected && db.pool) {
+                try {
+                    const pgRes = await db.pool.query(
+                        `SELECT * FROM rides 
+                         WHERE (customer_id = $1 OR customer_phone = $1 OR customer_id = $2 OR customer_phone = $2) 
+                         AND status IN ('Pending', 'Accepted', 'Arrived', 'InProgress', 'pending', 'accepted', 'arrived', 'in_progress')
+                         ORDER BY created_at DESC LIMIT 1`,
+                        [customerId, cleanPhone || customerId]
+                    );
+                    if (pgRes && pgRes.rows && pgRes.rows.length > 0) {
+                        active = pgRes.rows[0];
+                    }
+                } catch (_) {}
+            }
+
+            if (active) {
+                active.pickupName = active.pickupName || active.pickupAddress || active.pickup_title || 'موقع الركوب';
+                active.dropoffName = active.dropoffName || active.dropoffAddress || active.dropoff_title || active.destination || active.destinationAddress || 'وجهة الوصول';
+            }
+
             return sendJson({ success: true, activeRide: active || null });
         }
 
@@ -3907,27 +4200,17 @@ async function startServer() {
             return;
         }
 
-        // Driver Current Active Accepted Ride
+        // Driver Current Active Accepted Ride (Universal Redis + Memory + DB - Zero 404s)
         if ((pathname.startsWith('/api/driver/') || pathname.startsWith('/driver/')) && pathname.endsWith('/active-ride') && method === 'GET') {
             const parts = pathname.split('/');
             const rawParam = decodeURIComponent(parts[parts.length - 2]);
-            const cleanPhone = rawParam.replace(/[^0-9]/g, '');
-            const matchedDriver = (db.memoryState.drivers || []).find(d => 
-                d.driverId === rawParam || d.id === rawParam || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
-            );
-            const targetDriverId = matchedDriver ? matchedDriver.driverId : rawParam;
-
-            const active = (db.memoryState.rideRequests || []).find(r => {
-                const isDriver = r.acceptedDriverId === targetDriverId || 
-                                r.assignedDriverId === targetDriverId || 
-                                r.acceptedDriverId === rawParam || 
-                                r.assignedDriverId === rawParam ||
-                                (cleanPhone && String(r.driverPhone || r.acceptedDriverPhone || '').replace(/[^0-9]/g, '').endsWith(cleanPhone));
-                const st = String(r.status || '').toLowerCase();
-                const isActive = ['accepted', 'arrived', 'inprogress', 'in_progress', 'started', 'ontheway'].includes(st);
-                return isDriver && isActive;
-            });
-            return sendJson({ success: true, activeRide: active || null });
+            try {
+                const active = await findActiveRideForDriver(rawParam);
+                return sendJson({ success: true, activeRide: active || null }, 200);
+            } catch (err) {
+                console.error('[DriverActiveRide] Error:', err.message);
+                return sendJson({ success: true, activeRide: null }, 200);
+            }
         }
 
         // Driver Pending Requests List (Strictly Read from Redis Hash 'pending:rides' - Zero In-Memory State)
