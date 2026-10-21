@@ -8,23 +8,14 @@
  * (E) Request created on PID A, accepted on PID B across PM2 cluster
  */
 
+require('../src/backend/config');
 const http = require('http');
 const jwt = require('jsonwebtoken');
-const Redis = require('ioredis');
-const { Pool } = require('pg');
+const db = require('../src/backend/db');
+const redisManager = require('../src/backend/modules/redis/redisClient');
 
 const API_BASE = process.env.API_BASE || 'http://127.0.0.1:5050';
 const JWT_SECRET = process.env.JWT_SECRET || 'tawseela_prod_jwt_super_secret_najaf_2026';
-
-const redis = new Redis({
-    host: process.env.REDIS_HOST || '127.0.0.1',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
-    password: process.env.REDIS_PASSWORD || undefined
-});
-
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/taxiwisam'
-});
 
 function signToken(payload) {
     return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
@@ -106,35 +97,42 @@ async function runPreBatch2Tests() {
     const drv2Token = signToken(driver2);
 
     try {
+        // Wait for Redis and DB connections
+        await sleep(1000);
+
         // 0. Seed Candidates in Redis Geospatial Index & Postgres
         console.log('🌱 Seeding 2 test drivers into Redis Geo Index & PostgreSQL...');
-        await redis.geoadd('drivers:locations', 44.3170, 31.9970, driver1.id);
-        await redis.hmset(`driver:${driver1.id}:meta`, {
-            id: driver1.id,
-            fullName: driver1.fullName,
-            phone: driver1.phone,
-            status: 'Online',
-            workMode: 'taxi',
-            vehicleType: 'eco'
-        });
+        if (redisManager.isConnected && redisManager.client) {
+            await redisManager.client.geoadd('drivers:locations', 44.3170, 31.9970, driver1.id);
+            await redisManager.client.hmset(`driver:${driver1.id}:meta`, {
+                id: driver1.id,
+                fullName: driver1.fullName,
+                phone: driver1.phone,
+                status: 'Online',
+                workMode: 'taxi',
+                vehicleType: 'eco'
+            });
 
-        await redis.geoadd('drivers:locations', 44.3180, 31.9980, driver2.id);
-        await redis.hmset(`driver:${driver2.id}:meta`, {
-            id: driver2.id,
-            fullName: driver2.fullName,
-            phone: driver2.phone,
-            status: 'Online',
-            workMode: 'taxi',
-            vehicleType: 'eco'
-        });
+            await redisManager.client.geoadd('drivers:locations', 44.3180, 31.9980, driver2.id);
+            await redisManager.client.hmset(`driver:${driver2.id}:meta`, {
+                id: driver2.id,
+                fullName: driver2.fullName,
+                phone: driver2.phone,
+                status: 'Online',
+                workMode: 'taxi',
+                vehicleType: 'eco'
+            });
+        }
 
-        await pool.query(
-            `INSERT INTO drivers (driver_id, full_name, phone_number, status, is_online, current_lat, current_lon)
-             VALUES ($1, $2, $3, 'Online', true, 31.9970, 44.3170),
-                    ($4, $5, $6, 'Online', true, 31.9980, 44.3180)
-             ON CONFLICT (driver_id) DO UPDATE SET status = 'Online', is_online = true`,
-            [driver1.id, driver1.fullName, driver1.phone, driver2.id, driver2.fullName, driver2.phone]
-        );
+        if (db.pool && db.isPostgresConnected) {
+            await db.pool.query(
+                `INSERT INTO drivers (driver_id, full_name, phone_number, status, is_online, current_lat, current_lon)
+                 VALUES ($1, $2, $3, 'Online', true, 31.9970, 44.3170),
+                        ($4, $5, $6, 'Online', true, 31.9980, 44.3180)
+                 ON CONFLICT (driver_id) DO UPDATE SET status = 'Online', is_online = true`,
+                [driver1.id, driver1.fullName, driver1.phone, driver2.id, driver2.fullName, driver2.phone]
+            );
+        }
 
         // -------------------------------------------------------------------------
         // (A) Test: 20s Timeout Actual Expiration & Candidate Escalation
@@ -339,31 +337,25 @@ async function runPreBatch2Tests() {
         // Cleanup Test Data
         console.log('🧹 Cleaning up test data from Redis and PostgreSQL...');
         try {
-            await redis.zrem('drivers:locations', testDriver1Id, testDriver2Id);
-            await redis.del(`driver:${testDriver1Id}:meta`, `driver:${testDriver2Id}:meta`);
-            await pool.query(`DELETE FROM drivers WHERE driver_id IN ($1, $2)`, [testDriver1Id, testDriver2Id]);
-            await pool.query(`DELETE FROM rides WHERE customer_id IN ($1, $2)`, [customer1.id, customer2.id]);
-            await pool.query(`DELETE FROM ride_events WHERE event_data::text LIKE '%${customer1.id}%' OR event_data::text LIKE '%${customer2.id}%'`);
-            await pool.query(`DELETE FROM users WHERE id IN ($1, $2, $3, $4)`, [customer1.id, customer2.id, testDriver1Id, testDriver2Id]);
-            await redis.del(`rate:ride:create:${customer1.id}`, `rate:ride:create:${customer2.id}`);
-            // Flush any test pending rides
-            const keys = await redis.hkeys('pending:rides');
-            if (keys && keys.length > 0) {
-                await redis.del('pending:rides');
+            if (redisManager.isConnected && redisManager.client) {
+                await redisManager.client.zrem('drivers:locations', testDriver1Id, testDriver2Id);
+                await redisManager.client.del(`driver:${testDriver1Id}:meta`, `driver:${testDriver2Id}:meta`);
+                await redisManager.client.del(`rate:ride:create:${customer1.id}`, `rate:ride:create:${customer2.id}`);
+                const keys = await redisManager.client.hkeys('pending:rides');
+                if (keys && keys.length > 0) {
+                    await redisManager.client.del('pending:rides');
+                }
+            }
+            if (db.pool && db.isPostgresConnected) {
+                await db.pool.query(`DELETE FROM drivers WHERE driver_id IN ($1, $2)`, [testDriver1Id, testDriver2Id]);
+                await db.pool.query(`DELETE FROM rides WHERE customer_id IN ($1, $2)`, [customer1.id, customer2.id]);
+                await db.pool.query(`DELETE FROM ride_events WHERE event_data::text LIKE '%${customer1.id}%' OR event_data::text LIKE '%${customer2.id}%'`);
+                await db.pool.query(`DELETE FROM users WHERE id IN ($1, $2, $3, $4)`, [customer1.id, customer2.id, testDriver1Id, testDriver2Id]);
             }
         } catch (cleanupErr) {
             console.error('Cleanup notice:', cleanupErr.message);
         }
-        await redis.quit();
-        await pool.end();
-    }
-
-    console.log('===============================================================');
-    console.log(`📊 Suite Completed: ${passed} Passed, ${failed} Failed`);
-    console.log('===============================================================\n');
-
-    if (failed > 0) {
-        process.exit(1);
+        process.exit(failed > 0 ? 1 : 0);
     }
 }
 
