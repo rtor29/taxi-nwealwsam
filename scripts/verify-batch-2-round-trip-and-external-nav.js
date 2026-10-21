@@ -109,8 +109,8 @@ async function runBatch2Tests() {
     try {
         await sleep(1000);
 
-        // 0. Seed test drivers in Redis Geospatial Index & PostgreSQL
-        console.log('🌱 Seeding 3 isolated test drivers in Redis Geo Index & PostgreSQL...');
+        // 0. Seed test drivers in Redis Geospatial Index
+        console.log('🌱 Seeding 3 isolated test drivers in Redis Geo Index...');
         if (redisManager.isConnected && redisManager.client) {
             for (const d of [driver1, driver2, driver3]) {
                 await redisManager.client.geoadd('drivers:locations', 44.3170, 31.9970, d.id);
@@ -122,16 +122,6 @@ async function runBatch2Tests() {
                     workMode: 'taxi',
                     vehicleType: 'eco'
                 });
-            }
-        }
-        if (db.pool && db.isPostgresConnected) {
-            for (const d of [driver1, driver2, driver3]) {
-                await db.pool.query(
-                    `INSERT INTO drivers (driver_id, full_name, phone_number, status, is_online, current_lat, current_lon)
-                     VALUES ($1, $2, $3, 'Online', true, 31.9970, 44.3170)
-                     ON CONFLICT (driver_id) DO UPDATE SET status = 'Online', is_online = true`,
-                    [d.id, d.fullName, d.phone]
-                );
             }
         }
 
@@ -403,14 +393,10 @@ async function runBatch2Tests() {
                 }
             }
             if (db.pool && db.isPostgresConnected) {
-                const driverIds = testDrivers.map(d => d.id);
-                const driverPlaceholders = driverIds.map((_, i) => `$${i + 1}`).join(',');
-                await db.pool.query(`DELETE FROM drivers WHERE driver_id IN (${driverPlaceholders})`, driverIds);
                 if (testCustomers.length > 0) {
                     const custIds = testCustomers.map(c => c.id);
                     const custPlaceholders = custIds.map((_, i) => `$${i + 1}`).join(',');
                     await db.pool.query(`DELETE FROM rides WHERE rider_id IN (${custPlaceholders})`, custIds);
-                    await db.pool.query(`DELETE FROM users WHERE id IN (${custPlaceholders})`, custIds);
                 }
                 if (testRides.length > 0) {
                     const validRides = testRides.filter(Boolean);
