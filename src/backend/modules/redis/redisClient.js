@@ -178,30 +178,103 @@ class RedisManager {
     }
 
     /**
-     * Broadcast a ride update to passenger and assigned driver
+     * Broadcast a ride update to passenger and assigned driver with event history for Last-Event-ID
      */
     async publishRideEvent(rideId, event) {
         if (!this.isConnected) return false;
         try {
-            const payload = typeof event === 'string' ? event : JSON.stringify(event);
+            const eventObj = typeof event === 'object' && event !== null ? { ...event } : { data: event };
+            if (!eventObj.eventId && !eventObj.id) {
+                eventObj.eventId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 4);
+            }
+            const eventId = eventObj.eventId || eventObj.id;
+            const payload = JSON.stringify(eventObj);
+
+            // Record in Redis List history for Last-Event-ID replay (keep last 50 events, TTL 1 hour)
+            const histKey = `sse:history:ride:${rideId}`;
+            if (this.client) {
+                await this.client.rpush(histKey, payload).catch(() => {});
+                await this.client.ltrim(histKey, -50, -1).catch(() => {});
+                await this.client.expire(histKey, 3600).catch(() => {});
+            }
+
             await this.pub.publish(`channel:ride:${rideId}`, payload);
-            return true;
+            return eventId;
         } catch (_) {
             return false;
         }
     }
 
     /**
-     * Broadcast a direct notification to a specific driver
+     * Broadcast a direct notification to a specific driver with event history for Last-Event-ID
      */
     async publishDriverEvent(driverId, event) {
         if (!this.isConnected) return false;
         try {
-            const payload = typeof event === 'string' ? event : JSON.stringify(event);
+            const eventObj = typeof event === 'object' && event !== null ? { ...event } : { data: event };
+            if (!eventObj.eventId && !eventObj.id) {
+                eventObj.eventId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 4);
+            }
+            const eventId = eventObj.eventId || eventObj.id;
+            const payload = JSON.stringify(eventObj);
+
+            // Record in Redis List history for Last-Event-ID replay (keep last 50 events, TTL 1 hour)
+            const histKey = `sse:history:driver:${driverId}`;
+            if (this.client) {
+                await this.client.rpush(histKey, payload).catch(() => {});
+                await this.client.ltrim(histKey, -50, -1).catch(() => {});
+                await this.client.expire(histKey, 3600).catch(() => {});
+            }
+
             await this.pub.publish(`channel:driver:${driverId}`, payload);
-            return true;
+            return eventId;
         } catch (_) {
             return false;
+        }
+    }
+
+    /**
+     * Fetch missed SSE events since lastEventId from Redis List
+     */
+    async getMissedSseEvents(channelType, channelId, lastEventId) {
+        if (!this.isConnected || !this.client || !channelId || !lastEventId) return [];
+        try {
+            const histKey = `sse:history:${channelType}:${channelId}`;
+            const items = await this.client.lrange(histKey, 0, -1);
+            if (!items || items.length === 0) return [];
+            
+            const missed = [];
+            let foundLast = false;
+            for (const item of items) {
+                try {
+                    const parsed = JSON.parse(item);
+                    const eId = String(parsed.eventId || parsed.id || '');
+                    if (foundLast) {
+                        missed.push(parsed);
+                    } else if (eId === String(lastEventId)) {
+                        foundLast = true;
+                    }
+                } catch (_) {}
+            }
+            // Fallback: timestamp-based comparison if lastEventId is not exact match
+            if (!foundLast && missed.length === 0) {
+                const lastTs = parseInt(String(lastEventId).split('_')[0], 10);
+                if (!isNaN(lastTs) && lastTs > 0) {
+                    for (const item of items) {
+                        try {
+                            const parsed = JSON.parse(item);
+                            const eId = String(parsed.eventId || parsed.id || '');
+                            const curTs = parseInt(eId.split('_')[0], 10);
+                            if (!isNaN(curTs) && curTs > lastTs) {
+                                missed.push(parsed);
+                            }
+                        } catch (_) {}
+                    }
+                }
+            }
+            return missed;
+        } catch (_) {
+            return [];
         }
     }
 

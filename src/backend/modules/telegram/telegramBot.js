@@ -2305,9 +2305,22 @@ async function notifyTripCompleted(ride, fareInput) {
         const finalFareNum = Math.max(3000, Math.ceil(Number(rawFare || 3000) / 250) * 250);
         const formattedFare = finalFareNum.toLocaleString('en-US');
 
+        const isRound = Boolean(ride.isRoundTrip || ride.tripType === 'ROUND_TRIP');
+        let breakdownMsg = '';
+        if (isRound) {
+            const leg1 = Number(ride.leg1Fare || (ride.fare ? Math.round(Number(ride.fare) / 2) : 0));
+            const waitFee = Number(ride.waitFee || 0);
+            const leg2 = Math.max(0, finalFareNum - leg1 - waitFee);
+            breakdownMsg = `\n🔄 <b>نوع الرحلة:</b> ذهاب وإياب\n` +
+                           `📊 <b>تفاصيل الكروة:</b> ذهاب (${leg1.toLocaleString('en-US')} د.ع) + انتظار (${waitFee.toLocaleString('en-US')} د.ع) + عودة (${leg2.toLocaleString('en-US')} د.ع)`;
+            console.log(`[TelegramBot] notifyTripCompleted: rideId: ${ride.id}, type: ROUND_TRIP, finalFare: ${finalFareNum}, leg1Fare: ${leg1}, waitFee: ${waitFee}, leg2Fare: ${leg2}`);
+        } else {
+            console.log(`[TelegramBot] notifyTripCompleted: rideId: ${ride.id}, type: ONE_WAY, finalFare: ${finalFareNum}`);
+        }
+
         const msg = `🏁 الحمد لله على سلامة الوصول!\n\n` +
             `تم إنهاء مشوارك بنجاح ✅\n` +
-            `💰 المبلغ المستلم: ${formattedFare} دينار عراقي\n\n` +
+            `💰 المبلغ المستلم: ${formattedFare} دينار عراقي${breakdownMsg}\n\n` +
             `نتمنى لك وقتاً طيباً، ويسعدنا تقييمك للكابتن عبر التطبيق ⭐`;
 
         console.log(`[TelegramBot] notifyTripCompleted dispatching for ride: ${ride.id}`);
