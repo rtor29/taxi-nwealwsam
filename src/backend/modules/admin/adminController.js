@@ -38,7 +38,11 @@ function toLeanDriver(d) {
         serviceType: d.serviceType || 'Both',
         isActive: d.isActive !== false && d.status !== 'Inactive',
         status: d.status || 'Active',
-        approvalStatus: d.approvalStatus || (d.isVerified ? 'Approved' : 'Pending'),
+        isApproved: d.is_approved === true || d.isApproved === true,
+        isVerified: d.is_verified === true || d.isVerified === true,
+        isOnline: d.isOnline === true || d.status === 'Online',
+        tripStatus: d.tripStatus || d.trip_status || d.status || 'Offline',
+        approvalStatus: d.approvalStatus || (d.is_approved || d.isApproved ? 'Approved' : 'Pending'),
         rating: parseFloat(d.rating || 5.0),
         points: parseInt(d.points || d.rewardScore || 0, 10),
         isBlocked: !!d.isBlocked,
@@ -341,11 +345,13 @@ class AdminController {
         }
 
         const result = await db.setDriverStatus(driverId, newStatus, reason);
+        invalidateDriversCache();
         return result;
     }
 
     async setDriverApproval(driverId, isApproved) {
         const result = await db.setDriverApproval(driverId, isApproved);
+        invalidateDriversCache();
         if (isApproved && result && result.success) {
             setImmediate(async () => {
                 try {
@@ -431,7 +437,9 @@ class AdminController {
     }
 
     async deleteDriver(driverId) {
-        return await db.deleteDriver(driverId);
+        const res = await db.deleteDriver(driverId);
+        invalidateDriversCache();
+        return res;
     }
 
     async getPendingVerifications() {
