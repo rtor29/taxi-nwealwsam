@@ -162,6 +162,71 @@ class RedisManager {
         } catch (_) {}
     }
 
+    // ---[ Distributed Lock for Telegram Notifications (Multi-Worker Deduplication) ]---
+    async acquireTelegramNotificationLock(key, ttlSeconds = 86400) {
+        if (!this.isConnected || !this.client) {
+            if (!global._tgMemLocks) global._tgMemLocks = new Set();
+            if (global._tgMemLocks.has(key)) return false;
+            global._tgMemLocks.add(key);
+            setTimeout(() => global._tgMemLocks.delete(key), Math.min(ttlSeconds * 1000, 3600000));
+            return true;
+        }
+        try {
+            const lockKey = `tg:lock:${key}`;
+            const res = await this.client.set(lockKey, '1', 'NX', 'EX', ttlSeconds);
+            return res === 'OK';
+        } catch (err) {
+            return true; // allow attempt if redis error
+        }
+    }
+
+    // ---[ Store and retrieve sent Telegram ride offer messages for candidates ]---
+    async saveRideOfferMessage(rideId, driverId, chatId, messageId) {
+        if (!rideId || !driverId || !chatId || !messageId) return;
+        const entry = JSON.stringify({ driverId, chatId, messageId, timestamp: Date.now() });
+        if (this.isConnected && this.client) {
+            try {
+                await this.client.hset(`ride:offers:${rideId}`, String(driverId), entry);
+                await this.client.expire(`ride:offers:${rideId}`, 1800); // 30 mins
+            } catch (_) {}
+        } else {
+            if (!global._tgOffersMem) global._tgOffersMem = new Map();
+            const map = global._tgOffersMem.get(rideId) || new Map();
+            map.set(String(driverId), { driverId, chatId, messageId, timestamp: Date.now() });
+            global._tgOffersMem.set(rideId, map);
+        }
+    }
+
+    async getRideOfferMessages(rideId) {
+        if (!rideId) return [];
+        if (this.isConnected && this.client) {
+            try {
+                const rawMap = await this.client.hgetall(`ride:offers:${rideId}`);
+                if (!rawMap) return [];
+                return Object.values(rawMap).map(str => {
+                    try { return JSON.parse(str); } catch (_) { return null; }
+                }).filter(Boolean);
+            } catch (_) {
+                return [];
+            }
+        } else {
+            if (!global._tgOffersMem) return [];
+            const map = global._tgOffersMem.get(rideId);
+            return map ? Array.from(map.values()) : [];
+        }
+    }
+
+    async clearRideOfferMessages(rideId) {
+        if (!rideId) return;
+        if (this.isConnected && this.client) {
+            try {
+                await this.client.del(`ride:offers:${rideId}`);
+            } catch (_) {}
+        } else if (global._tgOffersMem) {
+            global._tgOffersMem.delete(rideId);
+        }
+    }
+
     // ---[ 3. Pub/Sub Real-Time Broadcast for SSE ]---
     /**
      * Broadcast a dispatch event across all PM2 cluster workers

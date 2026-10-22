@@ -3226,49 +3226,54 @@ async function startServer() {
 
                 console.log(`[TelegramDispatch] New ride created, type: ${newRequest.tripType || (newRequest.isRoundTrip ? 'ROUND_TRIP' : 'ONE_WAY')}, rideId: ${newRequest.id}, estimatedFare: ${newRequest.fare}`);
 
-                // Send Telegram notification to Platform Admin about new ride
+                // Send Telegram notification to Platform Admin about new ride (with distributed lock)
                 try {
                     const adminChatId = config.telegramAdminChatId || config.adminChatId || config.telegram?.adminChatId || '391762837';
-                    const maskedRiderPhone = newRequest.customerPhone ? maskPhoneNumber(newRequest.customerPhone) : 'غير متوفر';
-                    const tgAdminMsg = `🚖 <b>طلب مشوار جديد (#${newRequest.id})</b>\n\n` +
-                        `👤 <b>الراكب:</b> ${newRequest.customerName} (${maskedRiderPhone})\n` +
-                        `📍 <b>الانطلاق:</b> ${newRequest.pickupName || 'موقع الراكب'}\n` +
-                        `🏁 <b>الوجهة:</b> ${newRequest.dropoffName || 'الوجهة المحددة'}${extraTgInfo}\n` +
-                        `💰 <b>الأجرة:</b> ${newRequest.fare} د.ع (${tierBadge})\n` +
-                        `👥 <b>الكباتن المرشحون:</b> ${candidateDriverIds.length}\n` +
-                        `⏱️ <b>مهلة الرد:</b> 20 ثانية`;
+                    const adminLock = await redisManager.acquireTelegramNotificationLock(`${newRequest.id}:NEW_RIDE:ADMIN`, 86400);
+                    if (adminLock) {
+                        const maskedRiderPhone = newRequest.customerPhone ? maskPhoneNumber(newRequest.customerPhone) : 'غير متوفر';
+                        const tgAdminMsg = `🚖 <b>طلب مشوار جديد (#${newRequest.id})</b>\n\n` +
+                            `👤 <b>الراكب:</b> ${newRequest.customerName} (${maskedRiderPhone})\n` +
+                            `📍 <b>الانطلاق:</b> ${newRequest.pickupName || 'موقع الراكب'}\n` +
+                            `🏁 <b>الوجهة:</b> ${newRequest.dropoffName || 'الوجهة المحددة'}${extraTgInfo}\n` +
+                            `💰 <b>الأجرة:</b> ${newRequest.fare} د.ع (${tierBadge})\n` +
+                            `👥 <b>الكباتن المرشحون:</b> ${candidateDriverIds.length}\n` +
+                            `⏱️ <b>مهلة الرد:</b> 20 ثانية`;
 
-                    const tgRes = await telegramBot.sendMessage(adminChatId, tgAdminMsg);
-                    console.log(`[TelegramDispatch] New ride alert dispatched to Admin (chatId: ${String(adminChatId).slice(0, 3)}****), ok: ${Boolean(tgRes?.ok)}, message_id: ${tgRes?.result?.message_id || 'N/A'}`);
+                        const tgRes = await telegramBot.sendMessage(adminChatId, tgAdminMsg);
+                        console.log(`[TelegramDispatch] New ride alert dispatched to Admin (chatId: ${String(adminChatId).slice(0, 3)}****), ok: ${Boolean(tgRes?.ok)}, message_id: ${tgRes?.result?.message_id || 'N/A'}`);
+                    }
                 } catch (tgAdminErr) {
                     console.error('[TelegramDispatch] Failed to send new ride alert to admin:', tgAdminErr.message);
                 }
 
-                // Notify passenger via Telegram if connected
-                const custObj = (db.memoryState.customers || []).find(c => c.customerId === customerId || (customerPhone && c.phoneNumber === customerPhone));
-                if (custObj && custObj.telegramChatId) {
-                    const tgMsg = `🚖 <b>تم إرسال طلبك (${tierBadge}) إلى الكباتن المتاحين بالقرب منك!</b>\n\n` +
-                        `🛣️ <b>المسار:</b> ${newRequest.pickupName} ➔ ${newRequest.dropoffName}${extraTgInfo}\n` +
-                        `💰 <b>الأجرة:</b> ${newRequest.fare} د.ع\n\n` +
-                        `⏳ جاري البحث عن كابتن بانتظار الموافقة...`;
-                    telegramBot.notifyUser(custObj.telegramChatId, tgMsg).catch(() => {});
+                // Notify passenger via Telegram if connected (with distributed lock)
+                try {
+                    const custObj = (db.memoryState.customers || []).find(c => c.customerId === customerId || (customerPhone && c.phoneNumber === customerPhone));
+                    if (custObj && custObj.telegramChatId) {
+                        const custLock = await redisManager.acquireTelegramNotificationLock(`${newRequest.id}:NEW_RIDE:CUST`, 86400);
+                        if (custLock) {
+                            const tgMsg = `🚖 <b>تم إرسال طلبك (${tierBadge}) إلى الكباتن المتاحين بالقرب منك!</b>\n\n` +
+                                `🛣️ <b>المسار:</b> ${newRequest.pickupName} ➔ ${newRequest.dropoffName}${extraTgInfo}\n` +
+                                `💰 <b>الأجرة:</b> ${newRequest.fare} د.ع\n\n` +
+                                `⏳ جاري البحث عن كابتن بانتظار الموافقة...`;
+                            telegramBot.notifyUser(custObj.telegramChatId, tgMsg).catch(() => {});
+                        }
+                    }
+                } catch (custTgErr) {
+                    console.error('[NewRide] Customer Telegram notify error:', custTgErr.message);
                 }
 
-                // Notify candidate drivers with telegramChatId
+                // Notify candidate drivers with deep link https://tawseelaiq.app/drive?ride=<id>
                 try {
                     const candidateIds = new Set(newRequest.candidateDriverIds || []);
                     if (assignedDriver && assignedDriver.driverId) candidateIds.add(assignedDriver.driverId);
 
-                    const drvMsg = `🔔 <b>طلب مشوار جديد (${tierBadge})!</b>\n` +
-                        `📍 الانطلاق: <b>${newRequest.pickupName || 'موقع الراكب'}</b>\n` +
-                        `🏁 الوجهة: <b>${newRequest.dropoffName || 'الوجهة المحددة'}</b>${extraTgInfo}\n` +
-                        `💰 الأجرة التقديرية: <b>${newRequest.fare} د.ع</b>\n\n` +
-                        `افتح التطبيق لقبول الطلب:\nhttps://tawseelaiq.app/?role=Driver`;
-
                     for (const dId of candidateIds) {
-                        const drv = (db.memoryState.drivers || []).find(d => d.driverId === dId);
-                        if (drv && drv.telegramChatId) {
-                            telegramBot.notifyUser(drv.telegramChatId, drvMsg).catch(() => {});
+                        if (typeof telegramBot.notifyCaptainRideOffer === 'function') {
+                            telegramBot.notifyCaptainRideOffer(dId, newRequest, 20).catch(err => {
+                                console.error(`[NewRide] Driver ${dId} Telegram offer error:`, err.message);
+                            });
                         }
                     }
                 } catch (drvTgErr) {
@@ -3714,6 +3719,11 @@ async function startServer() {
                             event: 'no_drivers_available',
                             rideId: r.id
                         });
+                        try {
+                            if (typeof telegramBot.notifyRideCancelled === 'function') {
+                                telegramBot.notifyRideCancelled(r, reason, 'driver', 0).catch(() => {});
+                            }
+                        } catch (_) {}
                     }
                     db.saveStateSnapshot();
                     redisManager.publishDispatchEvent({ type: 'ride_rejected', requestId: r.id });
@@ -4041,14 +4051,7 @@ async function startServer() {
                     ride: r
                 });
 
-                // Telegram notification to passenger
-                const custObj = (db.memoryState.customers || []).find(c => c.customerId === r.customerId || (r.customerPhone && c.phoneNumber === r.customerPhone));
-                if (custObj && custObj.telegramChatId) {
-                    const tgMsg = `🏁 <b>وصلتم إلى وجهتكم بسلام!</b>\n\n` +
-                        `💰 <b>الأجرة النهائية المطلوب دفعها نقداً:</b> ${finalFare.toLocaleString('en-US')} د.ع\n` +
-                        `نتمنى أن تكون الرحلة مع الكابتن ${r.assignedDriverName || ''} ممتازة! ⭐`;
-                    telegramBot.notifyUser(custObj.telegramChatId, tgMsg).catch(() => {});
-                }
+                // Note: "الحمد لله على سلامتك" Telegram message is strictly delayed until Captain clicks "استلمت الأجرة" (POST /api/ride/complete)
 
                 // Round-Trip: Transition from ARRIVED_DESTINATION -> WAITING_AT_DESTINATION automatically
                 const isRound = Boolean(r.isRoundTrip || r.tripType === 'ROUND_TRIP');
@@ -4645,6 +4648,11 @@ async function startServer() {
                             event: 'no_drivers_available',
                             rideId: r.id
                         });
+                        try {
+                            if (typeof telegramBot.notifyRideCancelled === 'function') {
+                                telegramBot.notifyRideCancelled(r, reason, 'driver', 0).catch(() => {});
+                            }
+                        } catch (_) {}
                         return sendJson({
                             success: true,
                             reoffered: false,
@@ -4721,6 +4729,12 @@ async function startServer() {
                     cancelledBy: 'rider',
                     timestamp: Date.now()
                 });
+
+                try {
+                    if (typeof telegramBot.notifyRideCancelled === 'function') {
+                        telegramBot.notifyRideCancelled(r, reason, 'rider', isWaitCancellation ? r.finalFare : (feeApplies ? cancelFee : 0)).catch(() => {});
+                    }
+                } catch (_) {}
 
                 const cancelMsg = isWaitCancellation 
                     ? `تم إلغاء رحلة العودة والاكتفاء بالذهاب. المبلغ المستحق للذهاب والانتظار: ${r.finalFare} د.ع.`
