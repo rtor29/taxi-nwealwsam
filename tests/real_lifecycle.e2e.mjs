@@ -33,9 +33,10 @@ async function run() {
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security']
   });
 
-  const testPhone = '07819998811';
-  const testPhone2 = '07819998822';
-  const testRiderPhone = '07849992233';
+  const randSuffix = Math.floor(1000 + Math.random() * 9000);
+  const testPhone = `0781999${randSuffix}`;
+  const testRiderPhone = `0784999${randSuffix}`;
+  const distantPhone = `0784888${randSuffix}`;
 
   // ================================================================
   // TEST 1: REAL CAPTAIN REGISTRATION & POSTGRESQL INSERTION
@@ -282,11 +283,28 @@ async function run() {
   // ================================================================
   // TEST 6: DISTANT DRIVER OUTSIDE RADIUS -> NO_DRIVERS VERIFICATION
   // ================================================================
-  console.log('\n--- [TEST 6: Distant Request -> NO_DRIVERS Response] ---');
-  const distantRes = await riderPage.evaluate(async () => {
-    const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
-    const userId = localStorage.getItem('user_id') || localStorage.getItem('userId') || '';
-    // Pickup far away in Baghdad (lat 33.31, lon 44.36) with 5km radius
+  console.log('\n--- [TEST 6: Distant Request (Erbil) -> NO_DRIVERS 404 Response] ---');
+  const distantAuthRes = await riderPage.evaluate(async (phone) => {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fullName: 'راكب أربيل فحص',
+        phoneNumber: phone,
+        password: 'password123',
+        role: 'Customer',
+        serviceType: 'taxi',
+        address: 'أربيل - قلعة أربيل'
+      })
+    });
+    return { ok: res.ok, status: res.status, data: await res.json() };
+  }, distantPhone);
+
+  const distantToken = distantAuthRes.data?.token;
+  const distantUserId = distantAuthRes.data?.userId;
+
+  const distantRes = await riderPage.evaluate(async ({ token, userId, phone }) => {
+    // Pickup far away in Erbil (lat 36.19, lon 44.01) with 5km radius where NO drivers exist
     const res = await fetch('/api/ride/request', {
       method: 'POST',
       headers: {
@@ -296,29 +314,32 @@ async function run() {
       body: JSON.stringify({
         customerId: userId,
         customerName: 'فحص مسافة بعيدة',
-        customerPhone: '07849992233',
-        pickupName: 'الكرادة - بغداد',
-        pickupLat: 33.3100,
-        pickupLon: 44.3600,
-        dropoffName: 'المنصور - بغداد',
-        dropoffLat: 33.3200,
-        dropoffLon: 44.3500,
+        customerPhone: phone,
+        pickupName: 'قلعة أربيل',
+        pickupLat: 36.1900,
+        pickupLon: 44.0100,
+        dropoffName: 'مطار أربيل الدولي',
+        dropoffLat: 36.2300,
+        dropoffLon: 43.9600,
         rangeKm: 5,
         vehicleType: 'eco'
       })
     });
     return { ok: res.ok, status: res.status, data: await res.json() };
-  });
+  }, { token: distantToken, userId: distantUserId, phone: distantPhone });
 
-  console.log('Distant Ride Request result:', JSON.stringify(distantRes));
+  console.log('Distant Ride Request result status:', distantRes.status);
+  console.log('Distant Ride Request body:', JSON.stringify(distantRes.data));
 
   // ================================================================
   // TEST 7: CLEANUP & SYSTEM SETTINGS VERIFICATION
   // ================================================================
   console.log('\n--- [TEST 7: Cleanup Test Accounts & Verify system_settings] ---');
   // Clean up test data
-  runSsh(`su - postgres -c "psql -d taxiwisam -c \\"DELETE FROM drivers WHERE phone_number IN ('${testPhone}', '${testPhone2}'); DELETE FROM users WHERE phone_number IN ('${testPhone}', '${testPhone2}', '${testRiderPhone}'); DELETE FROM ride_events WHERE ride_id = '${rideId}';\\""`);
-  runSsh(`redis-cli --no-auth-warning ZREM 'drivers:locations' '${driverId}'`);
+  runSsh(`su - postgres -c "psql -d taxiwisam -c \\"DELETE FROM drivers WHERE phone_number = '${testPhone}'; DELETE FROM users WHERE phone_number IN ('${testPhone}', '${testRiderPhone}', '${distantPhone}'); DELETE FROM ride_events WHERE ride_id = '${rideId}';\\""`);
+  if (driverId) {
+    runSsh(`redis-cli --no-auth-warning ZREM 'drivers:locations' '${driverId}'`);
+  }
   console.log('Test accounts cleaned up from PostgreSQL and Redis.');
 
   // Check 18 keys in system_settings

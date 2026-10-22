@@ -2908,20 +2908,28 @@ async function startServer() {
                         for (const d of pgDrivers.rows) {
                             const id = String(d.driver_id || d.id);
                             if (!driversMap.has(id)) {
-                                const dLat = parseFloat(d.latitude || d.current_lat || pLat);
-                                const dLon = parseFloat(d.longitude || d.current_lon || pLon);
-                                const dist = calculateDistanceKm(pLat, pLon, dLat, dLon);
-                                if (dist <= maxDist) {
-                                    driversMap.set(id, {
-                                        driverId: id,
-                                        fullName: d.full_name || d.name || 'كابتن توصيله',
-                                        phoneNumber: d.phone_number || d.phone || '',
-                                        status: 'Online',
-                                        isOnline: true,
-                                        work_mode: d.work_mode || 'taxi',
-                                        vehicleType: d.vehicle_type || 'eco',
-                                        dist
-                                    });
+                                const rawLat = d.latitude != null ? d.latitude : d.current_lat;
+                                const rawLon = d.longitude != null ? d.longitude : d.current_lon;
+                                if (rawLat != null && rawLon != null) {
+                                    const dLat = parseFloat(rawLat);
+                                    const dLon = parseFloat(rawLon);
+                                    if (!isNaN(dLat) && !isNaN(dLon)) {
+                                        const dist = calculateDistanceKm(pLat, pLon, dLat, dLon);
+                                        if (dist <= maxDist) {
+                                            driversMap.set(id, {
+                                                driverId: id,
+                                                fullName: d.full_name || d.name || 'كابتن توصيله',
+                                                phoneNumber: d.phone_number || d.phone || '',
+                                                status: 'Online',
+                                                isOnline: true,
+                                                work_mode: d.work_mode || 'taxi',
+                                                vehicleType: d.vehicle_type || 'eco',
+                                                currentLat: dLat,
+                                                currentLon: dLon,
+                                                dist
+                                            });
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -2934,14 +2942,20 @@ async function startServer() {
                 if (isDriverOnlineAndActive(d)) {
                     const id = String(d.driverId || d.id);
                     if (!driversMap.has(id)) {
-                        const dLat = parseFloat(d.currentLat || d.latitude || pLat);
-                        const dLon = parseFloat(d.currentLon || d.longitude || pLon);
-                        const dist = calculateDistanceKm(pLat, pLon, dLat, dLon);
-                        if (dist <= maxDist) {
-                            driversMap.set(id, {
-                                ...d,
-                                dist
-                            });
+                        const rawLat = d.currentLat != null ? d.currentLat : d.latitude;
+                        const rawLon = d.currentLon != null ? d.currentLon : d.longitude;
+                        if (rawLat != null && rawLon != null) {
+                            const dLat = parseFloat(rawLat);
+                            const dLon = parseFloat(rawLon);
+                            if (!isNaN(dLat) && !isNaN(dLon)) {
+                                const dist = calculateDistanceKm(pLat, pLon, dLat, dLon);
+                                if (dist <= maxDist) {
+                                    driversMap.set(id, {
+                                        ...d,
+                                        dist
+                                    });
+                                }
+                            }
                         }
                     }
                 }
@@ -3070,9 +3084,14 @@ async function startServer() {
 
                 let candidates = tierCandidates
                     .map(d => {
-                        const drvLat = d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : (d.latitude ? parseFloat(d.latitude) : pLat));
-                        const drvLon = d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : (d.longitude ? parseFloat(d.longitude) : pLon));
-                        const dist = haversine(pLat, pLon, drvLat, drvLon);
+                        if (d.dist !== undefined && d.dist !== null && !isNaN(d.dist)) {
+                            return d;
+                        }
+                        const drvLat = d.currentLat != null ? parseFloat(d.currentLat) : (d.permanentLat != null ? parseFloat(d.permanentLat) : (d.latitude != null ? parseFloat(d.latitude) : null));
+                        const drvLon = d.currentLon != null ? parseFloat(d.currentLon) : (d.permanentLon != null ? parseFloat(d.permanentLon) : (d.longitude != null ? parseFloat(d.longitude) : null));
+                        const dist = (drvLat != null && drvLon != null && !isNaN(drvLat) && !isNaN(drvLon))
+                            ? haversine(pLat, pLon, drvLat, drvLon)
+                            : Infinity;
                         return { ...d, dist };
                     })
                     .sort((a, b) => a.dist - b.dist);
