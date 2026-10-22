@@ -4472,9 +4472,12 @@ async function startServer() {
                 }
             }
 
-            // RLS Check: Ensure caller is the customer or assigned driver of this ride
+            // RLS Check: Ensure caller is authenticated customer or assigned driver of this ride
             const authUser = getAuthUser(req);
-            if (reqObj && authUser && authUser.role !== 'Admin') {
+            if (!authUser) {
+                return sendJson({ success: false, error: 'غير مصرح: يجب تسجيل الدخول أولاً (RLS)' }, 401);
+            }
+            if (reqObj && authUser.role !== 'Admin') {
                 if (authUser.role === 'Customer' && reqObj.customerId && authUser.id !== reqObj.customerId && (!authUser.phone || reqObj.customerPhone !== authUser.phone)) {
                     return sendJson({ success: false, error: 'غير مصرح: لا يمكنك قراءة محادثة مستخدم آخر (RLS)' }, 403);
                 }
@@ -4516,9 +4519,12 @@ async function startServer() {
                     }
                 }
 
-                // RLS Check: Only participants of this ride can send messages
+                // RLS Check: Only authenticated participants of this ride can send messages
                 const authUser = getAuthUser(req);
-                if (reqObj && authUser && authUser.role !== 'Admin') {
+                if (!authUser) {
+                    return sendJson({ success: false, error: 'غير مصرح: يجب تسجيل الدخول أولاً (RLS)' }, 401);
+                }
+                if (reqObj && authUser.role !== 'Admin') {
                     if (authUser.role === 'Customer' && reqObj.customerId && authUser.id !== reqObj.customerId && (!authUser.phone || reqObj.customerPhone !== authUser.phone)) {
                         return sendJson({ success: false, error: 'غير مصرح بإرسال رسائل في محادثة مستخدم آخر (RLS)' }, 403);
                     }
