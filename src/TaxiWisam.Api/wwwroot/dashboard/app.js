@@ -55,6 +55,10 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
         if (typeof initBackupDropzoneEvents === 'function') initBackupDropzoneEvents();
     } catch (_) {}
+
+    try {
+        if (typeof loadPlatformFeatureFlags === 'function') loadPlatformFeatureFlags();
+    } catch (_) {}
 });
 
 function escapeHtml(str) {
@@ -1102,111 +1106,106 @@ async function loadDrivers(search = '') {
             const tr = document.createElement('tr');
             tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80';
 
-            let statusBadge = '';
-            if (d.isBlocked || d.status === 'Suspended') {
-                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-rose-50 text-rose-700 border border-rose-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>معلق / محظور</span>';
-            } else if (d.status === 'Approved' || d.status === 'Online') {
-                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>معتمد ✓</span>';
-            } else if (d.status === 'Rejected') {
-                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-rose-50 text-rose-700 border border-rose-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>مرفوض ✕</span>';
+            // 1. عمود الحالة الآنية: حالة تشغيلية بحتة (في رحلة / متصل / خمول)
+            let operationalStatusBadge = '';
+            if (d.tripStatus === 'on_trip' || d.status === 'on_trip' || d.inTrip) {
+                operationalStatusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-blue-50 text-blue-700 border border-blue-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>في رحلة</span>';
+            } else if (d.isOnline || d.status === 'Online' || d.tripStatus === 'Online') {
+                operationalStatusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>متصل</span>';
             } else {
-                statusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>بانتظار التدقيق ⏳</span>';
+                operationalStatusBadge = '<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 border border-slate-200/60 shadow-xs"><span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>خمول</span>';
             }
 
-            const verifBadge = d.isVerified || d.status === 'Approved' || d.status === 'Online'
-                ? '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60"><i class="fa-solid fa-circle-check text-[10px]"></i> موثق</span>'
-                : (d.status === 'Rejected'
-                    ? '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-rose-50 text-rose-700 border border-rose-200/60">مرفوض</span>'
-                    : '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200/60">قيد الفحص</span>');
+            // 2. عمود التوثيق والاعتماد: بادج موحد يزيل التناقض نهائياً
+            const isDriverApproved = Boolean(d.isApproved && d.status !== 'Rejected');
+            let approvalBadge = '';
+            if (d.isBlocked || d.status === 'Suspended') {
+                approvalBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-rose-50 text-rose-700 border border-rose-200/60"><i class="fa-solid fa-ban text-[10px]"></i> معلق / محظور</span>';
+            } else if (isDriverApproved) {
+                approvalBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60"><i class="fa-solid fa-circle-check text-[10px]"></i> معتمد ✓</span>';
+            } else if (d.status === 'Rejected') {
+                approvalBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-rose-50 text-rose-700 border border-rose-200/60"><i class="fa-solid fa-circle-xmark text-[10px]"></i> مرفوض ✕</span>';
+            } else {
+                approvalBadge = '<span class="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200/60"><i class="fa-solid fa-clock text-[10px]"></i> بانتظار الاعتماد</span>';
+            }
 
-            // Lifecycle Buttons
-            let lifecycleButtons = '';
-            if (d.status === 'Pending' || (!d.isVerified && d.status !== 'Rejected' && d.status !== 'Suspended')) {
-                lifecycleButtons = `
-                    <button onclick="updateDriverStatus('${d.driverId}', 'Approved')" title="قبول وتوثيق الكابتن" class="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer">
-                        <i class="fa-solid fa-check text-xs"></i>
-                        <span>قبول</span>
+            // 3. أزرار الإجراءات السياقية حسب حالة السائق: صف أفقي واحد متناسق
+            let actionButtons = '';
+            const docCheckBtn = (window.DRIVER_DOCUMENTS_ENABLED === true)
+                ? `<button onclick="viewFullDriver('${d.driverId}')" title="فحص المستمسكات والوثائق" class="px-2.5 py-1.5 bg-[#1B4965] hover:bg-[#143a50] text-white rounded-lg text-xs font-semibold transition flex items-center gap-1 shadow-xs cursor-pointer"><i class="fa-solid fa-id-card text-xs"></i><span>فحص</span></button>`
+                : '';
+
+            if (isDriverApproved) {
+                // سائق معتمد: [تعديل] [إيقاف / تنشيط] [حذف] فقط
+                const isBlocked = d.isBlocked || d.status === 'Suspended';
+                const toggleBlockBtn = isBlocked
+                    ? `<button onclick="toggleDriverBlock('${d.driverId}', false)" title="تنشيط وإلغاء إيقاف الكابتن" class="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/60 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer"><i class="fa-solid fa-play text-xs"></i><span>تنشيط</span></button>`
+                    : `<button onclick="toggleDriverBlock('${d.driverId}', true)" title="إيقاف حساب الكابتن مؤقتاً" class="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/60 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer"><i class="fa-solid fa-pause text-xs"></i><span>إيقاف</span></button>`;
+
+                actionButtons = `
+                    <button onclick="openEditDriverModal('${d.driverId}')" title="تعديل بيانات الكابتن والمسار" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer">
+                        <i class="fa-solid fa-pen-to-square text-xs"></i>
+                        <span>تعديل</span>
                     </button>
-                    <button onclick="promptRejectDriver('${d.driverId}')" title="رفض طلب الكابتن" class="px-2 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer">
+                    ${toggleBlockBtn}
+                    ${docCheckBtn}
+                    <button onclick="deleteDriverPermanently('${d.driverId}')" title="حذف السائق نهائياً من قاعدة البيانات" class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer">
+                        <i class="fa-solid fa-trash-can text-xs"></i>
+                        <span>حذف</span>
+                    </button>
+                `;
+            } else {
+                // سائق غير معتمد (Pending / بانتظار الاعتماد / مرفوض): [موافقة واعتماد] [رفض] [تعديل]
+                actionButtons = `
+                    <button onclick="approveDriverQuick('${d.driverId}')" title="موافقة واعتماد الكابتن للعمل على المنصة" class="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer">
+                        <i class="fa-solid fa-check text-xs"></i>
+                        <span>موافقة واعتماد</span>
+                    </button>
+                    <button onclick="promptRejectDriver('${d.driverId}', '${escapeHtml(d.fullName || '')}')" title="رفض طلب انضمام الكابتن" class="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer">
                         <i class="fa-solid fa-xmark text-xs"></i>
                         <span>رفض</span>
                     </button>
-                `;
-            } else if (d.status === 'Approved' || d.status === 'Online' || (!d.isBlocked && d.isVerified)) {
-                lifecycleButtons = `
-                    <button onclick="updateDriverStatus('${d.driverId}', 'Suspended', 'تعليق إداري')" title="تعليق حساب الكابتن" class="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/60 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer">
-                        <i class="fa-solid fa-pause text-xs"></i>
-                        <span>تعليق</span>
-                    </button>
-                `;
-            } else {
-                // Suspended or Rejected -> Reactivate
-                lifecycleButtons = `
-                    <button onclick="updateDriverStatus('${d.driverId}', 'Approved')" title="إعادة تفعيل واعتماد الكابتن" class="px-2 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer">
-                        <i class="fa-solid fa-play text-xs"></i>
-                        <span>تنشيط</span>
+                    ${docCheckBtn}
+                    <button onclick="openEditDriverModal('${d.driverId}')" title="تعديل بيانات الكابتن والمسار" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer">
+                        <i class="fa-solid fa-pen-to-square text-xs"></i>
+                        <span>تعديل</span>
                     </button>
                 `;
             }
 
-            if (!d.isApproved) {
-                lifecycleButtons = `
-                    <button onclick="approveDriver('${d.driverId}')" title="موافقة ظهور على الخريطة" class="px-2 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs cursor-pointer">
-                        <i class="fa-solid fa-check text-xs"></i>
-                        <span>موافقة</span>
-                    </button>
-                ` + lifecycleButtons;
-            }
-
-            const approveBadge = d.isApproved 
-                ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 ml-1">موافق عليه</span>' 
-                : '<span class="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-50 text-amber-700 border border-amber-200/60 ml-1">غير موافق</span>';
-
+            // رقم الهاتف بهوية لونية واضحة وعريضة (#1B4965)
             const driverPhoneHtml = d.phoneNumber
-                ? `<a href="tel:${escapeHtml(d.phoneNumber)}" class="inline-flex items-center gap-1 text-slate-500 hover:text-amber-600 font-mono text-xs transition-colors" dir="ltr" title="اتصال بالكابتن"><i class="fa-solid fa-phone text-[10px] text-slate-400"></i><span>${escapeHtml(d.phoneNumber)}</span></a>`
+                ? `<a href="tel:${escapeHtml(d.phoneNumber)}" class="inline-flex items-center gap-1.5 text-[#1B4965] hover:underline font-mono text-xs font-bold transition-colors" dir="ltr" title="اتصال بالكابتن"><i class="fa-solid fa-phone text-[11px] text-[#1B4965]"></i><span>${escapeHtml(d.phoneNumber)}</span></a>`
                 : '-';
 
             const tgLinked = Boolean(d.telegramChatId || d.telegram_chat_id);
             const tgUser = (d.telegramUsername || d.telegram_username) ? ` (${escapeHtml(d.telegramUsername || d.telegram_username)})` : '';
             const tgIcon = tgLinked
                 ? `<span class="inline-flex items-center text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)] cursor-help" title="مرتبط بالتيليجرام: ${escapeHtml(d.telegramChatId || d.telegram_chat_id)}${tgUser}"><i class="fa-brands fa-telegram text-base"></i></span>`
-                : `<span class="inline-flex items-center text-slate-500" title="غير مرتبط بتيليجرام"><i class="fa-brands fa-telegram text-base"></i></span>`;
+                : `<span class="inline-flex items-center text-slate-400" title="غير مرتبط بتيليجرام"><i class="fa-brands fa-telegram text-base"></i></span>`;
 
             tr.innerHTML = `
-                <td class="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2">
+                <td class="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2 text-right">
                     ${tgIcon}
                     <span>${escapeHtml(d.fullName)}</span>
                     ${d.isBlocked ? '<span class="px-1.5 py-0.5 text-[10px] bg-rose-50 text-rose-700 border border-rose-200/60 rounded font-bold">معلق</span>' : ''}
                 </td>
-                <td class="py-3.5 px-4 font-mono text-xs">${driverPhoneHtml}</td>
-                <td class="py-3.5 px-4">
+                <td class="py-3.5 px-4 font-mono text-xs text-right">${driverPhoneHtml}</td>
+                <td class="py-3.5 px-4 text-right">
                     <span class="inline-flex items-center px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200/60 rounded-md text-xs font-medium">${escapeHtml(d.workMode || 'مشوار قصير')}</span> 
                     <span class="inline-flex items-center px-2 py-0.5 text-xs rounded-md font-semibold ${d.vehicleType === 'vip' ? 'bg-amber-50 text-amber-800 border border-amber-200/60' : 'bg-slate-100 text-slate-700 border border-slate-200/60'}">${d.vehicleType === 'vip' ? '👑 VIP' : '🚕 توفير'}</span>
                 </td>
-
-                <td class="py-3.5 px-4">
+                <td class="py-3.5 px-4 text-center">
                     <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200/60 shadow-2xs">
                         <i class="fa-solid fa-star text-amber-500 text-[10px]"></i>
                         <span>${d.points || d.rewardScore || 0}</span>
                     </span>
                 </td>
-                <td class="py-3.5 px-4 text-center">${statusBadge}</td>
-                <td class="py-3.5 px-4 text-center">${verifBadge}${approveBadge}</td>
-                <td class="py-3.5 px-4">
-                    <div class="flex items-center justify-center gap-1.5 flex-wrap">
-                        <button onclick="openEditDriverModal('${d.driverId}')" title="تعديل بيانات الكابتن والمسار وكلمة المرور" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer">
-                            <i class="fa-solid fa-pen-to-square text-xs"></i>
-                            <span>تعديل</span>
-                        </button>
-                        <button onclick="viewFullDriver('${d.driverId}')" title="فحص المستمسكات والوثائق" class="px-2.5 py-1.5 bg-[#1B4965] hover:bg-[#143a50] text-white rounded-lg text-xs font-semibold transition flex items-center gap-1 shadow-xs cursor-pointer">
-                            <i class="fa-solid fa-id-card text-xs"></i>
-                            <span>فحص</span>
-                        </button>
-                        ${lifecycleButtons}
-                        <button onclick="deleteDriverPermanently('${d.driverId}')" title="حذف السائق نهائياً من قاعدة البيانات" class="px-2 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/60 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer">
-                            <i class="fa-solid fa-trash-can text-xs"></i>
-                            <span>حذف</span>
-                        </button>
+                <td class="py-3.5 px-4 text-center">${operationalStatusBadge}</td>
+                <td class="py-3.5 px-4 text-center">${approvalBadge}</td>
+                <td class="py-3.5 px-4 text-center">
+                    <div class="flex items-center justify-center gap-1.5 whitespace-nowrap flex-nowrap">
+                        ${actionButtons}
                     </div>
                 </td>
             `;
@@ -2431,6 +2430,16 @@ async function loadMatchingSettings() {
         let settings = await res.json();
         if (!Array.isArray(settings)) settings = [];
 
+        // Load Feature Flags
+        const docSetting = settings.find(s => s.key === 'driver_documents_enabled');
+        if (docSetting) {
+            const val = typeof docSetting.valueJson === 'string' ? JSON.parse(docSetting.valueJson) : docSetting.valueJson;
+            window.DRIVER_DOCUMENTS_ENABLED = (val === true || val === 'true');
+        } else {
+            window.DRIVER_DOCUMENTS_ENABLED = false;
+        }
+        applyDriverDocumentsFeatureVisibility();
+
         const matchConfig = settings.find(s => s.key === 'matching_settings' || s.key === 'SpatialMatching') || {};
         let matchVals = {
             MaxDetourMeters: 2000,
@@ -3382,32 +3391,37 @@ function translateDriverStatus(s) {
     }
 }
 
-async function approveDriver(driverId) {
-    if (!confirm('هل أنت متأكد من الموافقة على هذا الكابتن لكي يظهر على الخريطة للركاب؟')) return;
+async function approveDriverQuick(driverId) {
+    if (!confirm('هل أنت متأكد من اعتماد وموافقة هذا الكابتن للعمل على المنصة؟')) return;
     try {
         const res = await fetch(`${API_BASE}/drivers/${driverId}/approve`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders(),
             body: JSON.stringify({ approve: true })
         });
         const data = await res.json();
         if (data.success) {
-            showToast(`تم الموافقة على الكابتن بنجاح وأصبح متاحاً للركاب ✅`);
+            showToast('تم اعتماد الكابتن بنجاح وإرسال إشعار التفعيل ✅');
             loadDrivers();
+            loadDashboardStats();
             if (fleetMap) refreshFleetLocations();
         } else {
-            showToast(data.error || 'فشل الموافقة على الكابتن', true);
+            showToast(data.error || 'فشل اعتماد الكابتن', true);
         }
     } catch (err) {
         showToast('خطأ في الاتصال بالخادم', true);
     }
 }
 
+async function approveDriver(driverId) {
+    return approveDriverQuick(driverId);
+}
+
 async function updateDriverStatus(driverId, newStatus, reason = null) {
     try {
         const res = await fetch(`${API_BASE}/drivers/${driverId}/status`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders(),
             body: JSON.stringify({ status: newStatus, reason: reason })
         });
         const data = await res.json();
@@ -3426,11 +3440,89 @@ async function updateDriverStatus(driverId, newStatus, reason = null) {
     }
 }
 
-function promptRejectDriver(driverId, driverName) {
-    const reason = prompt(`يرجى كتابة سبب رفض طلب الكابتن "${driverName}":`, 'المستمسكات غير واضحة أو غير مطابقة');
-    if (reason !== null && reason.trim() !== '') {
-        updateDriverStatus(driverId, 'Rejected', reason.trim());
+async function promptRejectDriver(driverId, driverName) {
+    const reason = prompt(`يرجى كتابة سبب رفض طلب الكابتن${driverName ? ` "${driverName}"` : ''}:`, 'المستمسكات غير مطابقة لشروط العمل');
+    if (reason === null) return;
+    const trimmed = reason.trim() || 'تم رفض الطلب من قبل الإدارة';
+    try {
+        const res = await fetch(`${API_BASE}/drivers/${driverId}/approve`, {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ approve: false, reason: trimmed })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('تم رفض طلب الكابتن بنجاح');
+            loadDrivers();
+            loadDashboardStats();
+            if (fleetMap) refreshFleetLocations();
+        } else {
+            showToast(data.error || 'فشل رفض الكابتن', true);
+        }
+    } catch (err) {
+        showToast('خطأ في الاتصال بالخادم', true);
     }
+}
+
+// Feature Flag: driver_documents_enabled
+window.DRIVER_DOCUMENTS_ENABLED = false;
+
+function applyDriverDocumentsFeatureVisibility() {
+    const enabled = window.DRIVER_DOCUMENTS_ENABLED === true;
+    const tabBtn = document.getElementById('tab-btn-verifications');
+    if (tabBtn) {
+        if (enabled) tabBtn.classList.remove('hidden');
+        else tabBtn.classList.add('hidden');
+    }
+    const badge = document.getElementById('flag-docs-status-badge');
+    const label = document.getElementById('toggle-driver-documents-label');
+    const toggle = document.getElementById('toggle-driver-documents');
+    if (badge) {
+        badge.textContent = enabled ? 'مفعّلة ✓' : 'معطلة (افتراضي)';
+        badge.className = enabled ? 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300' : 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700';
+    }
+    if (label) label.textContent = enabled ? 'مفعّلة' : 'معطلة';
+    if (toggle) toggle.checked = enabled;
+}
+
+async function toggleDriverDocumentsFeature(enabled) {
+    try {
+        const res = await fetch(`${API_BASE}/settings/driver_documents_enabled`, {
+            method: 'PUT',
+            headers: authHeaders(),
+            body: JSON.stringify({ valueJson: enabled ? 'true' : 'false' })
+        });
+        if (res.ok) {
+            window.DRIVER_DOCUMENTS_ENABLED = enabled;
+            applyDriverDocumentsFeatureVisibility();
+            loadDrivers();
+            showToast(enabled ? 'تم تفعيل ميزة مستمسكات السائقين بنجاح ✅' : 'تم تعطيل ميزة مستمسكات السائقين بنجاح');
+        } else {
+            showToast('فشل في تعديل حالة الميزة', true);
+        }
+    } catch (err) {
+        showToast('خطأ في الاتصال بالخادم', true);
+    }
+}
+
+async function loadPlatformFeatureFlags() {
+    try {
+        const res = await fetch(`${API_BASE}/settings`, { headers: authHeaders() });
+        if (res.ok) {
+            let settings = await res.json();
+            if (!Array.isArray(settings)) settings = [];
+            const docSetting = settings.find(s => s.key === 'driver_documents_enabled');
+            if (docSetting) {
+                const val = typeof docSetting.valueJson === 'string' ? JSON.parse(docSetting.valueJson) : docSetting.valueJson;
+                window.DRIVER_DOCUMENTS_ENABLED = (val === true || val === 'true');
+            } else {
+                window.DRIVER_DOCUMENTS_ENABLED = false;
+            }
+        }
+    } catch (_) {
+        window.DRIVER_DOCUMENTS_ENABLED = false;
+    }
+    applyDriverDocumentsFeatureVisibility();
 }
 
 // -----------------------------------------------------------------------------

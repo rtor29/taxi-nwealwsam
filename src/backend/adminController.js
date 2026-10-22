@@ -179,6 +179,36 @@ class AdminController {
         return result;
     }
 
+    async setDriverApproval(driverId, isApproved) {
+        const result = await db.setDriverApproval(driverId, isApproved);
+        if (isApproved && result && result.success) {
+            setImmediate(async () => {
+                try {
+                    const telegramBot = require('./modules/telegram/telegramBot');
+                    const redisManager = require('./modules/redis/redisClient');
+                    const driver = result.driver || (db.memoryState && db.memoryState.drivers ? db.memoryState.drivers.find(d => d.driverId === driverId) : null);
+                    const phone = driver ? (driver.phoneNumber || driver.phone) : null;
+                    const chatId = await telegramBot.findDriverTelegramChatId(driverId, phone);
+                    if (!chatId) {
+                        console.log(`[DriverApproval] Driver ${driverId} has no telegramChatId linked. Skipping telegram notification.`);
+                        return;
+                    }
+                    const lockAcquired = await redisManager.acquireTelegramNotificationLock(`driver-approved:${driverId}`, 86400);
+                    if (!lockAcquired) {
+                        console.log(`[DriverApproval] Telegram approval notification for driver ${driverId} already sent (dedup lock active).`);
+                        return;
+                    }
+                    const text = 'تمت الموافقة على حسابك ✅ أصبحت جاهزاً للعمل على تطبيق توصيله';
+                    await telegramBot.sendMessage(chatId, text);
+                    console.log(`[DriverApproval] Sent approval notification to driver ${driverId} (chatId: ${chatId.slice(0, 3)}****)`);
+                } catch (tgErr) {
+                    console.error(`[DriverApproval] Telegram approval notification error for ${driverId}:`, tgErr.message);
+                }
+            });
+        }
+        return result;
+    }
+
     async toggleDriverBlock(driverId, isBlocked) {
         let driver = db.memoryState.drivers.find(d => d.driverId === driverId);
         if (!driver && db.isPostgresConnected && db.pool) {
@@ -1158,108 +1188,7 @@ class AdminController {
             }
         }
 
-        // If both PG and memory are empty, provide realistic sample cancellation requests
-        if (!db.memoryState.cancellationRequests || db.memoryState.cancellationRequests.length === 0) {
-            const seedRequests = [
-                {
-                    id: 'cnl-req-101',
-                    requestId: 'cnl-req-101',
-                    bookingId: 'bk-u8qea4da1',
-                    passengerName: 'فاطمة حيدر الحسيني',
-                    customerName: 'فاطمة حيدر الحسيني',
-                    passengerPhone: '07801234567',
-                    customerPhone: '07801234567',
-                    driverId: 'drv-veqjap6sb',
-                    driverName: 'سائق١',
-                    driverPhone: '07706204066',
-                    routeId: 'route-kufa-1',
-                    routeName: 'جامعة الكوفة ➔ حي الزهراء',
-                    route: 'جامعة الكوفة ➔ حي الزهراء',
-                    reasonCategory: 'تغيير وقت الدوام',
-                    passengerReason: 'تغيير وقت الدوام',
-                    reason: 'تغيير وقت الدوام',
-                    userMessage: 'تم تعديل جدول المحاضرات الصباحية في الجامعة وأحتاج إلغاء المقعد لهذا الخط.',
-                    passengerDetails: 'تم تعديل جدول المحاضرات الصباحية في الجامعة وأحتاج إلغاء المقعد لهذا الخط.',
-                    driverDecision: 'pending',
-                    driverApprovalReason: null,
-                    status: 'Pending',
-                    createdAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-                    resolvedAt: null
-                },
-                {
-                    id: 'cnl-req-102',
-                    requestId: 'cnl-req-102',
-                    bookingId: 'bk-v4krgw3nt',
-                    passengerName: 'كرار حسين الخفاجي',
-                    customerName: 'كرار حسين الخفاجي',
-                    passengerPhone: '07719876543',
-                    customerPhone: '07719876543',
-                    driverId: 'drv-veqjap6sb',
-                    driverName: 'سائق١',
-                    driverPhone: '07706204066',
-                    routeId: 'route-kufa-1',
-                    routeName: 'حي الجامعة ➔ الكوفة',
-                    route: 'حي الجامعة ➔ الكوفة',
-                    reasonCategory: 'ظروف خاصة',
-                    passengerReason: 'ظروف خاصة',
-                    reason: 'ظروف خاصة',
-                    userMessage: 'انتقال مكان السكن إلى منطقة أخرى قريبة من العمل، شكراً لتعاونكم.',
-                    passengerDetails: 'انتقال مكان السكن إلى منطقة أخرى قريبة من العمل، شكراً لتعاونكم.',
-                    driverDecision: 'approved',
-                    driverApprovalReason: 'تم الاتفاق مع الراكب وتحرير المقعد',
-                    status: 'Approved',
-                    createdAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
-                    resolvedAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString()
-                },
-                {
-                    id: 'cnl-req-103',
-                    requestId: 'cnl-req-103',
-                    bookingId: 'bk-d57vrhaft',
-                    passengerName: 'أحمد علي الفتلاوي',
-                    customerName: 'أحمد علي الفتلاوي',
-                    passengerPhone: '07503456789',
-                    customerPhone: '07503456789',
-                    driverId: 'drv-veqjap6sb',
-                    driverName: 'سائق١',
-                    driverPhone: '07706204066',
-                    routeId: 'route-kufa-1',
-                    routeName: 'حي السلام ➔ شارع المدينة',
-                    route: 'حي السلام ➔ شارع المدينة',
-                    reasonCategory: 'عدم الالتزام',
-                    passengerReason: 'عدم الالتزام',
-                    reason: 'عدم الالتزام',
-                    userMessage: 'طلب إلغاء بالخطأ، تم الاتصال بالراكب وتأكيد استمراره بالخط.',
-                    passengerDetails: 'طلب إلغاء بالخطأ، تم الاتصال بالراكب وتأكيد استمراره بالخط.',
-                    driverDecision: 'rejected',
-                    driverApprovalReason: 'تراجع الراكب عن الإلغاء واستمرار الحجز',
-                    status: 'Rejected',
-                    createdAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
-                    resolvedAt: new Date(Date.now() - 20 * 3600 * 1000).toISOString()
-                }
-            ];
-
-            db.memoryState.cancellationRequests = seedRequests;
-
-            if (db.isPostgresConnected && db.pool) {
-                for (const s of seedRequests) {
-                    try {
-                        await db.pool.query(`
-                            INSERT INTO cancellation_requests (
-                                id, booking_id, customer_name, customer_phone, passenger_name, passenger_phone,
-                                driver_id, driver_name, driver_phone, route_name, reason_category, user_message,
-                                passenger_reason, passenger_details, status, created_at, resolved_at
-                            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-                            ON CONFLICT (id) DO NOTHING
-                        `, [
-                            s.id, s.bookingId, s.customerName, s.customerPhone, s.passengerName, s.passengerPhone,
-                            s.driverId, s.driverName, s.driverPhone, s.routeName, s.reasonCategory, s.userMessage,
-                            s.passengerReason, s.passengerDetails, s.status, s.createdAt, s.resolvedAt
-                        ]);
-                    } catch (_) {}
-                }
-            }
-        }
-
+        // If PG returns rows, memory is updated. If both PG and memory are empty, return empty array.
         return {
             success: true,
             total: (db.memoryState.cancellationRequests || []).length,

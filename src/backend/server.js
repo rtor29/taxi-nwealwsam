@@ -840,6 +840,24 @@ async function startServer() {
 
             // إذا وُجد الكابتن (أسبقية مطلقة للسائق)
             if (foundDriver) {
+                const isBlocked = foundDriver.is_blocked === true || foundDriver.isBlocked === true;
+                if (isBlocked) {
+                    return sendJson({ success: false, error: 'تم حظر أو إيقاف حساب الكابتن من قبل إدارة المنصة.' }, 403);
+                }
+                const isApproved = foundDriver.is_approved === true || foundDriver.isApproved === true;
+                const isRejected = foundDriver.status === 'Rejected';
+                const isPending = foundDriver.status === 'Pending' || (!isApproved && !isRejected);
+                if (isRejected) {
+                    return sendJson({ success: false, error: 'تم رفض طلب انضمامك ككابتن من قبل إدارة المنصة.' }, 403);
+                }
+                if (!isApproved || isPending) {
+                    return sendJson({
+                        success: false,
+                        pending: true,
+                        error: 'حسابك معلّق بانتظار الاعتماد والموافقة من قبل إدارة المنصة.'
+                    }, 403);
+                }
+
                 // إزالة أي سجل راكب مكرر لنفس الرقم لضمان عدم التعارض
                 if (db.memoryState && Array.isArray(db.memoryState.customers)) {
                     db.memoryState.customers = db.memoryState.customers.filter(c => {
@@ -1670,11 +1688,20 @@ async function startServer() {
 
             // Drivers must be approved by admin before accessing web app
             if (userRole === 'Driver') {
-                if (user.status === 'Pending' || user.status === 'Unverified' || !user.isVerified) {
+                const isBlocked = user.isBlocked === true || user.is_blocked === true;
+                if (isBlocked) {
+                    return sendJson({ success: false, error: 'تم حظر أو إيقاف حساب الكابتن من قبل إدارة المنصة.' }, 403);
+                }
+                const isApproved = user.isApproved === true || user.is_approved === true;
+                const isRejected = user.status === 'Rejected';
+                if (isRejected) {
+                    return sendJson({ success: false, error: 'تم رفض طلب انضمامك ككابتن من قبل إدارة المنصة.' }, 403);
+                }
+                if (!isApproved || user.status === 'Pending' || user.status === 'Unverified' || !user.isVerified) {
                     return sendJson({
                         success: false,
                         pending: true,
-                        error: 'حسابك معلّق بانتظار التوثيق من قبل إدارة المنصة. يرجى إرسال المستمسكات عبر الواتساب أو التيليجرام للاعتماد.'
+                        error: 'حسابك معلّق بانتظار الاعتماد والموافقة من قبل إدارة المنصة.'
                     }, 403);
                 }
             }
@@ -1889,8 +1916,17 @@ async function startServer() {
                 } catch (_) {}
             }
             if (driver) {
-                if (driver.isBlocked === true || driver.status === 'Suspended' || driver.status === 'Blocked' || (driver.isVerified === false && driver.status === 'Rejected')) {
+                const isBlocked = driver.isBlocked === true || driver.is_blocked === true || driver.status === 'Suspended' || driver.status === 'Blocked';
+                if (isBlocked) {
                     return sendJson({ success: false, isBlocked: true, error: 'تم حظر أو تعليق حساب الكابتن من قبل إدارة المنصة.' }, 403);
+                }
+                const isApproved = driver.isApproved === true || driver.is_approved === true;
+                const isRejected = driver.status === 'Rejected';
+                if (isRejected) {
+                    return sendJson({ success: false, error: 'تم رفض حساب الكابتن من قبل إدارة المنصة.' }, 403);
+                }
+                if (!isApproved || driver.status === 'Pending' || driver.status === 'Unverified') {
+                    return sendJson({ success: false, pending: true, error: 'حسابك معلّق بانتظار الاعتماد والموافقة من قبل إدارة المنصة.' }, 403);
                 }
                 const driverRoute = db.memoryState.routes.find(r => r.driverId === driver.driverId);
                 const routeName = driver.route || (driverRoute ? (driverRoute.name || `${driverRoute.startName} - ${driverRoute.endName}`) : 'النجف الأشرف');
@@ -2458,7 +2494,17 @@ async function startServer() {
                     }
                 });
 
-                const fleet = sourceDrivers.map(d => {
+                const eligibleDrivers = sourceDrivers.filter(d => {
+                    const id = d.driver_id || d.driverId || d.id;
+                    const mem = memMap.get(id) || {};
+                    const isBlocked = d.is_blocked === true || mem.isBlocked === true;
+                    const isApproved = (d.is_approved === true || mem.isApproved === true || d.isApproved === true);
+                    const isRejected = d.status === 'Rejected' || mem.status === 'Rejected';
+                    const isPending = d.status === 'Pending' || mem.status === 'Pending';
+                    return isApproved && !isRejected && !isPending && !isBlocked;
+                });
+
+                const fleet = eligibleDrivers.map(d => {
                     const id = d.driver_id || d.driverId || d.id;
                     const mem = memMap.get(id) || {};
                     const activeRide = activeDriverRides.get(id);

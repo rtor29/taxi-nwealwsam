@@ -1070,16 +1070,45 @@ class DatabaseManager {
 
     async setDriverApproval(driverId, isApproved) {
         let driver = this.memoryState.drivers.find(d => d.driverId === driverId);
-        if (driver) driver.isApproved = isApproved;
+        const newStatus = isApproved ? 'Approved' : 'Rejected';
+        if (driver) {
+            driver.isApproved = isApproved;
+            driver.is_approved = isApproved;
+            driver.isVerified = isApproved;
+            driver.is_verified = isApproved;
+            driver.status = newStatus;
+            if (isApproved) {
+                driver.isBlocked = false;
+                driver.is_blocked = false;
+            }
+        }
         if (this.isPostgresConnected && this.pool) {
             try {
-                await this.pool.query('UPDATE drivers SET is_approved = $1, updated_at = NOW() WHERE driver_id = $2', [isApproved, driverId]);
+                await this.pool.query(
+                    `UPDATE drivers 
+                     SET is_approved = $1, 
+                         is_verified = $1, 
+                         status = $2, 
+                         is_blocked = CASE WHEN $1 = true THEN false ELSE is_blocked END, 
+                         updated_at = NOW() 
+                     WHERE driver_id = $3`,
+                    [isApproved, newStatus, driverId]
+                );
+                if (driver && driver.phoneNumber) {
+                    await this.pool.query(
+                        `UPDATE users 
+                         SET is_active = $1, 
+                             is_blocked = CASE WHEN $1 = true THEN false ELSE is_blocked END 
+                         WHERE phone_number = $2 AND role = 'Driver'`,
+                        [isApproved, driver.phoneNumber]
+                    ).catch(() => {});
+                }
             } catch (err) {
                 console.error('[Database] setDriverApproval error:', err);
             }
         }
         this.saveStateSnapshot();
-        return { success: true, driver };
+        return { success: true, driver, stats: this.getComputedStats() };
     }
 
     async setDriverWorkMode(driverId, workMode) {
