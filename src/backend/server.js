@@ -3679,7 +3679,7 @@ async function startServer() {
                     }
                 }
 
-                const action = body.action || (pathname.includes('/accept') ? 'accept' : 'reject');
+                const action = body.action || body.response || (pathname.includes('/accept') ? 'accept' : 'reject');
                 const requestId = body.requestId || body.rideId || body.id;
                 const driverId = body.driverId;
                 if (!requestId || requestId === 'undefined' || requestId === 'null') {
