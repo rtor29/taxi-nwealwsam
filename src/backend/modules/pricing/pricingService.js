@@ -250,7 +250,7 @@ class PricingService {
 
         const distanceKm = Math.max(0.5, Number(options.distanceKm) || 3.0);
         const durationMins = Math.max(3, Number(options.durationMins) || Math.round(distanceKm * 2.5));
-        const vehicleType = (options.vehicleType || 'super').toLowerCase();
+        const vehicleType = (options.vehicleType || options.tier || 'super').toLowerCase();
         const isRoundTrip = Boolean(options.isRoundTrip);
         const hasSecondStop = Boolean(options.hasSecondStop);
 
