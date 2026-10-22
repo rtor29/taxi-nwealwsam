@@ -2864,6 +2864,13 @@ async function startServer() {
         const getAvailableOnlineDrivers = async (pLat, pLon, maxDist = 25) => {
             const driversMap = new Map();
 
+            const isEligibleForTaxi = (mode, status) => {
+                const s = String(status || '').toLowerCase().trim();
+                if (s === 'offline' || s === 'idle') return false;
+                const m = String(mode || 'taxi').toLowerCase().trim();
+                return m === 'taxi' || m === 'both' || m === 'كلاهما' || m === 'مشوار قصير';
+            };
+
             // 1. From Redis geospatial index
             if (redisManager.isConnected && redisManager.client) {
                 try {
@@ -2871,16 +2878,18 @@ async function startServer() {
                     for (const item of nearby) {
                         const meta = await redisManager.client.hgetall(`driver:${item.driverId}:meta`);
                         if (meta && meta.id) {
-                            driversMap.set(String(item.driverId), {
-                                driverId: String(item.driverId),
-                                fullName: meta.fullName || 'كابتن توصيله',
-                                phoneNumber: meta.phone || '',
-                                status: meta.status || 'Online',
-                                isOnline: true,
-                                work_mode: meta.workMode || 'taxi',
-                                vehicleType: meta.vehicleType || 'eco',
-                                dist: item.distKm
-                            });
+                            if (isEligibleForTaxi(meta.workMode, meta.status)) {
+                                driversMap.set(String(item.driverId), {
+                                    driverId: String(item.driverId),
+                                    fullName: meta.fullName || 'كابتن توصيله',
+                                    phoneNumber: meta.phone || '',
+                                    status: meta.status || 'Online',
+                                    isOnline: true,
+                                    work_mode: meta.workMode || 'taxi',
+                                    vehicleType: meta.vehicleType || 'eco',
+                                    dist: item.distKm
+                                });
+                            }
                         } else {
                             driversMap.set(String(item.driverId), {
                                 driverId: String(item.driverId),
@@ -2902,10 +2911,12 @@ async function startServer() {
                     const pgDrivers = await db.pool.query(
                         `SELECT * FROM drivers 
                          WHERE status = 'Online' 
-                         AND (is_blocked IS NOT TRUE)`
+                         AND (is_blocked IS NOT TRUE)
+                         AND (work_mode IN ('taxi', 'both', 'كلاهما', 'مشوار قصير') OR work_mode IS NULL)`
                     );
                     if (pgDrivers && pgDrivers.rows) {
                         for (const d of pgDrivers.rows) {
+                            if (!isEligibleForTaxi(d.work_mode, d.status)) continue;
                             const id = String(d.driver_id || d.id);
                             if (!driversMap.has(id)) {
                                 const rawLat = d.latitude != null ? d.latitude : d.current_lat;
@@ -2939,7 +2950,7 @@ async function startServer() {
 
             // 3. From Memory
             for (const d of (db.memoryState.drivers || [])) {
-                if (isDriverOnlineAndActive(d)) {
+                if (isDriverOnlineAndActive(d) && isEligibleForTaxi(d.work_mode || d.workMode || d.mode, d.status)) {
                     const id = String(d.driverId || d.id);
                     if (!driversMap.has(id)) {
                         const rawLat = d.currentLat != null ? d.currentLat : d.latitude;
@@ -5909,14 +5920,15 @@ async function startServer() {
                 }
 
                 // Sync to Redis Geospatial Index & Real-time Hash across PM2 cluster
-                if (onlineBool && driver) {
+                const isEligibleForTaxiGeospatial = onlineBool && (computedWorkMode === 'taxi' || computedWorkMode === 'both');
+                if (isEligibleForTaxiGeospatial && driver) {
                     await redisManager.updateDriverLocation(
                         driver.driverId,
                         parseFloat(driver.currentLon || actualLng || 44.3285),
                         parseFloat(driver.currentLat || actualLat || 32.0298),
                         driver
                     );
-                } else if (!onlineBool && driver) {
+                } else if (driver) {
                     await redisManager.removeDriverLocation(driver.driverId);
                 }
 
