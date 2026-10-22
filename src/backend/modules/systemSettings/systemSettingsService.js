@@ -31,7 +31,7 @@ class SystemSettingsService {
     constructor() {
         this._cache = { ...DEFAULTS };
         this._lastLoaded = 0;
-        this._ttlMs = 60000; // 60 seconds cache TTL
+        this._ttlMs = 2000; // 2 seconds cache TTL for instantaneous cluster sync
         this._loadPromise = null;
     }
 

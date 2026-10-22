@@ -61,9 +61,9 @@ class PricingService {
                     manualOverrideLabel: parsed.manualOverrideLabel || 'وضع طبيعي (1.0x)',
                     discountPercent: Number(parsed.discountPercent ?? 0),
                     discountFixed: Number(parsed.discountFixed ?? 0),
-                    tierSurchargeEconomy: Number(parsed.tierSurchargeEconomy ?? parsed.vehicle_tier_surcharge_economy_iqd ?? (systemSettingsService ? systemSettingsService.getVehicleTierSurchargeEconomyIqd() : DEFAULT_PRICING.tierSurchargeEconomy)),
-                    tierSurchargeSuper: Number(parsed.tierSurchargeSuper ?? parsed.vehicle_tier_surcharge_super_iqd ?? (systemSettingsService ? systemSettingsService.getVehicleTierSurchargeSuperIqd() : DEFAULT_PRICING.tierSurchargeSuper)),
-                    tierSurchargePlus: Number(parsed.tierSurchargePlus ?? parsed.vehicle_tier_surcharge_plus_iqd ?? (systemSettingsService ? systemSettingsService.getVehicleTierSurchargePlusIqd() : DEFAULT_PRICING.tierSurchargePlus))
+                    tierSurchargeEconomy: systemSettingsService ? systemSettingsService.getVehicleTierSurchargeEconomyIqd() : Number(parsed.tierSurchargeEconomy ?? DEFAULT_PRICING.tierSurchargeEconomy),
+                    tierSurchargeSuper: systemSettingsService ? systemSettingsService.getVehicleTierSurchargeSuperIqd() : Number(parsed.tierSurchargeSuper ?? DEFAULT_PRICING.tierSurchargeSuper),
+                    tierSurchargePlus: systemSettingsService ? systemSettingsService.getVehicleTierSurchargePlusIqd() : Number(parsed.tierSurchargePlus ?? DEFAULT_PRICING.tierSurchargePlus)
                 };
             }
         } catch (e) {
@@ -166,7 +166,9 @@ class PricingService {
 
         // Refresh system settings service cache
         if (systemSettingsService && typeof systemSettingsService.refreshCache === 'function') {
-            systemSettingsService.refreshCache().catch(() => {});
+            try {
+                await systemSettingsService.refreshCache();
+            } catch (_) {}
         }
 
         // Snapshot to state.json
