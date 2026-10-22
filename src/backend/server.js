@@ -3233,7 +3233,7 @@ async function startServer() {
                     dropoffLon: effDLon,
                     distanceKm: validatedDistanceKm,
                     durationMins: validatedDurationMins,
-                    vehicleType: reqTier,
+                    vehicleType: reqTierNorm,
                     promoCode: body.promoCode,
                     isRoundTrip: Boolean(isRoundTrip),
                     hasSecondStop: Boolean(hasSecondStop || secondDestination),
