@@ -159,6 +159,13 @@ setInterval(() => {
     for (const [k, v] of truecallerVerificationStore) { if (now - (v.timestamp || 0) > 600000) truecallerVerificationStore.delete(k); }
 }, 300000);
 
+// Cluster-wide background cleanup for expired pending rides in Redis hash every 30s
+setInterval(() => {
+    if (redisManager && typeof redisManager.getPendingRides === 'function') {
+        redisManager.getPendingRides().catch(() => {});
+    }
+}, 30000);
+
 // ---[ Row Level Security (RLS) Helper: Extract & Validate Current User ]---
 function getAuthUser(req) {
     const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
@@ -2844,15 +2851,27 @@ async function startServer() {
                     if (!active) {
                         const pendingRaw = await redisManager.client.hgetall('pending:rides');
                         if (pendingRaw) {
-                            for (const [, rJson] of Object.entries(pendingRaw)) {
-                                const r = JSON.parse(rJson);
-                                const rCustId = String(r.customerId || r.riderId || '');
-                                const rCustPhone = String(r.customerPhone || r.riderPhone || '').replace(/[^0-9]/g, '');
-                                const isPhoneMatch = cleanPhone.length >= 7 && rCustPhone.length >= 7 && (rCustPhone.endsWith(cleanPhone.slice(-8)) || cleanPhone.endsWith(rCustPhone.slice(-8)));
-                                if ((customerId && rCustId === customerId) || isPhoneMatch) {
-                                    active = r;
-                                    break;
-                                }
+                            const now = Date.now();
+                            for (const [pId, rJson] of Object.entries(pendingRaw)) {
+                                try {
+                                    const r = JSON.parse(rJson);
+                                    const reqTime = r.requestedAt ? Number(r.requestedAt) : (r.createdAt ? new Date(r.createdAt).getTime() : now);
+                                    const age = now - reqTime;
+                                    const isExpired = age >= 120000 || (r.stepTimeoutAt && now > r.stepTimeoutAt && (!r.candidateDriverIds || r.currentDriverIndex >= (r.candidateDriverIds.length - 1)));
+                                    if (isExpired) {
+                                        // Auto-prune expired ride from Redis hash
+                                        await redisManager.client.hdel('pending:rides', String(pId)).catch(() => {});
+                                        await redisManager.client.del('ride:request:' + pId).catch(() => {});
+                                        continue;
+                                    }
+                                    const rCustId = String(r.customerId || r.riderId || '');
+                                    const rCustPhone = String(r.customerPhone || r.riderPhone || '').replace(/[^0-9]/g, '');
+                                    const isPhoneMatch = cleanPhone.length >= 7 && rCustPhone.length >= 7 && (rCustPhone.endsWith(cleanPhone.slice(-8)) || cleanPhone.endsWith(rCustPhone.slice(-8)));
+                                    if ((customerId && rCustId === customerId) || isPhoneMatch) {
+                                        active = r;
+                                        break;
+                                    }
+                                } catch (_) {}
                             }
                         }
                     }
@@ -2861,6 +2880,7 @@ async function startServer() {
 
             // 2. Check memory
             if (!active) {
+                const now = Date.now();
                 active = (db.memoryState.rideRequests || []).find(r => {
                     const rCustId = String(r.customerId || r.riderId || '');
                     const rCustPhone = String(r.customerPhone || r.riderPhone || '').replace(/[^0-9]/g, '');
@@ -2868,7 +2888,12 @@ async function startServer() {
                     const isMatch = (customerId && rCustId === customerId) || isPhoneMatch;
                     const st = String(r.status || '').toLowerCase();
                     const isActive = ['pending', 'requested', 'offered', 'accepted', 'arrived', 'driver_arrived', 'inprogress', 'in_progress', 'in_trip', 'arrived_destination', 'waiting_at_destination', 'waiting', 'in_trip_return', 'arrived_return'].includes(st);
-                    return isMatch && isActive;
+                    if (!isMatch || !isActive) return false;
+                    const reqTime = r.requestedAt ? Number(r.requestedAt) : (r.createdAt ? new Date(r.createdAt).getTime() : now);
+                    if (['pending', 'requested', 'offered'].includes(st) && (now - reqTime >= 120000)) {
+                        return false;
+                    }
+                    return true;
                 });
             }
 
