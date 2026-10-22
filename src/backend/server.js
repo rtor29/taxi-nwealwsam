@@ -7748,8 +7748,6 @@ async function startServer() {
                 return sendJson({ success: false, error: 'بيانات الكابتن غير موجودة في النظام' }, 404);
             }
 
-            console.log('[DEBUG_FIXED_LOC] id:', effectiveDriverId, 'mode:', driver.work_mode, 'status:', driver.workStatus, 'curr:', driver.current_mode);
-
             // Mode check: Must be commute or both (Arabic or English)
             const rawMode = String(driver.work_mode || driver.workStatus || driver.current_mode || driver.mode || '').toLowerCase().trim();
             const isAllowedMode = (

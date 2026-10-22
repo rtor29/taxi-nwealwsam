@@ -23,7 +23,7 @@ const db = require('../src/backend/db');
 const redisManager = require('../src/backend/modules/redis/redisClient');
 
 const API_BASE = process.env.API_BASE || 'http://127.0.0.1:5050';
-const JWT_SECRET = process.env.JWT_SECRET || 'tawseela_prod_jwt_super_secret_najaf_2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'tawseela_production_secret_key_najaf_2026_!@#';
 
 function signToken(payload) {
     return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
