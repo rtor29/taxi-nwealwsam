@@ -200,7 +200,7 @@ async function run() {
   console.log('Rider auth result:', JSON.stringify(riderAuth));
 
   // Request Ride via API from Rider page context
-  const rideRes = await riderPage.evaluate(async () => {
+  const rideRes = await riderPage.evaluate(async (phone) => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
     const userId = localStorage.getItem('user_id') || localStorage.getItem('userId') || '';
     const res = await fetch('/api/ride/request', {
@@ -212,7 +212,7 @@ async function run() {
       body: JSON.stringify({
         customerId: userId,
         customerName: 'أحمد الموسوي',
-        customerPhone: '07849992233',
+        customerPhone: phone,
         pickupName: 'حي الحنانة - شارع الكوفة',
         pickupLat: 32.0310,
         pickupLon: 44.3300,
@@ -226,7 +226,7 @@ async function run() {
       })
     });
     return { ok: res.ok, status: res.status, data: await res.json() };
-  });
+  }, testRiderPhone);
 
   console.log('Ride Request response:', JSON.stringify({
     ok: rideRes.ok,
