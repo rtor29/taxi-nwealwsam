@@ -1669,8 +1669,9 @@ async function loadAdminRides() {
                 statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">في انتظار العودة ⏳</span>';
             } else if (r.status === 'IN_TRIP' || r.status === 'IN_TRIP_RETURN') {
                 statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">على الطريق 🚗</span>';
-            } else if (r.status === 'CANCELLED') {
-                statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">ملغي ✕</span>';
+            } else if (r.status === 'CANCELLED' || r.status === 'CANCELLED_BY_RIDER' || r.status === 'CANCELLED_BY_DRIVER' || r.status === 'Cancelled') {
+                const reasonText = r.cancelReason || r.cancellationReason || 'إلغاء المشوار';
+                statusBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200" title="${escapeHtml(reasonText)}">ملغي ✕</span><div class="text-[10px] text-rose-600 mt-0.5 font-medium truncate max-w-[130px] mx-auto" title="${escapeHtml(reasonText)}">${escapeHtml(reasonText)}</div>`;
             }
 
             tr.innerHTML = `

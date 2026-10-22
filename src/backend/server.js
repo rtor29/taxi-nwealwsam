@@ -4585,6 +4585,38 @@ async function startServer() {
             }
         }
 
+        // ---------------------------------------------------------------------
+        // Cancellation Reasons Single Source of Truth
+        // ---------------------------------------------------------------------
+        const CANCELLATION_REASONS = {
+            rider: [
+                'تأخر الكابتن في الوصول',
+                'تغيير خطة المشوار',
+                'طلب بالخطأ',
+                'الكابتن طلب مني الإلغاء',
+                'الكابتن لا يتحرك باتجاهي',
+                'سبب آخر'
+            ],
+            driver: [
+                'تعطل المركبة أو حادث مفاجئ',
+                'ازدحام مروري خانق / الطريق مغلق',
+                'تعذر التواصل مع الراكب / لم يحضر',
+                'نقطة الانطلاق في موقع يتعذر الوصول إليه',
+                'سبب آخر'
+            ]
+        };
+
+        if ((pathname === '/api/ride/cancellation-reasons' || pathname === '/ride/cancellation-reasons') && method === 'GET') {
+            const cancelFee = systemSettingsService ? systemSettingsService.getCancellationFeeIqd() : 1500;
+            return sendJson({
+                success: true,
+                riderReasons: CANCELLATION_REASONS.rider,
+                driverReasons: CANCELLATION_REASONS.driver,
+                cancellationFeeIqd: cancelFee,
+                freeCancellationMinutes: 2
+            });
+        }
+
         // Passenger or Driver Cancel Ride (Unified & Atomically Cleared across Redis & PM2 Cluster)
         const isRideCancelRoute = (
             pathname === '/api/ride/cancel' || 
@@ -4596,7 +4628,6 @@ async function startServer() {
             try {
                 const body = await parseJsonBody(req);
                 const rideId = String(body.rideId || body.requestId || body.id || '').trim();
-                const reason = body.reason || 'إلغاء من قبل المستخدم';
 
                 if (!rideId) {
                     return sendJson({ success: false, error: 'معرف المشوار مطلوب للإلغاء' }, 400);
@@ -4619,6 +4650,28 @@ async function startServer() {
                 if (!isDriver && !isRider && !isAdmin) {
                     return sendJson({ success: false, error: 'غير مصرح: لا يمكنك إلغاء مشوار لمستخدم آخر (RLS)' }, 403);
                 }
+
+                // Strict Cancellation Reason Validation against Server Authority
+                const rawReason = String(body.reason || '').trim();
+                const customDetails = String(body.customDetails || body.details || '').trim();
+                const allowedList = isDriver ? CANCELLATION_REASONS.driver : CANCELLATION_REASONS.rider;
+
+                if (!rawReason) {
+                    return sendJson({ success: false, error: 'سبب الإلغاء إلزامي، يرجى اختيار سبب من القائمة' }, 400);
+                }
+
+                let validatedReason = rawReason;
+                if (rawReason.startsWith('سبب آخر')) {
+                    const customText = (customDetails || rawReason.replace(/^سبب آخر:?\s*/, '')).replace(/<[^>]*>?/gm, '').trim();
+                    if (!customText || customText.length < 3 || customText.length > 100) {
+                        return sendJson({ success: false, error: 'يرجى كتابة توضيح لسبب الإلغاء بين 3 و 100 حرف' }, 400);
+                    }
+                    validatedReason = `سبب آخر: ${customText}`;
+                } else if (!allowedList.includes(rawReason)) {
+                    return sendJson({ success: false, error: 'سبب الإلغاء غير معتمد، يرجى الاختيار من القائمة الرسمية' }, 400);
+                }
+
+                const reason = validatedReason;
 
                 if (isDriver) {
                     const prevDriverId = r.assignedDriverId || r.acceptedDriverId || body.driverId || authUser?.id;
@@ -4819,6 +4872,37 @@ async function startServer() {
                         telegramBot.notifyRideCancelled(r, reason, 'rider', isWaitCancellation ? r.finalFare : (feeApplies ? cancelFee : 0)).catch(() => {});
                     }
                 } catch (_) {}
+
+                // Log cancellation in PostgreSQL ride_events and audit_logs
+                if (db.isPostgresConnected && db.pool) {
+                    try {
+                        const actorId = String(authUser?.id || r.customerId || 'rider');
+                        await db.pool.query(
+                            `INSERT INTO ride_events (ride_id, from_status, to_status, actor_id, actor_role, metadata) 
+                             VALUES ($1, $2, $3, $4, $5, $6)`,
+                            [
+                                r.id,
+                                r.status,
+                                RIDE_STATES.CANCELLED_BY_RIDER,
+                                actorId,
+                                'Customer',
+                                JSON.stringify({ reason, cancellationFee: isWaitCancellation ? r.finalFare : (feeApplies ? cancelFee : 0) })
+                            ]
+                        ).catch(() => {});
+
+                        await db.pool.query(
+                            `INSERT INTO audit_logs (action, entity_name, entity_id, new_values_json, ip_address) 
+                             VALUES ($1, $2, $3, $4, $5)`,
+                            [
+                                'RIDE_CANCELLED_BY_RIDER',
+                                'Ride',
+                                r.id,
+                                JSON.stringify({ reason, fee: isWaitCancellation ? r.finalFare : (feeApplies ? cancelFee : 0) }),
+                                req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1'
+                            ]
+                        ).catch(() => {});
+                    } catch (_) {}
+                }
 
                 const cancelMsg = isWaitCancellation 
                     ? `تم إلغاء رحلة العودة والاكتفاء بالذهاب. المبلغ المستحق للذهاب والانتظار: ${r.finalFare} د.ع.`
