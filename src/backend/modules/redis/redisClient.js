@@ -514,6 +514,53 @@ class RedisManager {
             return false;
         }
     }
+
+    // ---[ 7. Driver Fixed Location Management (Batch 1) ]---
+    async setDriverFixedLocation(driverId, data = {}) {
+        if (!this.isConnected || !this.client || !driverId) return false;
+        try {
+            const hashKey = `driver:${driverId}:meta`;
+            await this.client.hset(hashKey, {
+                id: String(driverId),
+                fixed_lat: String(data.lat),
+                fixed_lng: String(data.lng),
+                fixed_label: String(data.label || ''),
+                fixed_updated_at: String(data.updatedAt || new Date().toISOString())
+            });
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    async removeDriverFixedLocation(driverId) {
+        if (!this.isConnected || !this.client || !driverId) return false;
+        try {
+            const hashKey = `driver:${driverId}:meta`;
+            await this.client.hdel(hashKey, 'fixed_lat', 'fixed_lng', 'fixed_label', 'fixed_updated_at');
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    async getDriverFixedLocation(driverId) {
+        if (!this.isConnected || !this.client || !driverId) return null;
+        try {
+            const hashKey = `driver:${driverId}:meta`;
+            const meta = await this.client.hgetall(hashKey);
+            if (!meta || !meta.fixed_lat || !meta.fixed_lng) return null;
+            return {
+                driverId: String(driverId),
+                lat: parseFloat(meta.fixed_lat),
+                lng: parseFloat(meta.fixed_lng),
+                label: meta.fixed_label || '',
+                updatedAt: meta.fixed_updated_at || null
+            };
+        } catch (_) {
+            return null;
+        }
+    }
 }
 
 const redisManager = new RedisManager();

@@ -7654,6 +7654,262 @@ async function startServer() {
         }
 
 
+        // ===== Driver Fixed Location (Batch 1: تثبيت وإزالة الموقع الثابت لكابتن الخط الدائم) =====
+        const isDriverFixedLocationRoute = (
+            pathname === '/api/driver/fixed-location' ||
+            pathname === '/driver/fixed-location' ||
+            pathname === '/api/driver/fixed-location/remove' ||
+            pathname === '/driver/fixed-location/remove'
+        );
+
+        if (isDriverFixedLocationRoute) {
+            // 1. Authentication Check (JWT on server, 401 if missing, 403 if not Driver)
+            const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
+            const rawToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+            if (!rawToken) {
+                return sendJson({ success: false, error: 'جلسة الدخول مطلوبة (Missing Token)' }, 401);
+            }
+
+            const authUser = getAuthUser(req);
+            if (!authUser || (authUser.role !== 'Driver' && authUser.role !== 'driver')) {
+                return sendJson({ success: false, error: 'غير مصرح: الحساب ليس كابتن معتمد (RLS)' }, 403);
+            }
+
+            const effectiveDriverId = String(authUser.id || '').trim();
+            if (!effectiveDriverId) {
+                return sendJson({ success: false, error: 'غير مصرح: معرّف الكابتن غير موجود في التوكن (RLS)' }, 403);
+            }
+
+            // 2. Body Parsing & RLS Check (No trust in client-provided ID)
+            let body = {};
+            if (method === 'POST' || method === 'DELETE' || method === 'PUT') {
+                body = await parseJsonBody(req).catch(() => ({}));
+            }
+            const submittedDriverId = body.driverId || body.id;
+            if (submittedDriverId && String(submittedDriverId).trim() !== effectiveDriverId) {
+                return sendJson({ success: false, error: 'غير مصرح: لا يمكنك تعديل أو استعراض موقع كابتن آخر (RLS)' }, 403);
+            }
+
+            // 3. Rate Limiting across PM2 cluster via Redis (10 requests per 10 minutes)
+            if (method !== 'GET') {
+                const rateKey = `rate:driver:fixed_loc:${effectiveDriverId}`;
+                const rate = await redisManager.checkRateLimitCluster(rateKey, 10, 600);
+                if (!rate.allowed) {
+                    res.setHeader('Retry-After', String(rate.ttl));
+                    return sendJson({
+                        success: false,
+                        error: 'تم تجاوز الحد المسموح لتعديل الموقع الثابت (10 طلبات كل 10 دقائق). يرجى المحاولة لاحقاً',
+                        retry_after: rate.ttl
+                    }, 429);
+                }
+            }
+
+            // 4. Idempotency Check
+            const idempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || body.idempotencyKey;
+            if (idempotencyKey) {
+                if (redisManager && redisManager.isConnected && redisManager.client) {
+                    try {
+                        const cached = await redisManager.client.get(`idem:${idempotencyKey}`);
+                        if (cached) return sendJson(JSON.parse(cached));
+                    } catch (_) {}
+                }
+                if (idempotencyStore && idempotencyStore.has(idempotencyKey)) {
+                    return sendJson(idempotencyStore.get(idempotencyKey).response);
+                }
+            }
+
+            // 5. Driver Existence & Work Mode Verification
+            let driver = (db.memoryState.drivers || []).find(d => 
+                String(d.driverId || d.id) === effectiveDriverId ||
+                (authUser.phone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(authUser.phone.replace(/[^0-9]/g, '').slice(-8)))
+            );
+
+            if (!driver && db.pool && db.isPostgresConnected) {
+                try {
+                    const pgRes = await db.pool.query('SELECT * FROM drivers WHERE driver_id = $1', [effectiveDriverId]);
+                    if (pgRes.rows && pgRes.rows[0]) {
+                        const r = pgRes.rows[0];
+                        driver = {
+                            driverId: r.driver_id,
+                            fullName: r.full_name,
+                            phoneNumber: r.phone_number,
+                            work_mode: r.work_mode,
+                            workStatus: r.work_mode === 'خط دائمي' ? 'permanent' : r.work_mode,
+                            fixedLat: r.fixed_lat ? parseFloat(r.fixed_lat) : null,
+                            fixedLng: r.fixed_lng ? parseFloat(r.fixed_lng) : null,
+                            fixedLabel: r.fixed_label || '',
+                            fixedUpdatedAt: r.fixed_updated_at || null
+                        };
+                        db.memoryState.drivers.push(driver);
+                    }
+                } catch (_) {}
+            }
+
+            if (!driver) {
+                return sendJson({ success: false, error: 'بيانات الكابتن غير موجودة في النظام' }, 404);
+            }
+
+            // Mode check: Must be commute or both (Arabic or English)
+            const rawMode = String(driver.work_mode || driver.workStatus || driver.current_mode || driver.mode || '').toLowerCase().trim();
+            const isAllowedMode = (
+                rawMode === 'commute' || 
+                rawMode === 'both' || 
+                rawMode === 'permanent' || 
+                rawMode === 'خط دائمي' || 
+                rawMode === 'كلاهما'
+            );
+            if (!isAllowedMode) {
+                return sendJson({
+                    success: false,
+                    error: 'غير مسموح بتثبيت الموقع الثابت إلا للكابتن في وضع الخط الدائم (commute) أو كلاهما (both)'
+                }, 409);
+            }
+
+            // ---[ Branch A: GET Current Fixed Location ]---
+            if (method === 'GET') {
+                let fixedLat = driver.fixedLat !== undefined ? driver.fixedLat : (driver.permanentLat || null);
+                let fixedLng = driver.fixedLng !== undefined ? driver.fixedLng : (driver.permanentLon || null);
+                let fixedLabel = driver.fixedLabel !== undefined ? driver.fixedLabel : (driver.permanentLocationName || '');
+                let fixedUpdatedAt = driver.fixedUpdatedAt || null;
+
+                // Sync from Redis if available
+                const redisLoc = await redisManager.getDriverFixedLocation(effectiveDriverId);
+                if (redisLoc) {
+                    fixedLat = redisLoc.lat;
+                    fixedLng = redisLoc.lng;
+                    fixedLabel = redisLoc.label;
+                    fixedUpdatedAt = redisLoc.updatedAt;
+                } else if (fixedLat !== null && fixedLng !== null) {
+                    await redisManager.setDriverFixedLocation(effectiveDriverId, {
+                        lat: fixedLat,
+                        lng: fixedLng,
+                        label: fixedLabel,
+                        updatedAt: fixedUpdatedAt
+                    });
+                }
+
+                return sendJson({
+                    success: true,
+                    driverId: effectiveDriverId,
+                    fixed_lat: fixedLat,
+                    fixed_lng: fixedLng,
+                    fixed_label: fixedLabel || '',
+                    fixed_updated_at: fixedUpdatedAt,
+                    work_mode: driver.work_mode || driver.workStatus || 'commute'
+                });
+            }
+
+            // ---[ Branch B: DELETE or POST Remove ]---
+            const isRemoval = method === 'DELETE' || pathname.endsWith('/remove') || body.remove === true || body.action === 'remove';
+            if (isRemoval) {
+                const nowIso = new Date().toISOString();
+                driver.fixedLat = null;
+                driver.fixedLng = null;
+                driver.fixedLabel = null;
+                driver.fixedUpdatedAt = nowIso;
+                driver.permanentLat = null;
+                driver.permanentLon = null;
+                driver.permanentLocationName = null;
+                db.saveStateSnapshot();
+
+                await db.removeDriverFixedLocation(effectiveDriverId);
+                await redisManager.removeDriverFixedLocation(effectiveDriverId);
+
+                try {
+                    const auditService = require('./modules/audit/auditService');
+                    await auditService.logEvent({
+                        action: 'DRIVER_FIXED_LOCATION_REMOVED',
+                        entityType: 'Driver',
+                        entityId: effectiveDriverId,
+                        actor: `كابتن (${driver.fullName || effectiveDriverId})`,
+                        details: { removed: true, timestamp: nowIso },
+                        ip: clientIp
+                    });
+                } catch (_) {}
+
+                const respPayload = {
+                    success: true,
+                    driverId: effectiveDriverId,
+                    fixed_lat: null,
+                    fixed_lng: null,
+                    fixed_label: null,
+                    fixed_updated_at: nowIso,
+                    work_mode: driver.work_mode || driver.workStatus || 'commute'
+                };
+
+                if (idempotencyKey) {
+                    if (idempotencyStore) idempotencyStore.set(idempotencyKey, { response: respPayload, timestamp: Date.now() });
+                    if (redisManager && redisManager.isConnected && redisManager.client) {
+                        redisManager.client.set(`idem:${idempotencyKey}`, JSON.stringify(respPayload), 'EX', 3600).catch(() => {});
+                    }
+                }
+                return sendJson(respPayload);
+            }
+
+            // ---[ Branch C: POST Set / Update Fixed Location ]---
+            const rawLat = body.lat !== undefined ? body.lat : body.latitude;
+            const rawLng = body.lng !== undefined ? body.lng : (body.lon !== undefined ? body.lon : body.longitude);
+            const rawLabel = body.label !== undefined ? body.label : (body.name !== undefined ? body.name : body.locationName);
+
+            const parsedLat = parseFloat(rawLat);
+            const parsedLng = parseFloat(rawLng);
+
+            if (rawLat === undefined || rawLat === null || isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+                return sendJson({ success: false, error: 'إحداثيات خط العرض غير صحيحة' }, 400);
+            }
+            if (rawLng === undefined || rawLng === null || isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180) {
+                return sendJson({ success: false, error: 'إحداثيات خط الطول غير صحيحة' }, 400);
+            }
+
+            const cleanLabel = String(rawLabel || '').replace(/<[^>]*>?/gm, '').trim();
+            if (!cleanLabel || cleanLabel.length > 60) {
+                return sendJson({ success: false, error: 'يجب إدخال اسم موقع صحيح بحد أقصى 60 حرفاً' }, 400);
+            }
+
+            const nowIso = new Date().toISOString();
+            driver.fixedLat = parsedLat;
+            driver.fixedLng = parsedLng;
+            driver.fixedLabel = cleanLabel;
+            driver.fixedUpdatedAt = nowIso;
+            driver.permanentLat = parsedLat;
+            driver.permanentLon = parsedLng;
+            driver.permanentLocationName = cleanLabel;
+            db.saveStateSnapshot();
+
+            await db.persistDriverFixedLocation(effectiveDriverId, { lat: parsedLat, lng: parsedLng, label: cleanLabel });
+            await redisManager.setDriverFixedLocation(effectiveDriverId, { lat: parsedLat, lng: parsedLng, label: cleanLabel, updatedAt: nowIso });
+
+            try {
+                const auditService = require('./modules/audit/auditService');
+                await auditService.logEvent({
+                    action: 'DRIVER_FIXED_LOCATION_UPDATED',
+                    entityType: 'Driver',
+                    entityId: effectiveDriverId,
+                    actor: `كابتن (${driver.fullName || effectiveDriverId})`,
+                    details: { lat: parsedLat, lng: parsedLng, label: cleanLabel, timestamp: nowIso },
+                    ip: clientIp
+                });
+            } catch (_) {}
+
+            const respPayload = {
+                success: true,
+                driverId: effectiveDriverId,
+                fixed_lat: parsedLat,
+                fixed_lng: parsedLng,
+                fixed_label: cleanLabel,
+                fixed_updated_at: nowIso,
+                work_mode: driver.work_mode || driver.workStatus || 'commute'
+            };
+
+            if (idempotencyKey) {
+                if (idempotencyStore) idempotencyStore.set(idempotencyKey, { response: respPayload, timestamp: Date.now() });
+                if (redisManager && redisManager.isConnected && redisManager.client) {
+                    redisManager.client.set(`idem:${idempotencyKey}`, JSON.stringify(respPayload), 'EX', 3600).catch(() => {});
+                }
+            }
+            return sendJson(respPayload);
+        }
+
         // Passenger: Set permanent location & route
         if (pathname === '/api/passenger/set-permanent-location' && method === 'POST') {
             const body = await parseJsonBody(req);

@@ -56,6 +56,10 @@ CREATE TABLE IF NOT EXISTS drivers (
     telegram_chat_id VARCHAR(64),
     telegram_username VARCHAR(100),
     telegram_linked_at TIMESTAMPTZ,
+    fixed_lat DOUBLE PRECISION,
+    fixed_lng DOUBLE PRECISION,
+    fixed_label VARCHAR(60),
+    fixed_updated_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -64,6 +68,7 @@ CREATE INDEX IF NOT EXISTS idx_drivers_status ON drivers(status);
 CREATE INDEX IF NOT EXISTS idx_drivers_verified ON drivers(is_verified);
 CREATE INDEX IF NOT EXISTS idx_drivers_blocked ON drivers(is_blocked);
 CREATE INDEX IF NOT EXISTS idx_drivers_telegram_chat ON drivers(telegram_chat_id);
+CREATE INDEX IF NOT EXISTS idx_drivers_fixed_lat_lng ON drivers(fixed_lat, fixed_lng) WHERE fixed_lat IS NOT NULL;
 
 -- 3. Customers
 CREATE TABLE IF NOT EXISTS customers (

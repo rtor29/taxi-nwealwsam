@@ -325,6 +325,11 @@ class DatabaseManager {
                         ALTER TABLE customers ADD COLUMN IF NOT EXISTS telegram_linked_at TIMESTAMPTZ;
                         ALTER TABLE bookings ADD COLUMN IF NOT EXISTS driver_phone VARCHAR(50);
                         ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
+                        ALTER TABLE drivers ADD COLUMN IF NOT EXISTS fixed_lat DOUBLE PRECISION;
+                        ALTER TABLE drivers ADD COLUMN IF NOT EXISTS fixed_lng DOUBLE PRECISION;
+                        ALTER TABLE drivers ADD COLUMN IF NOT EXISTS fixed_label VARCHAR(60);
+                        ALTER TABLE drivers ADD COLUMN IF NOT EXISTS fixed_updated_at TIMESTAMPTZ;
+                        CREATE INDEX IF NOT EXISTS idx_drivers_fixed_lat_lng ON drivers(fixed_lat, fixed_lng) WHERE fixed_lat IS NOT NULL;
                         CREATE INDEX IF NOT EXISTS idx_drivers_telegram_chat ON drivers(telegram_chat_id);
                         CREATE INDEX IF NOT EXISTS idx_customers_telegram_chat ON customers(telegram_chat_id);
                         CREATE TABLE IF NOT EXISTS trip_ratings (
@@ -527,12 +532,16 @@ class DatabaseManager {
                     totalTrips: r.total_trips || 0,
                     points: parseInt(r.points || 0, 10),
                     rewardScore: parseInt(r.points || 0, 10),
-                    permanentLat: r.permanent_lat ? parseFloat(r.permanent_lat) : null,
-                    permanentLon: r.permanent_lon ? parseFloat(r.permanent_lon) : null,
-                    permanentLocationName: r.permanent_location_name || '',
+                    permanentLat: r.permanent_lat ? parseFloat(r.permanent_lat) : (r.fixed_lat ? parseFloat(r.fixed_lat) : null),
+                    permanentLon: r.permanent_lon ? parseFloat(r.permanent_lon) : (r.fixed_lng ? parseFloat(r.fixed_lng) : null),
+                    permanentLocationName: r.permanent_location_name || r.fixed_label || '',
                     permanentDropoffLat: r.permanent_dropoff_lat ? parseFloat(r.permanent_dropoff_lat) : null,
                     permanentDropoffLon: r.permanent_dropoff_lon ? parseFloat(r.permanent_dropoff_lon) : null,
                     permanentDropoffName: r.permanent_dropoff_name || '',
+                    fixedLat: r.fixed_lat ? parseFloat(r.fixed_lat) : (r.permanent_lat ? parseFloat(r.permanent_lat) : null),
+                    fixedLng: r.fixed_lng ? parseFloat(r.fixed_lng) : (r.permanent_lon ? parseFloat(r.permanent_lon) : null),
+                    fixedLabel: r.fixed_label || r.permanent_location_name || '',
+                    fixedUpdatedAt: r.fixed_updated_at || null,
                     telegramChatId: r.telegram_chat_id ? String(r.telegram_chat_id) : null,
                     createdAt: r.created_at
                 }));
@@ -751,6 +760,36 @@ class DatabaseManager {
                 [data.lat, data.lon, data.locationName || '', data.dropoffLat || null, data.dropoffLon || null, data.dropoffName || '', data.route || null, data.address || null, customerId]
             );
         } catch (e) { console.warn('[Database] persistCustomerPermanentLocation error:', e.message); }
+    }
+
+    // Persist fixed location for permanent line driver
+    async persistDriverFixedLocation(driverId, data) {
+        if (!this.pool || !this.isPostgresConnected) return;
+        try {
+            await this.pool.query(
+                `UPDATE drivers SET 
+                    fixed_lat = $1, fixed_lng = $2, fixed_label = $3, fixed_updated_at = NOW(),
+                    permanent_lat = $1, permanent_lon = $2, permanent_location_name = $3,
+                    updated_at = NOW()
+                 WHERE driver_id = $4`,
+                [data.lat, data.lng, data.label || '', driverId]
+            );
+        } catch (e) { console.warn('[Database] persistDriverFixedLocation error:', e.message); }
+    }
+
+    // Remove fixed location for driver
+    async removeDriverFixedLocation(driverId) {
+        if (!this.pool || !this.isPostgresConnected) return;
+        try {
+            await this.pool.query(
+                `UPDATE drivers SET 
+                    fixed_lat = NULL, fixed_lng = NULL, fixed_label = NULL, fixed_updated_at = NOW(),
+                    permanent_lat = NULL, permanent_lon = NULL, permanent_location_name = NULL,
+                    updated_at = NOW()
+                 WHERE driver_id = $1`,
+                [driverId]
+            );
+        } catch (e) { console.warn('[Database] removeDriverFixedLocation error:', e.message); }
     }
 
 
