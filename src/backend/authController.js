@@ -5729,7 +5729,7 @@ class AuthController {
                     INSERT INTO drivers (driver_id, full_name, phone_number, email, google_id, license_number, vehicle_make, vehicle_model, vehicle_year, vehicle_plate, status, is_verified, is_blocked, created_at)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9, 'Pending', false, false, $10)
                     ON CONFLICT (driver_id) DO NOTHING
-                `, [driverId, fullName, cleanPhone, emailLower, googleId, licenseNumber, newDriver.vehicle.make, newDriver.vehicle.year, newDriver.vehicle.plateNumber, now]);
+                `, [driverId, fullName, cleanPhone, emailLower, googleId, finalLicenseNumber, newDriver.vehicle.make, newDriver.vehicle.year, newDriver.vehicle.plateNumber, now]);
             } catch (e) {
                 console.error('[AuthController] PG Driver insert error:', e);
             }

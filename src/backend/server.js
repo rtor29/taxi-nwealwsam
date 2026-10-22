@@ -852,9 +852,12 @@ async function startServer() {
                     db.pool.query(`DELETE FROM users WHERE (phone_number LIKE $1 OR phone_number LIKE $2) AND role = 'Customer'`, [`%${targetNorm}`, `%0${targetNorm}`]).catch(() => {});
                 }
 
-                const driverId = foundDriver.driverId || foundDriver.id || ('drv_' + targetNorm);
-                const driverName = foundDriver.fullName || foundDriver.name || 'كابتن توصيلة';
-                const driverPhone = foundDriver.phoneNumber || foundDriver.phone_number || ('0' + targetNorm);
+                const driverId = foundDriver.driver_id || foundDriver.driverId || foundDriver.id || ('drv_' + targetNorm);
+                const driverName = foundDriver.full_name || foundDriver.fullName || foundDriver.name || 'كابتن توصيلة';
+                const driverPhone = foundDriver.phone_number || foundDriver.phoneNumber || ('0' + targetNorm);
+                foundDriver.driverId = driverId;
+                foundDriver.fullName = driverName;
+                foundDriver.phoneNumber = driverPhone;
                 const token = generateSignedToken({
                     id: driverId,
                     phone: driverPhone,
@@ -1258,8 +1261,8 @@ async function startServer() {
                     db.pool.query(`DELETE FROM users WHERE (phone_number LIKE $1 OR phone_number LIKE $2) AND role = 'Customer'`, [`%${targetNorm}`, `%0${targetNorm}`]).catch(() => {});
                 }
 
-                const driverName = foundDriver.fullName || foundDriver.name || 'كابتن توصيلة';
-                const driverPhone = foundDriver.phoneNumber || foundDriver.phone_number || ('0' + targetNorm);
+                const driverName = foundDriver.full_name || foundDriver.fullName || foundDriver.name || 'كابتن توصيلة';
+                const driverPhone = foundDriver.phone_number || foundDriver.phoneNumber || ('0' + targetNorm);
                 return sendJson({
                     exists: true,
                     role: 'driver',
@@ -3078,11 +3081,12 @@ async function startServer() {
                 const effectiveCandidates = inRadius.length > 0 ? inRadius : candidates;
 
                 if (effectiveCandidates.length === 0) {
+                    console.log(`[RideRequest] NO_DRIVERS: No online drivers found within radius ${maxDist}km of pickup (${pLat}, ${pLon})`);
                     return sendJson({
                         success: false,
                         error: isVipTier
-                            ? 'لا يوجد كابتن VIP متاح بالقرب منك حالياً.'
-                            : 'لا يوجد كابتن توفير متاح بالقرب منك حالياً.'
+                            ? `لا يوجد كابتن VIP متاح بالقرب منك حالياً ضمن نطاق ${maxDist} كم.`
+                            : `لا يوجد كابتن توفير متاح بالقرب منك حالياً ضمن نطاق ${maxDist} كم.`
                     }, 404);
                 }
 
@@ -3203,6 +3207,24 @@ async function startServer() {
 
                 console.log(`[TelegramDispatch] New ride created, type: ${newRequest.tripType || (newRequest.isRoundTrip ? 'ROUND_TRIP' : 'ONE_WAY')}, rideId: ${newRequest.id}, estimatedFare: ${newRequest.fare}`);
 
+                // Send Telegram notification to Platform Admin about new ride
+                try {
+                    const adminChatId = config.telegramAdminChatId || config.adminChatId || config.telegram?.adminChatId || '391762837';
+                    const maskedRiderPhone = newRequest.customerPhone ? maskPhoneNumber(newRequest.customerPhone) : 'غير متوفر';
+                    const tgAdminMsg = `🚖 <b>طلب مشوار جديد (#${newRequest.id})</b>\n\n` +
+                        `👤 <b>الراكب:</b> ${newRequest.customerName} (${maskedRiderPhone})\n` +
+                        `📍 <b>الانطلاق:</b> ${newRequest.pickupName || 'موقع الراكب'}\n` +
+                        `🏁 <b>الوجهة:</b> ${newRequest.dropoffName || 'الوجهة المحددة'}${extraTgInfo}\n` +
+                        `💰 <b>الأجرة:</b> ${newRequest.fare} د.ع (${tierBadge})\n` +
+                        `👥 <b>الكباتن المرشحون:</b> ${candidateDriverIds.length}\n` +
+                        `⏱️ <b>مهلة الرد:</b> 20 ثانية`;
+
+                    const tgRes = await telegramBot.sendMessage(adminChatId, tgAdminMsg);
+                    console.log(`[TelegramDispatch] New ride alert dispatched to Admin (chatId: ${String(adminChatId).slice(0, 3)}****), ok: ${Boolean(tgRes?.ok)}, message_id: ${tgRes?.result?.message_id || 'N/A'}`);
+                } catch (tgAdminErr) {
+                    console.error('[TelegramDispatch] Failed to send new ride alert to admin:', tgAdminErr.message);
+                }
+
                 // Notify passenger via Telegram if connected
                 const custObj = (db.memoryState.customers || []).find(c => c.customerId === customerId || (customerPhone && c.phoneNumber === customerPhone));
                 if (custObj && custObj.telegramChatId) {
@@ -3247,15 +3269,27 @@ async function startServer() {
                     request: maskedPayload
                 });
 
-                // First candidate targeted offer
+                // First candidate targeted offer (published to candidate driver and phone alias)
                 if (candidateDriverIds.length > 0) {
-                    await redisManager.publishDriverEvent(candidateDriverIds[0], {
+                    const primaryCandidateId = candidateDriverIds[0];
+                    const candDriver = (db.memoryState.drivers || []).find(d => String(d.driverId || d.driver_id || d.id) === String(primaryCandidateId));
+                    await redisManager.publishDriverEvent(primaryCandidateId, {
                         type: 'new_ride',
                         event: 'new_ride',
                         rideId: newRequest.id,
                         requestId: newRequest.id,
                         request: maskedPayload
                     });
+                    const cleanDrvPhone = candDriver?.phoneNumber ? String(candDriver.phoneNumber).replace(/[^0-9]/g, '') : '';
+                    if (cleanDrvPhone && `drv_${cleanDrvPhone}` !== primaryCandidateId) {
+                        await redisManager.publishDriverEvent(`drv_${cleanDrvPhone}`, {
+                            type: 'new_ride',
+                            event: 'new_ride',
+                            rideId: newRequest.id,
+                            requestId: newRequest.id,
+                            request: maskedPayload
+                        });
+                    }
                 }
 
                 const responsePayload = {
@@ -5211,7 +5245,7 @@ async function startServer() {
 
             return sourceList.filter(r => {
                 const st = String(r.status || '').toLowerCase().trim();
-                if (st !== 'pending') return false;
+                if (st !== 'pending' && st !== 'offered' && st !== 'requested') return false;
 
                 // Freshness check: strictly within 3 minutes
                 const reqTime = r.requestedAt ? Number(r.requestedAt) : (r.createdAt ? new Date(r.createdAt).getTime() : now);
@@ -5220,6 +5254,24 @@ async function startServer() {
                 if (r.acceptedDriverId) return false;
                 const tType = String(r.tripType || r.serviceType || 'short').toLowerCase().trim();
                 if (tType === 'daily' || tType === 'commute' || tType === 'خط دائمي' || tType === 'permanent') return false;
+
+                // Targeted candidate matching
+                if (r.candidateDriverIds && Array.isArray(r.candidateDriverIds) && r.candidateDriverIds.length > 0) {
+                    const isCandidate = r.candidateDriverIds.some(cid => {
+                        const sCid = String(cid || '').trim();
+                        if (targetDriverId && sCid === String(targetDriverId)) return true;
+                        if (rawParam && sCid === String(rawParam)) return true;
+                        if (cleanPhone.length >= 7 && sCid.replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8))) return true;
+                        return false;
+                    });
+                    const isAssigned = r.assignedDriverId && (
+                        String(r.assignedDriverId) === String(targetDriverId) ||
+                        String(r.assignedDriverId) === String(rawParam) ||
+                        (cleanPhone.length >= 7 && String(r.assignedDriverId).replace(/[^0-9]/g, '').endsWith(cleanPhone.slice(-8)))
+                    );
+                    if (!isCandidate && !isAssigned) return false;
+                }
+
                 if (r.rejectedDriverIds && Array.isArray(r.rejectedDriverIds) && r.rejectedDriverIds.length > 0) {
                     const isRejected = r.rejectedDriverIds.some(rid => {
                         const sRid = String(rid || '').trim();
@@ -5346,8 +5398,11 @@ async function startServer() {
                             timestamp: Date.now()
                         }, eventId);
                     } else if (channel === `channel:driver:${driverId}`) {
+                        const updatedPending = await getDriverPendingList(driverId);
                         sendSse('driver_event', {
                             event: data,
+                            type: data.type || data.event || 'driver_event',
+                            pendingRequests: updatedPending,
                             activeRide: getDriverActiveRideItem(driverId),
                             timestamp: Date.now()
                         }, eventId);

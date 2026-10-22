@@ -2097,12 +2097,24 @@ function stopBot() {
 
 // Admin message from dashboard
 async function sendAdminNotification(text) {
-    try { await sendMessage(ADMIN_CHAT_ID, text); } catch (_) {}
+    try {
+        const res = await sendMessage(ADMIN_CHAT_ID, text);
+        return res;
+    } catch (err) {
+        console.error('[TelegramBot] sendAdminNotification error:', err.message);
+        return { ok: false, error: err.message };
+    }
 }
 
 // Send message to a specific user by chatId
 async function notifyUser(chatId, text) {
-    try { await sendMessage(chatId, text); } catch (_) {}
+    try {
+        const res = await sendMessage(chatId, text);
+        return res;
+    } catch (err) {
+        console.error('[TelegramBot] notifyUser error:', err.message);
+        return { ok: false, error: err.message };
+    }
 }
 
 // Broadcast message with target selector (channel, group, subscribers, all)
