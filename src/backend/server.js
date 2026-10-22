@@ -4437,7 +4437,7 @@ async function startServer() {
         }
 
         // ---------------------------------------------------------------------
-        // IN-APP CHAT (Passenger & Driver) - RLS Protected
+        // IN-APP CHAT (Passenger & Driver) - RLS Protected & SSE Streamed
         // ---------------------------------------------------------------------
         if (pathname === '/api/chat/messages' && method === 'GET') {
             const requestId = parsedUrl.searchParams.get('requestId');
@@ -4445,9 +4445,23 @@ async function startServer() {
                 return sendJson({ success: false, error: 'requestId is required' }, 400);
             }
 
+            const reqObj = await findRideById(requestId);
+            if (!reqObj) {
+                return sendJson({ success: false, notFound: true, error: 'المشوار غير موجود' }, 200);
+            }
+
+            // Access duration check: close chat 15 minutes after completion/cancellation
+            const isFinished = ['COMPLETED', 'CANCELLED', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_DRIVER', 'NO_DRIVERS'].includes(reqObj.status);
+            if (isFinished) {
+                const finishedTime = reqObj.completedAt || reqObj.cancelledAt || reqObj.updatedAt;
+                const elapsed = finishedTime ? (Date.now() - new Date(finishedTime).getTime()) : 0;
+                if (elapsed > 15 * 60 * 1000) {
+                    return sendJson({ success: false, error: 'انتهت صلاحية المراسلة لهذا المشوار بعد إكماله' }, 403);
+                }
+            }
+
             // RLS Check: Ensure caller is the customer or assigned driver of this ride
             const authUser = getAuthUser(req);
-            const reqObj = (db.memoryState.rideRequests || []).find(r => r.id === requestId);
             if (reqObj && authUser && authUser.role !== 'Admin') {
                 if (authUser.role === 'Customer' && reqObj.customerId && authUser.id !== reqObj.customerId && (!authUser.phone || reqObj.customerPhone !== authUser.phone)) {
                     return sendJson({ success: false, error: 'غير مصرح: لا يمكنك قراءة محادثة مستخدم آخر (RLS)' }, 403);
@@ -4470,9 +4484,28 @@ async function startServer() {
                     return sendJson({ success: false, error: 'requestId and text are required' }, 400);
                 }
 
+                const cleanText = String(text || '').replace(/<[^>]*>?/gm, '').trim().slice(0, 500);
+                if (!cleanText) {
+                    return sendJson({ success: false, error: 'نص الرسالة فارغ' }, 400);
+                }
+
+                const reqObj = await findRideById(requestId);
+                if (!reqObj) {
+                    return sendJson({ success: false, notFound: true, error: 'المشوار غير موجود' }, 200);
+                }
+
+                // Check access expiration (15 mins post completion)
+                const isFinished = ['COMPLETED', 'CANCELLED', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_DRIVER', 'NO_DRIVERS'].includes(reqObj.status);
+                if (isFinished) {
+                    const finishedTime = reqObj.completedAt || reqObj.cancelledAt || reqObj.updatedAt;
+                    const elapsed = finishedTime ? (Date.now() - new Date(finishedTime).getTime()) : 0;
+                    if (elapsed > 15 * 60 * 1000) {
+                        return sendJson({ success: false, error: 'انتهت صلاحية المراسلة لهذا المشوار بعد إكماله' }, 403);
+                    }
+                }
+
                 // RLS Check: Only participants of this ride can send messages
                 const authUser = getAuthUser(req);
-                const reqObj = (db.memoryState.rideRequests || []).find(r => r.id === requestId);
                 if (reqObj && authUser && authUser.role !== 'Admin') {
                     if (authUser.role === 'Customer' && reqObj.customerId && authUser.id !== reqObj.customerId && (!authUser.phone || reqObj.customerPhone !== authUser.phone)) {
                         return sendJson({ success: false, error: 'غير مصرح بإرسال رسائل في محادثة مستخدم آخر (RLS)' }, 403);
@@ -4482,19 +4515,70 @@ async function startServer() {
                     }
                 }
 
+                // Rate limiting (max 10 msgs per 10s per sender)
+                const effectiveSenderId = senderId || authUser?.id || 'anon';
+                const isAllowed = await redisManager.checkRateLimitCluster(`chat_rate:${effectiveSenderId}`, 10, 10);
+                if (!isAllowed) {
+                    return sendJson({ success: false, error: 'تجاوزت حد إرسال الرسائل، يرجى الانتظار قليلاً' }, 429);
+                }
+
                 db.memoryState.chatMessages = db.memoryState.chatMessages || [];
                 const newMsg = {
                     id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
                     requestId,
-                    senderId: senderId || 'user',
+                    senderId: effectiveSenderId,
                     senderRole: senderRole || 'Customer',
                     senderName: senderName || (senderRole === 'Driver' ? 'الكابتن' : 'الراكب'),
-                    text: text.trim(),
+                    text: cleanText,
                     createdAt: new Date().toISOString(),
                     timestamp: new Date().toISOString()
                 };
                 db.memoryState.chatMessages.push(newMsg);
                 db.saveStateSnapshot();
+
+                // Publish real-time event to SSE channel for instant delivery without polling
+                await redisManager.publishRideEvent(requestId, {
+                    type: 'chat_message',
+                    event: 'chat_message',
+                    rideId: requestId,
+                    message: newMsg
+                });
+
+                // Fallback Telegram notification to recipient (throttled once every 60s per ride)
+                (async () => {
+                    try {
+                        const isCustSender = (senderRole || 'Customer').toLowerCase() === 'customer';
+                        if (isCustSender) {
+                            const drvId = reqObj.assignedDriverId || reqObj.acceptedDriverId;
+                            const drvChatId = await telegramBot.findDriverTelegramChatId(drvId, reqObj.assignedDriverPhone);
+                            if (drvChatId) {
+                                const lock = await redisManager.acquireTelegramNotificationLock(`chat_tg:${requestId}:${drvChatId}`, 60);
+                                if (lock) {
+                                    const tgText = `💬 <b>رسالة جديدة من الراكب:</b>\n\n"${cleanText.slice(0, 80)}${cleanText.length > 80 ? '...' : ''}"`;
+                                    await telegramBot.sendMessage(drvChatId, tgText, {
+                                        reply_markup: {
+                                            inline_keyboard: [[{ text: '💬 فتح المحادثة', url: `https://tawseelaiq.app/drive?ride=${encodeURIComponent(requestId)}` }]]
+                                        }
+                                    }).catch(() => {});
+                                }
+                            }
+                        } else {
+                            const custChatId = await telegramBot.findCustomerTelegramChatId(reqObj);
+                            if (custChatId) {
+                                const lock = await redisManager.acquireTelegramNotificationLock(`chat_tg:${requestId}:${custChatId}`, 60);
+                                if (lock) {
+                                    const tgText = `💬 <b>رسالة جديدة من الكابتن:</b>\n\n"${cleanText.slice(0, 80)}${cleanText.length > 80 ? '...' : ''}"`;
+                                    await telegramBot.sendMessage(custChatId, tgText, {
+                                        reply_markup: {
+                                            inline_keyboard: [[{ text: '💬 فتح المحادثة', url: `https://tawseelaiq.app/?ride=${encodeURIComponent(requestId)}` }]]
+                                        }
+                                    }).catch(() => {});
+                                }
+                            }
+                        }
+                    } catch (_) {}
+                })();
+
                 return sendJson({ success: true, message: newMsg });
             } catch (err) {
                 return sendJson({ success: false, error: err.message }, 500);
@@ -5551,7 +5635,11 @@ async function startServer() {
                 try {
                     if (channel === `channel:ride:${rideId}`) {
                         const data = JSON.parse(msgStr);
-                        sendSse('trip_update', data, data.eventId || data.id);
+                        const evtName = data.event || data.type || 'trip_update';
+                        sendSse(evtName, data, data.eventId || data.id);
+                        if (evtName !== 'trip_update') {
+                            sendSse('trip_update', data, data.eventId || data.id);
+                        }
                     }
                 } catch (_) {}
             };
