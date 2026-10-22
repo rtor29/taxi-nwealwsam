@@ -6082,6 +6082,11 @@ async function startServer() {
                     driver.current_mode = computedMode;
                     driver.mode = computedMode;
                     driver.serviceType = computedServiceType;
+                    if (body.vehicleType || body.tier) {
+                        const vt = normalizeTier(body.vehicleType || body.tier);
+                        driver.vehicleType = vt;
+                        driver.tier = vt;
+                    }
                     if (actualLat && actualLng) {
                         driver.currentLat = actualLat;
                         driver.currentLon = actualLng;
