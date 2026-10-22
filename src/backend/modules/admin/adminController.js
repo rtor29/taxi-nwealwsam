@@ -9,7 +9,7 @@ let _leanDriversCache = null;
 let _leanDriversCacheTime = 0;
 let _leanCustomersCache = null;
 let _leanCustomersCacheTime = 0;
-const DASHBOARD_CACHE_TTL = 30000; // 30 seconds with instant mutation invalidation
+const DASHBOARD_CACHE_TTL = 3000; // 3 seconds with instant mutation invalidation
 
 function invalidateDriversCache() {
     _leanDriversCache = null;
@@ -24,6 +24,12 @@ function invalidateCustomersCache() {
 function toLeanDriver(d) {
     const routeObj = (db.memoryState.routes || []).find(r => r.driverId === d.driverId);
     const routeName = (routeObj ? (routeObj.name || `${routeObj.startName} - ${routeObj.endName}`) : null) || d.route || 'غير محدد';
+    let vType = 'eco';
+    const rawVT = String(d.vehicleType || d.vehicle_type || '').toLowerCase();
+    if (rawVT === 'super' || rawVT === 'سوبر') vType = 'super';
+    else if (rawVT === 'plus' || rawVT === 'vip' || rawVT === 'بلس' || rawVT === 'بلَس') vType = 'plus';
+    else vType = 'eco';
+
     return {
         id: d.id || d.driverId,
         driverId: d.driverId,
@@ -34,7 +40,7 @@ function toLeanDriver(d) {
         vehicleModel: d.vehicleModel || (d.vehicles && d.vehicles[0] && d.vehicles[0].model) || 'كورولا',
         vehiclePlate: d.vehiclePlate || d.plateNumber || (d.vehicles && d.vehicles[0] && d.vehicles[0].plateNumber) || 'النجف',
         vehicleColor: d.vehicleColor || (d.vehicles && d.vehicles[0] && d.vehicles[0].color) || 'أبيض',
-        vehicleType: d.vehicleType || 'eco',
+        vehicleType: vType,
         serviceType: d.serviceType || 'Both',
         isActive: d.isActive !== false && d.status !== 'Inactive',
         status: d.status || 'Active',
@@ -90,12 +96,78 @@ class AdminController {
         };
     }
 
-    // 3. Drivers Management (Instant In-Memory Lean Cache)
+    // 3. Drivers Management (Instant In-Memory Lean Cache synced with PostgreSQL single source of truth)
     async getDrivers(search = '') {
         const now = Date.now();
         if (!_leanDriversCache || now - _leanDriversCacheTime > DASHBOARD_CACHE_TTL) {
-            _leanDriversCache = (db.memoryState.drivers || []).map(toLeanDriver);
-            _leanDriversCacheTime = now;
+            let fetched = false;
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    const pgRes = await db.pool.query(`
+                        SELECT d.driver_id, d.full_name, d.phone_number, d.email,
+                               d.license_number, d.vehicle_make, d.vehicle_model, d.vehicle_year,
+                               d.vehicle_plate, d.vehicle_type, d.status, d.is_verified, d.is_blocked,
+                               d.is_approved, d.rating_average, d.total_trips, d.created_at,
+                               d.telegram_chat_id, d.telegram_username, d.telegram_linked_at,
+                               d.work_mode, d.points,
+                               r.start_name, r.end_name
+                        FROM drivers d
+                        LEFT JOIN routes r ON r.driver_id = d.driver_id
+                        ORDER BY d.created_at DESC
+                    `);
+                    if (pgRes.rows) {
+                        const memMap = new Map((db.memoryState.drivers || []).map(m => [m.driverId, m]));
+                        _leanDriversCache = pgRes.rows.map(r => {
+                            const m = memMap.get(r.driver_id) || {};
+                            const routeName = (r.start_name && r.end_name ? `${r.start_name} - ${r.end_name}` : null) || m.route || 'غير محدد';
+                            let vType = 'eco';
+                            const rawVT = String(r.vehicle_type || m.vehicleType || '').toLowerCase();
+                            if (rawVT === 'super' || rawVT === 'سوبر') vType = 'super';
+                            else if (rawVT === 'plus' || rawVT === 'vip' || rawVT === 'بلس' || rawVT === 'بلَس') vType = 'plus';
+                            else vType = 'eco';
+
+                            return {
+                                id: r.driver_id,
+                                driverId: r.driver_id,
+                                fullName: r.full_name || m.fullName || 'كابتن توصيلة',
+                                phoneNumber: r.phone_number || m.phoneNumber || '',
+                                email: r.email || m.email || '',
+                                vehicleMake: r.vehicle_make || m.vehicleMake || 'تويوتا',
+                                vehicleModel: r.vehicle_model || m.vehicleModel || 'كورولا',
+                                vehiclePlate: r.vehicle_plate || m.vehiclePlate || 'النجف',
+                                vehicleColor: m.vehicleColor || 'أبيض',
+                                vehicleType: vType,
+                                serviceType: m.serviceType || 'Both',
+                                isActive: !r.is_blocked && r.status !== 'Inactive',
+                                status: r.status || m.status || 'Active',
+                                isApproved: r.is_approved === true || m.isApproved === true,
+                                isVerified: r.is_verified === true || m.isVerified === true,
+                                isOnline: m.isOnline === true || r.status === 'Online',
+                                tripStatus: m.tripStatus || r.status || 'Offline',
+                                approvalStatus: r.is_approved ? 'Approved' : (m.approvalStatus || 'Pending'),
+                                rating: parseFloat(r.rating_average || m.rating || 5.0),
+                                points: parseInt(r.points || m.points || 0, 10),
+                                isBlocked: !!r.is_blocked,
+                                route: routeName,
+                                createdAt: r.created_at ? new Date(r.created_at).toISOString() : (m.createdAt || new Date().toISOString()),
+                                telegramChatId: r.telegram_chat_id || m.telegramChatId || '',
+                                telegramUsername: r.telegram_username || m.telegramUsername || '',
+                                telegramLinkedAt: r.telegram_linked_at || m.telegramLinkedAt || null,
+                                workMode: r.work_mode || m.workMode || 'كلاهما'
+                            };
+                        });
+                        _leanDriversCacheTime = now;
+                        fetched = true;
+                    }
+                } catch (pgErr) {
+                    console.warn('[AdminController] PG drivers fetch error, falling back to memoryState:', pgErr.message);
+                }
+            }
+
+            if (!fetched) {
+                _leanDriversCache = (db.memoryState.drivers || []).map(toLeanDriver);
+                _leanDriversCacheTime = now;
+            }
         }
 
         let drivers = _leanDriversCache;
@@ -156,7 +228,12 @@ class AdminController {
             }
         }
         if (data.governorate !== undefined) driver.governorate = String(data.governorate).trim();
-        if (data.vehicleType !== undefined) driver.vehicleType = String(data.vehicleType).toLowerCase() === 'vip' ? 'vip' : 'eco';
+        if (data.vehicleType !== undefined) {
+            const rawVT = String(data.vehicleType || '').toLowerCase();
+            if (rawVT === 'super' || rawVT === 'سوبر') driver.vehicleType = 'super';
+            else if (rawVT === 'plus' || rawVT === 'vip' || rawVT === 'بلس' || rawVT === 'بلَس') driver.vehicleType = 'plus';
+            else driver.vehicleType = 'eco';
+        }
         if (data.telegramChatId !== undefined || data.telegram_chat_id !== undefined) {
             const rawTg = String(data.telegramChatId !== undefined ? data.telegramChatId : data.telegram_chat_id).trim();
             driver.telegramChatId = rawTg || null;
@@ -273,9 +350,10 @@ class AdminController {
                 await db.pool.query(`
                     UPDATE drivers 
                     SET full_name = $1, phone_number = $2, password_hash = COALESCE($3, password_hash), plain_password = COALESCE($4, plain_password),
-                        latitude = COALESCE($5, latitude), longitude = COALESCE($6, longitude), updated_at = NOW()
-                    WHERE driver_id = $7
-                `, [driver.fullName, driver.phoneNumber, driver.passwordHash || null, driver.plainPassword || null, driver.permanentLat || null, driver.permanentLon || null, driverId]);
+                        latitude = COALESCE($5, latitude), longitude = COALESCE($6, longitude),
+                        vehicle_type = COALESCE($7, vehicle_type), updated_at = NOW()
+                    WHERE driver_id = $8
+                `, [driver.fullName, driver.phoneNumber, driver.passwordHash || null, driver.plainPassword || null, driver.permanentLat || null, driver.permanentLon || null, driver.vehicleType || 'eco', driverId]);
 
                 await db.pool.query(`
                     UPDATE users 
@@ -1180,6 +1258,12 @@ class AdminController {
             defaultWorkStatus = 'permanent';
         }
 
+        let vType = 'eco';
+        const rawVT = String(vehicleType || data.vehicleType || '').toLowerCase();
+        if (rawVT === 'super' || rawVT === 'سوبر') vType = 'super';
+        else if (rawVT === 'plus' || rawVT === 'vip' || rawVT === 'بلس' || rawVT === 'بلَس') vType = 'plus';
+        else vType = 'eco';
+
         const passStr = (password && String(password).trim()) ? String(password).trim() : '';
         const newDriver = {
             driverId,
@@ -1194,6 +1278,8 @@ class AdminController {
             vehicleYear: vYear,
             vehiclePlate: vPlate,
             vehicleColor: vehicleColor || 'أبيض',
+            vehicleType: vType,
+            vehicle_type: vType,
             serviceType: normalizedServiceType,
             work_mode: defaultWorkMode,
             workStatus: defaultWorkStatus,
@@ -1203,6 +1289,8 @@ class AdminController {
             tripStatus: 'Online',
             isOnline: true,
             isVerified: true,
+            isApproved: true,
+            is_approved: true,
             isBlocked: false,
             ratingAverage: 5.0,
             totalTrips: 0,
@@ -1316,10 +1404,10 @@ class AdminController {
 
                 const rawTg = newDriver.telegramChatId;
                 await db.pool.query(`
-                    INSERT INTO drivers (driver_id, full_name, phone_number, email, password_hash, plain_password, license_number, vehicle_make, vehicle_model, vehicle_year, vehicle_plate, status, is_verified, is_blocked, latitude, longitude, created_at, telegram_chat_id, telegram_linked_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Approved', true, false, $12, $13, $14, $15, $16)
-                    ON CONFLICT (driver_id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number, password_hash = EXCLUDED.password_hash, plain_password = EXCLUDED.plain_password, telegram_chat_id = COALESCE(EXCLUDED.telegram_chat_id, drivers.telegram_chat_id)
-                `, [driverId, fullName, cleanPhone, cleanEmail, passwordHash, passStr, license, vMake, vModel, vYear, vPlate, startLat, startLon, now, rawTg, rawTg ? now : null]);
+                    INSERT INTO drivers (driver_id, full_name, phone_number, email, password_hash, plain_password, license_number, vehicle_make, vehicle_model, vehicle_year, vehicle_plate, status, is_verified, is_blocked, latitude, longitude, created_at, telegram_chat_id, telegram_linked_at, vehicle_type, is_approved)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Approved', true, false, $12, $13, $14, $15, $16, $17, true)
+                    ON CONFLICT (driver_id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number, password_hash = EXCLUDED.password_hash, plain_password = EXCLUDED.plain_password, telegram_chat_id = COALESCE(EXCLUDED.telegram_chat_id, drivers.telegram_chat_id), vehicle_type = EXCLUDED.vehicle_type, is_approved = true
+                `, [driverId, fullName, cleanPhone, cleanEmail, passwordHash, passStr, license, vMake, vModel, vYear, vPlate, startLat, startLon, now, rawTg, rawTg ? now : null, vType]);
 
                 if (createdRoute) {
                     await db.pool.query(`

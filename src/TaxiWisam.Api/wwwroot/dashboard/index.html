@@ -1331,6 +1331,29 @@
                             </div>
                         </div>
 
+                        <!-- رسوم الفئات الإضافية الثابتة (Vehicle Tier Surcharges) -->
+                        <div class="pt-3 border-t border-slate-100">
+                            <label class="block text-xs font-bold text-slate-800 mb-2 flex items-center gap-2">
+                                <i class="fa-solid fa-layer-group text-amber-500"></i>
+                                <span>رسوم الفئات الإضافية الثابتة (Vehicle Tier Surcharges)</span>
+                            </label>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-600 mb-1">🚕 توفير (د.ع إضافي)</label>
+                                    <input type="number" id="setting-tier-surcharge-economy" step="250" min="0" value="0" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 transition" oninput="runLiveFareSimulator()">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-600 mb-1">⚡ سوبر (د.ع إضافي)</label>
+                                    <input type="number" id="setting-tier-surcharge-super" step="250" min="0" value="250" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 transition" oninput="runLiveFareSimulator()">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-600 mb-1">💎 بلس (د.ع إضافي)</label>
+                                    <input type="number" id="setting-tier-surcharge-plus" step="250" min="0" value="500" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 transition" oninput="runLiveFareSimulator()">
+                                </div>
+                            </div>
+                            <span class="text-[10.5px] text-slate-400 mt-1 block">يُضاف المبلغ الإضافي للفئة المختارة إلى الأجرة قبل التقريب التصاعدي لأقرب 250 د.ع.</span>
+                        </div>
+
                         <!-- Cash Rounding Note -->
                         <div class="p-3 bg-amber-50/60 border border-amber-200/70 rounded-xl flex items-center gap-2.5 text-xs text-amber-900 font-medium">
                             <i class="fa-solid fa-circle-check text-amber-600"></i>
@@ -2908,7 +2931,8 @@
                             <label class="block text-xs font-bold text-slate-300 mb-1">فئة المركبة للراكب <span class="text-rose-500">*</span></label>
                             <select id="admin-drv-vehicle-type" class="w-full px-3.5 py-2 bg-[#161C28] border border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-white font-semibold">
                                 <option value="eco" selected>🚕 توفير</option>
-                                <option value="vip">👑 VIP</option>
+                                <option value="super">⚡ سوبر</option>
+                                <option value="plus">💎 بلس</option>
                             </select>
                         </div>
                     </div>
@@ -3174,7 +3198,8 @@
                     <label class="block text-xs font-bold text-slate-300 mb-1">فئة المركبة للراكب</label>
                     <select id="edit-drv-vehicle-type" class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
                         <option value="eco">🚕 توفير</option>
-                        <option value="vip">👑 VIP</option>
+                        <option value="super">⚡ سوبر</option>
+                        <option value="plus">💎 بلس</option>
                     </select>
                 </div>
                 <div>

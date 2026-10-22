@@ -20,7 +20,11 @@ const DEFAULTS = {
     free_wait_minutes: 5,
     max_wait_minutes: 60,
     round_trip_discount_percent: 0,
-    external_nav_timeout_minutes: 15
+    external_nav_timeout_minutes: 15,
+    // Vehicle Tiers Surcharges (Batch 3)
+    vehicle_tier_surcharge_economy_iqd: 0,
+    vehicle_tier_surcharge_super_iqd: 250,
+    vehicle_tier_surcharge_plus_iqd: 500
 };
 
 class SystemSettingsService {
@@ -53,7 +57,10 @@ class SystemSettingsService {
                         'free_wait_minutes',
                         'max_wait_minutes',
                         'round_trip_discount_percent',
-                        'external_nav_timeout_minutes'
+                        'external_nav_timeout_minutes',
+                        'vehicle_tier_surcharge_economy_iqd',
+                        'vehicle_tier_surcharge_super_iqd',
+                        'vehicle_tier_surcharge_plus_iqd'
                     )`
                 );
 
@@ -155,6 +162,18 @@ class SystemSettingsService {
         return this.getConstant('external_nav_timeout_minutes', DEFAULTS.external_nav_timeout_minutes);
     }
 
+    getVehicleTierSurchargeEconomyIqd() {
+        return this.getConstant('vehicle_tier_surcharge_economy_iqd', DEFAULTS.vehicle_tier_surcharge_economy_iqd);
+    }
+
+    getVehicleTierSurchargeSuperIqd() {
+        return this.getConstant('vehicle_tier_surcharge_super_iqd', DEFAULTS.vehicle_tier_surcharge_super_iqd);
+    }
+
+    getVehicleTierSurchargePlusIqd() {
+        return this.getConstant('vehicle_tier_surcharge_plus_iqd', DEFAULTS.vehicle_tier_surcharge_plus_iqd);
+    }
+
     getAllConstants() {
         return {
             proximity_radius_meters: this.getProximityRadiusMeters(),
@@ -167,7 +186,10 @@ class SystemSettingsService {
             free_wait_minutes: this.getFreeWaitMinutes(),
             max_wait_minutes: this.getMaxWaitMinutes(),
             round_trip_discount_percent: this.getRoundTripDiscountPercent(),
-            external_nav_timeout_minutes: this.getExternalNavTimeoutMinutes()
+            external_nav_timeout_minutes: this.getExternalNavTimeoutMinutes(),
+            vehicle_tier_surcharge_economy_iqd: this.getVehicleTierSurchargeEconomyIqd(),
+            vehicle_tier_surcharge_super_iqd: this.getVehicleTierSurchargeSuperIqd(),
+            vehicle_tier_surcharge_plus_iqd: this.getVehicleTierSurchargePlusIqd()
         };
     }
 }

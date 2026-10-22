@@ -1083,28 +1083,38 @@ async function rejectCurrentDocument() {
 }
 
 // -----------------------------------------------------------------------------
-// 3. Drivers Directory
+// 3. Drivers Directory (Differential Keyed Rendering - Zero Flash)
 // -----------------------------------------------------------------------------
 async function loadDrivers(search = '') {
     const tbody = document.getElementById('drivers-table-body');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400">جاري التحميل...</td></tr>';
+
+    // Only show loading placeholder on initial render when table is completely empty
+    if (!tbody.hasChildNodes() || tbody.children.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400"><div class="inline-block h-5 w-5 animate-spin rounded-full border-2 border-amber-500 border-t-transparent mr-2"></div>جاري التحميل...</td></tr>';
+    }
 
     try {
         const res = await fetch(`${API_BASE}/drivers?search=${encodeURIComponent(search)}`, { headers: authHeaders() });
         const data = await res.json();
-        tbody.innerHTML = '';
 
         if (!data.drivers || data.drivers.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400">لا يوجد سائقون مطابقون</td></tr>';
             return;
         }
 
+        // Clear initial placeholder or empty state row
+        const placeholder = tbody.querySelector('td[colspan="7"]');
+        if (placeholder) {
+            tbody.innerHTML = '';
+        }
+
         window.driversMap = window.driversMap || {};
+        const incomingDriverIds = new Set();
+
         data.drivers.forEach(d => {
+            incomingDriverIds.add(d.driverId);
             window.driversMap[d.driverId] = d;
-            const tr = document.createElement('tr');
-            tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80';
 
             // 1. عمود الحالة الآنية: حالة تشغيلية بحتة (في رحلة / متصل / خمول)
             let operationalStatusBadge = '';
@@ -1184,7 +1194,16 @@ async function loadDrivers(search = '') {
                 ? `<span class="inline-flex items-center text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.6)] cursor-help" title="مرتبط بالتيليجرام: ${escapeHtml(d.telegramChatId || d.telegram_chat_id)}${tgUser}"><i class="fa-brands fa-telegram text-base"></i></span>`
                 : `<span class="inline-flex items-center text-slate-400" title="غير مرتبط بتيليجرام"><i class="fa-brands fa-telegram text-base"></i></span>`;
 
-            tr.innerHTML = `
+            // فئات المركبة: توفير / سوبر / بلس
+            let tierBadge = '<span class="inline-flex items-center px-2 py-0.5 text-xs rounded-md font-semibold bg-slate-100 text-slate-700 border border-slate-200/60">🚕 توفير</span>';
+            const vt = String(d.vehicleType || '').toLowerCase();
+            if (vt === 'super' || vt === 'سوبر') {
+                tierBadge = '<span class="inline-flex items-center px-2 py-0.5 text-xs rounded-md font-semibold bg-amber-50 text-amber-800 border border-amber-200/60">⚡ سوبر</span>';
+            } else if (vt === 'plus' || vt === 'vip' || vt === 'بلس' || vt === 'بلَس') {
+                tierBadge = '<span class="inline-flex items-center px-2 py-0.5 text-xs rounded-md font-semibold bg-purple-50 text-purple-800 border border-purple-200/60">💎 بلس</span>';
+            }
+
+            const rowContent = `
                 <td class="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2 text-right">
                     ${tgIcon}
                     <span>${escapeHtml(d.fullName)}</span>
@@ -1193,7 +1212,7 @@ async function loadDrivers(search = '') {
                 <td class="py-3.5 px-4 font-mono text-xs text-right">${driverPhoneHtml}</td>
                 <td class="py-3.5 px-4 text-right">
                     <span class="inline-flex items-center px-2 py-0.5 bg-slate-100 text-slate-700 border border-slate-200/60 rounded-md text-xs font-medium">${escapeHtml(d.workMode || 'مشوار قصير')}</span> 
-                    <span class="inline-flex items-center px-2 py-0.5 text-xs rounded-md font-semibold ${d.vehicleType === 'vip' ? 'bg-amber-50 text-amber-800 border border-amber-200/60' : 'bg-slate-100 text-slate-700 border border-slate-200/60'}">${d.vehicleType === 'vip' ? '👑 VIP' : '🚕 توفير'}</span>
+                    ${tierBadge}
                 </td>
                 <td class="py-3.5 px-4 text-center">
                     <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200/60 shadow-2xs">
@@ -1209,10 +1228,32 @@ async function loadDrivers(search = '') {
                     </div>
                 </td>
             `;
-            tbody.appendChild(tr);
+
+            let tr = tbody.querySelector(`tr[data-driver-id="${d.driverId}"]`);
+            if (tr) {
+                if (tr.innerHTML !== rowContent) {
+                    tr.innerHTML = rowContent;
+                }
+            } else {
+                tr = document.createElement('tr');
+                tr.setAttribute('data-driver-id', d.driverId);
+                tr.className = 'hover:bg-slate-50/80 transition-colors border-b border-slate-100/80';
+                tr.innerHTML = rowContent;
+                tbody.appendChild(tr);
+            }
+        });
+
+        // Remove any rows that are no longer in data
+        Array.from(tbody.querySelectorAll('tr[data-driver-id]')).forEach(existingTr => {
+            const id = existingTr.getAttribute('data-driver-id');
+            if (id && !incomingDriverIds.has(id)) {
+                existingTr.remove();
+            }
         });
     } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-rose-500">فشل في الاتصال بقاعدة البيانات</td></tr>';
+        if (!tbody.hasChildNodes() || tbody.children.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-rose-500">فشل في الاتصال بقاعدة البيانات</td></tr>';
+        }
     }
 }
 
@@ -2135,6 +2176,9 @@ async function loadPricingSettings() {
         setVal('setting-demand-sensitivity', String(currentPricingConfig.demandSensitivity || 1.0));
         setVal('setting-manual-multiplier', currentPricingConfig.manualOverrideMultiplier || 1.0);
         setVal('setting-manual-label', currentPricingConfig.manualOverrideLabel || 'تسعيرة بلي القياسية (1.0x)');
+        setVal('setting-tier-surcharge-economy', currentPricingConfig.tierSurchargeEconomy ?? 0);
+        setVal('setting-tier-surcharge-super', currentPricingConfig.tierSurchargeSuper ?? 250);
+        setVal('setting-tier-surcharge-plus', currentPricingConfig.tierSurchargePlus ?? 500);
 
         const surgeToggle = document.getElementById('setting-enable-surge');
         if (surgeToggle) {
@@ -2159,7 +2203,10 @@ function checkIsBalyStandard() {
         const mf = Number(document.getElementById('setting-min-fare')?.value) || 0;
         const cf = Number(document.getElementById('setting-cancellation-fee')?.value) || 0;
         const mult = Number(document.getElementById('setting-manual-multiplier')?.value) || 1.0;
-        return bf === 1000 && km === 500 && mn === 100 && mf === 3000 && cf === 1500 && Math.abs(mult - 1.0) < 0.01;
+        const eco = Number(document.getElementById('setting-tier-surcharge-economy')?.value) || 0;
+        const sup = Number(document.getElementById('setting-tier-surcharge-super')?.value) || 0;
+        const plu = Number(document.getElementById('setting-tier-surcharge-plus')?.value) || 0;
+        return bf === 1000 && km === 500 && mn === 100 && mf === 3000 && cf === 1500 && Math.abs(mult - 1.0) < 0.01 && eco === 0 && sup === 250 && plu === 500;
     } catch (_) {
         return false;
     }
@@ -2238,6 +2285,9 @@ async function applyBalyPricingStandard(andSave = true) {
         setVal('setting-demand-sensitivity', '1.0');
         setVal('setting-manual-multiplier', 1.0);
         setVal('setting-manual-label', 'تسعيرة بلي القياسية (1.0x)');
+        setVal('setting-tier-surcharge-economy', 0);
+        setVal('setting-tier-surcharge-super', 250);
+        setVal('setting-tier-surcharge-plus', 500);
         const surgeToggle = document.getElementById('setting-enable-surge');
         if (surgeToggle) surgeToggle.checked = true;
 
@@ -2268,13 +2318,19 @@ async function savePricingSettings() {
         nightSurgePercent: Math.min(100, Math.max(0, Number(document.getElementById('setting-night-surge')?.value) || 25)),
         demandSensitivity: Number(document.getElementById('setting-demand-sensitivity')?.value) || 1.0,
         manualOverrideMultiplier: Math.min(4.0, Math.max(0.5, Number(document.getElementById('setting-manual-multiplier')?.value) || 1.0)),
-        manualOverrideLabel: String(document.getElementById('setting-manual-label')?.value || 'تسعيرة بلي القياسية (1.0x)').slice(0, 100)
+        manualOverrideLabel: String(document.getElementById('setting-manual-label')?.value || 'تسعيرة بلي القياسية (1.0x)').slice(0, 100),
+        tierSurchargeEconomy: Math.max(0, Number(document.getElementById('setting-tier-surcharge-economy')?.value) || 0),
+        tierSurchargeSuper: Math.max(0, Number(document.getElementById('setting-tier-surcharge-super')?.value) || 250),
+        tierSurchargePlus: Math.max(0, Number(document.getElementById('setting-tier-surcharge-plus')?.value) || 500)
     };
 
     try {
         const res = await fetch(`${API_BASE}/pricing`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                ...authHeaders(),
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify(payload)
         });
 
@@ -4372,7 +4428,8 @@ function openEditDriverModal(driverId) {
     if (tgInput) tgInput.value = driver.telegramChatId || driver.telegram_chat_id || '';
 
     const vehicleTypeEl = document.getElementById('edit-drv-vehicle-type');
-    if (vehicleTypeEl) vehicleTypeEl.value = driver.vehicleType === 'vip' ? 'vip' : 'eco';
+    const curVT = String(driver.vehicleType || '').toLowerCase();
+    if (vehicleTypeEl) vehicleTypeEl.value = (curVT === 'super' || curVT === 'plus') ? curVT : 'eco';
 
     const govKey = driver.governorate || 'najaf';
     const govEl = document.getElementById('edit-drv-gov');

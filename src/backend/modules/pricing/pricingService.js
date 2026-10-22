@@ -31,7 +31,10 @@ const DEFAULT_PRICING = {
     manualOverrideMultiplier: 1.0, // مضاعف العرض والطلب الافتراضي (1.0x الوضع الطبيعي)
     manualOverrideLabel: 'وضع طبيعي (1.0x)',
     discountPercent: 0,            // خصم ركود بالنسبة مئوية %
-    discountFixed: 0               // خصم ركود ثابت د.ع
+    discountFixed: 0,              // خصم ركود ثابت د.ع
+    tierSurchargeEconomy: 0,       // مبلغ إضافي لفئة توفير د.ع (0)
+    tierSurchargeSuper: 250,       // مبلغ إضافي لفئة سوبر د.ع (250)
+    tierSurchargePlus: 500         // مبلغ إضافي لفئة بلس د.ع (500)
 };
 
 class PricingService {
@@ -57,13 +60,21 @@ class PricingService {
                     manualOverrideMultiplier: Number(parsed.manualOverrideMultiplier ?? 1.0),
                     manualOverrideLabel: parsed.manualOverrideLabel || 'وضع طبيعي (1.0x)',
                     discountPercent: Number(parsed.discountPercent ?? 0),
-                    discountFixed: Number(parsed.discountFixed ?? 0)
+                    discountFixed: Number(parsed.discountFixed ?? 0),
+                    tierSurchargeEconomy: Number(parsed.tierSurchargeEconomy ?? parsed.vehicle_tier_surcharge_economy_iqd ?? (systemSettingsService ? systemSettingsService.getVehicleTierSurchargeEconomyIqd() : DEFAULT_PRICING.tierSurchargeEconomy)),
+                    tierSurchargeSuper: Number(parsed.tierSurchargeSuper ?? parsed.vehicle_tier_surcharge_super_iqd ?? (systemSettingsService ? systemSettingsService.getVehicleTierSurchargeSuperIqd() : DEFAULT_PRICING.tierSurchargeSuper)),
+                    tierSurchargePlus: Number(parsed.tierSurchargePlus ?? parsed.vehicle_tier_surcharge_plus_iqd ?? (systemSettingsService ? systemSettingsService.getVehicleTierSurchargePlusIqd() : DEFAULT_PRICING.tierSurchargePlus))
                 };
             }
         } catch (e) {
             console.warn('[PricingService] Error loading pricing settings:', e.message);
         }
-        return { ...DEFAULT_PRICING };
+        return {
+            ...DEFAULT_PRICING,
+            tierSurchargeEconomy: systemSettingsService ? systemSettingsService.getVehicleTierSurchargeEconomyIqd() : DEFAULT_PRICING.tierSurchargeEconomy,
+            tierSurchargeSuper: systemSettingsService ? systemSettingsService.getVehicleTierSurchargeSuperIqd() : DEFAULT_PRICING.tierSurchargeSuper,
+            tierSurchargePlus: systemSettingsService ? systemSettingsService.getVehicleTierSurchargePlusIqd() : DEFAULT_PRICING.tierSurchargePlus
+        };
     }
 
     /**
@@ -84,7 +95,10 @@ class PricingService {
             manualOverrideMultiplier: Math.min(4.0, Math.max(0.5, Number(newSettings.manualOverrideMultiplier ?? current.manualOverrideMultiplier))),
             manualOverrideLabel: String(newSettings.manualOverrideLabel ?? current.manualOverrideLabel),
             discountPercent: Math.min(50, Math.max(0, Number(newSettings.discountPercent ?? current.discountPercent))),
-            discountFixed: Math.max(0, Number(newSettings.discountFixed ?? current.discountFixed))
+            discountFixed: Math.max(0, Number(newSettings.discountFixed ?? current.discountFixed)),
+            tierSurchargeEconomy: Math.max(0, Number(newSettings.tierSurchargeEconomy ?? newSettings.vehicle_tier_surcharge_economy_iqd ?? current.tierSurchargeEconomy ?? 0)),
+            tierSurchargeSuper: Math.max(0, Number(newSettings.tierSurchargeSuper ?? newSettings.vehicle_tier_surcharge_super_iqd ?? current.tierSurchargeSuper ?? 250)),
+            tierSurchargePlus: Math.max(0, Number(newSettings.tierSurchargePlus ?? newSettings.vehicle_tier_surcharge_plus_iqd ?? current.tierSurchargePlus ?? 500))
         };
 
         const jsonStr = JSON.stringify(merged);
@@ -102,6 +116,18 @@ class PricingService {
             };
             db.memoryState.settings.push(settingEntry);
         }
+
+        const updateIndividualSetting = (k, v, desc) => {
+            const entry = db.memoryState.settings.find(s => s.key === k);
+            if (entry) {
+                entry.valueJson = String(v);
+            } else {
+                db.memoryState.settings.push({ key: k, valueJson: String(v), description: desc });
+            }
+        };
+        updateIndividualSetting('vehicle_tier_surcharge_economy_iqd', merged.tierSurchargeEconomy, 'مبلغ إضافي لفئة توفير (د.ع)');
+        updateIndividualSetting('vehicle_tier_surcharge_super_iqd', merged.tierSurchargeSuper, 'مبلغ إضافي لفئة سوبر (د.ع)');
+        updateIndividualSetting('vehicle_tier_surcharge_plus_iqd', merged.tierSurchargePlus, 'مبلغ إضافي لفئة بلس (د.ع)');
 
         // Also update legacy pricing_settings key for compatibility
         let legacyEntry = db.memoryState.settings.find(s => s.key === 'pricing_settings');
@@ -124,9 +150,23 @@ class PricingService {
                     VALUES ($1, $2, $3, NOW())
                     ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json, updated_at = NOW()
                 `, ['PricingParameters', jsonStr, 'معايير التسعير والذروة الديناميكية لمشاوير التكسي الفوري']);
+
+                await db.pool.query(`
+                    INSERT INTO system_settings (key, value_json, description, updated_at)
+                    VALUES 
+                        ('vehicle_tier_surcharge_economy_iqd', $1, 'مبلغ إضافي لفئة توفير (د.ع)', NOW()),
+                        ('vehicle_tier_surcharge_super_iqd', $2, 'مبلغ إضافي لفئة سوبر (د.ع)', NOW()),
+                        ('vehicle_tier_surcharge_plus_iqd', $3, 'مبلغ إضافي لفئة بلس (د.ع)', NOW())
+                    ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json, updated_at = NOW()
+                `, [String(merged.tierSurchargeEconomy), String(merged.tierSurchargeSuper), String(merged.tierSurchargePlus)]);
             } catch (e) {
                 console.warn('[PricingService] PostgreSQL update error:', e.message);
             }
+        }
+
+        // Refresh system settings service cache
+        if (systemSettingsService && typeof systemSettingsService.refreshCache === 'function') {
+            systemSettingsService.refreshCache().catch(() => {});
         }
 
         // Snapshot to state.json
@@ -212,21 +252,29 @@ class PricingService {
         const isRoundTrip = Boolean(options.isRoundTrip);
         const hasSecondStop = Boolean(options.hasSecondStop);
 
-        // Tier multipliers / base differences
-        let tierMultiplier = 1.0;
+        // Vehicle tier surcharges (Fixed addition before rounding to nearest 250 IQD)
+        const ecoSurcharge = Number(settings.tierSurchargeEconomy ?? 0);
+        const supSurcharge = Number(settings.tierSurchargeSuper ?? 250);
+        const pluSurcharge = Number(settings.tierSurchargePlus ?? 500);
+
+        let tierSurcharge = supSurcharge;
+        let tierKey = 'super';
         let tierNameAr = 'سوبر (الخيار الأفضل)';
+
         if (vehicleType === 'eco' || vehicleType === 'saving' || vehicleType === 'توفير') {
-            tierMultiplier = 0.90; // خصم 10% لفئة التوفير
+            tierKey = 'saving';
             tierNameAr = 'توفير (التكسي الأوفر)';
-        } else if (vehicleType === 'vip' || vehicleType === 'plus' || vehicleType === 'بلَس') {
-            tierMultiplier = 1.20; // زيادة 20% لفئة بلس / VIP
+            tierSurcharge = ecoSurcharge;
+        } else if (vehicleType === 'plus' || vehicleType === 'vip' || vehicleType === 'بلس' || vehicleType === 'بلَس') {
+            tierKey = 'plus';
             tierNameAr = 'بلَس (خدمة أكثر راحة)';
+            tierSurcharge = pluSurcharge;
         }
 
-        // 1. Base components
-        const baseFare = settings.baseFare * tierMultiplier;
-        const distanceFare = distanceKm * settings.kmRate * tierMultiplier;
-        const timeFare = durationMins * settings.minuteRate * tierMultiplier;
+        // 1. Base components (Standard fare without tier percentage)
+        const baseFare = settings.baseFare;
+        const distanceFare = distanceKm * settings.kmRate;
+        const timeFare = durationMins * settings.minuteRate;
 
         const rawStandardFare = baseFare + distanceFare + timeFare;
 
@@ -385,8 +433,17 @@ class PricingService {
             fareAfterDiscount = minFare;
         }
 
-        // 8. Iraqi Dinar Rounding (Nearest 250 IQD Ceil)
-        const finalFare = this.roundToNearest250(fareAfterDiscount);
+        // 8. Vehicle Tier Surcharge & Iraqi Dinar Rounding (Nearest 250 IQD Ceil)
+        const fareWithTier = fareAfterDiscount + tierSurcharge;
+        const finalFare = this.roundToNearest250(fareWithTier);
+
+        // Precompute authoritative fares for all three tiers so API returns tierFares
+        const tierFares = {
+            saving: this.roundToNearest250(fareAfterDiscount + ecoSurcharge),
+            super: this.roundToNearest250(fareAfterDiscount + supSurcharge),
+            plus: this.roundToNearest250(fareAfterDiscount + pluSurcharge),
+            economy: this.roundToNearest250(fareAfterDiscount + ecoSurcharge)
+        };
 
         // 9. Badges & Explanations
         let surgeBadge = null;
@@ -446,6 +503,7 @@ class PricingService {
             success: true,
             fare: finalFare,                     // المبلغ النهائي المقرب لأقرب 250 د.ع تصاعدياً
             currency: 'IQD',
+            tierFares: tierFares,                // الأسعار المحسوبة حتمياً للفئات الثلاث من الخادم
             breakdown: {
                 baseFare: Math.round(baseFare),
                 distanceKm: Number(distanceKm.toFixed(1)),
@@ -457,10 +515,14 @@ class PricingService {
                 rawStandardFare: Math.round(rawStandardFare),
                 avgSpeedKmh: Number(avgSpeedKmh.toFixed(1)),
                 minFare: minFare,
+                tierSurcharge: tierSurcharge,
+                tierKey: tierKey,
+                tierNameAr: tierNameAr,
                 cancellationFee: settings.cancellationFee || 1500
             },
             multipliers: {
-                tierMultiplier,
+                tierSurcharge,
+                tierKey,
                 tierNameAr,
                 demandMultiplier: Number(demandMultiplier.toFixed(2)),
                 isNight,

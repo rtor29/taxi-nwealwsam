@@ -3122,24 +3122,19 @@ async function startServer() {
                         .filter(d => isDriverOnlineAndActive(d) && d.work_mode !== 'خط دائمي' && d.current_mode !== 'commute' && d.workStatus !== 'permanent');
                 }
 
-                // Filter by VIP or Eco (توفير)
-                const reqTier = (vehicleType || 'eco').toLowerCase();
-                const isVipTier = reqTier === 'vip';
-                const isDriverVip = (d) => {
-                    const vt = (d.vehicleType || d.vehicleClass || d.tier || '').toLowerCase();
-                    if (vt === 'vip') return true;
-                    if (vt === 'eco' || vt === 'economy' || vt === 'توفير') return false;
-                    if (d.isVip === true) return true;
-                    return false;
-                };
-
-                const driverTier = (d) => isDriverVip(d) ? 'vip' : 'eco';
-                let tierCandidates = driverCandidates.filter(d => driverTier(d) === (isVipTier ? 'vip' : 'eco'));
-                if (tierCandidates.length === 0) {
-                    tierCandidates = driverCandidates;
+                // Filter candidate drivers (Vehicle tier affects pricing only; never break dispatching)
+                const reqTier = (vehicleType || 'super').toLowerCase();
+                let reqTierNorm = 'super';
+                let tierNameAr = 'سوبر';
+                if (reqTier === 'eco' || reqTier === 'saving' || reqTier === 'توفير') {
+                    reqTierNorm = 'saving';
+                    tierNameAr = 'توفير';
+                } else if (reqTier === 'plus' || reqTier === 'vip' || reqTier === 'بلس' || reqTier === 'بلَس') {
+                    reqTierNorm = 'plus';
+                    tierNameAr = 'بلس';
                 }
 
-                let candidates = tierCandidates
+                let candidates = driverCandidates
                     .map(d => {
                         if (d.dist !== undefined && d.dist !== null && !isNaN(d.dist)) {
                             return d;
@@ -3160,9 +3155,7 @@ async function startServer() {
                     console.log(`[RideRequest] NO_DRIVERS: No online drivers found within radius ${maxDist}km of pickup (${pLat}, ${pLon})`);
                     return sendJson({
                         success: false,
-                        error: isVipTier
-                            ? `لا يوجد كابتن VIP متاح بالقرب منك حالياً ضمن نطاق ${maxDist} كم.`
-                            : `لا يوجد كابتن توفير متاح بالقرب منك حالياً ضمن نطاق ${maxDist} كم.`
+                        error: `لا يوجد كابتن متاح بالقرب منك حالياً ضمن نطاق ${maxDist} كم.`
                     }, 404);
                 }
 
@@ -3222,7 +3215,8 @@ async function startServer() {
                     surgeBadge: dynamicPricing.surgeBadge,
                     discountBadge: dynamicPricing.discountBadge,
                     pricingBreakdown: dynamicPricing.breakdown,
-                    vehicleType: isVipTier ? 'VIP' : 'توفير',
+                    vehicleType: tierNameAr,
+                    tier: reqTierNorm,
                     isRoundTrip: Boolean(isRoundTrip || body.tripType === 'ROUND_TRIP'),
                     tripType: (isRoundTrip || body.tripType === 'ROUND_TRIP') ? 'ROUND_TRIP' : 'ONE_WAY',
                     expectedWaitMinutes: Number(body.expectedWaitMinutes || stopDuration || 0),
@@ -3669,7 +3663,9 @@ async function startServer() {
                         assignedDriverPhone: targetDriver?.phoneNumber || targetDriver?.phone || cleanPhone || '',
                         assignedDriverVehicle: targetDriver ? `${targetDriver.vehicleMake||'تويوتا'} ${targetDriver.vehicleModel||'كورولا'}` : 'تويوتا كورولا',
                         driverPlate: targetDriver?.plateNumber || '١١٣٤٠ ة - النجف',
-                        driverRating: targetDriver?.rating || 5.0
+                        driverRating: targetDriver?.rating || 5.0,
+                        driverTier: targetDriver ? (targetDriver.vehicleType || 'eco') : 'eco',
+                        assignedDriverTier: targetDriver ? (targetDriver.vehicleType || 'eco') : 'eco'
                     };
 
                     // Atomic State Transition OFFERED -> ACCEPTED via Redis Distributed Lock
@@ -3708,14 +3704,17 @@ async function startServer() {
                     };
                     db.memoryState.chatMessages.push(initMsg);
 
-                    // Stage 1: Notify Customer on Telegram that trip was accepted
-                    try {
-                        if (typeof telegramBot.notifyTripAccepted === 'function') {
-                            telegramBot.notifyTripAccepted(r).catch(err => console.error('[RideAccepted] Telegram notify error:', err.message));
+                    // Stage 1: Notify Customer on Telegram asynchronously (setImmediate)
+                    // This ensures the HTTP response returns immediately to driver app so UI transitions before Telegram push
+                    setImmediate(async () => {
+                        try {
+                            if (typeof telegramBot.notifyTripAccepted === 'function') {
+                                await telegramBot.notifyTripAccepted(r);
+                            }
+                        } catch (tgErr) {
+                            console.error('[RideAccepted] Telegram notify error:', tgErr.message);
                         }
-                    } catch (tgErr) {
-                        console.error('[RideAccepted] Telegram notify error:', tgErr.message);
-                    }
+                    });
 
                     await redisManager.publishRideEvent(r.id, { type: 'ride_accepted', event: 'ride_accepted', request: r });
                     await redisManager.publishDispatchEvent({ type: 'ride_taken', event: 'ride_taken', rideId: r.id, requestId: r.id });
