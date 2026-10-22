@@ -5801,11 +5801,12 @@ async function startServer() {
                                 const ride = JSON.parse(rideJson);
                                 const reqTime = ride.requestedAt ? Number(ride.requestedAt) : (ride.createdAt ? new Date(ride.createdAt).getTime() : (ride.timestamp ? Number(ride.timestamp) : now));
                                 const age = now - reqTime;
-                                const isPending = String(ride.status || '').toLowerCase().trim() === 'pending';
+                                const s = String(ride.status || '').toLowerCase().trim();
+                                const isPending = s === 'pending' || s === 'offered' || s === 'requested';
 
                                 if (isPending && age < 120000 && !ride.acceptedDriverId) {
                                     validRides.push(ride);
-                                } else if (age >= 120000 || !isPending || ride.acceptedDriverId) {
+                                } else if (age >= 120000 || (!isPending && s !== '') || ride.acceptedDriverId) {
                                     // Automatic self-cleaning of expired or accepted rides
                                     await redisManager.client.hdel('pending:rides', String(id)).catch(() => {});
                                     await redisManager.client.del(`ride:request:${id}`).catch(() => {});
