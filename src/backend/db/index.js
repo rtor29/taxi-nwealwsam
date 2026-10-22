@@ -515,6 +515,8 @@ class DatabaseManager {
                     vehicleModel: r.vehicle_model,
                     vehicleYear: r.vehicle_year,
                     vehiclePlate: r.vehicle_plate,
+                    vehicleType: r.vehicle_type || 'eco',
+                    tier: r.vehicle_type || 'eco',
                     status: r.status,
                     isVerified: r.is_verified,
                     isBlocked: r.is_blocked,
@@ -632,6 +634,8 @@ class DatabaseManager {
                                     if (!exist.permanentDropoffLon && d.permanentDropoffLon) exist.permanentDropoffLon = d.permanentDropoffLon;
                                     if (!exist.permanentDropoffName && d.permanentDropoffName) exist.permanentDropoffName = d.permanentDropoffName;
                                     if (!exist.telegramChatId && d.telegramChatId) exist.telegramChatId = d.telegramChatId;
+                                    if (d.vehicleType) exist.vehicleType = d.vehicleType;
+                                    if (d.tier) exist.tier = d.tier;
                                 }
                             }
                         }

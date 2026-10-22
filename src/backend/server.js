@@ -6112,32 +6112,36 @@ async function startServer() {
                 // Persist directly to PostgreSQL database
                 if (db.isPostgresConnected && db.pool && (driverId || actualPhone)) {
                     try {
+                        const vt = (body.vehicleType || body.tier) ? normalizeTier(body.vehicleType || body.tier) : null;
                         const upRes = await db.pool.query(`
                             UPDATE drivers 
                             SET status = $1, 
                                 work_mode = $2, 
                                 latitude = COALESCE($3, latitude), 
                                 longitude = COALESCE($4, longitude),
+                                vehicle_type = COALESCE($5, vehicle_type),
                                 updated_at = NOW()
-                            WHERE driver_id = $5 OR phone_number = $6
+                            WHERE driver_id = $6 OR phone_number = $7
                         `, [
                             onlineBool ? 'Online' : 'Offline',
                             computedWorkMode,
                             actualLat,
                             actualLng,
+                            vt,
                             driverId || '',
                             actualPhone || ''
                         ]);
                         if (upRes.rowCount === 0 && driverId) {
                             const licenseNum = driver?.licenseNumber || ('IRQ-NJF-' + (String(driverId).replace(/[^0-9]/g, '').slice(-4) || '1000'));
                             await db.pool.query(`
-                                INSERT INTO drivers (driver_id, full_name, phone_number, license_number, status, work_mode, latitude, longitude, created_at, updated_at)
-                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+                                INSERT INTO drivers (driver_id, full_name, phone_number, license_number, status, work_mode, latitude, longitude, vehicle_type, created_at, updated_at)
+                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
                                 ON CONFLICT (driver_id) DO UPDATE SET
                                     status = EXCLUDED.status,
                                     work_mode = EXCLUDED.work_mode,
                                     latitude = EXCLUDED.latitude,
                                     longitude = EXCLUDED.longitude,
+                                    vehicle_type = COALESCE(EXCLUDED.vehicle_type, drivers.vehicle_type),
                                     updated_at = NOW()
                             `, [
                                 driverId,
@@ -6147,7 +6151,8 @@ async function startServer() {
                                 onlineBool ? 'Online' : 'Offline',
                                 computedWorkMode,
                                 actualLat || 32.0298,
-                                actualLng || 44.3285
+                                actualLng || 44.3285,
+                                vt || 'eco'
                             ]);
                         }
                     } catch (pgErr) {
