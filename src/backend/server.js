@@ -3504,7 +3504,8 @@ async function startServer() {
             !pathname.includes('/stream') && 
             !pathname.includes('/status') && 
             !pathname.endsWith('/active-ride') &&
-            !pathname.endsWith('/pending-requests');
+            !pathname.endsWith('/pending-requests') &&
+            !pathname.endsWith('/cancellation-reasons');
         if (isSingleRideRoute) {
             const rideId = pathname.replace(/^\/?(?:api\/)?ride\//, '').trim();
             if (!rideId || rideId === 'undefined' || rideId === 'null') {
