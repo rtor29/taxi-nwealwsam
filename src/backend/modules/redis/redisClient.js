@@ -396,13 +396,14 @@ class RedisManager {
                 try {
                     const r = JSON.parse(jsonStr);
                     const reqTime = r.requestedAt ? Number(r.requestedAt) : (r.createdAt ? new Date(r.createdAt).getTime() : (r.timestamp ? Number(r.timestamp) : now));
-                    const isPending = String(r.status || '').toLowerCase().trim() === 'pending';
+                    const s = String(r.status || '').toLowerCase().trim();
+                    const isPending = s === 'pending' || s === 'offered' || s === 'requested';
                     const age = now - reqTime;
                     const isFresh = age < maxAgeMs;
 
                     if (isPending && isFresh && !r.acceptedDriverId) {
                         rides.push(r);
-                    } else if (age >= maxAgeMs || !isPending || r.acceptedDriverId) {
+                    } else if (age >= maxAgeMs || (!isPending && s !== '') || r.acceptedDriverId) {
                         // Stale, accepted, or non-pending: prune atomically from Redis hash
                         this.client.hdel('pending:rides', String(id)).catch(() => {});
                         this.client.del(`ride:request:${id}`).catch(() => {});
