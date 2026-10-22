@@ -19,6 +19,8 @@ require('../src/backend/config');
 const http = require('http');
 const jwt = require('jsonwebtoken');
 const { execSync } = require('child_process');
+const db = require('../src/backend/db');
+const redisManager = require('../src/backend/modules/redis/redisClient');
 
 const API_BASE = process.env.API_BASE || 'http://127.0.0.1:5050';
 const JWT_SECRET = process.env.JWT_SECRET || 'tawseela_prod_jwt_super_secret_najaf_2026';
@@ -70,6 +72,9 @@ async function runSuite() {
     console.log('       BATCH 1/6: DRIVER FIXED LOCATION VERIFICATION SUITE       ');
     console.log('================================================================\n');
 
+    // 0. Connect DB & Redis
+    await db.init();
+
     const results = [];
     function record(name, passed, evidence, details = '') {
         results.push({ name, passed, evidence, details });
@@ -85,47 +90,66 @@ async function runSuite() {
     const testDriverOtherId = 'drv_test_other_b1_' + Date.now();
     const testCustomerId = 'cust_test_b1_' + Date.now();
 
-    const tokenCommute = signToken({ id: testDriverCommuteId, role: 'Driver', name: 'كابتن فحص خط دائم' });
-    const tokenTaxi = signToken({ id: testDriverTaxiId, role: 'Driver', name: 'كابتن فحص تكسي' });
-    const tokenIdle = signToken({ id: testDriverIdleId, role: 'Driver', name: 'كابتن فحص خمول' });
-    const tokenOther = signToken({ id: testDriverOtherId, role: 'Driver', name: 'كابتن فحص آخر' });
+    async function registerDriver(driverId, phone, name, mode, status = 'Online') {
+        const token = signToken({ id: driverId, role: 'Driver', phone, name });
+        if (db.pool && db.isPostgresConnected) {
+            await db.pool.query(`
+                INSERT INTO users (id, phone_number, full_name, role, is_active)
+                VALUES ($1, $2, $3, 'Driver', true)
+                ON CONFLICT (id) DO UPDATE SET role = 'Driver', full_name = $3
+            `, [driverId, phone, name]);
+
+            await db.pool.query(`
+                INSERT INTO drivers (driver_id, full_name, phone_number, license_number, work_mode, status, is_verified, is_approved)
+                VALUES ($1, $2, $3, 'TEST-LIC-1000', $4, $5, true, true)
+                ON CONFLICT (driver_id) DO UPDATE SET work_mode = $4, status = $5
+            `, [driverId, name, phone, mode, status]);
+        }
+        if (redisManager && redisManager.isConnected && redisManager.client) {
+            await redisManager.client.hset(`driver:${driverId}:meta`, {
+                id: driverId,
+                fullName: name,
+                phone: phone,
+                workMode: mode,
+                status: status,
+                isOnline: status === 'Online' ? 'true' : 'false'
+            });
+        }
+        const memDrv = {
+            driverId,
+            fullName: name,
+            phoneNumber: phone,
+            workMode: mode,
+            work_mode: mode,
+            workStatus: (mode === 'commute' || mode === 'خط دائمي' || mode === 'permanent') ? 'permanent' : (mode === 'both' ? 'both' : (status === 'Online' ? 'taxi' : 'idle')),
+            status: status,
+            isOnline: status === 'Online',
+            isVerified: true,
+            isApproved: true
+        };
+        db.memoryState.drivers = db.memoryState.drivers || [];
+        db.memoryState.drivers = db.memoryState.drivers.filter(d => (d.driverId || d.id) !== driverId);
+        db.memoryState.drivers.push(memDrv);
+        db.saveStateSnapshot();
+        return { driverId, token, phone, name, mode };
+    }
+
+    const commuteDriver = await registerDriver(testDriverCommuteId, '07890001111', 'كابتن فحص خط دائم', 'commute', 'Online');
+    const taxiDriver = await registerDriver(testDriverTaxiId, '07890002222', 'كابتن فحص تكسي', 'taxi', 'Online');
+    const idleDriver = await registerDriver(testDriverIdleId, '07890003333', 'كابتن فحص خمول', 'idle', 'Offline');
+    const otherDriver = await registerDriver(testDriverOtherId, '07890004444', 'كابتن فحص آخر', 'commute', 'Online');
+
+    // Register test customer
+    if (db.pool && db.isPostgresConnected) {
+        await db.pool.query(`
+            INSERT INTO users (id, phone_number, full_name, role, is_active)
+            VALUES ($1, '07890005555', 'راكب فحص', 'Customer', true)
+            ON CONFLICT (id) DO UPDATE SET role = 'Customer'
+        `, [testCustomerId]);
+    }
     const tokenCustomer = signToken({ id: testCustomerId, role: 'Customer', name: 'راكب فحص' });
 
-    // Seed drivers into DB and memory state via /api/driver/toggle-online or direct
-    await request('POST', '/api/driver/toggle-online', {
-        driverId: testDriverCommuteId,
-        isOnline: true,
-        workMode: 'commute',
-        driverName: 'كابتن فحص خط دائم',
-        phoneNumber: '07890001111'
-    });
-
-    await request('POST', '/api/driver/toggle-online', {
-        driverId: testDriverTaxiId,
-        isOnline: true,
-        workMode: 'taxi',
-        driverName: 'كابتن فحص تكسي',
-        phoneNumber: '07890002222'
-    });
-
-    await request('POST', '/api/driver/toggle-online', {
-        driverId: testDriverIdleId,
-        isOnline: false,
-        workMode: 'idle',
-        status: 'offline',
-        driverName: 'كابتن فحص خمول',
-        phoneNumber: '07890003333'
-    });
-
-    await request('POST', '/api/driver/toggle-online', {
-        driverId: testDriverOtherId,
-        isOnline: true,
-        workMode: 'commute',
-        driverName: 'كابتن فحص آخر',
-        phoneNumber: '07890004444'
-    });
-
-    console.log('--- Initial Setup Completed ---\n');
+    console.log('--- Initial Setup Completed (All Drivers Seeded in Postgres, Redis, Memory) ---\n');
 
     // TEST 1: Unauthenticated request (Missing Token = 401)
     {
@@ -152,11 +176,11 @@ async function runSuite() {
     // TEST 3: Driver attempting to modify another driver's location (RLS -> 403)
     {
         const res = await request('POST', '/api/driver/fixed-location', {
-            driverId: testDriverOtherId, // Mismatched ID in body vs JWT tokenCommute
+            driverId: otherDriver.driverId, // Mismatched ID in body vs JWT token
             lat: 32.0298,
             lng: 44.3285,
             label: 'محاولة تعديل كابتن آخر'
-        }, { 'Authorization': `Bearer ${tokenCommute}` });
+        }, { 'Authorization': `Bearer ${commuteDriver.token}` });
         const pass = res.status === 403 && res.body?.success === false;
         record('RLS Isolation (Modifying other driver location -> 403)', pass, { status: res.status, body: res.body });
     }
@@ -167,7 +191,7 @@ async function runSuite() {
             lat: 32.0298,
             lng: 44.3285,
             label: 'تثبيت في وضع التكسي'
-        }, { 'Authorization': `Bearer ${tokenTaxi}` });
+        }, { 'Authorization': `Bearer ${taxiDriver.token}` });
         const pass = res.status === 409 && res.body?.success === false;
         record('Work Mode Guard (Taxi mode -> 409 Conflict)', pass, { status: res.status, body: res.body });
     }
@@ -178,7 +202,7 @@ async function runSuite() {
             lat: 32.0298,
             lng: 44.3285,
             label: 'تثبيت في وضع الخمول'
-        }, { 'Authorization': `Bearer ${tokenIdle}` });
+        }, { 'Authorization': `Bearer ${idleDriver.token}` });
         const pass = res.status === 409 && res.body?.success === false;
         record('Work Mode Guard (Idle mode -> 409 Conflict)', pass, { status: res.status, body: res.body });
     }
@@ -189,7 +213,7 @@ async function runSuite() {
             lat: 95.0,
             lng: 44.3285,
             label: 'إحداثيات خاطئة'
-        }, { 'Authorization': `Bearer ${tokenCommute}` });
+        }, { 'Authorization': `Bearer ${commuteDriver.token}` });
         const pass = res.status === 400 && res.body?.success === false;
         record('Input Validation (Latitude > 90 -> 400)', pass, { status: res.status, body: res.body });
     }
@@ -200,7 +224,7 @@ async function runSuite() {
             lat: 32.0298,
             lng: 200.0,
             label: 'إحداثيات خاطئة'
-        }, { 'Authorization': `Bearer ${tokenCommute}` });
+        }, { 'Authorization': `Bearer ${commuteDriver.token}` });
         const pass = res.status === 400 && res.body?.success === false;
         record('Input Validation (Longitude > 180 -> 400)', pass, { status: res.status, body: res.body });
     }
@@ -212,21 +236,20 @@ async function runSuite() {
             lat: 32.0298,
             lng: 44.3285,
             label: longLabel
-        }, { 'Authorization': `Bearer ${tokenCommute}` });
+        }, { 'Authorization': `Bearer ${commuteDriver.token}` });
         const pass = res.status === 400 && res.body?.success === false;
         record('Input Validation (Label > 60 characters -> 400)', pass, { status: res.status, body: res.body });
     }
 
     // TEST 9: Idempotency-Key handling (Same key returns cached response)
     const idemKey = 'idem_b1_test_' + Date.now();
-    let firstIdemRes = null;
     {
-        firstIdemRes = await request('POST', '/api/driver/fixed-location', {
+        const firstIdemRes = await request('POST', '/api/driver/fixed-location', {
             lat: 32.0298,
             lng: 44.3285,
             label: 'النجف - الحنانة'
         }, {
-            'Authorization': `Bearer ${tokenCommute}`,
+            'Authorization': `Bearer ${commuteDriver.token}`,
             'Idempotency-Key': idemKey
         });
 
@@ -235,7 +258,7 @@ async function runSuite() {
             lng: 44.3285,
             label: 'النجف - الحنانة'
         }, {
-            'Authorization': `Bearer ${tokenCommute}`,
+            'Authorization': `Bearer ${commuteDriver.token}`,
             'Idempotency-Key': idemKey
         });
 
@@ -255,7 +278,7 @@ async function runSuite() {
             lat: 32.0350,
             lng: 44.3700,
             label: 'الكوفة - مسجد السهلة'
-        }, { 'Authorization': `Bearer ${tokenCommute}` });
+        }, { 'Authorization': `Bearer ${commuteDriver.token}` });
 
         const pass = res.status === 200 &&
                      res.body?.success === true &&
@@ -271,7 +294,7 @@ async function runSuite() {
         const responses = [];
         for (let i = 0; i < 15; i++) {
             const res = await request('GET', '/api/driver/fixed-location', null, {
-                'Authorization': `Bearer ${tokenCommute}`
+                'Authorization': `Bearer ${commuteDriver.token}`
             });
             if (res.pid) pids.add(res.pid);
             responses.push({ pid: res.pid, lat: res.body?.fixed_lat, label: res.body?.fixed_label });
@@ -293,7 +316,7 @@ async function runSuite() {
         await sleep(4000); // Wait for workers to come online
 
         const res = await request('GET', '/api/driver/fixed-location', null, {
-            'Authorization': `Bearer ${tokenCommute}`
+            'Authorization': `Bearer ${commuteDriver.token}`
         });
 
         const pass = res.status === 200 &&
@@ -310,11 +333,11 @@ async function runSuite() {
     // TEST 13: Removal of fixed location (DELETE /api/driver/fixed-location -> 200)
     {
         const res = await request('DELETE', '/api/driver/fixed-location', null, {
-            'Authorization': `Bearer ${tokenCommute}`
+            'Authorization': `Bearer ${commuteDriver.token}`
         });
 
         const getAfter = await request('GET', '/api/driver/fixed-location', null, {
-            'Authorization': `Bearer ${tokenCommute}`
+            'Authorization': `Bearer ${commuteDriver.token}`
         });
 
         const pass = res.status === 200 &&
@@ -333,10 +356,10 @@ async function runSuite() {
             lat: 32.0298,
             lng: 44.3285,
             label: 'موقع مؤقت للإزالة عبر POST'
-        }, { 'Authorization': `Bearer ${tokenCommute}` });
+        }, { 'Authorization': `Bearer ${commuteDriver.token}` });
 
         const res = await request('POST', '/api/driver/fixed-location/remove', null, {
-            'Authorization': `Bearer ${tokenCommute}`
+            'Authorization': `Bearer ${commuteDriver.token}`
         });
 
         const pass = res.status === 200 && res.body?.fixed_lat === null;
@@ -346,13 +369,7 @@ async function runSuite() {
     // TEST 15: Rate Limiting (10 requests per 10 minutes -> 429 with retry_after)
     {
         const rateDriverId = 'drv_test_rate_b1_' + Date.now();
-        const rateToken = signToken({ id: rateDriverId, role: 'Driver', name: 'كابتن فحص المعدل' });
-        await request('POST', '/api/driver/toggle-online', {
-            driverId: rateDriverId,
-            isOnline: true,
-            workMode: 'commute',
-            driverName: 'كابتن فحص المعدل'
-        });
+        const rateDriver = await registerDriver(rateDriverId, '07890009999', 'كابتن فحص المعدل', 'commute', 'Online');
 
         let hit429 = false;
         let lastRes = null;
@@ -361,7 +378,7 @@ async function runSuite() {
                 lat: 32.0298,
                 lng: 44.3285,
                 label: `موقع تجربة ${i}`
-            }, { 'Authorization': `Bearer ${rateToken}` });
+            }, { 'Authorization': `Bearer ${rateDriver.token}` });
 
             if (lastRes.status === 429) {
                 hit429 = true;
@@ -381,7 +398,6 @@ async function runSuite() {
 
     // TEST 16: Audit Logs Verification
     {
-        const db = require('../src/backend/db');
         let auditRows = [];
         if (db.pool && db.isPostgresConnected) {
             const pgAudit = await db.pool.query(
@@ -407,8 +423,6 @@ async function runSuite() {
 
     // CLEANUP TEST DATA
     console.log('--- Cleaning Up Test Data ---');
-    const db = require('../src/backend/db');
-    const redisManager = require('../src/backend/modules/redis/redisClient');
     const testIds = [testDriverCommuteId, testDriverTaxiId, testDriverIdleId, testDriverOtherId];
 
     if (db.pool && db.isPostgresConnected) {
@@ -418,6 +432,9 @@ async function runSuite() {
             await db.pool.query('DELETE FROM users WHERE id = $1', [tid]).catch(() => {});
         }
         await db.pool.query('DELETE FROM users WHERE id = $1', [testCustomerId]).catch(() => {});
+        // Also cleanup rate limit test driver
+        await db.pool.query('DELETE FROM drivers WHERE driver_id LIKE $1', ['drv_test_rate_b1_%']).catch(() => {});
+        await db.pool.query('DELETE FROM users WHERE id LIKE $1', ['drv_test_rate_b1_%']).catch(() => {});
     }
 
     if (redisManager && redisManager.isConnected && redisManager.client) {
@@ -426,6 +443,9 @@ async function runSuite() {
             await redisManager.client.del(`rate:driver:fixed_loc:${tid}`).catch(() => {});
         }
         await redisManager.client.del(`idem:${idemKey}`).catch(() => {});
+        // cleanup rate driver redis keys
+        const keys = await redisManager.client.keys('rate:driver:fixed_loc:drv_test_rate_b1_*');
+        if (keys && keys.length > 0) await redisManager.client.del(...keys);
     }
 
     if (db.memoryState && Array.isArray(db.memoryState.drivers)) {

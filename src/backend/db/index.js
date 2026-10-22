@@ -442,7 +442,7 @@ class DatabaseManager {
                 `, [
                     d.driverId, d.fullName, d.phoneNumber, d.email || null, d.googleId || null,
                     d.licenseNumber || 'IRQ-NJF-1000', d.status || 'Pending', !!d.isVerified,
-                    !!d.isBlocked, !!d.isApproved, d.workMode || 'مشوار قصير', d.ratingAverage || 5.0, d.totalTrips || 0, d.createdAt || new Date().toISOString()
+                    !!d.isBlocked, !!d.isApproved, d.work_mode || d.workMode || 'مشوار قصير', d.ratingAverage || 5.0, d.totalTrips || 0, d.createdAt || new Date().toISOString()
                 ]);
             }
 
@@ -521,7 +521,7 @@ class DatabaseManager {
                     isApproved: r.is_approved,
                     workMode: r.work_mode || 'مشوار قصير',
                     work_mode: r.work_mode || 'مشوار قصير',
-                    workStatus: (r.work_mode === 'خط دائمي' ? 'permanent' : (r.status === 'Online' ? 'taxi' : 'idle')),
+                    workStatus: (r.work_mode === 'خط دائمي' || r.work_mode === 'commute' || r.work_mode === 'permanent' ? 'permanent' : (r.work_mode === 'both' || r.work_mode === 'كلاهما' ? 'both' : (r.status === 'Online' ? 'taxi' : 'idle'))),
                     isOnline: r.status === 'Online' || r.status === 'Active',
                     latitude: r.latitude ? parseFloat(r.latitude) : 31.9961,
                     longitude: r.longitude ? parseFloat(r.longitude) : 44.3168,
