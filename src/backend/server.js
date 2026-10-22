@@ -7720,8 +7720,7 @@ async function startServer() {
 
             // 5. Driver Existence & Work Mode Verification
             let driver = (db.memoryState.drivers || []).find(d => 
-                String(d.driverId || d.id) === effectiveDriverId ||
-                (authUser.phone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(authUser.phone.replace(/[^0-9]/g, '').slice(-8)))
+                String(d.driverId || d.id) === effectiveDriverId
             );
 
             if (!driver && db.pool && db.isPostgresConnected) {

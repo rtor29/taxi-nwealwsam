@@ -241,6 +241,11 @@ async function runSuite() {
         record('Input Validation (Label > 60 characters -> 400)', pass, { status: res.status, body: res.body });
     }
 
+    // Reset rate limiter for commuteDriver before operational flow
+    if (redisManager && redisManager.isConnected && redisManager.client) {
+        await redisManager.client.del(`rate:driver:fixed_loc:${commuteDriver.driverId}`);
+    }
+
     // TEST 9: Idempotency-Key handling (Same key returns cached response)
     const idemKey = 'idem_b1_test_' + Date.now();
     {
