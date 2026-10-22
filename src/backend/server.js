@@ -2963,28 +2963,22 @@ async function startServer() {
                 try {
                     const nearby = await redisManager.findNearbyDriverIds(pLon, pLat, maxDist);
                     for (const item of nearby) {
+                        const memDriver = (db.memoryState.drivers || []).find(d => String(d.driverId) === String(item.driverId));
                         const meta = await redisManager.client.hgetall(`driver:${item.driverId}:meta`);
-                        if (meta && meta.id) {
-                            if (isEligibleForTaxi(meta.workMode, meta.status)) {
-                                driversMap.set(String(item.driverId), {
-                                    driverId: String(item.driverId),
-                                    fullName: meta.fullName || 'كابتن توصيله',
-                                    phoneNumber: meta.phone || '',
-                                    status: meta.status || 'Online',
-                                    isOnline: true,
-                                    work_mode: meta.workMode || 'taxi',
-                                    vehicleType: meta.vehicleType || 'eco',
-                                    dist: item.distKm
-                                });
-                            }
-                        } else {
+                        const driverMode = memDriver?.work_mode || memDriver?.workMode || meta?.workMode || 'taxi';
+                        const driverStatus = memDriver?.status || meta?.status || 'Online';
+                        const driverVehicleType = memDriver?.vehicleType || memDriver?.tier || meta?.vehicleType || 'eco';
+
+                        if (isEligibleForTaxi(driverMode, driverStatus)) {
                             driversMap.set(String(item.driverId), {
                                 driverId: String(item.driverId),
-                                fullName: 'كابتن توصيله',
-                                status: 'Online',
+                                fullName: memDriver?.fullName || meta?.fullName || 'كابتن توصيله',
+                                phoneNumber: memDriver?.phoneNumber || meta?.phone || '',
+                                status: driverStatus,
                                 isOnline: true,
-                                work_mode: 'taxi',
-                                vehicleType: 'eco',
+                                work_mode: driverMode,
+                                vehicleType: driverVehicleType,
+                                tier: driverVehicleType,
                                 dist: item.distKm
                             });
                         }

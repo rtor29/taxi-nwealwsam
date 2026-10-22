@@ -84,7 +84,7 @@ class RedisManager {
                 phone: meta.phoneNumber || meta.phone || '',
                 status: meta.status || 'Online',
                 workMode: meta.work_mode || meta.workMode || 'taxi',
-                vehicleType: meta.vehicleType || 'eco',
+                vehicleType: meta.vehicleType || meta.tier || 'eco',
                 isOnline: 'true'
             };
             pipeline.hset(hashKey, payload);
