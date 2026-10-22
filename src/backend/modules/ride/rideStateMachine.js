@@ -432,13 +432,20 @@ async function transitionRideState(redisManager, rideId, targetStatus, actorInfo
                 }
                 return { success: true, ride, idempotent: true };
             }
+            const friendlyError = fromStatus === RIDE_STATES.NO_DRIVERS
+                ? 'عذراً، انتهت مهلة هذا المشوار ولم يعد متاحاً'
+                : (fromStatus === RIDE_STATES.CANCELLED || fromStatus === RIDE_STATES.CANCELLED_BY_RIDER || fromStatus === RIDE_STATES.CANCELLED_BY_DRIVER)
+                ? 'عذراً، تم إلغاء هذا المشوار'
+                : `تعارض حالات: لا يمكن الانتقال من الحالة [${fromStatus}] إلى [${toStatus}]`;
             return {
                 success: false,
                 conflict: true,
                 status: 409,
                 fromStatus,
                 toStatus,
-                error: `تعارض حالات: لا يمكن الانتقال من الحالة [${fromStatus}] إلى [${toStatus}]`
+                alreadyAccepted: fromStatus !== RIDE_STATES.OFFERED && fromStatus !== RIDE_STATES.REQUESTED,
+                expired: fromStatus === RIDE_STATES.NO_DRIVERS,
+                error: friendlyError
             };
         }
 

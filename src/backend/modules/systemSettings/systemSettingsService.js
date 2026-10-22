@@ -11,6 +11,7 @@ const DEFAULTS = {
     proximity_radius_meters: 1000,
     speed_jump_limit_kmh: 140,
     step_timeout_seconds: 20,
+    search_radius_km: 25,
     // Reconciliation & Cancellation
     fare_discrepancy_threshold_iqd: 500,
     fare_rounding_multiple_iqd: 250,
@@ -60,13 +61,15 @@ class SystemSettingsService {
                         'external_nav_timeout_minutes',
                         'vehicle_tier_surcharge_economy_iqd',
                         'vehicle_tier_surcharge_super_iqd',
-                        'vehicle_tier_surcharge_plus_iqd'
+                        'vehicle_tier_surcharge_plus_iqd',
+                        'matching_settings',
+                        'search_radius_km'
                     )`
                 );
 
                 // Priority Rule:
                 // 1. First parse legacy composite rows as fallback
-                const compositeKeys = ['dispatch_constants', 'reconciliation_constants'];
+                const compositeKeys = ['dispatch_constants', 'reconciliation_constants', 'matching_settings'];
                 for (const row of res.rows.filter(r => compositeKeys.includes(r.key))) {
                     try {
                         const parsed = typeof row.value_json === 'string' ? JSON.parse(row.value_json) : row.value_json;
@@ -80,6 +83,10 @@ class SystemSettingsService {
                             if (parsed.fare_discrepancy_threshold_iqd !== undefined) this._cache.fare_discrepancy_threshold_iqd = Number(parsed.fare_discrepancy_threshold_iqd);
                             if (parsed.fare_rounding_multiple_iqd !== undefined) this._cache.fare_rounding_multiple_iqd = Number(parsed.fare_rounding_multiple_iqd);
                             if (parsed.cancellation_fee_iqd !== undefined) this._cache.cancellation_fee_iqd = Number(parsed.cancellation_fee_iqd);
+                        } else if (row.key === 'matching_settings') {
+                            if (parsed.search_radius_km !== undefined) this._cache.search_radius_km = Number(parsed.search_radius_km);
+                            if (parsed.searchRadiusKm !== undefined) this._cache.search_radius_km = Number(parsed.searchRadiusKm);
+                            if (parsed.max_distance_km !== undefined) this._cache.search_radius_km = Number(parsed.max_distance_km);
                         }
                     } catch (_) {}
                 }
@@ -142,6 +149,10 @@ class SystemSettingsService {
         return this.getConstant('step_timeout_seconds', DEFAULTS.step_timeout_seconds);
     }
 
+    getSearchRadiusKm() {
+        return this.getConstant('search_radius_km', DEFAULTS.search_radius_km);
+    }
+
     getMinuteWaitRateIqd() {
         return this.getConstant('minute_wait_rate_iqd', DEFAULTS.minute_wait_rate_iqd);
     }
@@ -182,6 +193,7 @@ class SystemSettingsService {
             cancellation_fee_iqd: this.getCancellationFeeIqd(),
             speed_jump_limit_kmh: this.getSpeedJumpLimitKmh(),
             step_timeout_seconds: this.getStepTimeoutSeconds(),
+            search_radius_km: this.getSearchRadiusKm(),
             minute_wait_rate_iqd: this.getMinuteWaitRateIqd(),
             free_wait_minutes: this.getFreeWaitMinutes(),
             max_wait_minutes: this.getMaxWaitMinutes(),

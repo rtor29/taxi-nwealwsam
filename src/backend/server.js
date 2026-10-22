@@ -56,6 +56,21 @@ function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
+// --- Vehicle Tier Normalization & Labeling ---
+function normalizeTier(tier) {
+    const t = String(tier || 'eco').toLowerCase().trim();
+    if (t === 'super' || t === 'سوبر') return 'super';
+    if (t === 'plus' || t === 'vip' || t === 'بلس' || t === 'بلَس') return 'plus';
+    return 'saving'; // eco / saving / توفير
+}
+
+function getTierArabicName(tier) {
+    const norm = normalizeTier(tier);
+    if (norm === 'plus') return 'بلس';
+    if (norm === 'super') return 'سوبر';
+    return 'توفير';
+}
+
 // ---[ Honeypot WAF & IP Ban Shield ]---
 const _bannedIpSet = new Set();
 function _initBannedIps() {
@@ -2581,7 +2596,7 @@ async function startServer() {
             const tripType = parsedUrl.searchParams.get('tripType'); // 'short' or 'daily'
             const requestedVehicleType = (parsedUrl.searchParams.get('vehicleType') || '').toLowerCase();
             const normaliseVehicleType = (driver) =>
-                String(driver.vehicleType || driver.vehicleClass || driver.tier || 'eco').toLowerCase() === 'vip' ? 'vip' : 'eco';
+                normalizeTier(driver.vehicleType || driver.vehicleClass || driver.tier);
             
             const toRad = (deg) => deg * Math.PI / 180;
             const haversine = (lat1, lon1, lat2, lon2) => {
@@ -2594,7 +2609,7 @@ async function startServer() {
 
             const activeDrivers = (db.memoryState.drivers || [])
                 .filter(d => isDriverOnlineAndActive(d))
-                .filter(d => !requestedVehicleType || normaliseVehicleType(d) === requestedVehicleType)
+                .filter(d => !requestedVehicleType || normaliseVehicleType(d) === normalizeTier(requestedVehicleType))
                 .filter(d => {
                     const cMode = String(d.current_mode || d.mode || d.work_mode || d.workStatus || '').toLowerCase();
                     const isBoth = cMode === 'both' || cMode === 'كلاهما';
@@ -2656,9 +2671,10 @@ async function startServer() {
                 })
                 .sort((a, b) => a.distanceKm - b.distanceKm);
 
-            const maxRange = parseFloat(parsedUrl.searchParams.get('rangeKm') || parsedUrl.searchParams.get('radius') || '15');
+            const defaultRadius = systemSettingsService ? systemSettingsService.getSearchRadiusKm() : 25;
+            const maxRange = parseFloat(parsedUrl.searchParams.get('rangeKm') || parsedUrl.searchParams.get('radius') || defaultRadius);
             const inRange = activeDrivers.filter(d => d.distanceKm <= maxRange);
-            const resultData = inRange.length > 0 ? inRange : activeDrivers.slice(0, 5);
+            const resultData = inRange;
 
             // High-Performance 304 Not Modified caching for thousands of concurrent passengers
             const etagPayload = resultData.map(d => `${d.driverId}:${d.latitude}:${d.longitude}:${d.status}`).join(';');
@@ -3134,7 +3150,7 @@ async function startServer() {
                     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
                 };
 
-                const maxDist = parseFloat(rangeKm) || 25;
+                const maxDist = systemSettingsService ? systemSettingsService.getSearchRadiusKm() : (parseFloat(rangeKm) || 25);
                 let driverCandidates = await getAvailableOnlineDrivers(pLat, pLon, maxDist);
                 if (driverCandidates.length === 0) {
                     driverCandidates = (db.memoryState.drivers || [])
@@ -3147,17 +3163,9 @@ async function startServer() {
                         .filter(d => isDriverOnlineAndActive(d) && d.work_mode !== 'خط دائمي' && d.current_mode !== 'commute' && d.workStatus !== 'permanent');
                 }
 
-                // Filter candidate drivers (Vehicle tier affects pricing only; never break dispatching)
-                const reqTier = (vehicleType || 'super').toLowerCase();
-                let reqTierNorm = 'super';
-                let tierNameAr = 'سوبر';
-                if (reqTier === 'eco' || reqTier === 'saving' || reqTier === 'توفير') {
-                    reqTierNorm = 'saving';
-                    tierNameAr = 'توفير';
-                } else if (reqTier === 'plus' || reqTier === 'vip' || reqTier === 'بلس' || reqTier === 'بلَس') {
-                    reqTierNorm = 'plus';
-                    tierNameAr = 'بلس';
-                }
+                // Vehicle tier matching (Dispatch exclusively to matching tier captains)
+                const reqTierNorm = normalizeTier(vehicleType || 'super');
+                const tierNameAr = getTierArabicName(vehicleType || 'super');
 
                 let candidates = driverCandidates
                     .map(d => {
@@ -3174,16 +3182,34 @@ async function startServer() {
                     .sort((a, b) => a.dist - b.dist);
 
                 const inRadius = candidates.filter(d => d.dist <= maxDist);
-                const effectiveCandidates = inRadius;
 
-                if (effectiveCandidates.length === 0) {
+                if (inRadius.length === 0) {
                     console.log(`[RideRequest] NO_DRIVERS: No online drivers found within radius ${maxDist}km of pickup (${pLat}, ${pLon})`);
                     return sendJson({
                         success: false,
+                        noDriversInRadius: true,
                         error: `لا يوجد كابتن متاح بالقرب منك حالياً ضمن نطاق ${maxDist} كم.`
                     }, 404);
                 }
 
+                // Filter candidates strictly by requested vehicle tier
+                const tierMatched = inRadius.filter(d => {
+                    const drvTier = normalizeTier(d.vehicleType || d.vehicle_type || d.tier);
+                    return drvTier === reqTierNorm;
+                });
+
+                if (tierMatched.length === 0) {
+                    console.log(`[RideRequest] NO_DRIVERS_IN_TIER: No drivers found for tier ${tierNameAr} (${reqTierNorm}) within radius ${maxDist}km`);
+                    return sendJson({
+                        success: false,
+                        noDriversInTier: true,
+                        tier: reqTierNorm,
+                        tierName: tierNameAr,
+                        error: `لا يوجد كابتن ${tierNameAr} متاح قريباً، جرّب فئة أخرى.`
+                    }, 404);
+                }
+
+                const effectiveCandidates = tierMatched;
                 const candidateDriverIds = effectiveCandidates.map(c => c.driverId);
                 const assignedDriver = effectiveCandidates[0] || (driverCandidates[0] || null);
 
@@ -3242,6 +3268,8 @@ async function startServer() {
                     pricingBreakdown: dynamicPricing.breakdown,
                     vehicleType: tierNameAr,
                     tier: reqTierNorm,
+                    tierName: tierNameAr,
+                    tierBadge: reqTierNorm === 'plus' ? '💎 بلس' : reqTierNorm === 'super' ? '⚡ سوبر' : '🚕 توفير',
                     isRoundTrip: Boolean(isRoundTrip || body.tripType === 'ROUND_TRIP'),
                     tripType: (isRoundTrip || body.tripType === 'ROUND_TRIP') ? 'ROUND_TRIP' : 'ONE_WAY',
                     expectedWaitMinutes: Number(body.expectedWaitMinutes || stopDuration || 0),
@@ -3476,7 +3504,17 @@ async function startServer() {
             if ((currentCanonStatus === RIDE_STATES.OFFERED || currentCanonStatus === RIDE_STATES.REQUESTED) && r.candidateDriverIds && r.candidateDriverIds.length > 0) {
                 const now = Date.now();
                 if (now > (r.stepTimeoutAt || 0)) {
+                    const prevDriverId = r.candidateDriverIds[r.currentDriverIndex || 0];
                     r.currentDriverIndex = (r.currentDriverIndex || 0) + 1;
+                    if (prevDriverId) {
+                        redisManager.publishDriverEvent(prevDriverId, {
+                            type: 'ride_offer_expired',
+                            event: 'ride_offer_expired',
+                            rideId: r.id,
+                            requestId: r.id,
+                            reason: 'timeout_next_driver'
+                        }).catch(() => {});
+                    }
                     if (r.currentDriverIndex < r.candidateDriverIds.length) {
                         const nextDriverId = r.candidateDriverIds[r.currentDriverIndex];
                         const nextDriver = (db.memoryState.drivers || []).find(d => d.driverId === nextDriverId);
@@ -3505,7 +3543,7 @@ async function startServer() {
                             request: { ...r, customerPhone: maskPhoneNumber(r.customerPhone) }
                         });
                     } else {
-                        // All candidates exhausted
+                        // All candidates exhausted -> transition to NO_DRIVERS
                         r.status = RIDE_STATES.NO_DRIVERS;
                         r.assignedDriverId = null;
                         db.saveStateSnapshot();
@@ -3518,6 +3556,22 @@ async function startServer() {
                             event: 'no_drivers_available',
                             rideId: r.id
                         });
+                        // Instantly withdraw ride offer modal from all candidate drivers via SSE
+                        for (const dId of (r.candidateDriverIds || [])) {
+                            redisManager.publishDriverEvent(dId, {
+                                type: 'ride_offer_expired',
+                                event: 'ride_offer_expired',
+                                rideId: r.id,
+                                requestId: r.id,
+                                reason: 'no_drivers_available'
+                            }).catch(() => {});
+                        }
+                        redisManager.publishDispatchEvent({
+                            type: 'ride_taken',
+                            event: 'ride_taken',
+                            rideId: r.id,
+                            requestId: r.id
+                        }).catch(() => {});
                     }
                 }
             }
@@ -3664,6 +3718,19 @@ async function startServer() {
                 }
 
                 if (action === 'accept') {
+                    // Check if ride is already in NO_DRIVERS or cancelled status
+                    const currentCanon = toCanonicalState(r.status);
+                    if (currentCanon === RIDE_STATES.NO_DRIVERS || currentCanon === RIDE_STATES.CANCELLED || currentCanon === RIDE_STATES.CANCELLED_BY_RIDER || currentCanon === RIDE_STATES.CANCELLED_BY_DRIVER) {
+                        return sendJson({
+                            success: false,
+                            conflict: true,
+                            alreadyAccepted: true,
+                            expired: true,
+                            status: 409,
+                            error: 'عذراً، انتهت مهلة هذا المشوار ولم يعد متاحاً للقبول'
+                        }, 409);
+                    }
+
                     // Pre-check driver active ride: a driver with an active ride cannot accept another ride
                     const existingActiveRide = await findActiveRideForDriver(driverId);
                     if (existingActiveRide && String(existingActiveRide.id) !== String(r.id)) {
@@ -3707,6 +3774,7 @@ async function startServer() {
                             success: false,
                             conflict: true,
                             alreadyAccepted: true,
+                            expired: Boolean(transResult.expired || transResult.fromStatus === RIDE_STATES.NO_DRIVERS),
                             status: 409,
                             error: transResult.error || 'عذراً، المشوار تم قبوله من كابتن آخر أو لم يعد متاحاً.'
                         }, 409);
@@ -3744,6 +3812,19 @@ async function startServer() {
                     await redisManager.publishRideEvent(r.id, { type: 'ride_accepted', event: 'ride_accepted', request: r });
                     await redisManager.publishDispatchEvent({ type: 'ride_taken', event: 'ride_taken', rideId: r.id, requestId: r.id });
                     await redisManager.publishDriverEvent(actualDriverId, { type: 'ride_assigned', event: 'ride_assigned', request: r });
+
+                    // Instantly withdraw ride offer modal from other candidate drivers
+                    for (const candId of (r.candidateDriverIds || [])) {
+                        if (String(candId) !== String(actualDriverId)) {
+                            redisManager.publishDriverEvent(candId, {
+                                type: 'ride_offer_expired',
+                                event: 'ride_offer_expired',
+                                rideId: r.id,
+                                requestId: r.id,
+                                reason: 'accepted_by_another'
+                            }).catch(() => {});
+                        }
+                    }
 
                     const respPayload = {
                         success: true,
@@ -5869,6 +5950,14 @@ async function startServer() {
                 const now = Date.now();
                 const validRides = [];
 
+                const drvMatch = pathname.match(/^\/?(?:api\/)?driver\/([^/]+)\/pending-requests/);
+                const targetDriverId = drvMatch ? decodeURIComponent(drvMatch[1]) : null;
+                const cleanPhone = targetDriverId ? targetDriverId.replace(/[^0-9]/g, '') : '';
+                const targetDriverObj = targetDriverId ? (db.memoryState.drivers || []).find(d => 
+                    String(d.driverId || d.id) === String(targetDriverId) || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
+                ) : null;
+                const targetDriverTier = normalizeTier(targetDriverObj?.vehicleType || targetDriverObj?.tier);
+
                 if (redisManager.isConnected && redisManager.client) {
                     const pendingRaw = await redisManager.client.hgetall('pending:rides');
                     if (pendingRaw) {
@@ -5880,7 +5969,12 @@ async function startServer() {
                                 const s = String(ride.status || '').toLowerCase().trim();
                                 const isPending = s === 'pending' || s === 'offered' || s === 'requested';
 
-                                if (isPending && age < 120000 && !ride.acceptedDriverId) {
+                                const isNotExpired = now <= (ride.stepTimeoutAt || (now + 1000));
+                                const isCandidate = !targetDriverId || !ride.candidateDriverIds || ride.candidateDriverIds.length === 0 ||
+                                    ride.candidateDriverIds.some(cId => String(cId) === String(targetDriverId) || (targetDriverObj?.driverId && String(cId) === String(targetDriverObj.driverId)));
+                                const isTierMatch = !targetDriverObj || !ride.tier || normalizeTier(ride.tier) === targetDriverTier;
+
+                                if (isPending && age < 120000 && isNotExpired && isCandidate && isTierMatch && !ride.acceptedDriverId) {
                                     validRides.push(ride);
                                 } else if (age >= 120000 || (!isPending && s !== '') || ride.acceptedDriverId) {
                                     // Automatic self-cleaning of expired or accepted rides
