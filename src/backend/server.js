@@ -3291,7 +3291,7 @@ async function startServer() {
                 await logRideEvent(newRequest.id, null, RIDE_STATES.REQUESTED, customerId, 'Customer', pLat, pLon);
                 await logRideEvent(newRequest.id, RIDE_STATES.REQUESTED, RIDE_STATES.OFFERED, 'system', 'System', pLat, pLon, { candidateCount: candidateDriverIds.length });
 
-                const tierBadge = isVipTier ? '👑 VIP' : '🚗 توفير';
+                const tierBadge = reqTierNorm === 'plus' ? '💎 بلس' : reqTierNorm === 'super' ? '⚡ سوبر' : '🚕 توفير';
                 let extraTgInfo = '';
                 if (newRequest.isRoundTrip) extraTgInfo += '\n🔄 <b>نوع الرحلة:</b> ذهاب وإياب (خصم 15% على العودة)';
                 if (newRequest.secondDestination) extraTgInfo += `\n📍 <b>وجهة إضافية:</b> ${newRequest.secondDestination}`;
