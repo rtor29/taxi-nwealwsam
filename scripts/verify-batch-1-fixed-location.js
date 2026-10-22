@@ -134,20 +134,26 @@ async function runSuite() {
         return { driverId, token, phone, name, mode };
     }
 
-    const commuteDriver = await registerDriver(testDriverCommuteId, '07890001111', 'كابتن فحص خط دائم', 'commute', 'Online');
-    const taxiDriver = await registerDriver(testDriverTaxiId, '07890002222', 'كابتن فحص تكسي', 'taxi', 'Online');
-    const idleDriver = await registerDriver(testDriverIdleId, '07890003333', 'كابتن فحص خمول', 'idle', 'Offline');
-    const otherDriver = await registerDriver(testDriverOtherId, '07890004444', 'كابتن فحص آخر', 'commute', 'Online');
+    const phoneCommute = '078' + Math.floor(10000000 + Math.random() * 90000000);
+    const phoneTaxi = '078' + Math.floor(10000000 + Math.random() * 90000000);
+    const phoneIdle = '078' + Math.floor(10000000 + Math.random() * 90000000);
+    const phoneOther = '078' + Math.floor(10000000 + Math.random() * 90000000);
+    const phoneCustomer = '078' + Math.floor(10000000 + Math.random() * 90000000);
+
+    const commuteDriver = await registerDriver(testDriverCommuteId, phoneCommute, 'كابتن فحص خط دائم', 'commute', 'Online');
+    const taxiDriver = await registerDriver(testDriverTaxiId, phoneTaxi, 'كابتن فحص تكسي', 'taxi', 'Online');
+    const idleDriver = await registerDriver(testDriverIdleId, phoneIdle, 'كابتن فحص خمول', 'idle', 'Offline');
+    const otherDriver = await registerDriver(testDriverOtherId, phoneOther, 'كابتن فحص آخر', 'commute', 'Online');
 
     // Register test customer
     if (db.pool && db.isPostgresConnected) {
         await db.pool.query(`
             INSERT INTO users (id, phone_number, full_name, role, is_active)
-            VALUES ($1, '07890005555', 'راكب فحص', 'Customer', true)
+            VALUES ($1, $2, 'راكب فحص', 'Customer', true)
             ON CONFLICT (id) DO UPDATE SET role = 'Customer'
-        `, [testCustomerId]);
+        `, [testCustomerId, phoneCustomer]);
     }
-    const tokenCustomer = signToken({ id: testCustomerId, role: 'Customer', name: 'راكب فحص' });
+    const tokenCustomer = signToken({ id: testCustomerId, role: 'Customer', phone: phoneCustomer, name: 'راكب فحص' });
 
     console.log('--- Initial Setup Completed (All Drivers Seeded in Postgres, Redis, Memory) ---\n');
 
