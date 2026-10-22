@@ -3078,7 +3078,7 @@ async function startServer() {
                     .sort((a, b) => a.dist - b.dist);
 
                 const inRadius = candidates.filter(d => d.dist <= maxDist);
-                const effectiveCandidates = inRadius.length > 0 ? inRadius : candidates;
+                const effectiveCandidates = inRadius;
 
                 if (effectiveCandidates.length === 0) {
                     console.log(`[RideRequest] NO_DRIVERS: No online drivers found within radius ${maxDist}km of pickup (${pLat}, ${pLon})`);

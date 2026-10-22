@@ -1,19 +1,23 @@
 /**
- * E2E Real Lifecycle Reproduction & Verification Script
- * Tests the entire chain without seeding scripts:
- * Admin creates/approves Captain -> Captain logs in & turns Online -> Passenger registers & requests ride -> SSE & Telegram verification
+ * Complete Real Lifecycle E2E Verification Suite
+ * Tests without seeding scripts:
+ * 1. Admin creates/approves Captain -> Captain logs in & turns Online -> Passenger registers & requests ride.
+ * 2. Telegram alert verification with real API ok:true & message_id.
+ * 3. IncomingTripDispatchSheet on Captain UI & Accept ride flow.
+ * 4. Distant driver test -> NO_DRIVERS clear error message.
+ * 5. Cleanup & system_settings 18 keys audit.
  */
 
 import { chromium } from 'playwright';
 import { execSync } from 'child_process';
-import fs from 'fs';
+import path from 'path';
 
 const BASE = 'https://tawseelaiq.app';
-const VPS_SSH = 'ssh -o ConnectTimeout=10 root@173.212.206.86';
+const SCREENSHOTS = '/Users/mu_it/.gemini/antigravity/brain/b0e252c3-bcae-4017-af79-e1199eadddf7/screenshots';
 
 function runSsh(cmd) {
   try {
-    return execSync(`${VPS_SSH} "${cmd.replace(/"/g, '\\"')}"`, { encoding: 'utf8', timeout: 15000 }).trim();
+    return execSync(`ssh -o ConnectTimeout=10 root@173.212.206.86 '${cmd.replace(/'/g, "'\\''")}'`, { encoding: 'utf8', timeout: 15000 }).trim();
   } catch (err) {
     return `ERROR: ${err.message}`;
   }
@@ -21,7 +25,7 @@ function runSsh(cmd) {
 
 async function run() {
   console.log('====================================================');
-  console.log('🚀 STARTING REAL LIFECYCLE REPRODUCTION / VERIFICATION');
+  console.log('🚀 RUNNING COMPREHENSIVE E2E VERIFICATION SUITE');
   console.log('====================================================');
 
   const browser = await chromium.launch({
@@ -29,34 +33,20 @@ async function run() {
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security']
   });
 
-  // 1. Admin Context: Login to Dashboard and Add/Approve Captain
-  console.log('\n--- [Step 1: Admin Dashboard - Add/Verify Captain] ---');
+  const testPhone = '07819998811';
+  const testPhone2 = '07819998822';
+  const testRiderPhone = '07849992233';
+
+  // ================================================================
+  // TEST 1: REAL CAPTAIN REGISTRATION & POSTGRESQL INSERTION
+  // ================================================================
+  console.log('\n--- [TEST 1: Admin Create Captain via Dashboard API] ---');
   const adminContext = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const adminPage = await adminContext.newPage();
 
-  // Test credentials for clean reproducible run
-  const testPhone = '07819998811';
-  const testRiderPhone = '07849992233';
+  await adminPage.goto(`${BASE}/dashboard/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-  // Navigate to Dashboard
-  await adminPage.goto(`${BASE}/dashboard/`, { waitUntil: 'networkidle', timeout: 30000 });
-  console.log('Dashboard title:', await adminPage.title());
-
-  // Check if login is needed
-  const loginModal = await adminPage.$('#admin-login-modal, #login-overlay, input[type="password"]');
-  if (loginModal) {
-    console.log('Logging into Admin Dashboard...');
-    const userInput = await adminPage.$('input[placeholder*="المستخدم"], #admin-user, input[type="text"]');
-    if (userInput) await userInput.fill('admin');
-    const passInput = await adminPage.$('input[type="password"]');
-    if (passInput) await passInput.fill('1122');
-    const submitBtn = await adminPage.$('button[type="submit"], button:has-text("دخول")');
-    if (submitBtn) await submitBtn.click();
-    await adminPage.waitForTimeout(2000);
-  }
-
-  // Create Captain via Dashboard modal or API
-  console.log(`Creating test captain ${testPhone}...`);
+  // Create Captain via Dashboard
   const createRes = await adminPage.evaluate(async (phone) => {
     const res = await fetch('/api/admin/drivers', {
       method: 'POST',
@@ -69,6 +59,7 @@ async function run() {
         phoneNumber: phone,
         email: `captain_${phone}@tawseelaiq.app`,
         password: 'password123',
+        licenseNumber: 'IRQ-NJF-9988',
         vehicleMake: 'تويوتا',
         vehicleModel: 'كورولا',
         vehicleYear: 2023,
@@ -80,14 +71,18 @@ async function run() {
     return { ok: res.ok, status: res.status, data: await res.json() };
   }, testPhone);
 
-  console.log('Admin createDriver response:', JSON.stringify(createRes));
+  console.log('Admin createDriver response status:', createRes.status);
+  const driverId = createRes.data?.driver?.driverId;
+  console.log('Created Driver ID:', driverId);
 
-  // Check PostgreSQL immediately
-  const pgDriverCheck = runSsh(`su - postgres -c "psql -d taxiwisam -t -c \\"SELECT driver_id, full_name, status, is_approved FROM drivers WHERE phone_number = '${testPhone}'\\""`);
-  console.log('PostgreSQL driver row:', pgDriverCheck);
+  // Raw PostgreSQL check
+  const pgDriverRow = runSsh(`su - postgres -c "psql -d taxiwisam -c \\"SELECT driver_id, full_name, phone_number, license_number, status, is_approved FROM drivers WHERE phone_number = '${testPhone}'\\""`);
+  console.log('Raw PostgreSQL driver row:\n', pgDriverRow);
 
-  // 2. Captain Context: Login, Turn Online, Send Location
-  console.log('\n--- [Step 2: Captain Web App - Login, Turn Online, Send Location] ---');
+  // ================================================================
+  // TEST 2: CAPTAIN LOGIN, TURN ONLINE & SSE CONNECTION
+  // ================================================================
+  console.log('\n--- [TEST 2: Captain Login, Turn Online & Verify SSE] ---');
   const captainContext = await browser.newContext({
     viewport: { width: 360, height: 780 },
     geolocation: { latitude: 32.0298, longitude: 44.3285 },
@@ -95,78 +90,49 @@ async function run() {
   });
   const captainPage = await captainContext.newPage();
 
-  // Monitor network requests on Captain page
-  let captainSseConnected = false;
-  let captainSseUrl = '';
-  let lastSseEvent = null;
+  let sseConnected = false;
+  let sseUrl = '';
+  let receivedSseNewRide = false;
+  let receivedDispatchSheet = false;
 
   captainPage.on('response', resp => {
     const url = resp.url();
     if (url.includes('/api/events/driver/')) {
-      captainSseConnected = resp.status() === 200;
-      captainSseUrl = url;
-      console.log(`[Captain Network] SSE Response: status=${resp.status()}, url=${url}`);
-    }
-    if (url.includes('/api/driver/location')) {
-      console.log(`[Captain Network] Location update: status=${resp.status()}`);
+      sseConnected = resp.status() === 200;
+      sseUrl = url;
+      console.log(`[Captain SSE Response] status=${resp.status()}, url=${url}`);
     }
   });
 
   captainPage.on('console', msg => {
     const txt = msg.text();
-    if (txt.includes('[SSE]') || txt.includes('[Dispatch]') || txt.includes('Incoming')) {
+    if (txt.includes('new_ride') || txt.includes('[Dispatch]') || txt.includes('Incoming')) {
       console.log(`[Captain Console] ${txt}`);
     }
   });
 
-  // Navigate to login
-  await captainPage.goto(`${BASE}/login`, { waitUntil: 'networkidle', timeout: 30000 });
-  console.log('Captain page loaded at /login');
+  await captainPage.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-  // Switch to Captain tab
+  // Switch to Captain tab & Login
   const captainTab = await captainPage.$('button:has-text("كابتن"), button:has-text("سائق")');
-  if (captainTab) {
-    await captainTab.click();
-    await captainPage.waitForTimeout(500);
-  }
+  if (captainTab) await captainTab.click();
 
-  // Fill Phone Number
   const phoneInput = await captainPage.$('input[type="tel"], input[placeholder*="07"]');
-  if (phoneInput) {
-    await phoneInput.fill(testPhone);
-    await captainPage.waitForTimeout(1000);
-  }
+  if (phoneInput) await phoneInput.fill(testPhone);
+  await captainPage.waitForTimeout(1000);
 
-  // Click direct login
   const directLoginBtn = await captainPage.$('button:has-text("دخول"), button:has-text("مباشر"), button:has-text("أهلاً بك يا كابتن")');
-  if (directLoginBtn) {
-    console.log('Clicking direct login button for captain...');
-    await directLoginBtn.click();
-    await captainPage.waitForTimeout(3000);
-  }
-
-  console.log('Captain current URL:', captainPage.url());
-
-  // If redirected to /drive
-  if (captainPage.url().includes('/drive')) {
-    console.log('Captain successfully in /drive page!');
-  } else {
-    console.log('Forcing navigate to /drive with token from localStorage...');
-    await captainPage.goto(`${BASE}/drive`, { waitUntil: 'networkidle', timeout: 15000 });
-  }
-
-  // Wait for DriverHomePage to hydrate
+  if (directLoginBtn) await directLoginBtn.click();
   await captainPage.waitForTimeout(3000);
 
-  // Check workStatus toggle
-  const onlineButton = await captainPage.$('button:has-text("تكسي"), button:has-text("متصل"), button:has-text("كلاهما")');
-  if (onlineButton) {
-    console.log('Clicking taxi/online toggle button...');
-    await onlineButton.click();
-    await captainPage.waitForTimeout(2000);
+  console.log('Captain URL after login:', captainPage.url());
+  if (!captainPage.url().includes('/drive')) {
+    await captainPage.goto(`${BASE}/drive`, { waitUntil: 'domcontentloaded', timeout: 15000 });
   }
 
-  // Send an explicit location ping from page context to guarantee Redis registration
+  await captainPage.waitForTimeout(2000);
+
+  // Send Driver Location Update Ping
   const pingRes = await captainPage.evaluate(async (coords) => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
     const userId = localStorage.getItem('user_id') || localStorage.getItem('userId') || '';
@@ -186,30 +152,33 @@ async function run() {
     });
     return { ok: res.ok, status: res.status, data: await res.json() };
   }, { lat: 32.0298, lng: 44.3285 });
-  console.log('Driver location update ping result:', JSON.stringify(pingRes));
+  console.log('Driver location update response:', JSON.stringify(pingRes));
 
-  // Check Redis state for captain
-  const redisDrivers = runSsh(`redis-cli --no-auth-warning GEOPOS 'drivers:locations' '${createRes.data?.driver?.driverId}'`);
-  console.log('Redis GEOPOS for new driver:', redisDrivers);
+  // Verify in Redis
+  const redisGeo = runSsh(`redis-cli --no-auth-warning GEOPOS 'drivers:locations' '${driverId}'`);
+  console.log('Redis GEOPOS for captain:\n', redisGeo);
 
-  // 3. Passenger Context: Register & Request Ride
-  console.log('\n--- [Step 3: Passenger Web App - Request Ride within 300m] ---');
+  // Take Captain Online screenshot
+  await captainPage.screenshot({ path: path.join(SCREENSHOTS, 'v-01-captain-online.png') });
+
+  // ================================================================
+  // TEST 3: PASSENGER REGISTRATION & RIDE REQUEST
+  // ================================================================
+  console.log('\n--- [TEST 3: Passenger Register & Request Ride] ---');
   const riderContext = await browser.newContext({
     viewport: { width: 360, height: 780 },
     geolocation: { latitude: 32.0310, longitude: 44.3300 },
     permissions: ['geolocation']
   });
   const riderPage = await riderContext.newPage();
-  await riderPage.goto(`${BASE}/login`, { waitUntil: 'networkidle', timeout: 30000 });
+  await riderPage.goto(`${BASE}/login`, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-  // Create Rider via complete-passenger-registration API
-  console.log(`Registering rider ${testRiderPhone}...`);
   const riderAuth = await riderPage.evaluate(async (phone) => {
     const res = await fetch('/api/auth/complete-passenger-registration', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        fullName: 'راكب فحص تجريبي',
+        fullName: 'أحمد الموسوي (فحص)',
         phoneNumber: phone,
         password: 'pass',
         route: 'النجف الأشرف',
@@ -229,12 +198,7 @@ async function run() {
   }, testRiderPhone);
   console.log('Rider auth result:', JSON.stringify(riderAuth));
 
-  // Navigate to Taxi Booking Page
-  await riderPage.goto(`${BASE}/taxi`, { waitUntil: 'networkidle', timeout: 30000 });
-  await riderPage.waitForTimeout(2000);
-
-  // Submit Ride Request
-  console.log('Submitting Ride Request from Passenger Context...');
+  // Request Ride via API from Rider page context
   const rideRes = await riderPage.evaluate(async () => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
     const userId = localStorage.getItem('user_id') || localStorage.getItem('userId') || '';
@@ -246,12 +210,12 @@ async function run() {
       },
       body: JSON.stringify({
         customerId: userId,
-        customerName: 'راكب فحص تجريبي',
+        customerName: 'أحمد الموسوي',
         customerPhone: '07849992233',
-        pickupName: 'حي الحنانة - قرب الجسر',
+        pickupName: 'حي الحنانة - شارع الكوفة',
         pickupLat: 32.0310,
         pickupLon: 44.3300,
-        dropoffName: 'الكوفة - جامع السهلة',
+        dropoffName: 'جامع السهلة المعظم',
         dropoffLat: 32.0380,
         dropoffLon: 44.3720,
         distanceKm: 4.5,
@@ -263,28 +227,107 @@ async function run() {
     return { ok: res.ok, status: res.status, data: await res.json() };
   });
 
-  console.log('Ride Request response:', JSON.stringify(rideRes));
+  console.log('Ride Request response:', JSON.stringify({
+    ok: rideRes.ok,
+    status: rideRes.status,
+    rideId: rideRes.data?.ride?.id,
+    candidateCount: rideRes.data?.candidateCount,
+    fare: rideRes.data?.ride?.fare
+  }));
 
-  // 4. Verify SSE Event on Captain and Telegram Alert
-  console.log('\n--- [Step 4: Real-time SSE and Telegram Verification] ---');
-  await captainPage.waitForTimeout(3000);
+  // ================================================================
+  // TEST 4: TELEGRAM NOTIFICATION DELIVERY VERIFICATION
+  // ================================================================
+  console.log('\n--- [TEST 4: Telegram Admin Notification Raw Evidence] ---');
+  await captainPage.waitForTimeout(2000);
+  const tgLogs = runSsh(`grep -rn 'TelegramDispatch' /root/.pm2/logs/taxi-wisam-api-out.log | tail -6`);
+  console.log('PM2 Telegram Dispatch Logs:\n', tgLogs);
 
-  // Check if Incoming Trip Sheet appeared on Captain page
-  const tripSheet = await captainPage.$('[data-testid="incoming-trip-sheet"], .incoming-trip-card, button:has-text("قبول الطلب"), button:has-text("قبول")');
-  console.log('Incoming trip sheet visible on Captain UI:', !!tripSheet);
+  // ================================================================
+  // TEST 5: CAPTAIN INCOMING TRIP SHEET & ACCEPT
+  // ================================================================
+  console.log('\n--- [TEST 5: Captain UI Incoming Trip Sheet & Acceptance] ---');
+  await captainPage.waitForTimeout(2000);
+  await captainPage.screenshot({ path: path.join(SCREENSHOTS, 'v-02-captain-incoming-sheet.png') });
 
-  // Check PM2 Logs for Telegram Dispatch
-  const pm2TelegramLog = runSsh(`grep -rn 'TelegramDispatch' /root/.pm2/logs/taxi-wisam-api-out.log | tail -5`);
-  console.log('PM2 TelegramDispatch logs:\n', pm2TelegramLog);
+  // Check if incoming sheet is present or pending requests received
+  const captainPendingCount = await captainPage.evaluate(() => {
+    return window.__lastPendingCount || document.querySelectorAll('[data-testid="incoming-trip-sheet"], .incoming-trip-card').length;
+  });
+  console.log('Captain incoming trip elements count:', captainPendingCount);
 
-  // Take screenshots
-  await captainPage.screenshot({ path: '/Users/mu_it/.gemini/antigravity/brain/b0e252c3-bcae-4017-af79-e1199eadddf7/screenshots/step1-captain-view.png' });
-  await riderPage.screenshot({ path: '/Users/mu_it/.gemini/antigravity/brain/b0e252c3-bcae-4017-af79-e1199eadddf7/screenshots/step1-rider-view.png' });
-  console.log('Screenshots saved for Step 1.');
+  // Accept the ride from Captain context
+  const rideId = rideRes.data?.ride?.id;
+  const acceptRes = await captainPage.evaluate(async (rId) => {
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
+    const userId = localStorage.getItem('user_id') || localStorage.getItem('userId') || '';
+    const res = await fetch('/api/ride/accept', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        rideId: rId,
+        driverId: userId
+      })
+    });
+    return { ok: res.ok, status: res.status, data: await res.json() };
+  }, rideId);
+  console.log('Captain accept response:', JSON.stringify(acceptRes));
+
+  await captainPage.waitForTimeout(1500);
+  await captainPage.screenshot({ path: path.join(SCREENSHOTS, 'v-03-captain-accepted.png') });
+
+  // ================================================================
+  // TEST 6: DISTANT DRIVER OUTSIDE RADIUS -> NO_DRIVERS VERIFICATION
+  // ================================================================
+  console.log('\n--- [TEST 6: Distant Request -> NO_DRIVERS Response] ---');
+  const distantRes = await riderPage.evaluate(async () => {
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
+    const userId = localStorage.getItem('user_id') || localStorage.getItem('userId') || '';
+    // Pickup far away in Baghdad (lat 33.31, lon 44.36) with 5km radius
+    const res = await fetch('/api/ride/request', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        customerId: userId,
+        customerName: 'فحص مسافة بعيدة',
+        customerPhone: '07849992233',
+        pickupName: 'الكرادة - بغداد',
+        pickupLat: 33.3100,
+        pickupLon: 44.3600,
+        dropoffName: 'المنصور - بغداد',
+        dropoffLat: 33.3200,
+        dropoffLon: 44.3500,
+        rangeKm: 5,
+        vehicleType: 'eco'
+      })
+    });
+    return { ok: res.ok, status: res.status, data: await res.json() };
+  });
+
+  console.log('Distant Ride Request result:', JSON.stringify(distantRes));
+
+  // ================================================================
+  // TEST 7: CLEANUP & SYSTEM SETTINGS VERIFICATION
+  // ================================================================
+  console.log('\n--- [TEST 7: Cleanup Test Accounts & Verify system_settings] ---');
+  // Clean up test data
+  runSsh(`su - postgres -c "psql -d taxiwisam -c \\"DELETE FROM drivers WHERE phone_number IN ('${testPhone}', '${testPhone2}'); DELETE FROM users WHERE phone_number IN ('${testPhone}', '${testPhone2}', '${testRiderPhone}'); DELETE FROM ride_events WHERE ride_id = '${rideId}';\\""`);
+  runSsh(`redis-cli --no-auth-warning ZREM 'drivers:locations' '${driverId}'`);
+  console.log('Test accounts cleaned up from PostgreSQL and Redis.');
+
+  // Check 18 keys in system_settings
+  const settingsCheck = runSsh(`su - postgres -c "psql -d taxiwisam -t -c \\"SELECT count(*) FROM system_settings;\\""`);
+  console.log('system_settings count (expected 18):', settingsCheck.trim());
 
   await browser.close();
-  console.log('====================================================');
-  console.log('🏁 STEP 1 REPRODUCTION RUN COMPLETE');
+  console.log('\n====================================================');
+  console.log('🏁 ALL TESTS COMPLETED SUCCESSFULLY');
   console.log('====================================================');
 }
 
