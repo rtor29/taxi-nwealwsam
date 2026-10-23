@@ -780,13 +780,13 @@ class DatabaseManager {
         try {
             await this.pool.query(
                 `UPDATE drivers SET 
-                    fixed_lat = $1, fixed_lng = $2, fixed_label = $3, fixed_updated_at = NOW(),
-                    permanent_lat = $1, permanent_lon = $2, permanent_location_name = $3,
-                    fixed_dest_lat = $4, fixed_dest_lng = $5, fixed_dest_label = $6,
-                    permanent_dropoff_lat = $4, permanent_dropoff_lon = $5, permanent_dropoff_name = $6,
-                    route_name = $7,
+                    fixed_lat = $1::double precision, fixed_lng = $2::double precision, fixed_label = $3::text, fixed_updated_at = NOW(),
+                    permanent_lat = $1::double precision, permanent_lon = $2::double precision, permanent_location_name = $3::text,
+                    fixed_dest_lat = $4::double precision, fixed_dest_lng = $5::double precision, fixed_dest_label = $6::text,
+                    permanent_dropoff_lat = $4::double precision, permanent_dropoff_lon = $5::double precision, permanent_dropoff_name = $6::text,
+                    route_name = $7::text,
                     updated_at = NOW()
-                 WHERE driver_id = $8`,
+                 WHERE driver_id = $8::varchar`,
                 [data.lat, data.lng, data.label || '', data.destLat || null, data.destLng || null, data.destLabel || '', data.routeName || '', driverId]
             );
         } catch (e) { console.warn('[Database] persistDriverFixedLocation error:', e.message); }
