@@ -3294,6 +3294,8 @@ async function startServer() {
                     offeredAt: new Date().toISOString(),
                     createdAt: new Date().toISOString(),
                     stepTimeoutAt: Date.now() + ((systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 20) * 1000), // Step countdown calculated by server
+                    serverTimestamp: Date.now(),
+                    remainingSeconds: systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 20,
                     history: []
                 };
 
@@ -3379,8 +3381,12 @@ async function startServer() {
                 }
 
                 // Real-time broadcast with PRIVACY MASKING: mask customer phone for candidate drivers
+                const broadcastNow = Date.now();
+                const remBroadcastSec = Math.max(0, Math.round(((newRequest.stepTimeoutAt || 0) - broadcastNow) / 1000));
                 const maskedPayload = {
                     ...newRequest,
+                    serverTimestamp: broadcastNow,
+                    remainingSeconds: remBroadcastSec,
                     customerPhone: maskPhoneNumber(newRequest.customerPhone)
                 };
                 await redisManager.publishDispatchEvent({
@@ -3524,6 +3530,8 @@ async function startServer() {
                         r.assignedDriverVehicle = nextDriver ? `${nextDriver.vehicleMake||'تويوتا'} ${nextDriver.vehicleModel||'كورولا'}` : 'تويوتا';
                         const stepTimeoutSec = systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 20;
                         r.stepTimeoutAt = now + (stepTimeoutSec * 1000);
+                        r.serverTimestamp = now;
+                        r.remainingSeconds = stepTimeoutSec;
                         db.saveStateSnapshot();
                         if (redisManager.isConnected && redisManager.client) {
                             redisManager.client.hset('pending:rides', String(r.id), JSON.stringify(r)).catch(() => {});
@@ -3534,7 +3542,12 @@ async function startServer() {
                             event: 'new_ride',
                             rideId: r.id,
                             requestId: r.id,
-                            request: { ...r, customerPhone: maskPhoneNumber(r.customerPhone) }
+                            request: {
+                                ...r,
+                                serverTimestamp: now,
+                                remainingSeconds: stepTimeoutSec,
+                                customerPhone: maskPhoneNumber(r.customerPhone)
+                            }
                         });
                     } else {
                         // All candidates exhausted -> transition to NO_DRIVERS
@@ -3599,12 +3612,17 @@ async function startServer() {
             }
 
             const secondsRemaining = Math.max(0, Math.round(((r.stepTimeoutAt || 0) - Date.now()) / 1000));
+            const enrichedRide = {
+                ...outputRide,
+                serverTimestamp: Date.now(),
+                remainingSeconds: secondsRemaining
+            };
             return sendJson({
                 success: true,
                 notFound: false,
-                request: outputRide,
-                ride: outputRide,
-                activeRide: outputRide,
+                request: enrichedRide,
+                ride: enrichedRide,
+                activeRide: enrichedRide,
                 secondsRemaining,
                 currentDriverIndex: r.currentDriverIndex || 0,
                 totalCandidates: (r.candidateDriverIds || []).length
@@ -3843,7 +3861,10 @@ async function startServer() {
                     const stepTimeoutSec = systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 20;
 
                     if (r.candidateDriverIds && r.currentDriverIndex < r.candidateDriverIds.length) {
-                        r.stepTimeoutAt = Date.now() + (stepTimeoutSec * 1000);
+                        const now = Date.now();
+                        r.stepTimeoutAt = now + (stepTimeoutSec * 1000);
+                        r.serverTimestamp = now;
+                        r.remainingSeconds = stepTimeoutSec;
                         const nextDriverId = r.candidateDriverIds[r.currentDriverIndex];
                         r.assignedDriverId = nextDriverId;
                         const nextDriver = (db.memoryState.drivers || []).find(d => String(d.driverId) === String(nextDriverId) || String(d.id) === String(nextDriverId));
@@ -3861,7 +3882,12 @@ async function startServer() {
                             event: 'new_ride',
                             rideId: r.id,
                             requestId: r.id,
-                            request: { ...r, customerPhone: maskPhoneNumber(r.customerPhone) }
+                            request: {
+                                ...r,
+                                serverTimestamp: now,
+                                remainingSeconds: stepTimeoutSec,
+                                customerPhone: maskPhoneNumber(r.customerPhone)
+                            }
                         });
                     } else {
                         await transitionRideState(
@@ -4856,8 +4882,9 @@ async function startServer() {
                     if (altCandidates.length > 0) {
                         const nextDriverId = altCandidates[0];
                         const nextDriver = (db.memoryState.drivers || []).find(d => String(d.driverId) === String(nextDriverId) || String(d.id) === String(nextDriverId));
+                        const now = Date.now();
                         const stepTimeoutSec = systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 20;
-                        const stepTimeoutAt = Date.now() + (stepTimeoutSec * 1000);
+                        const stepTimeoutAt = now + (stepTimeoutSec * 1000);
 
                         const transRes = await transitionRideState(
                             redisManager,
@@ -4871,6 +4898,8 @@ async function startServer() {
                                 assignedDriverPhone: nextDriver ? nextDriver.phoneNumber : '',
                                 assignedDriverVehicle: nextDriver ? `${nextDriver.vehicleMake||'تويوتا'} ${nextDriver.vehicleModel||'كورولا'}` : 'تويوتا',
                                 stepTimeoutAt,
+                                serverTimestamp: now,
+                                remainingSeconds: stepTimeoutSec,
                                 prevDriverId,
                                 cancelledDriverId: prevDriverId,
                                 candidateDriverIds: altCandidates,
@@ -5647,7 +5676,14 @@ async function startServer() {
                     if (isRejected) return false;
                 }
                 return true;
-            });
+            }).map(r => {
+                const rem = Math.max(0, Math.round(((r.stepTimeoutAt || 0) - now) / 1000));
+                return {
+                    ...r,
+                    serverTimestamp: now,
+                    remainingSeconds: rem
+                };
+            }).filter(r => r.remainingSeconds > 0);
         };
 
         const getDriverActiveRideItem = (rawParam) => {
@@ -5969,7 +6005,14 @@ async function startServer() {
                                 const isTierMatch = !targetDriverObj || !ride.tier || normalizeTier(ride.tier) === targetDriverTier;
 
                                 if (isPending && age < 120000 && isNotExpired && isCandidate && isTierMatch && !ride.acceptedDriverId) {
-                                    validRides.push(ride);
+                                    const remSec = Math.max(0, Math.round(((ride.stepTimeoutAt || 0) - now) / 1000));
+                                    if (remSec > 0) {
+                                        validRides.push({
+                                            ...ride,
+                                            serverTimestamp: now,
+                                            remainingSeconds: remSec
+                                        });
+                                    }
                                 } else if (age >= 120000 || (!isPending && s !== '') || ride.acceptedDriverId) {
                                     // Automatic self-cleaning of expired or accepted rides
                                     await redisManager.client.hdel('pending:rides', String(id)).catch(() => {});
