@@ -577,7 +577,7 @@ class RedisManager {
         }
     }
 
-    // ---[ 7. Driver Fixed Location Management (Batch 1) ]---
+    // ---[ 7. Driver Fixed Location Management (Batch 1 & 5) ]---
     async setDriverFixedLocation(driverId, data = {}) {
         if (!this.isConnected || !this.client || !driverId) return false;
         try {
@@ -587,6 +587,10 @@ class RedisManager {
                 fixed_lat: String(data.lat),
                 fixed_lng: String(data.lng),
                 fixed_label: String(data.label || ''),
+                fixed_dest_lat: data.destLat != null ? String(data.destLat) : '',
+                fixed_dest_lng: data.destLng != null ? String(data.destLng) : '',
+                fixed_dest_label: String(data.destLabel || ''),
+                route_name: String(data.routeName || ''),
                 fixed_updated_at: String(data.updatedAt || new Date().toISOString())
             });
             return true;
@@ -599,7 +603,12 @@ class RedisManager {
         if (!this.isConnected || !this.client || !driverId) return false;
         try {
             const hashKey = `driver:${driverId}:meta`;
-            await this.client.hdel(hashKey, 'fixed_lat', 'fixed_lng', 'fixed_label', 'fixed_updated_at');
+            await this.client.hdel(
+                hashKey, 
+                'fixed_lat', 'fixed_lng', 'fixed_label', 
+                'fixed_dest_lat', 'fixed_dest_lng', 'fixed_dest_label', 
+                'route_name', 'fixed_updated_at'
+            );
             return true;
         } catch (_) {
             return false;
@@ -617,6 +626,10 @@ class RedisManager {
                 lat: parseFloat(meta.fixed_lat),
                 lng: parseFloat(meta.fixed_lng),
                 label: meta.fixed_label || '',
+                destLat: meta.fixed_dest_lat ? parseFloat(meta.fixed_dest_lat) : null,
+                destLng: meta.fixed_dest_lng ? parseFloat(meta.fixed_dest_lng) : null,
+                destLabel: meta.fixed_dest_label || '',
+                routeName: meta.route_name || '',
                 updatedAt: meta.fixed_updated_at || null
             };
         } catch (_) {

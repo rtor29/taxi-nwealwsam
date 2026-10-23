@@ -329,6 +329,10 @@ class DatabaseManager {
                         ALTER TABLE drivers ADD COLUMN IF NOT EXISTS fixed_lng DOUBLE PRECISION;
                         ALTER TABLE drivers ADD COLUMN IF NOT EXISTS fixed_label VARCHAR(60);
                         ALTER TABLE drivers ADD COLUMN IF NOT EXISTS fixed_updated_at TIMESTAMPTZ;
+                        ALTER TABLE drivers ADD COLUMN IF NOT EXISTS fixed_dest_lat DOUBLE PRECISION;
+                        ALTER TABLE drivers ADD COLUMN IF NOT EXISTS fixed_dest_lng DOUBLE PRECISION;
+                        ALTER TABLE drivers ADD COLUMN IF NOT EXISTS fixed_dest_label VARCHAR(255);
+                        ALTER TABLE drivers ADD COLUMN IF NOT EXISTS route_name VARCHAR(255);
                         CREATE INDEX IF NOT EXISTS idx_drivers_fixed_lat_lng ON drivers(fixed_lat, fixed_lng) WHERE fixed_lat IS NOT NULL;
                         CREATE INDEX IF NOT EXISTS idx_drivers_telegram_chat ON drivers(telegram_chat_id);
                         CREATE INDEX IF NOT EXISTS idx_customers_telegram_chat ON customers(telegram_chat_id);
@@ -543,6 +547,10 @@ class DatabaseManager {
                     fixedLat: r.fixed_lat ? parseFloat(r.fixed_lat) : (r.permanent_lat ? parseFloat(r.permanent_lat) : null),
                     fixedLng: r.fixed_lng ? parseFloat(r.fixed_lng) : (r.permanent_lon ? parseFloat(r.permanent_lon) : null),
                     fixedLabel: r.fixed_label || r.permanent_location_name || '',
+                    fixedDestLat: r.fixed_dest_lat ? parseFloat(r.fixed_dest_lat) : (r.permanent_dropoff_lat ? parseFloat(r.permanent_dropoff_lat) : null),
+                    fixedDestLng: r.fixed_dest_lng ? parseFloat(r.fixed_dest_lng) : (r.permanent_dropoff_lon ? parseFloat(r.permanent_dropoff_lon) : null),
+                    fixedDestLabel: r.fixed_dest_label || r.permanent_dropoff_name || '',
+                    routeName: r.route_name || '',
                     fixedUpdatedAt: r.fixed_updated_at || null,
                     telegramChatId: r.telegram_chat_id ? String(r.telegram_chat_id) : null,
                     createdAt: r.created_at
@@ -774,9 +782,12 @@ class DatabaseManager {
                 `UPDATE drivers SET 
                     fixed_lat = $1, fixed_lng = $2, fixed_label = $3, fixed_updated_at = NOW(),
                     permanent_lat = $1, permanent_lon = $2, permanent_location_name = $3,
+                    fixed_dest_lat = $4, fixed_dest_lng = $5, fixed_dest_label = $6,
+                    permanent_dropoff_lat = $4, permanent_dropoff_lon = $5, permanent_dropoff_name = $6,
+                    route_name = $7,
                     updated_at = NOW()
-                 WHERE driver_id = $4`,
-                [data.lat, data.lng, data.label || '', driverId]
+                 WHERE driver_id = $8`,
+                [data.lat, data.lng, data.label || '', data.destLat || null, data.destLng || null, data.destLabel || '', data.routeName || '', driverId]
             );
         } catch (e) { console.warn('[Database] persistDriverFixedLocation error:', e.message); }
     }
@@ -789,6 +800,9 @@ class DatabaseManager {
                 `UPDATE drivers SET 
                     fixed_lat = NULL, fixed_lng = NULL, fixed_label = NULL, fixed_updated_at = NOW(),
                     permanent_lat = NULL, permanent_lon = NULL, permanent_location_name = NULL,
+                    fixed_dest_lat = NULL, fixed_dest_lng = NULL, fixed_dest_label = NULL,
+                    permanent_dropoff_lat = NULL, permanent_dropoff_lon = NULL, permanent_dropoff_name = NULL,
+                    route_name = NULL,
                     updated_at = NOW()
                  WHERE driver_id = $1`,
                 [driverId]

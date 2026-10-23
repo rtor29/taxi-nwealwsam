@@ -2799,6 +2799,10 @@ async function startServer() {
                 let fixedLat = null;
                 let fixedLng = null;
                 let fixedLabel = '';
+                let fixedDestLat = null;
+                let fixedDestLng = null;
+                let fixedDestLabel = '';
+                let routeName = '';
                 let fixedUpdatedAt = null;
 
                 const redisLoc = await redisManager.getDriverFixedLocation(id);
@@ -2806,6 +2810,10 @@ async function startServer() {
                     fixedLat = redisLoc.lat;
                     fixedLng = redisLoc.lng;
                     fixedLabel = redisLoc.label || '';
+                    fixedDestLat = redisLoc.destLat != null ? redisLoc.destLat : null;
+                    fixedDestLng = redisLoc.destLng != null ? redisLoc.destLng : null;
+                    fixedDestLabel = redisLoc.destLabel || '';
+                    routeName = redisLoc.routeName || '';
                     fixedUpdatedAt = redisLoc.updatedAt || null;
                 } else {
                     const dbLat = d.fixed_lat != null ? parseFloat(d.fixed_lat) : (mem.fixedLat != null ? parseFloat(mem.fixedLat) : null);
@@ -2814,6 +2822,10 @@ async function startServer() {
                         fixedLat = dbLat;
                         fixedLng = dbLng;
                         fixedLabel = d.fixed_label || mem.fixedLabel || '';
+                        fixedDestLat = d.fixed_dest_lat != null ? parseFloat(d.fixed_dest_lat) : (mem.fixedDestLat != null ? parseFloat(mem.fixedDestLat) : null);
+                        fixedDestLng = d.fixed_dest_lng != null ? parseFloat(d.fixed_dest_lng) : (mem.fixedDestLng != null ? parseFloat(mem.fixedDestLng) : null);
+                        fixedDestLabel = d.fixed_dest_label || mem.fixedDestLabel || '';
+                        routeName = d.route_name || mem.routeName || '';
                         fixedUpdatedAt = d.fixed_updated_at || mem.fixedUpdatedAt || null;
                     }
                 }
@@ -2838,7 +2850,7 @@ async function startServer() {
                 const vType = normalizeTier(d.vehicle_type || mem.vehicleType || 'توفير');
                 const fullName = d.full_name || d.fullName || mem.fullName || 'كابتن';
                 const firstName = fullName.trim().split(/\s+/)[0] || 'كابتن';
-                const routeStr = d.route || mem.route || (fixedLabel ? `${fixedLabel} ➔ المركز` : 'خط دائمي');
+                const routeStr = routeName || (fixedLabel && fixedDestLabel ? `${fixedLabel} ➔ ${fixedDestLabel}` : (d.route || mem.route || (fixedLabel ? `${fixedLabel} ➔ المركز` : 'خط دائمي')));
 
                 const targetRoute = (db.memoryState.routes || []).find(r => r.driverId === id || r.driver_id === id);
                 const totalCapacity = routeSeatsMap.get(id) || parseInt(targetRoute?.totalSeats || targetRoute?.total_seats || mem.totalSeats || mem.availableSeats || 4, 10);
@@ -2853,9 +2865,13 @@ async function startServer() {
                     vehicleColor: vColor,
                     vehicleType: vType,
                     route: routeStr,
+                    route_name: routeName || routeStr,
                     fixed_label: fixedLabel,
                     fixed_lat: fixedLat,
                     fixed_lng: fixedLng,
+                    fixed_dest_label: fixedDestLabel,
+                    fixed_dest_lat: fixedDestLat,
+                    fixed_dest_lng: fixedDestLng,
                     distanceM: distanceM,
                     distanceBand: distanceBand,
                     isFull: Boolean(isFull),
@@ -8558,6 +8574,10 @@ async function startServer() {
                 let fixedLat = driver.fixedLat !== undefined ? driver.fixedLat : (driver.permanentLat || null);
                 let fixedLng = driver.fixedLng !== undefined ? driver.fixedLng : (driver.permanentLon || null);
                 let fixedLabel = driver.fixedLabel !== undefined ? driver.fixedLabel : (driver.permanentLocationName || '');
+                let fixedDestLat = driver.fixedDestLat !== undefined ? driver.fixedDestLat : (driver.permanentDropoffLat || null);
+                let fixedDestLng = driver.fixedDestLng !== undefined ? driver.fixedDestLng : (driver.permanentDropoffLon || null);
+                let fixedDestLabel = driver.fixedDestLabel !== undefined ? driver.fixedDestLabel : (driver.permanentDropoffName || '');
+                let routeName = driver.routeName || '';
                 let fixedUpdatedAt = driver.fixedUpdatedAt || null;
 
                 // Sync from Redis if available
@@ -8566,12 +8586,20 @@ async function startServer() {
                     fixedLat = redisLoc.lat;
                     fixedLng = redisLoc.lng;
                     fixedLabel = redisLoc.label;
+                    if (redisLoc.destLat != null) fixedDestLat = redisLoc.destLat;
+                    if (redisLoc.destLng != null) fixedDestLng = redisLoc.destLng;
+                    if (redisLoc.destLabel) fixedDestLabel = redisLoc.destLabel;
+                    if (redisLoc.routeName) routeName = redisLoc.routeName;
                     fixedUpdatedAt = redisLoc.updatedAt;
                 } else if (fixedLat !== null && fixedLng !== null) {
                     await redisManager.setDriverFixedLocation(effectiveDriverId, {
                         lat: fixedLat,
                         lng: fixedLng,
                         label: fixedLabel,
+                        destLat: fixedDestLat,
+                        destLng: fixedDestLng,
+                        destLabel: fixedDestLabel,
+                        routeName: routeName,
                         updatedAt: fixedUpdatedAt
                     });
                 }
@@ -8582,6 +8610,10 @@ async function startServer() {
                     fixed_lat: fixedLat,
                     fixed_lng: fixedLng,
                     fixed_label: fixedLabel || '',
+                    fixed_dest_lat: fixedDestLat,
+                    fixed_dest_lng: fixedDestLng,
+                    fixed_dest_label: fixedDestLabel || '',
+                    route_name: routeName || '',
                     fixed_updated_at: fixedUpdatedAt,
                     work_mode: driver.work_mode || driver.workStatus || 'commute'
                 });
@@ -8594,10 +8626,17 @@ async function startServer() {
                 driver.fixedLat = null;
                 driver.fixedLng = null;
                 driver.fixedLabel = null;
+                driver.fixedDestLat = null;
+                driver.fixedDestLng = null;
+                driver.fixedDestLabel = null;
+                driver.routeName = null;
                 driver.fixedUpdatedAt = nowIso;
                 driver.permanentLat = null;
                 driver.permanentLon = null;
                 driver.permanentLocationName = null;
+                driver.permanentDropoffLat = null;
+                driver.permanentDropoffLon = null;
+                driver.permanentDropoffName = null;
                 db.saveStateSnapshot();
 
                 await db.removeDriverFixedLocation(effectiveDriverId);
@@ -8621,6 +8660,10 @@ async function startServer() {
                     fixed_lat: null,
                     fixed_lng: null,
                     fixed_label: null,
+                    fixed_dest_lat: null,
+                    fixed_dest_lng: null,
+                    fixed_dest_label: null,
+                    route_name: null,
                     fixed_updated_at: nowIso,
                     work_mode: driver.work_mode || driver.workStatus || 'commute'
                 };
@@ -8639,6 +8682,11 @@ async function startServer() {
             const rawLng = body.lng !== undefined ? body.lng : (body.lon !== undefined ? body.lon : body.longitude);
             const rawLabel = body.label !== undefined ? body.label : (body.name !== undefined ? body.name : body.locationName);
 
+            const rawDestLat = body.destLat !== undefined ? body.destLat : body.destinationLat;
+            const rawDestLng = body.destLng !== undefined ? body.destLng : body.destinationLng;
+            const rawDestLabel = body.destLabel !== undefined ? body.destLabel : (body.destinationLabel || body.destinationName);
+            const rawRouteName = body.routeName !== undefined ? body.routeName : body.name;
+
             const parsedLat = parseFloat(rawLat);
             const parsedLng = parseFloat(rawLng);
 
@@ -8654,18 +8702,70 @@ async function startServer() {
                 return sendJson({ success: false, error: 'يجب إدخال اسم موقع صحيح بحد أقصى 60 حرفاً' }, 400);
             }
 
+            // Destination coordinates validation (Iraq-wide bounds)
+            let parsedDestLat = null;
+            let parsedDestLng = null;
+            let cleanDestLabel = '';
+            if (rawDestLat !== undefined && rawDestLat !== null && rawDestLng !== undefined && rawDestLng !== null) {
+                parsedDestLat = parseFloat(rawDestLat);
+                parsedDestLng = parseFloat(rawDestLng);
+                if (isNaN(parsedDestLat) || isNaN(parsedDestLng) || parsedDestLat < 29.0 || parsedDestLat > 38.5 || parsedDestLng < 38.5 || parsedDestLng > 49.0) {
+                    return sendJson({ success: false, error: 'إحداثيات الوجهة خارج النطاق الجغرافي للعراق' }, 400);
+                }
+                cleanDestLabel = String(rawDestLabel || '').replace(/<[^>]*>?/gm, '').trim();
+                if (!cleanDestLabel || cleanDestLabel.length > 100) {
+                    return sendJson({ success: false, error: 'يجب إدخال اسم وجهة صحيح بحد أقصى 100 حرفاً' }, 400);
+                }
+            }
+
+            let cleanRouteName = String(rawRouteName || '').replace(/<[^>]*>?/gm, '').trim();
+            if (!cleanRouteName && cleanDestLabel) {
+                cleanRouteName = `${cleanLabel} ➔ ${cleanDestLabel}`;
+            }
+
             const nowIso = new Date().toISOString();
             driver.fixedLat = parsedLat;
             driver.fixedLng = parsedLng;
             driver.fixedLabel = cleanLabel;
+            driver.fixedDestLat = parsedDestLat;
+            driver.fixedDestLng = parsedDestLng;
+            driver.fixedDestLabel = cleanDestLabel;
+            driver.routeName = cleanRouteName;
             driver.fixedUpdatedAt = nowIso;
             driver.permanentLat = parsedLat;
             driver.permanentLon = parsedLng;
             driver.permanentLocationName = cleanLabel;
+            if (parsedDestLat) driver.permanentDropoffLat = parsedDestLat;
+            if (parsedDestLng) driver.permanentDropoffLon = parsedDestLng;
+            if (cleanDestLabel) driver.permanentDropoffName = cleanDestLabel;
+
+            // Ensure driver work mode is commute or both
+            const currentMode = String(driver.work_mode || driver.workStatus || '').toLowerCase();
+            if (currentMode === 'taxi') {
+                driver.work_mode = 'both';
+                driver.workStatus = 'both';
+            }
             db.saveStateSnapshot();
 
-            await db.persistDriverFixedLocation(effectiveDriverId, { lat: parsedLat, lng: parsedLng, label: cleanLabel });
-            await redisManager.setDriverFixedLocation(effectiveDriverId, { lat: parsedLat, lng: parsedLng, label: cleanLabel, updatedAt: nowIso });
+            await db.persistDriverFixedLocation(effectiveDriverId, {
+                lat: parsedLat,
+                lng: parsedLng,
+                label: cleanLabel,
+                destLat: parsedDestLat,
+                destLng: parsedDestLng,
+                destLabel: cleanDestLabel,
+                routeName: cleanRouteName
+            });
+            await redisManager.setDriverFixedLocation(effectiveDriverId, {
+                lat: parsedLat,
+                lng: parsedLng,
+                label: cleanLabel,
+                destLat: parsedDestLat,
+                destLng: parsedDestLng,
+                destLabel: cleanDestLabel,
+                routeName: cleanRouteName,
+                updatedAt: nowIso
+            });
 
             try {
                 const auditService = require('./modules/audit/auditService');
@@ -8674,7 +8774,16 @@ async function startServer() {
                     entityType: 'Driver',
                     entityId: effectiveDriverId,
                     actor: `كابتن (${driver.fullName || effectiveDriverId})`,
-                    details: { lat: parsedLat, lng: parsedLng, label: cleanLabel, timestamp: nowIso },
+                    details: {
+                        lat: parsedLat,
+                        lng: parsedLng,
+                        label: cleanLabel,
+                        destLat: parsedDestLat,
+                        destLng: parsedDestLng,
+                        destLabel: cleanDestLabel,
+                        routeName: cleanRouteName,
+                        timestamp: nowIso
+                    },
                     ip: clientIp
                 });
             } catch (_) {}
@@ -8685,6 +8794,10 @@ async function startServer() {
                 fixed_lat: parsedLat,
                 fixed_lng: parsedLng,
                 fixed_label: cleanLabel,
+                fixed_dest_lat: parsedDestLat,
+                fixed_dest_lng: parsedDestLng,
+                fixed_dest_label: cleanDestLabel,
+                route_name: cleanRouteName,
                 fixed_updated_at: nowIso,
                 work_mode: driver.work_mode || driver.workStatus || 'commute'
             };

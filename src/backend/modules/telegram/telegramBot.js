@@ -2791,9 +2791,15 @@ async function notifyBookingRequestToCaptain(booking, route = null) {
                         { text: 'رفض ❌', callback_data: `bk_reject_${bId}` }
                     ]
                 ];
-                await sendKeyboard(captainChatId, msg, buttons).catch(err => {
+                const sendRes = await sendKeyboard(captainChatId, msg, buttons).catch(err => {
                     console.warn('[TelegramBot] sendKeyboard to captain error:', err.message);
                 });
+                if (sendRes && sendRes.ok && sendRes.result && sendRes.result.message_id && redisManager && redisManager.client) {
+                    await redisManager.client.set(`booking:${bId}:tg_msg`, JSON.stringify({
+                        chatId: captainChatId,
+                        messageId: sendRes.result.message_id
+                    }), 'EX', 86400).catch(() => {});
+                }
             }
         }
 
@@ -2922,6 +2928,33 @@ async function notifyBookingDeclinedToRider(booking, reason = null) {
     }
 }
 
+async function updateCaptainBookingMessage(bookingId, status, bookingData = null) {
+    if (!redisManager || !redisManager.client) return;
+    try {
+        const raw = await redisManager.client.get(`booking:${bookingId}:tg_msg`);
+        if (!raw) return;
+        const info = JSON.parse(raw);
+        if (!info || !info.chatId || !info.messageId) return;
+
+        let editedText = '';
+        if (status === 'Confirmed' || status === 'Accepted') {
+            const b = bookingData || (db.memoryState.bookings || []).find(x => (x.id === bookingId || x.bookingId === bookingId));
+            editedText = `✅ <b>تم قبول الحجز عبر التطبيق ✅</b>\n\n` +
+                `👤 <b>الراكب:</b> ${(b && b.customerName) || 'راكب'}\n` +
+                `📍 <b>المسار:</b> ${(b && b.pickupLocation) || ''} ➔ ${(b && b.dropoffLocation) || ''}\n` +
+                `💺 <b>المقاعد:</b> ${(b && b.seatsBooked) || 1}\n` +
+                `📞 <b>هاتف الراكب:</b> <code>${(b && b.customerPhone) || 'غير متوفر'}</code>\n\n` +
+                `<i>تم تأكيد المقعد ونقل الراكب لقائمة المشتركين.</i>`;
+        } else if (status === 'Declined' || status === 'Rejected') {
+            editedText = `❌ <b>تم رفض الحجز عبر التطبيق ❌</b>\n\n<i>طلب الحجز تم رفضه من الكابتن.</i>`;
+        }
+        if (editedText) {
+            await editMessageText(info.chatId, info.messageId, editedText, { reply_markup: { inline_keyboard: [] } }).catch(() => {});
+            await redisManager.client.del(`booking:${bookingId}:tg_msg`).catch(() => {});
+        }
+    } catch (_) {}
+}
+
 module.exports = {
     startBot,
     stopBot,
@@ -2945,6 +2978,7 @@ module.exports = {
     notifyBookingRequestToCaptain,
     notifyBookingAcceptedToRider,
     notifyBookingDeclinedToRider,
+    updateCaptainBookingMessage,
     handleBookingDecisionCallback
 };
 

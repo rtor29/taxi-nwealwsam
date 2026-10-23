@@ -1140,9 +1140,12 @@ class AdminController {
             status: 'Confirmed'
         });
 
-        // Notify Passenger via Telegram with SET NX distributed lock
+        // Notify Passenger via Telegram with SET NX distributed lock and update captain message
         try {
             const telegramBot = require('../telegram/telegramBot');
+            if (typeof telegramBot.updateCaptainBookingMessage === 'function') {
+                telegramBot.updateCaptainBookingMessage(booking.id || bookingId, 'Confirmed', booking).catch(() => {});
+            }
             if (typeof telegramBot.notifyBookingAcceptedToRider === 'function') {
                 telegramBot.notifyBookingAcceptedToRider(booking).catch(err => {
                     console.warn('[AdminController] notifyBookingAcceptedToRider error:', err.message);
@@ -1365,16 +1368,19 @@ class AdminController {
             status: 'Declined'
         });
 
-        // Notify Passenger via Telegram with SET NX distributed lock
+        // Notify Passenger via Telegram with SET NX distributed lock and update captain message
         try {
             const telegramBot = require('../telegram/telegramBot');
+            if (typeof telegramBot.updateCaptainBookingMessage === 'function') {
+                telegramBot.updateCaptainBookingMessage(booking.id || bookingId, 'Declined', booking).catch(() => {});
+            }
             if (typeof telegramBot.notifyBookingDeclinedToRider === 'function') {
                 telegramBot.notifyBookingDeclinedToRider(booking, sanitizedReason).catch(err => {
                     console.warn('[AdminController] notifyBookingDeclinedToRider error:', err.message);
                 });
             }
         } catch (tgErr) {
-            console.warn('[AdminController] Telegram notify error:', tgErr.message);
+            console.warn('[AdminController] Telegram notify decline error:', tgErr.message);
         }
 
         db.saveStateSnapshot();
