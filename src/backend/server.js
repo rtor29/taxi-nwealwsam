@@ -4519,7 +4519,8 @@ async function startServer() {
 
                 const lastKnownLocation = {
                     lat: parseFloat(r.driverLat || r.currentLat || r.pickupLat || 32.0),
-                    lon: parseFloat(r.driverLon || r.currentLon || r.pickupLon || 44.3)
+                    lng: parseFloat(r.driverLng || r.driverLon || r.currentLng || r.currentLon || r.pickupLng || r.pickupLon || 44.3),
+                    lon: parseFloat(r.driverLon || r.driverLng || r.currentLon || r.currentLng || r.pickupLon || r.pickupLng || 44.3)
                 };
 
                 // Save snapshot & broadcast SSE to both passenger and driver streams
@@ -7130,8 +7131,13 @@ async function startServer() {
         // Customer Request Route Cancellation
         if ((pathname === '/api/customer/request-route-cancellation' || pathname === '/customer/request-route-cancellation') && method === 'POST') {
             const body = await parseJsonBody(req).catch(() => ({}));
-            const result = await adminController.requestRouteCancellation(body);
-            return sendJson(result, result.success ? 200 : 400);
+            const authUser = getAuthUser(req);
+            const userIdentifier = body.customerId || body.customerPhone || (authUser ? (authUser.id || authUser.phone) : clientIp);
+            if (_orderRateLimit(clientIp, userIdentifier)) {
+                return sendJson({ success: false, error: 'تم إرسال طلبات متعددة بسرعة، يرجى الانتظار قليلاً' }, 429);
+            }
+            const result = await adminController.requestRouteCancellation(body, authUser);
+            return sendJson(result, result.success ? 200 : (result.code || 400));
         }
 
         // Driver Respond Route Cancellation (Approve or Reject)
