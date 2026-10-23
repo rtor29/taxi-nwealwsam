@@ -29,7 +29,11 @@ const DEFAULTS = {
     // Commute Distance Bands & Results (Batch 2)
     commute_band_green_m: 500,
     commute_band_purple_m: 1000,
-    commute_max_results: 100
+    commute_max_results: 100,
+    // Booking Lifecycle (Batch 3)
+    booking_max_pending_per_rider: 3,
+    booking_expiry_hours: 24,
+    booking_driver_reject_reasons: ['المقاعد مكتملة', 'المسار غير متطابق', 'الوقت غير مناسب', 'أخرى']
 };
 
 class SystemSettingsService {
@@ -69,6 +73,9 @@ class SystemSettingsService {
                         'commute_band_green_m',
                         'commute_band_purple_m',
                         'commute_max_results',
+                        'booking_max_pending_per_rider',
+                        'booking_expiry_hours',
+                        'booking_driver_reject_reasons',
                         'matching_settings',
                         'search_radius_km'
                     )`
@@ -106,6 +113,8 @@ class SystemSettingsService {
                         const val = parsed.value !== undefined ? parsed.value : parsed;
                         if (typeof val === 'number' || (typeof val === 'string' && !isNaN(Number(val)))) {
                             this._cache[row.key] = Number(val);
+                        } else if (Array.isArray(val)) {
+                            this._cache[row.key] = val;
                         }
                     } catch (_) {}
                 }
@@ -204,6 +213,18 @@ class SystemSettingsService {
         return this.getConstant('commute_max_results', DEFAULTS.commute_max_results);
     }
 
+    getBookingMaxPendingPerRider() {
+        return this.getConstant('booking_max_pending_per_rider', DEFAULTS.booking_max_pending_per_rider);
+    }
+
+    getBookingExpiryHours() {
+        return this.getConstant('booking_expiry_hours', DEFAULTS.booking_expiry_hours);
+    }
+
+    getBookingDriverRejectReasons() {
+        return this.getConstant('booking_driver_reject_reasons', DEFAULTS.booking_driver_reject_reasons);
+    }
+
     getAllConstants() {
         return {
             proximity_radius_meters: this.getProximityRadiusMeters(),
@@ -223,7 +244,10 @@ class SystemSettingsService {
             vehicle_tier_surcharge_plus_iqd: this.getVehicleTierSurchargePlusIqd(),
             commute_band_green_m: this.getCommuteBandGreenM(),
             commute_band_purple_m: this.getCommuteBandPurpleM(),
-            commute_max_results: this.getCommuteMaxResults()
+            commute_max_results: this.getCommuteMaxResults(),
+            booking_max_pending_per_rider: this.getBookingMaxPendingPerRider(),
+            booking_expiry_hours: this.getBookingExpiryHours(),
+            booking_driver_reject_reasons: this.getBookingDriverRejectReasons()
         };
     }
 }

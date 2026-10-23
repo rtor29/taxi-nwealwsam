@@ -335,6 +335,32 @@ class RedisManager {
     }
 
     /**
+     * Publish Real-time Passenger/Customer Event with Replay Buffer
+     */
+    async publishPassengerEvent(passengerId, event) {
+        if (!this.isConnected || !this.pub || !passengerId) return false;
+        try {
+            const eventId = `ev_pass_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+            const eventObj = typeof event === 'string' ? JSON.parse(event) : { ...event };
+            eventObj.eventId = eventId;
+            eventObj.timestamp = eventObj.timestamp || new Date().toISOString();
+            const payload = JSON.stringify(eventObj);
+
+            const histKey = `sse:history:passenger:${passengerId}`;
+            if (this.client) {
+                await this.client.rpush(histKey, payload).catch(() => {});
+                await this.client.ltrim(histKey, -50, -1).catch(() => {});
+                await this.client.expire(histKey, 3600).catch(() => {});
+            }
+
+            await this.pub.publish(`channel:passenger:${passengerId}`, payload);
+            return eventId;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    /**
      * Fetch missed SSE events since lastEventId from Redis List
      */
     async getMissedSseEvents(channelType, channelId, lastEventId) {

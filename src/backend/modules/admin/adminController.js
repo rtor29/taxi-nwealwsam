@@ -890,7 +890,7 @@ class AdminController {
         };
     }
 
-    async acceptBooking(bookingId, driverId = null) {
+    async acceptBooking(bookingId, driverId = null, authUser = null) {
         let booking = (db.memoryState.bookings || []).find(b => (b.id === bookingId || b.bookingId === bookingId));
         
         if (!booking && db.isPostgresConnected && db.pool) {
@@ -904,6 +904,7 @@ class AdminController {
                         routeId: r.route_id,
                         driverId: r.driver_id,
                         driverName: r.driver_name,
+                        driverPhone: r.driver_phone,
                         customerId: r.customer_id,
                         customerName: r.customer_name,
                         customerPhone: r.customer_phone,
@@ -922,16 +923,99 @@ class AdminController {
         }
 
         if (!booking) {
-            return { success: false, error: 'الحجز غير موجود' };
+            return { success: false, code: 404, error: 'الحجز غير موجود' };
+        }
+
+        // RLS Authorization Check: Driver must be the assigned captain, or actor is Admin
+        if (authUser) {
+            if (authUser.role === 'Driver') {
+                const callerDriverId = authUser.id || driverId;
+                const isDriverOwner = (callerDriverId && (String(callerDriverId) === String(booking.driverId) || String(callerDriverId) === String(booking.driverPhone))) ||
+                                      (authUser.phone && booking.driverPhone && String(authUser.phone).replace(/[^0-9]/g, '').endsWith(String(booking.driverPhone).replace(/[^0-9]/g, '').slice(-8)));
+                if (!isDriverOwner) {
+                    return { success: false, code: 403, error: 'غير مصرح: هذا الحجز مخصص لكابتن آخر (RLS)' };
+                }
+            } else if (authUser.role === 'Customer') {
+                return { success: false, code: 403, error: 'غير مصرح للركاب بقبول الحجوزات (RLS)' };
+            }
+        }
+
+        // State Machine Check: only Pending can transition to Confirmed (ACCEPTED)
+        const curStatus = String(booking.status || 'Pending').toLowerCase();
+        if (curStatus !== 'pending') {
+            let msg = 'لا يمكن قبول الحجز في حالته الحالية';
+            if (curStatus === 'confirmed' || curStatus === 'accepted') msg = 'طلب الحجز تم قبوله مسبقاً';
+            else if (curStatus === 'declined' || curStatus === 'rejected') msg = 'طلب الحجز تم رفضه مسبقاً';
+            else if (curStatus === 'cancelled') msg = 'طلب الحجز ملغي';
+            else if (curStatus === 'expired') msg = 'انتهت صلاحية طلب الحجز';
+            return { success: false, code: 409, error: msg, currentStatus: booking.status };
+        }
+
+        // Atomic Seat Capacity Check: Enforce driver capacity limit
+        const seatsRequested = parseInt(booking.seatsBooked || 1, 10);
+        let activeBookedSeats = 0;
+        if (db.isPostgresConnected && db.pool) {
+            try {
+                const capRes = await db.pool.query(`
+                    SELECT COALESCE(SUM(seats_booked), 0) AS booked_count
+                    FROM bookings
+                    WHERE driver_id = $1 AND status IN ('Confirmed', 'Active') AND id != $2
+                `, [booking.driverId, booking.id || bookingId]);
+                activeBookedSeats = parseInt(capRes.rows[0]?.booked_count || 0, 10);
+            } catch (_) {
+                const memActive = (db.memoryState.bookings || []).filter(b => 
+                    b.driverId === booking.driverId && (b.status === 'Confirmed' || b.status === 'Active') && (b.id !== booking.id && b.bookingId !== booking.id)
+                );
+                activeBookedSeats = memActive.reduce((sum, b) => sum + parseInt(b.seatsBooked || 1, 10), 0);
+            }
+        } else {
+            const memActive = (db.memoryState.bookings || []).filter(b => 
+                b.driverId === booking.driverId && (b.status === 'Confirmed' || b.status === 'Active') && (b.id !== booking.id && b.bookingId !== booking.id)
+            );
+            activeBookedSeats = memActive.reduce((sum, b) => sum + parseInt(b.seatsBooked || 1, 10), 0);
+        }
+
+        const targetRoute = (db.memoryState.routes || []).find(r => (r.id === booking.routeId || r.routeId === booking.routeId));
+        const targetDriver = (db.memoryState.drivers || []).find(d => d.driverId === booking.driverId);
+        const totalCapacity = targetRoute?.totalSeats || targetDriver?.availableSeats || targetDriver?.available_seats || 4;
+
+        if (activeBookedSeats + seatsRequested > totalCapacity) {
+            return {
+                success: false,
+                code: 409,
+                error: `عذراً، المقاعد مكتملة بالكامل لدى الكابتن (${activeBookedSeats}/${totalCapacity} محجوز)، لا يمكن قبول ركاب إضافيين.`
+            };
+        }
+
+        // Atomic Compare-And-Set in PostgreSQL
+        const nowIso = new Date().toISOString();
+        if (db.isPostgresConnected && db.pool) {
+            try {
+                const pgUpd = await db.pool.query(`
+                    UPDATE bookings 
+                    SET status = 'Confirmed', accepted_at = NOW(), updated_at = NOW()
+                    WHERE id = $1 AND status = 'Pending'
+                    RETURNING *
+                `, [booking.id || bookingId]);
+                if (!pgUpd.rows || pgUpd.rows.length === 0) {
+                    return {
+                        success: false,
+                        code: 409,
+                        error: 'تعذر قبول الحجز، قد تكون حالته تغيرت بالتزامن'
+                    };
+                }
+            } catch (e) {
+                console.error('[AdminController] PG accept booking error:', e);
+                return { success: false, code: 500, error: 'فشل حفظ قبول الحجز في قاعدة البيانات' };
+            }
         }
 
         booking.status = 'Confirmed';
-        booking.acceptedAt = new Date().toISOString();
+        booking.acceptedAt = nowIso;
 
         // Deduct seats from target route
-        const targetRoute = (db.memoryState.routes || []).find(r => (r.id === booking.routeId || r.routeId === booking.routeId));
         if (targetRoute && !booking.seatsDeducted) {
-            targetRoute.availableSeats = Math.max(0, (targetRoute.availableSeats || 4) - (booking.seatsBooked || 1));
+            targetRoute.availableSeats = Math.max(0, (targetRoute.availableSeats || 4) - seatsRequested);
             booking.seatsDeducted = true;
         }
 
@@ -943,21 +1027,51 @@ class AdminController {
             cust.bookingConfirmed = true;
         }
 
-        if (db.isPostgresConnected && db.pool) {
-            try {
-                await db.pool.query(`
-                    UPDATE bookings 
-                    SET status = 'Confirmed' 
-                    WHERE id = $1
-                `, [booking.id || bookingId]);
-            } catch (e) {
-                console.error('[AdminController] PG accept booking error:', e);
+        // Real-time SSE Broadcasts
+        const redisManager = require('../redis/redisClient');
+        if (redisManager) {
+            if (typeof redisManager.publishPassengerEvent === 'function') {
+                await redisManager.publishPassengerEvent(booking.customerId, {
+                    type: 'booking_updated',
+                    event: 'booking_updated',
+                    canonicalStatus: 'ACCEPTED',
+                    status: 'Confirmed',
+                    bookingId: booking.id || bookingId,
+                    driverId: booking.driverId,
+                    driverName: booking.driverName,
+                    driverPhone: booking.driverPhone,
+                    message: 'وافق الكابتن على طلب حجزك في الخط! تم تأكيد مقعدك بنجاح ✅'
+                });
+            }
+            if (typeof redisManager.publishRideEvent === 'function') {
+                redisManager.publishRideEvent(`cust:${booking.customerId}`, {
+                    type: 'booking_accepted',
+                    canonicalStatus: 'ACCEPTED',
+                    bookingId: booking.id || bookingId
+                });
+            }
+            if (typeof redisManager.publishDriverEvent === 'function') {
+                redisManager.publishDriverEvent(booking.driverId, {
+                    type: 'booking_accepted',
+                    canonicalStatus: 'ACCEPTED',
+                    bookingId: booking.id || bookingId,
+                    customerId: booking.customerId
+                });
+            }
+            if (redisManager.pub) {
+                redisManager.pub.publish('channel:cluster:sync', JSON.stringify({
+                    type: 'booking_status_sync',
+                    bookingId: booking.id || bookingId,
+                    status: 'Confirmed'
+                })).catch(() => {});
             }
         }
 
         db.addAuditLog('BookingAccepted', 'Driver', booking.driverId || 'Admin', {
             bookingId: booking.id || bookingId,
             customerName: booking.customerName,
+            customerId: booking.customerId,
+            driverId: booking.driverId,
             status: 'Confirmed'
         });
 
@@ -965,7 +1079,7 @@ class AdminController {
         return { success: true, message: 'تمت موافقة السائق على الحجز وأصبح الزبون ضمن الركاب بنجاح! ✅', booking };
     }
 
-    async declineBooking(bookingId, reason = null) {
+    async declineBooking(bookingId, reason = null, driverId = null, authUser = null) {
         let booking = (db.memoryState.bookings || []).find(b => (b.id === bookingId || b.bookingId === bookingId));
 
         if (!booking && db.isPostgresConnected && db.pool) {
@@ -979,6 +1093,7 @@ class AdminController {
                         routeId: r.route_id,
                         driverId: r.driver_id,
                         driverName: r.driver_name,
+                        driverPhone: r.driver_phone,
                         customerId: r.customer_id,
                         customerName: r.customer_name,
                         customerPhone: r.customer_phone,
@@ -994,12 +1109,68 @@ class AdminController {
         }
 
         if (!booking) {
-            return { success: false, error: 'الحجز غير موجود' };
+            return { success: false, code: 404, error: 'الحجز غير موجود' };
+        }
+
+        // RLS Authorization Check: Driver must be the assigned captain, or actor is Admin
+        if (authUser) {
+            if (authUser.role === 'Driver') {
+                const callerDriverId = authUser.id || driverId;
+                const isDriverOwner = (callerDriverId && (String(callerDriverId) === String(booking.driverId) || String(callerDriverId) === String(booking.driverPhone))) ||
+                                      (authUser.phone && booking.driverPhone && String(authUser.phone).replace(/[^0-9]/g, '').endsWith(String(booking.driverPhone).replace(/[^0-9]/g, '').slice(-8)));
+                if (!isDriverOwner) {
+                    return { success: false, code: 403, error: 'غير مصرح: هذا الحجز مخصص لكابتن آخر (RLS)' };
+                }
+            } else if (authUser.role === 'Customer') {
+                return { success: false, code: 403, error: 'غير مصرح للركاب برفض الحجوزات من طرف الكابتن (RLS)' };
+            }
+        }
+
+        // State Machine Check: only Pending can transition to Declined (REJECTED)
+        const curStatus = String(booking.status || 'Pending').toLowerCase();
+        if (curStatus !== 'pending') {
+            let msg = 'لا يمكن رفض الحجز في حالته الحالية';
+            if (curStatus === 'confirmed' || curStatus === 'accepted') msg = 'طلب الحجز تم قبوله مسبقاً، يرجى استخدام مسار إلغاء الاشتراك';
+            else if (curStatus === 'declined' || curStatus === 'rejected') msg = 'طلب الحجز تم رفضه مسبقاً';
+            else if (curStatus === 'cancelled') msg = 'طلب الحجز ملغي';
+            else if (curStatus === 'expired') msg = 'انتهت صلاحية طلب الحجز';
+            return { success: false, code: 409, error: msg, currentStatus: booking.status };
+        }
+
+        // Validate and sanitize rejection reason
+        const systemSettingsService = require('../systemSettings/systemSettingsService');
+        let sanitizedReason = typeof reason === 'string' ? reason.trim().slice(0, 100) : '';
+        if (!sanitizedReason) {
+            sanitizedReason = 'المقاعد مكتملة';
+        }
+
+        // Atomic Compare-And-Set in PostgreSQL
+        const nowIso = new Date().toISOString();
+        if (db.isPostgresConnected && db.pool) {
+            try {
+                const pgUpd = await db.pool.query(`
+                    UPDATE bookings 
+                    SET status = 'Declined', declined_at = NOW(), rejection_reason = $2, updated_at = NOW()
+                    WHERE id = $1 AND status = 'Pending'
+                    RETURNING *
+                `, [booking.id || bookingId, sanitizedReason]);
+                if (!pgUpd.rows || pgUpd.rows.length === 0) {
+                    return {
+                        success: false,
+                        code: 409,
+                        error: 'تعذر رفض الحجز، قد تكون حالته تغيرت بالتزامن'
+                    };
+                }
+            } catch (e) {
+                console.error('[AdminController] PG decline booking error:', e);
+                return { success: false, code: 500, error: 'فشل حفظ رفض الحجز في قاعدة البيانات' };
+            }
         }
 
         booking.status = 'Declined';
-        booking.declinedAt = new Date().toISOString();
-        if (reason) booking.declineReason = reason;
+        booking.declinedAt = nowIso;
+        booking.declineReason = sanitizedReason;
+        booking.rejectionReason = sanitizedReason;
 
         if (booking.seatsDeducted) {
             const targetRoute = (db.memoryState.routes || []).find(r => (r.id === booking.routeId || r.routeId === booking.routeId));
@@ -1015,22 +1186,44 @@ class AdminController {
             cust.bookingConfirmed = false;
         }
 
-        if (db.isPostgresConnected && db.pool) {
-            try {
-                await db.pool.query(`
-                    UPDATE bookings 
-                    SET status = 'Declined' 
-                    WHERE id = $1
-                `, [booking.id || bookingId]);
-            } catch (e) {
-                console.error('[AdminController] PG decline booking error:', e);
+        // Real-time SSE Broadcasts
+        const redisManager = require('../redis/redisClient');
+        if (redisManager) {
+            if (typeof redisManager.publishPassengerEvent === 'function') {
+                await redisManager.publishPassengerEvent(booking.customerId, {
+                    type: 'booking_updated',
+                    event: 'booking_updated',
+                    canonicalStatus: 'REJECTED',
+                    status: 'Declined',
+                    bookingId: booking.id || bookingId,
+                    driverId: booking.driverId,
+                    reason: sanitizedReason,
+                    message: `اعتذر الكابتن عن قبول الطلب: ${sanitizedReason}`
+                });
+            }
+            if (typeof redisManager.publishDriverEvent === 'function') {
+                redisManager.publishDriverEvent(booking.driverId, {
+                    type: 'booking_declined',
+                    canonicalStatus: 'REJECTED',
+                    bookingId: booking.id || bookingId
+                });
+            }
+            if (redisManager.pub) {
+                redisManager.pub.publish('channel:cluster:sync', JSON.stringify({
+                    type: 'booking_status_sync',
+                    bookingId: booking.id || bookingId,
+                    status: 'Declined'
+                })).catch(() => {});
             }
         }
 
         db.addAuditLog('BookingDeclined', 'Driver', booking.driverId || 'Admin', {
             bookingId: booking.id || bookingId,
             customerName: booking.customerName,
-            reason
+            customerId: booking.customerId,
+            driverId: booking.driverId,
+            reason: sanitizedReason,
+            status: 'Declined'
         });
 
         db.saveStateSnapshot();

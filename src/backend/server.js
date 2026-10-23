@@ -181,6 +181,55 @@ setInterval(() => {
     }
 }, 30000);
 
+// Cluster-wide background job: Auto-expire pending commute booking requests (every 60s)
+setInterval(async () => {
+    try {
+        if (!redisManager || !redisManager.client) return;
+        // Acquire Redis distributed lock across 6 PM2 cluster nodes for 55s
+        const lockAcquired = await redisManager.client.set('lock:booking:expiry', '1', 'NX', 'EX', 55).catch(() => null);
+        if (!lockAcquired) return;
+
+        const expiryHours = systemSettingsService ? systemSettingsService.getBookingExpiryHours() : 24;
+        if (db.isPostgresConnected && db.pool) {
+            const expRes = await db.pool.query(`
+                UPDATE bookings 
+                SET status = 'Expired', expired_at = NOW(), updated_at = NOW()
+                WHERE status = 'Pending' 
+                  AND created_at < NOW() - INTERVAL '1 hour' * $1
+                RETURNING id, customer_id, driver_id, driver_name
+            `, [expiryHours]);
+
+            if (expRes.rows && expRes.rows.length > 0) {
+                for (const row of expRes.rows) {
+                    const memB = (db.memoryState.bookings || []).find(b => b.id === row.id || b.bookingId === row.id);
+                    if (memB) {
+                        memB.status = 'Expired';
+                        memB.expiredAt = new Date().toISOString();
+                    }
+                    if (typeof redisManager.publishPassengerEvent === 'function') {
+                        await redisManager.publishPassengerEvent(row.customer_id, {
+                            type: 'booking_updated',
+                            event: 'booking_updated',
+                            canonicalStatus: 'EXPIRED',
+                            status: 'Expired',
+                            bookingId: row.id,
+                            driverId: row.driver_id,
+                            message: 'انتهت مهلة طلب الحجز لعدم رد الكابتن خلال المدة المحددة'
+                        });
+                    }
+                    db.addAuditLog('BookingExpired', 'System', row.id, {
+                        customerId: row.customer_id,
+                        driverId: row.driver_id,
+                        expiryHours
+                    });
+                }
+            }
+        }
+    } catch (err) {
+        console.error('[BookingExpiryJob] Error in auto-expiry run:', err);
+    }
+}, 60000);
+
 // ---[ Row Level Security (RLS) Helper: Extract & Validate Current User ]---
 function getAuthUser(req) {
     const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
@@ -6026,6 +6075,113 @@ async function startServer() {
             return;
         }
 
+        // 1.5. Passenger Real-time Event Stream: GET /api/customer/stream or /api/passenger/stream or /api/events/passenger/:id
+        const isPassengerSseRoute = (pathname === '/api/customer/stream' || pathname === '/customer/stream' || 
+                                     pathname === '/api/passenger/stream' || pathname === '/passenger/stream' ||
+                                     pathname.startsWith('/api/events/passenger/') || pathname.startsWith('/events/passenger/') ||
+                                     pathname.startsWith('/api/events/customer/') || pathname.startsWith('/events/customer/'));
+        if (isPassengerSseRoute && method === 'GET') {
+            const authUser = getAuthUser(req);
+            let passengerId = '';
+            if (pathname.startsWith('/api/events/passenger/') || pathname.startsWith('/events/passenger/')) {
+                passengerId = pathname.replace(/^\/?(?:api\/)?events\/passenger\//, '').trim();
+            } else if (pathname.startsWith('/api/events/customer/') || pathname.startsWith('/events/customer/')) {
+                passengerId = pathname.replace(/^\/?(?:api\/)?events\/customer\//, '').trim();
+            }
+            if (!passengerId) {
+                passengerId = parsedUrl.searchParams.get('passengerId') || 
+                              parsedUrl.searchParams.get('customerId') || 
+                              parsedUrl.searchParams.get('id') || 
+                              (authUser ? (authUser.id || authUser.phone) : '');
+            }
+            passengerId = String(passengerId || '').trim();
+
+            if (!passengerId) {
+                return sendJson({ success: false, error: 'passengerId مطلوب لفتح قناة البث اللحظي للراكب' }, 400);
+            }
+
+            // RLS: Must be authenticated and either Admin or the passenger themselves
+            if (!authUser) {
+                return sendJson({ success: false, error: 'غير مصرح: تسجيل الدخول مطلوب للاشتراك في قناة بث الراكب' }, 401);
+            }
+            if (authUser.role !== 'Admin') {
+                const cleanAuthId = String(authUser.id || '').trim();
+                const cleanAuthPhone = normalizePhone(authUser.phone || '');
+                const cleanReqPassengerId = String(passengerId || '').trim();
+                const cleanReqPhone = normalizePhone(passengerId);
+                const isMatch = (cleanAuthId && cleanAuthId === cleanReqPassengerId) || 
+                                (cleanAuthPhone && cleanReqPhone && cleanAuthPhone === cleanReqPhone) ||
+                                (cleanAuthId && cleanReqPhone && cleanAuthId === cleanReqPhone);
+                if (!isMatch) {
+                    return sendJson({ success: false, error: 'غير مصرح: لا يمكنك الاشتراك في قناة راكب آخر (RLS)' }, 403);
+                }
+            }
+
+            res.writeHead(200, {
+                'Content-Type': 'text/event-stream; charset=utf-8',
+                'Cache-Control': 'no-cache, no-transform',
+                'Connection': 'keep-alive',
+                'Access-Control-Allow-Origin': req.headers['origin'] || '*',
+                'X-Accel-Buffering': 'no'
+            });
+
+            const lastEventId = req.headers['last-event-id'] || parsedUrl.searchParams.get('lastEventId');
+            const sendSse = (eventName, data, eventId = null) => {
+                try {
+                    const idLine = eventId ? `id: ${eventId}\n` : `id: ${Date.now()}\n`;
+                    res.write(`${idLine}event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`);
+                } catch (_) {}
+            };
+
+            (async () => {
+                if (lastEventId) {
+                    const missed = await redisManager.getMissedSseEvents('passenger', passengerId, lastEventId);
+                    for (const m of missed) {
+                        const eName = m.event || m.type || 'passenger_event';
+                        sendSse(eName, m, m.eventId || m.id);
+                    }
+                } else {
+                    sendSse('init', {
+                        connected: true,
+                        passengerId,
+                        timestamp: Date.now()
+                    });
+                }
+            })();
+
+            const onRedisPassengerMsg = (channel, msgStr) => {
+                try {
+                    if (channel === `channel:passenger:${passengerId}`) {
+                        const data = JSON.parse(msgStr);
+                        const eventId = data.eventId || data.id;
+                        const eventType = data.type || data.event || 'passenger_event';
+                        sendSse(eventType, data, eventId);
+                    }
+                } catch (_) {}
+            };
+
+            if (redisManager.isConnected && redisManager.sub) {
+                redisManager.sub.subscribe(`channel:passenger:${passengerId}`).catch(() => {});
+                redisManager.sub.on('message', onRedisPassengerMsg);
+            }
+
+            const heartbeatTimer = setInterval(() => {
+                try {
+                    res.write(': keepalive\n\n');
+                } catch (_) {}
+            }, 15000);
+
+            req.on('close', () => {
+                clearInterval(heartbeatTimer);
+                if (redisManager.isConnected && redisManager.sub) {
+                    redisManager.sub.removeListener('message', onRedisPassengerMsg);
+                    redisManager.sub.unsubscribe(`channel:passenger:${passengerId}`).catch(() => {});
+                }
+            });
+
+            return;
+        }
+
         // 2. Passenger Ride Status & Location Stream: GET /api/ride/stream or /api/ride/:id/stream
         const isRideSseStream = (pathname.startsWith('/api/ride/') && pathname.endsWith('/stream')) || 
                                 pathname === '/api/ride/stream' || 
@@ -6833,7 +6989,7 @@ async function startServer() {
                                     driverId: r.driver_id,
                                     customerId: r.customer_id,
                                     customerName: r.customer_name || 'راكب',
-                                    customerPhone: r.customer_phone || '',
+                                    customerPhone: (r.status === 'Confirmed' || r.status === 'Active') ? (r.customer_phone || '') : maskPhoneNumber(r.customer_phone || ''),
                                     pickupLocation: r.pickup_name || 'موقع الركوب',
                                     dropoffLocation: r.dropoff_name || 'جامعة الكوفة',
                                     pickupLat: parseFloat(r.pickup_lat || 31.9961),
@@ -6995,7 +7151,7 @@ async function startServer() {
                             driverId: r.driver_id,
                             customerId: r.customer_id,
                             customerName: r.customer_name || 'راكب طالب حجز',
-                            customerPhone: r.customer_phone || '',
+                            customerPhone: maskPhoneNumber(r.customer_phone || ''),
                             pickupLocation: r.pickup_name || 'موقع الركوب',
                             dropoffLocation: r.dropoff_name || 'جامعة الكوفة',
                             pickupLat: parseFloat(r.pickup_lat || 31.9961),
@@ -7019,7 +7175,10 @@ async function startServer() {
             );
             for (const mb of memPending) {
                 if (!pendingBookings.some(pb => (pb.id === mb.id || pb.bookingId === mb.bookingId))) {
-                    pendingBookings.push(mb);
+                    pendingBookings.push({
+                        ...mb,
+                        customerPhone: maskPhoneNumber(mb.customerPhone || mb.phone || '')
+                    });
                 }
             }
 
@@ -7081,14 +7240,41 @@ async function startServer() {
 
         // Customer Book Route Endpoint
         if ((pathname === '/api/customer/book-route' || pathname === '/api/bookings' || pathname === '/bookings' || pathname === '/api/routes/subscribe' || pathname === '/routes/subscribe') && method === 'POST') {
+            const authUser = getAuthUser(req);
+            if (!authUser) {
+                return sendJson({ success: false, error: 'غير مصرح: يرجى تسجيل الدخول أولاً لإرسال طلب الحجز' }, 401);
+            }
+
             const body = await parseJsonBody(req);
-            const userIdentifier = body.customerId || body.passengerPhone || body.phone || body.userId;
-            if (_orderRateLimit(clientIp, userIdentifier)) {
+            const candidateCustomerId = String(authUser.role === 'Customer' ? authUser.id : (body.customerId || authUser.id || '')).trim();
+            const candidateRawPhone = String(authUser.role === 'Customer' ? (authUser.phone || body.customerPhone || '') : (body.customerPhone || authUser.phone || '')).trim();
+            const candidateCleanPhone = candidateRawPhone.replace(/[^0-9]/g, '');
+            const candidateName = authUser.role === 'Customer' ? (authUser.fullName || authUser.name || body.customerName || 'راكب توصيله') : (body.customerName || 'راكب توصيله');
+
+            // Cluster Rate Limit per User
+            const userIdentifier = candidateCustomerId || candidateRawPhone || clientIp;
+            const rateLimitKey = `rate:customer:book:${userIdentifier}`;
+            const isRateLimited = await redisManager.checkRateLimitCluster(rateLimitKey, 10, 60);
+            if (isRateLimited) {
                 return sendJson({
                     success: false,
-                    error: '⚠️ لقد أرسلت طلبات حجز كثيرة في وقت قصير. يرجى الانتظار دقيقة قبل المحاولة مجدداً.'
+                    error: '⚠️ لقد أرسلت طلبات حجز كثيرة في وقت قصير. يرجى الانتظار دقيقة قبل المحاولة مجدداً.',
+                    retry_after: 60
                 }, 429);
             }
+
+            // Idempotency-Key Check
+            const idempotencyKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || body.idempotencyKey;
+            if (idempotencyKey && redisManager && redisManager.client) {
+                const cachedIdemp = await redisManager.client.get(`idempotency:booking:${idempotencyKey}`).catch(() => null);
+                if (cachedIdemp) {
+                    try {
+                        const parsedIdemp = JSON.parse(cachedIdemp);
+                        return sendJson(parsedIdemp, 200);
+                    } catch (_) {}
+                }
+            }
+
             const routeId = body.routeId || body.driverRouteId;
             let targetRoute = (db.memoryState.routes || []).find(r => (r.id === routeId || r.routeId === routeId));
             
@@ -7105,35 +7291,75 @@ async function startServer() {
             if (!targetDriver && routeId) {
                 targetDriver = (db.memoryState.drivers || []).find(d => routeId.includes(d.driverId) || d.driverId.includes(routeId));
             }
-            if (!targetRoute && targetDriver) {
-                targetRoute = (db.memoryState.routes || []).find(r => r.driverId === targetDriver.driverId);
+            if (!targetDriver && body.driverId && db.isPostgresConnected && db.pool) {
+                try {
+                    const dRes = await db.pool.query('SELECT * FROM drivers WHERE driver_id = $1 LIMIT 1', [body.driverId]);
+                    if (dRes.rows && dRes.rows.length > 0) targetDriver = dRes.rows[0];
+                } catch (_) {}
+            }
+            if (!targetDriver) {
+                return sendJson({ success: false, error: 'الكابتن المطلوب غير موجود' }, 404);
             }
 
-            const defaultDriver = (db.memoryState.drivers || [])[0];
-            const resolvedDriverId = targetDriver ? targetDriver.driverId : (targetRoute ? targetRoute.driverId : (body.driverId || (defaultDriver ? defaultDriver.driverId : 'drv-sample')));
-            const resolvedDriverName = targetDriver ? targetDriver.fullName : (targetRoute ? targetRoute.driverName : (body.driverName || (defaultDriver ? defaultDriver.fullName : 'كابتن توصيله')));
-            const resolvedDriverPhone = targetDriver ? targetDriver.phoneNumber : (targetRoute ? targetRoute.driverPhone : (body.driverPhone || (defaultDriver ? defaultDriver.phoneNumber : '07801234567')));
+            // Target Captain Validation: is_approved, commute mode, fixed location
+            const isApproved = targetDriver.is_approved !== false && targetDriver.isApproved !== false;
+            if (!isApproved) {
+                return sendJson({ success: false, error: 'الكابتن غير معتمد حالياً لتلقي طلبات الخطوط' }, 400);
+            }
+            const drvMode = String(targetDriver.work_mode || targetDriver.workMode || targetDriver.workStatus || '').toLowerCase();
+            const isCommute = drvMode === 'commute' || drvMode === 'both' || drvMode === 'خط' || drvMode === 'خط دائمي' || drvMode === '';
+            if (!isCommute && drvMode === 'taxi') {
+                return sendJson({ success: false, error: 'الكابتن يعمل بنظام التكسي المباشر فقط ولا يقبل اشتراكات الخطوط' }, 400);
+            }
+            const hasFixedLoc = (targetDriver.fixed_lat || targetDriver.fixedLat) && (targetDriver.fixed_lng || targetDriver.fixedLng || targetDriver.fixed_lon || targetDriver.fixedLon);
+            if (!hasFixedLoc) {
+                return sendJson({ success: false, error: 'الكابتن لم يحدد نقطة الانطلاق الثابتة لخطه الدائمي' }, 400);
+            }
 
-            // -------------------------------------------------------------
-            // PREVENT DUPLICATE SUBSCRIPTION / BOOKING FOR THE SAME PASSENGER
-            // -------------------------------------------------------------
-            const candidateCustomerId = String(body.customerId || body.passengerId || body.userId || '');
-            const candidateRawPhone = String(body.customerPhone || body.phoneNumber || body.phone || '');
-            const candidateCleanPhone = candidateRawPhone.replace(/[^0-9]/g, '');
+            if (!targetRoute && targetDriver) {
+                targetRoute = (db.memoryState.routes || []).find(r => r.driverId === (targetDriver.driverId || targetDriver.driver_id));
+            }
+            const resolvedDriverId = targetDriver.driverId || targetDriver.driver_id;
+            const resolvedDriverName = targetDriver.fullName || targetDriver.full_name || 'كابتن توصيله';
+            const resolvedDriverPhone = targetDriver.phoneNumber || targetDriver.phone_number || '';
 
+            // Check max pending requests per rider (booking_max_pending_per_rider)
+            const maxPending = systemSettingsService ? systemSettingsService.getBookingMaxPendingPerRider() : 3;
+            let currentPendingCount = 0;
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    const pRes = await db.pool.query(`
+                        SELECT COUNT(*) AS cnt FROM bookings 
+                        WHERE (customer_id = $1 OR (customer_phone IS NOT NULL AND customer_phone = $2)) AND status = 'Pending'
+                    `, [candidateCustomerId, candidateRawPhone]);
+                    currentPendingCount = parseInt(pRes.rows[0]?.cnt || 0, 10);
+                } catch (_) {}
+            } else {
+                currentPendingCount = (db.memoryState.bookings || []).filter(b => 
+                    (b.customerId === candidateCustomerId || (candidateCleanPhone && b.customerPhone && b.customerPhone.replace(/[^0-9]/g, '').endsWith(candidateCleanPhone.slice(-8)))) &&
+                    b.status === 'Pending'
+                ).length;
+            }
+
+            if (currentPendingCount >= maxPending) {
+                return sendJson({
+                    success: false,
+                    error: `تجاوزت الحد الأقصى للطلبات المعلقة (${maxPending}). يرجى انتظار رد الكباتن أو إلغاء طلب معلق قبل إرسال طلب جديد.`
+                }, 409);
+            }
+
+            // Prevent duplicate booking for the same passenger and captain
             const existingActiveBooking = (db.memoryState.bookings || []).find(b => {
-                const isActive = b.status === 'Confirmed' || b.status === 'Pending' || b.status === 'Active' || b.status === 'cancel_requested_by_passenger' || b.status === 'cancel_requested_by_driver' || !b.status;
+                const isActive = b.status === 'Confirmed' || b.status === 'Pending' || b.status === 'Active';
                 if (!isActive) return false;
 
-                // 1. Match customer by ID or Phone number
                 const bCustId = String(b.customerId || b.passengerId || '');
                 const bPhone = String(b.customerPhone || b.phone || '').replace(/[^0-9]/g, '');
                 const isSameCustomer = (candidateCustomerId && bCustId && candidateCustomerId === bCustId) ||
                                        (candidateCleanPhone.length >= 7 && bPhone.length >= 7 && (bPhone.endsWith(candidateCleanPhone.slice(-8)) || candidateCleanPhone.endsWith(bPhone.slice(-8))));
                 if (!isSameCustomer) return false;
 
-                // 2. Any active commute subscription (single subscription restriction)
-                return true;
+                return (b.driverId === resolvedDriverId);
             });
 
             if (existingActiveBooking) {
@@ -7141,42 +7367,54 @@ async function startServer() {
                     success: false,
                     alreadySubscribed: true,
                     existingBookingId: existingActiveBooking.id || existingActiveBooking.bookingId,
-                    error: 'لديك اشتراك خط دائمي حالي. يجب إلغاء اشتراكك الحالي وتأكيد إلغائه قبل الاشتراك في خط آخر.'
+                    error: 'أنت مشترك بالفعل أو لديك طلب حجز معلق مع هذا الكابتن، لا يمكنك تكرار الحجز.'
                 }, 409);
             }
 
-            // Also check PostgreSQL database if connected
             if (db.isPostgresConnected && db.pool) {
                 try {
                     const pgDup = await db.pool.query(`
                         SELECT id FROM bookings 
-                        WHERE (customer_id = $1 OR customer_id = $2)
-                          AND (driver_route_id = $3 OR route_id = $3 OR driver_id = $4)
+                        WHERE (customer_id = $1 OR customer_phone = $2)
+                          AND driver_id = $3
                           AND status IN ('Pending', 'Confirmed', 'Active')
                         LIMIT 1
-                    `, [candidateCustomerId, userIdentifier, routeId, resolvedDriverId]);
+                    `, [candidateCustomerId, candidateRawPhone, resolvedDriverId]);
                     if (pgDup.rows && pgDup.rows.length > 0) {
                         return sendJson({
                             success: false,
                             alreadySubscribed: true,
-                            error: 'أنت مشترك بالفعل في هذا الخط، لا يمكنك تكرار الحجز.'
+                            existingBookingId: pgDup.rows[0].id,
+                            error: 'أنت مشترك بالفعل أو لديك طلب حجز معلق مع هذا الكابتن، لا يمكنك تكرار الحجز.'
                         }, 409);
                     }
                 } catch (_) {}
             }
 
-            const seats = Math.max(1, parseInt(body.seats || body.seatsBooked || 1, 10));
-
-            // Enforce driver capacity based on active passengers
-            const activeBookings = (db.memoryState.bookings || []).filter(b => 
-                (b.driverId === resolvedDriverId) && (b.status === 'Confirmed' || b.status === 'Pending')
-            );
-            const activeBookedSeats = activeBookings.reduce((sum, b) => sum + parseInt(b.seatsBooked || 1, 10), 0);
-            const totalCarCapacity = targetRoute?.totalSeats || targetDriver?.availableSeats || 4;
-
-            if (activeBookedSeats >= totalCarCapacity || (targetRoute && targetRoute.availableSeats <= 0) || (targetRoute && targetRoute.availableSeats < seats)) {
-                return sendJson({ success: false, error: 'عذراً، العدد عند السائق مكتمل حالياً' }, 400);
+            const seats = Math.max(1, Math.min(4, parseInt(body.seats || body.seatsBooked || 1, 10)));
+            let currentBookedSeats = 0;
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    const capQ = await db.pool.query(`
+                        SELECT COALESCE(SUM(seats_booked), 0) AS booked_count
+                        FROM bookings
+                        WHERE driver_id = $1 AND status IN ('Confirmed', 'Active')
+                    `, [resolvedDriverId]);
+                    currentBookedSeats = parseInt(capQ.rows[0]?.booked_count || 0, 10);
+                } catch (_) {}
+            } else {
+                const activeBookings = (db.memoryState.bookings || []).filter(b => 
+                    (b.driverId === resolvedDriverId) && (b.status === 'Confirmed' || b.status === 'Active')
+                );
+                currentBookedSeats = activeBookings.reduce((sum, b) => sum + parseInt(b.seatsBooked || 1, 10), 0);
             }
+            const totalCarCapacity = targetDriver.available_seats || targetDriver.availableSeats || targetRoute?.totalSeats || 4;
+            if (currentBookedSeats >= totalCarCapacity || (currentBookedSeats + seats > totalCarCapacity)) {
+                return sendJson({ success: false, error: 'عذراً، المقاعد مكتملة بالكامل لدى الكابتن حالياً.' }, 409);
+            }
+
+            const rawNotes = body.notes || body.note || body.comment || '';
+            const sanitizedNotes = typeof rawNotes === 'string' ? rawNotes.trim().slice(0, 300) : '';
 
             const bookingId = 'bk-' + Math.random().toString(36).substr(2, 9);
             const now = new Date().toISOString();
@@ -7190,9 +7428,9 @@ async function startServer() {
                 driverId: resolvedDriverId,
                 driverName: resolvedDriverName,
                 driverPhone: resolvedDriverPhone,
-                customerId: body.customerId || ('cust-' + Math.random().toString(36).substr(2, 7)),
-                customerName: body.customerName || body.fullName || 'راكب توصيله',
-                customerPhone: body.customerPhone || body.phoneNumber || '',
+                customerId: candidateCustomerId,
+                customerName: candidateName,
+                customerPhone: candidateRawPhone,
                 pickupLocation: body.pickupLocation || body.pickup || body.pickupName || (targetRoute ? targetRoute.startName : ''),
                 dropoffLocation: body.dropoffLocation || body.destination || body.dropoffName || (targetRoute ? targetRoute.endName : 'جامعة الكوفة'),
                 pickupLat: parseFloat(body.pickupLat || (targetRoute ? targetRoute.startLat : 31.9961)),
@@ -7200,6 +7438,7 @@ async function startServer() {
                 dropoffLat: parseFloat(body.dropoffLat || (targetRoute ? targetRoute.endLat : 32.0321)),
                 dropoffLon: parseFloat(body.dropoffLon || (targetRoute ? targetRoute.endLon : 44.3725)),
                 seatsBooked: seats,
+                notes: sanitizedNotes,
                 fare: totalFare,
                 totalFare: totalFare,
                 status: 'Pending',
@@ -7207,18 +7446,8 @@ async function startServer() {
                 createdAt: now
             };
 
-            db.memoryState.bookings = db.memoryState.bookings || [];
-            db.memoryState.bookings.unshift(newBooking);
-
-            // Increment customer booking count
-            const cust = (db.memoryState.customers || []).find(c => c.customerId === newBooking.customerId || c.phoneNumber === newBooking.customerPhone);
-            if (cust) {
-                cust.totalBookings = (cust.totalBookings || 0) + 1;
-            }
-
             if (db.isPostgresConnected && db.pool) {
                 try {
-                    // Ensure user & customer exist in DB for FK integrity
                     await db.pool.query(`
                         INSERT INTO users (id, phone_number, full_name, role, created_at)
                         VALUES ($1, $2, $3, 'Customer', $4)
@@ -7231,48 +7460,74 @@ async function startServer() {
                         ON CONFLICT (customer_id) DO UPDATE SET full_name = EXCLUDED.full_name, phone_number = EXCLUDED.phone_number
                     `, [newBooking.customerId, newBooking.customerName, newBooking.customerPhone, now]);
 
-                    // Validate routeId exists in routes table
                     let validRouteId = null;
                     if (newBooking.routeId) {
                         const rCheck = await db.pool.query('SELECT id FROM routes WHERE id = $1', [newBooking.routeId]);
                         if (rCheck.rows.length > 0) validRouteId = newBooking.routeId;
                     }
 
-                    // Validate driverId exists in drivers table
                     let validDriverId = null;
                     if (newBooking.driverId) {
                         const dCheck = await db.pool.query('SELECT driver_id FROM drivers WHERE driver_id = $1', [newBooking.driverId]);
                         if (dCheck.rows.length > 0) validDriverId = newBooking.driverId;
-                    }
-                    if (!validDriverId && newBooking.driverName) {
-                        const dnCheck = await db.pool.query('SELECT driver_id FROM drivers WHERE LOWER(full_name) = LOWER($1) LIMIT 1', [newBooking.driverName]);
-                        if (dnCheck.rows.length > 0) {
-                            validDriverId = dnCheck.rows[0].driver_id;
-                            newBooking.driverId = validDriverId;
-                        }
                     }
 
                     await db.pool.query(`
                         INSERT INTO bookings (
                             id, route_id, customer_id, customer_name, driver_id, driver_name,
                             pickup_name, dropoff_name, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon,
-                            total_fare, seats_booked, status, created_at
+                            total_fare, seats_booked, status, customer_phone, cancellation_reason, created_at
                         )
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-                        ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
                     `, [
                         bookingId, validRouteId, newBooking.customerId, newBooking.customerName,
                         validDriverId, newBooking.driverName, newBooking.pickupLocation,
                         newBooking.dropoffLocation, newBooking.pickupLat, newBooking.pickupLon,
-                        newBooking.dropoffLat, newBooking.dropoffLon, totalFare, seats, 'Pending', now
+                        newBooking.dropoffLat, newBooking.dropoffLon, totalFare, seats, 'Pending',
+                        newBooking.customerPhone, sanitizedNotes, now
                     ]);
                 } catch (e) {
+                    if (e && e.code === '23505') {
+                        return sendJson({
+                            success: false,
+                            alreadySubscribed: true,
+                            error: 'أنت مشترك بالفعل أو لديك طلب حجز معلق مع هذا الكابتن، لا يمكنك تكرار الحجز.'
+                        }, 409);
+                    }
                     console.error('[Server] PG Booking insert error:', e);
                 }
             }
 
+            db.memoryState.bookings = db.memoryState.bookings || [];
+            db.memoryState.bookings.unshift(newBooking);
+
+            const cust = (db.memoryState.customers || []).find(c => c.customerId === newBooking.customerId || c.phoneNumber === newBooking.customerPhone);
+            if (cust) {
+                cust.totalBookings = (cust.totalBookings || 0) + 1;
+            }
+
+            // Real-time Driver SSE Broadcast (phone masked)
+            if (redisManager && typeof redisManager.publishDriverEvent === 'function') {
+                redisManager.publishDriverEvent(resolvedDriverId, {
+                    type: 'booking_request',
+                    event: 'booking_request',
+                    booking: {
+                        ...newBooking,
+                        customerPhone: maskPhoneNumber(newBooking.customerPhone)
+                    }
+                });
+            }
+            if (redisManager && redisManager.pub) {
+                redisManager.pub.publish('channel:cluster:sync', JSON.stringify({
+                    type: 'booking_created',
+                    bookingId: newBooking.id,
+                    driverId: resolvedDriverId
+                })).catch(() => {});
+            }
+
             db.addAuditLog('SeatBooked', 'Customer', newBooking.customerId, {
                 bookingId,
+                driverId: resolvedDriverId,
                 driverName: newBooking.driverName,
                 route: `${newBooking.pickupLocation} ➔ ${newBooking.dropoffLocation}`,
                 seats,
@@ -7282,29 +7537,54 @@ async function startServer() {
 
             db.saveStateSnapshot();
 
-            return sendJson({
+            const successResponse = {
                 success: true,
                 message: 'تم إرسال طلب الحجز إلى الكابتن بنجاح! بانتظار موافقة الكابتن لتأكيد مقعدك.',
                 booking: newBooking
-            });
+            };
+
+            // Cache response in Redis if idempotencyKey supplied
+            if (idempotencyKey && redisManager && redisManager.client) {
+                await redisManager.client.set(`idempotency:booking:${idempotencyKey}`, JSON.stringify(successResponse), 'EX', 600).catch(() => {});
+            }
+
+            return sendJson(successResponse, 201);
         }
 
         // Accept Booking by Driver / Admin (Driver approves customer to become passenger)
         const acceptMatch = pathname.match(/^\/?(?:api\/)?(?:driver\/)?bookings\/([^\/]+)\/accept$/i);
         if (acceptMatch && method === 'POST') {
             const bookingId = acceptMatch[1];
+            const authUser = getAuthUser(req);
+            if (!authUser) {
+                return sendJson({ success: false, error: 'غير مصرح: تسجيل الدخول مطلوب لقبول طلب الحجز' }, 401);
+            }
+            const rateKey = `rate:driver:accept:${authUser.id || clientIp}`;
+            const isRateLimited = await redisManager.checkRateLimitCluster(rateKey, 20, 60);
+            if (isRateLimited) {
+                return sendJson({ success: false, error: 'تجاوزت الحد المسموح به، يرجى الانتظار قليلاً', retry_after: 60 }, 429);
+            }
             const body = await parseJsonBody(req).catch(() => ({}));
-            const result = await adminController.acceptBooking(bookingId, body.driverId);
-            return sendJson(result, result.success ? 200 : 400);
+            const result = await adminController.acceptBooking(bookingId, body.driverId, authUser);
+            return sendJson(result, result.success ? 200 : (result.code || 400));
         }
 
         // Decline / Reject Booking by Driver / Admin
         const declineMatch = pathname.match(/^\/?(?:api\/)?(?:driver\/)?bookings\/([^\/]+)\/(?:decline|reject)$/i);
         if (declineMatch && method === 'POST') {
             const bookingId = declineMatch[1];
+            const authUser = getAuthUser(req);
+            if (!authUser) {
+                return sendJson({ success: false, error: 'غير مصرح: تسجيل الدخول مطلوب لرفض طلب الحجز' }, 401);
+            }
+            const rateKey = `rate:driver:reject:${authUser.id || clientIp}`;
+            const isRateLimited = await redisManager.checkRateLimitCluster(rateKey, 20, 60);
+            if (isRateLimited) {
+                return sendJson({ success: false, error: 'تجاوزت الحد المسموح به، يرجى الانتظار قليلاً', retry_after: 60 }, 429);
+            }
             const body = await parseJsonBody(req).catch(() => ({}));
-            const result = await adminController.declineBooking(bookingId, body.reason || body.declineReason);
-            return sendJson(result, result.success ? 200 : 400);
+            const result = await adminController.declineBooking(bookingId, body.reason || body.declineReason, body.driverId, authUser);
+            return sendJson(result, result.success ? 200 : (result.code || 400));
         }
 
         // Generic Booking Status Update
