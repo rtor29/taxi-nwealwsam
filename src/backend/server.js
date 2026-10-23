@@ -7548,6 +7548,10 @@ async function startServer() {
                         }, 409);
                     }
                     console.error('[Server] PG Booking insert error:', e);
+                    return sendJson({
+                        success: false,
+                        error: 'تعذر حفظ طلب الحجز في قاعدة البيانات، يرجى إعادة المحاولة'
+                    }, 500);
                 }
             }
 

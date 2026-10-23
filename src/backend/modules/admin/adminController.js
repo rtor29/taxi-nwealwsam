@@ -891,39 +891,92 @@ class AdminController {
     }
 
     async acceptBooking(bookingId, driverId = null, authUser = null) {
-        let booking = (db.memoryState.bookings || []).find(b => (b.id === bookingId || b.bookingId === bookingId));
-        
-        if (!booking && db.isPostgresConnected && db.pool) {
+        let pgRow = null;
+        if (db.isPostgresConnected && db.pool) {
             try {
                 const pgRes = await db.pool.query('SELECT * FROM bookings WHERE id = $1 LIMIT 1', [bookingId]);
                 if (pgRes.rows && pgRes.rows.length > 0) {
-                    const r = pgRes.rows[0];
-                    booking = {
-                        id: r.id,
-                        bookingId: r.id,
-                        routeId: r.route_id,
-                        driverId: r.driver_id,
-                        driverName: r.driver_name,
-                        driverPhone: r.driver_phone,
-                        customerId: r.customer_id,
-                        customerName: r.customer_name,
-                        customerPhone: r.customer_phone,
-                        pickupLocation: r.pickup_name,
-                        dropoffLocation: r.dropoff_name,
-                        seatsBooked: r.seats_booked || 1,
-                        status: r.status,
-                        totalFare: r.total_fare,
-                        createdAt: r.created_at
-                    };
-                    db.memoryState.bookings.unshift(booking);
+                    pgRow = pgRes.rows[0];
                 }
             } catch (e) {
                 console.error('[AdminController] PG fetch booking error:', e);
             }
         }
 
+        let booking = (db.memoryState.bookings || []).find(b => (b.id === bookingId || b.bookingId === bookingId));
+        
+        if (pgRow) {
+            const mappedFromPg = {
+                id: pgRow.id,
+                bookingId: pgRow.id,
+                routeId: pgRow.route_id,
+                driverId: pgRow.driver_id,
+                driverName: pgRow.driver_name,
+                driverPhone: pgRow.driver_phone,
+                customerId: pgRow.customer_id,
+                customerName: pgRow.customer_name,
+                customerPhone: pgRow.customer_phone,
+                pickupLocation: pgRow.pickup_name,
+                dropoffLocation: pgRow.dropoff_name,
+                seatsBooked: pgRow.seats_booked || 1,
+                status: pgRow.status,
+                totalFare: pgRow.total_fare,
+                createdAt: pgRow.created_at
+            };
+            if (booking) {
+                Object.assign(booking, mappedFromPg);
+            } else {
+                booking = mappedFromPg;
+                db.memoryState.bookings.unshift(booking);
+            }
+        } else if (booking && db.isPostgresConnected && db.pool && String(booking.status || 'Pending').toLowerCase() === 'pending') {
+            try {
+                const now = booking.createdAt || new Date().toISOString();
+                if (booking.customerId) {
+                    await db.pool.query(`
+                        INSERT INTO users (id, phone_number, full_name, role, created_at)
+                        VALUES ($1, $2, $3, 'Customer', $4)
+                        ON CONFLICT (id) DO NOTHING
+                    `, [booking.customerId, booking.customerPhone || '', booking.customerName || 'راكب', now]);
+
+                    await db.pool.query(`
+                        INSERT INTO customers (customer_id, full_name, phone_number, created_at)
+                        VALUES ($1, $2, $3, $4)
+                        ON CONFLICT (customer_id) DO NOTHING
+                    `, [booking.customerId, booking.customerName || 'راكب', booking.customerPhone || '', now]);
+                }
+                let validRouteId = null;
+                if (booking.routeId) {
+                    const rCheck = await db.pool.query('SELECT id FROM routes WHERE id = $1', [booking.routeId]);
+                    if (rCheck.rows.length > 0) validRouteId = booking.routeId;
+                }
+                let validDriverId = null;
+                if (booking.driverId) {
+                    const dCheck = await db.pool.query('SELECT driver_id FROM drivers WHERE driver_id = $1', [booking.driverId]);
+                    if (dCheck.rows.length > 0) validDriverId = booking.driverId;
+                }
+                await db.pool.query(`
+                    INSERT INTO bookings (
+                        id, route_id, customer_id, customer_name, driver_id, driver_name,
+                        pickup_name, dropoff_name, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon,
+                        total_fare, seats_booked, status, customer_phone, cancellation_reason, created_at
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'Pending', $15, '', $16)
+                    ON CONFLICT (id) DO NOTHING
+                `, [
+                    booking.id || bookingId, validRouteId, booking.customerId, booking.customerName || 'راكب',
+                    validDriverId, booking.driverName || '', booking.pickupLocation || '',
+                    booking.dropoffLocation || '', booking.pickupLat || null, booking.pickupLon || null,
+                    booking.dropoffLat || null, booking.dropoffLon || null, parseFloat(booking.totalFare || booking.fare || 0),
+                    parseInt(booking.seatsBooked || 1, 10), booking.customerPhone || '', now
+                ]);
+            } catch (syncErr) {
+                console.error('[AdminController] PG sync pending booking error:', syncErr);
+            }
+        }
+
         if (!booking) {
-            return { success: false, code: 404, error: 'الحجز غير موجود' };
+            return { success: false, code: 404, error: 'الطلب لم يعد موجوداً' };
         }
 
         // RLS Authorization Check: Driver must be the assigned captain, or actor is Admin
@@ -1004,11 +1057,17 @@ class AdminController {
                     RETURNING *
                 `, [booking.id || bookingId]);
                 if (!pgUpd.rows || pgUpd.rows.length === 0) {
-                    return {
-                        success: false,
-                        code: 409,
-                        error: 'تعذر قبول الحجز، قد تكون حالته تغيرت بالتزامن'
-                    };
+                    const checkRow = await db.pool.query('SELECT status FROM bookings WHERE id = $1 LIMIT 1', [booking.id || bookingId]);
+                    if (!checkRow.rows || checkRow.rows.length === 0) {
+                        return { success: false, code: 404, error: 'الطلب لم يعد موجوداً' };
+                    }
+                    const freshStatus = String(checkRow.rows[0].status || '').toLowerCase();
+                    let msg = 'لا يمكن قبول الحجز في حالته الحالية';
+                    if (freshStatus === 'confirmed' || freshStatus === 'accepted') msg = 'طلب الحجز تم قبوله مسبقاً';
+                    else if (freshStatus === 'declined' || freshStatus === 'rejected') msg = 'طلب الحجز تم رفضه مسبقاً';
+                    else if (freshStatus === 'cancelled') msg = 'طلب الحجز ملغي';
+                    else if (freshStatus === 'expired') msg = 'انتهت صلاحية طلب الحجز';
+                    return { success: false, code: 409, error: msg, currentStatus: checkRow.rows[0].status };
                 }
             } catch (e) {
                 console.error('[AdminController] PG accept booking error:', e);
@@ -1098,36 +1157,92 @@ class AdminController {
     }
 
     async declineBooking(bookingId, reason = null, driverId = null, authUser = null) {
-        let booking = (db.memoryState.bookings || []).find(b => (b.id === bookingId || b.bookingId === bookingId));
-
-        if (!booking && db.isPostgresConnected && db.pool) {
+        let pgRow = null;
+        if (db.isPostgresConnected && db.pool) {
             try {
                 const pgRes = await db.pool.query('SELECT * FROM bookings WHERE id = $1 LIMIT 1', [bookingId]);
                 if (pgRes.rows && pgRes.rows.length > 0) {
-                    const r = pgRes.rows[0];
-                    booking = {
-                        id: r.id,
-                        bookingId: r.id,
-                        routeId: r.route_id,
-                        driverId: r.driver_id,
-                        driverName: r.driver_name,
-                        driverPhone: r.driver_phone,
-                        customerId: r.customer_id,
-                        customerName: r.customer_name,
-                        customerPhone: r.customer_phone,
-                        seatsBooked: r.seats_booked || 1,
-                        status: r.status,
-                        createdAt: r.created_at
-                    };
-                    db.memoryState.bookings.unshift(booking);
+                    pgRow = pgRes.rows[0];
                 }
             } catch (e) {
                 console.error('[AdminController] PG fetch booking error:', e);
             }
         }
 
+        let booking = (db.memoryState.bookings || []).find(b => (b.id === bookingId || b.bookingId === bookingId));
+
+        if (pgRow) {
+            const mappedFromPg = {
+                id: pgRow.id,
+                bookingId: pgRow.id,
+                routeId: pgRow.route_id,
+                driverId: pgRow.driver_id,
+                driverName: pgRow.driver_name,
+                driverPhone: pgRow.driver_phone,
+                customerId: pgRow.customer_id,
+                customerName: pgRow.customer_name,
+                customerPhone: pgRow.customer_phone,
+                pickupLocation: pgRow.pickup_name,
+                dropoffLocation: pgRow.dropoff_name,
+                seatsBooked: pgRow.seats_booked || 1,
+                status: pgRow.status,
+                totalFare: pgRow.total_fare,
+                createdAt: pgRow.created_at
+            };
+            if (booking) {
+                Object.assign(booking, mappedFromPg);
+            } else {
+                booking = mappedFromPg;
+                db.memoryState.bookings.unshift(booking);
+            }
+        } else if (booking && db.isPostgresConnected && db.pool && String(booking.status || 'Pending').toLowerCase() === 'pending') {
+            try {
+                const now = booking.createdAt || new Date().toISOString();
+                if (booking.customerId) {
+                    await db.pool.query(`
+                        INSERT INTO users (id, phone_number, full_name, role, created_at)
+                        VALUES ($1, $2, $3, 'Customer', $4)
+                        ON CONFLICT (id) DO NOTHING
+                    `, [booking.customerId, booking.customerPhone || '', booking.customerName || 'راكب', now]);
+
+                    await db.pool.query(`
+                        INSERT INTO customers (customer_id, full_name, phone_number, created_at)
+                        VALUES ($1, $2, $3, $4)
+                        ON CONFLICT (customer_id) DO NOTHING
+                    `, [booking.customerId, booking.customerName || 'راكب', booking.customerPhone || '', now]);
+                }
+                let validRouteId = null;
+                if (booking.routeId) {
+                    const rCheck = await db.pool.query('SELECT id FROM routes WHERE id = $1', [booking.routeId]);
+                    if (rCheck.rows.length > 0) validRouteId = booking.routeId;
+                }
+                let validDriverId = null;
+                if (booking.driverId) {
+                    const dCheck = await db.pool.query('SELECT driver_id FROM drivers WHERE driver_id = $1', [booking.driverId]);
+                    if (dCheck.rows.length > 0) validDriverId = booking.driverId;
+                }
+                await db.pool.query(`
+                    INSERT INTO bookings (
+                        id, route_id, customer_id, customer_name, driver_id, driver_name,
+                        pickup_name, dropoff_name, pickup_lat, pickup_lon, dropoff_lat, dropoff_lon,
+                        total_fare, seats_booked, status, customer_phone, cancellation_reason, created_at
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'Pending', $15, '', $16)
+                    ON CONFLICT (id) DO NOTHING
+                `, [
+                    booking.id || bookingId, validRouteId, booking.customerId, booking.customerName || 'راكب',
+                    validDriverId, booking.driverName || '', booking.pickupLocation || '',
+                    booking.dropoffLocation || '', booking.pickupLat || null, booking.pickupLon || null,
+                    booking.dropoffLat || null, booking.dropoffLon || null, parseFloat(booking.totalFare || booking.fare || 0),
+                    parseInt(booking.seatsBooked || 1, 10), booking.customerPhone || '', now
+                ]);
+            } catch (syncErr) {
+                console.error('[AdminController] PG sync pending booking error:', syncErr);
+            }
+        }
+
         if (!booking) {
-            return { success: false, code: 404, error: 'الحجز غير موجود' };
+            return { success: false, code: 404, error: 'الطلب لم يعد موجوداً' };
         }
 
         // RLS Authorization Check: Driver must be the assigned captain, or actor is Admin
@@ -1173,11 +1288,17 @@ class AdminController {
                     RETURNING *
                 `, [booking.id || bookingId, sanitizedReason]);
                 if (!pgUpd.rows || pgUpd.rows.length === 0) {
-                    return {
-                        success: false,
-                        code: 409,
-                        error: 'تعذر رفض الحجز، قد تكون حالته تغيرت بالتزامن'
-                    };
+                    const checkRow = await db.pool.query('SELECT status FROM bookings WHERE id = $1 LIMIT 1', [booking.id || bookingId]);
+                    if (!checkRow.rows || checkRow.rows.length === 0) {
+                        return { success: false, code: 404, error: 'الطلب لم يعد موجوداً' };
+                    }
+                    const freshStatus = String(checkRow.rows[0].status || '').toLowerCase();
+                    let msg = 'لا يمكن رفض الحجز في حالته الحالية';
+                    if (freshStatus === 'confirmed' || freshStatus === 'accepted') msg = 'طلب الحجز تم قبوله مسبقاً، يرجى استخدام مسار إلغاء الاشتراك';
+                    else if (freshStatus === 'declined' || freshStatus === 'rejected') msg = 'طلب الحجز تم رفضه مسبقاً';
+                    else if (freshStatus === 'cancelled') msg = 'طلب الحجز ملغي';
+                    else if (freshStatus === 'expired') msg = 'انتهت صلاحية طلب الحجز';
+                    return { success: false, code: 409, error: msg, currentStatus: checkRow.rows[0].status };
                 }
             } catch (e) {
                 console.error('[AdminController] PG decline booking error:', e);

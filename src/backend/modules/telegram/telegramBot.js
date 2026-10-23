@@ -1111,15 +1111,18 @@ async function handleBookingDecisionCallback(chatId, data, user, queryId, messag
     }
 
     if (!booking) {
+        if (redisManager && redisManager.client) {
+            await redisManager.client.del(lockKey).catch(() => {});
+        }
         if (queryId) {
             await tgRequest('answerCallbackQuery', {
                 callback_query_id: queryId,
-                text: 'لم يعد الطلب متاحاً',
+                text: 'الطلب لم يعد موجوداً',
                 show_alert: true
             }).catch(() => {});
         }
         if (messageId) {
-            await editMessageText(chatId, messageId, '⚠️ <i>لم يعد طلب الحجز متاحاً</i>', { reply_markup: { inline_keyboard: [] } }).catch(() => {});
+            await editMessageText(chatId, messageId, '⚠️ <i>الطلب لم يعد موجوداً</i>', { reply_markup: { inline_keyboard: [] } }).catch(() => {});
         }
         return;
     }
@@ -1129,6 +1132,9 @@ async function handleBookingDecisionCallback(chatId, data, user, queryId, messag
     const isAdmin = String(chatId) === String(ADMIN_CHAT_ID);
     const isOwner = assignedChatId && String(chatId) === String(assignedChatId);
     if (!isOwner && !isAdmin) {
+        if (redisManager && redisManager.client) {
+            await redisManager.client.del(lockKey).catch(() => {});
+        }
         if (queryId) {
             await tgRequest('answerCallbackQuery', {
                 callback_query_id: queryId,
@@ -1146,12 +1152,12 @@ async function handleBookingDecisionCallback(chatId, data, user, queryId, messag
         if (queryId) {
             await tgRequest('answerCallbackQuery', {
                 callback_query_id: queryId,
-                text: `⚠️ لم يعد الطلب متاحاً (${stAr})`,
+                text: `⚠️ طلب الحجز ${stAr}`,
                 show_alert: true
             }).catch(() => {});
         }
         if (messageId) {
-            await editMessageText(chatId, messageId, `⚠️ <i>طلب الحجز غير متاح (${stAr})</i>`, { reply_markup: { inline_keyboard: [] } }).catch(() => {});
+            await editMessageText(chatId, messageId, `⚠️ <i>طلب الحجز ${stAr}</i>`, { reply_markup: { inline_keyboard: [] } }).catch(() => {});
         }
         return;
     }
@@ -1180,6 +1186,9 @@ async function handleBookingDecisionCallback(chatId, data, user, queryId, messag
                 await editMessageText(chatId, messageId, editedText, { reply_markup: { inline_keyboard: [] } }).catch(() => {});
             }
         } else {
+            if (redisManager && redisManager.client) {
+                await redisManager.client.del(lockKey).catch(() => {});
+            }
             if (queryId) {
                 await tgRequest('answerCallbackQuery', {
                     callback_query_id: queryId,
@@ -1209,6 +1218,9 @@ async function handleBookingDecisionCallback(chatId, data, user, queryId, messag
                 await editMessageText(chatId, messageId, editedText, { reply_markup: { inline_keyboard: [] } }).catch(() => {});
             }
         } else {
+            if (redisManager && redisManager.client) {
+                await redisManager.client.del(lockKey).catch(() => {});
+            }
             if (queryId) {
                 await tgRequest('answerCallbackQuery', {
                     callback_query_id: queryId,
