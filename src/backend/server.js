@@ -7254,12 +7254,13 @@ async function startServer() {
             // Cluster Rate Limit per User
             const userIdentifier = candidateCustomerId || candidateRawPhone || clientIp;
             const rateLimitKey = `rate:customer:book:${userIdentifier}`;
-            const isRateLimited = await redisManager.checkRateLimitCluster(rateLimitKey, 10, 60);
-            if (isRateLimited) {
+            const bookRate = await redisManager.checkRateLimitCluster(rateLimitKey, 10, 60);
+            if (!bookRate.allowed) {
+                res.setHeader('Retry-After', String(bookRate.ttl || 60));
                 return sendJson({
                     success: false,
                     error: '⚠️ لقد أرسلت طلبات حجز كثيرة في وقت قصير. يرجى الانتظار دقيقة قبل المحاولة مجدداً.',
-                    retry_after: 60
+                    retry_after: bookRate.ttl || 60
                 }, 429);
             }
 
@@ -7560,9 +7561,10 @@ async function startServer() {
                 return sendJson({ success: false, error: 'غير مصرح: تسجيل الدخول مطلوب لقبول طلب الحجز' }, 401);
             }
             const rateKey = `rate:driver:accept:${authUser.id || clientIp}`;
-            const isRateLimited = await redisManager.checkRateLimitCluster(rateKey, 20, 60);
-            if (isRateLimited) {
-                return sendJson({ success: false, error: 'تجاوزت الحد المسموح به، يرجى الانتظار قليلاً', retry_after: 60 }, 429);
+            const acceptRate = await redisManager.checkRateLimitCluster(rateKey, 20, 60);
+            if (!acceptRate.allowed) {
+                res.setHeader('Retry-After', String(acceptRate.ttl || 60));
+                return sendJson({ success: false, error: 'تجاوزت الحد المسموح به، يرجى الانتظار قليلاً', retry_after: acceptRate.ttl || 60 }, 429);
             }
             const body = await parseJsonBody(req).catch(() => ({}));
             const result = await adminController.acceptBooking(bookingId, body.driverId, authUser);
@@ -7578,9 +7580,10 @@ async function startServer() {
                 return sendJson({ success: false, error: 'غير مصرح: تسجيل الدخول مطلوب لرفض طلب الحجز' }, 401);
             }
             const rateKey = `rate:driver:reject:${authUser.id || clientIp}`;
-            const isRateLimited = await redisManager.checkRateLimitCluster(rateKey, 20, 60);
-            if (isRateLimited) {
-                return sendJson({ success: false, error: 'تجاوزت الحد المسموح به، يرجى الانتظار قليلاً', retry_after: 60 }, 429);
+            const rejectRate = await redisManager.checkRateLimitCluster(rateKey, 20, 60);
+            if (!rejectRate.allowed) {
+                res.setHeader('Retry-After', String(rejectRate.ttl || 60));
+                return sendJson({ success: false, error: 'تجاوزت الحد المسموح به، يرجى الانتظار قليلاً', retry_after: rejectRate.ttl || 60 }, 429);
             }
             const body = await parseJsonBody(req).catch(() => ({}));
             const result = await adminController.declineBooking(bookingId, body.reason || body.declineReason, body.driverId, authUser);
