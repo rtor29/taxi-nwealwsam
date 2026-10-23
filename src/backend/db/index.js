@@ -1136,16 +1136,29 @@ class DatabaseManager {
             driver.work_mode = workMode;
             if (workMode === 'خمول' || workMode === 'idle') {
                 driver.workStatus = 'idle';
+                driver.current_mode = 'idle';
+                driver.mode = 'idle';
                 driver.isOnline = false;
                 driver.status = 'Offline';
                 driver.tripStatus = 'Offline';
             } else if (workMode === 'خط دائمي' || workMode === 'permanent') {
                 driver.workStatus = 'permanent';
+                driver.current_mode = 'commute';
+                driver.mode = 'commute';
                 driver.isOnline = true;
                 driver.status = 'Online';
                 driver.tripStatus = 'Online';
             } else if (workMode === 'مشوار قصير' || workMode === 'taxi') {
                 driver.workStatus = 'taxi';
+                driver.current_mode = 'taxi';
+                driver.mode = 'taxi';
+                driver.isOnline = true;
+                driver.status = 'Online';
+                driver.tripStatus = 'Online';
+            } else if (workMode === 'both' || workMode === 'كلاهما') {
+                driver.workStatus = 'both';
+                driver.current_mode = 'both';
+                driver.mode = 'both';
                 driver.isOnline = true;
                 driver.status = 'Online';
                 driver.tripStatus = 'Online';

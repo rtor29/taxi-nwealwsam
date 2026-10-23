@@ -3461,12 +3461,26 @@ async function startServer() {
                 if (driverCandidates.length === 0) {
                     driverCandidates = (db.memoryState.drivers || [])
                         .filter(d => isDriverOnlineAndActive(d))
-                        .filter(d => d.work_mode !== 'خط دائمي' && d.current_mode !== 'commute' && d.workStatus !== 'permanent')
-                        .filter(d => (d.current_mode === 'taxi' || d.mode === 'taxi' || d.work_mode === 'مشوار قصير' || d.work_mode === 'taxi' || d.workStatus === 'taxi' || d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.work_mode));
+                        .filter(d => {
+                            const wm = String(d.work_mode || d.workMode || '').toLowerCase().trim();
+                            if (wm === 'both' || wm === 'كلاهما') return true;
+                            return d.work_mode !== 'خط دائمي' && d.current_mode !== 'commute' && d.workStatus !== 'permanent';
+                        })
+                        .filter(d => {
+                            const wm = String(d.work_mode || d.workMode || '').toLowerCase().trim();
+                            const cm = String(d.current_mode || d.mode || d.workStatus || '').toLowerCase().trim();
+                            if (wm === 'both' || wm === 'كلاهما' || cm === 'both') return true;
+                            return (cm === 'taxi' || d.mode === 'taxi' || wm === 'مشوار قصير' || wm === 'taxi' || d.workStatus === 'taxi' || d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.work_mode);
+                        });
                 }
                 if (driverCandidates.length === 0) {
                     driverCandidates = (db.memoryState.drivers || [])
-                        .filter(d => isDriverOnlineAndActive(d) && d.work_mode !== 'خط دائمي' && d.current_mode !== 'commute' && d.workStatus !== 'permanent');
+                        .filter(d => {
+                            if (!isDriverOnlineAndActive(d)) return false;
+                            const wm = String(d.work_mode || d.workMode || '').toLowerCase().trim();
+                            if (wm === 'both' || wm === 'كلاهما') return true;
+                            return d.work_mode !== 'خط دائمي' && d.current_mode !== 'commute' && d.workStatus !== 'permanent';
+                        });
                 }
 
                 // Vehicle tier matching (Dispatch exclusively to matching tier captains)
@@ -3709,11 +3723,10 @@ async function startServer() {
                     request: maskedPayload
                 });
 
-                // First candidate targeted offer (published to candidate driver and phone alias)
-                if (candidateDriverIds.length > 0) {
-                    const primaryCandidateId = candidateDriverIds[0];
-                    const candDriver = (db.memoryState.drivers || []).find(d => String(d.driverId || d.driver_id || d.id) === String(primaryCandidateId));
-                    await redisManager.publishDriverEvent(primaryCandidateId, {
+                // Candidate targeted offers (published to all candidate drivers and phone aliases)
+                for (const cDriverId of candidateDriverIds) {
+                    const candDriver = (db.memoryState.drivers || []).find(d => String(d.driverId || d.driver_id || d.id) === String(cDriverId));
+                    await redisManager.publishDriverEvent(cDriverId, {
                         type: 'new_ride',
                         event: 'new_ride',
                         rideId: newRequest.id,
@@ -3721,7 +3734,7 @@ async function startServer() {
                         request: maskedPayload
                     });
                     const cleanDrvPhone = candDriver?.phoneNumber ? String(candDriver.phoneNumber).replace(/[^0-9]/g, '') : '';
-                    if (cleanDrvPhone && `drv_${cleanDrvPhone}` !== primaryCandidateId) {
+                    if (cleanDrvPhone && `drv_${cleanDrvPhone}` !== cDriverId) {
                         await redisManager.publishDriverEvent(`drv_${cleanDrvPhone}`, {
                             type: 'new_ride',
                             event: 'new_ride',
@@ -5933,9 +5946,14 @@ async function startServer() {
 
             let isStrictlyCommuteOrIdle = false;
             if (matchedDriver) {
-                const dMode = String(matchedDriver.current_mode || matchedDriver.work_mode || matchedDriver.workStatus || matchedDriver.mode || '').toLowerCase().trim();
-                if (dMode === 'commute' || dMode === 'permanent' || dMode === 'خط دائمي' || dMode === 'idle' || dMode === 'خمول' || dMode === 'offline') {
-                    isStrictlyCommuteOrIdle = true;
+                const wMode = String(matchedDriver.work_mode || matchedDriver.workMode || '').toLowerCase().trim();
+                const dMode = String(matchedDriver.current_mode || matchedDriver.workStatus || matchedDriver.mode || '').toLowerCase().trim();
+                const isBoth = wMode === 'both' || wMode === 'كلاهما' || dMode === 'both';
+                if (!isBoth) {
+                    if (wMode === 'commute' || wMode === 'permanent' || wMode === 'خط دائمي' || wMode === 'idle' || wMode === 'خمول' || wMode === 'offline' ||
+                        dMode === 'commute' || dMode === 'permanent' || dMode === 'خط دائمي' || dMode === 'idle' || dMode === 'خمول' || dMode === 'offline') {
+                        isStrictlyCommuteOrIdle = true;
+                    }
                 }
             }
 
