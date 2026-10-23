@@ -2160,21 +2160,67 @@ class AdminController {
         }
     }
 
-    // 15. Driver Force-Cancel a Subscriber
-    async driverCancelSubscriber(data) {
+    // 15. Driver Force-Cancel a Subscriber (Driver removes subscriber from permanent route)
+    async driverCancelSubscriber(data, authUser = null) {
         db.memoryState.bookings = db.memoryState.bookings || [];
-        const bookingId = data.bookingId;
-        const targetDriverId = String(data.driverId || '');
+        db.memoryState.customers = db.memoryState.customers || [];
+        const rawBookingId = String(data.bookingId || '').trim();
+        const candidateCustomerId = String(data.customerId || data.userId || '').trim();
+        const candidatePhone = String(data.customerPhone || data.phone || '').replace(/[^0-9]/g, '');
+        const targetDriverId = String(data.driverId || '').trim();
         const reason = data.reason || 'إلغاء من الكابتن';
 
-        let booking = (db.memoryState.bookings || []).find(b =>
-            b.id === bookingId || b.bookingId === bookingId
-        );
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(bookingId));
-        if (!booking && db.isPostgresConnected && db.pool && isUuid) {
+        // Extract customer ID if passed as 'bk-assign-cust_...'
+        let cleanCustId = candidateCustomerId;
+        if (!cleanCustId && rawBookingId.startsWith('bk-assign-')) {
+            cleanCustId = rawBookingId.replace('bk-assign-', '');
+        }
+
+        // 1. RLS Authorization Check: Driver can only remove passengers from their own route
+        if (authUser && authUser.role === 'Driver') {
+            const actualAuthDriverId = String(authUser.id || authUser.driverId || authUser.userId || '');
+            const actualAuthPhone = String(authUser.phone || authUser.phoneNumber || '').replace(/[^0-9]/g, '');
+            const targetId = targetDriverId || actualAuthDriverId;
+            const idMatch = actualAuthDriverId && (targetId === actualAuthDriverId || targetId.includes(actualAuthDriverId));
+            const phoneMatch = actualAuthPhone.length >= 7 && targetId.includes(actualAuthPhone.slice(-8));
+            if (!idMatch && !phoneMatch && targetId !== 'drv-sample') {
+                return { success: false, error: 'غير مصرح لك بإلغاء ركاب خط كابتن آخر (403)', code: 403 };
+            }
+        }
+
+        // 2. Find booking in memory
+        let booking = db.memoryState.bookings.find(b => {
+            if (rawBookingId && (b.id === rawBookingId || b.bookingId === rawBookingId)) return true;
+            const bCustId = String(b.customerId || b.passengerId || '');
+            const bPhone = String(b.customerPhone || b.phone || '').replace(/[^0-9]/g, '');
+            const custMatch = (cleanCustId && (bCustId === cleanCustId || bCustId.endsWith(cleanCustId))) ||
+                              (candidatePhone.length >= 7 && bPhone.length >= 7 && bPhone.endsWith(candidatePhone.slice(-8)));
+            const drvMatch = !targetDriverId || (b.driverId === targetDriverId || b.driverPhone === targetDriverId);
+            return custMatch && drvMatch;
+        });
+
+        // 3. PostgreSQL query if not in memory
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBookingId);
+        if (!booking && db.isPostgresConnected && db.pool) {
             try {
-                const pgRes = await db.pool.query('SELECT * FROM bookings WHERE id = $1 LIMIT 1', [bookingId]);
-                if (pgRes.rows && pgRes.rows.length > 0) {
+                let pgRes = null;
+                if (isUuid) {
+                    pgRes = await db.pool.query('SELECT * FROM bookings WHERE id = $1 LIMIT 1', [rawBookingId]);
+                }
+                if ((!pgRes || !pgRes.rows || pgRes.rows.length === 0) && (cleanCustId || candidatePhone)) {
+                    pgRes = await db.pool.query(`
+                        SELECT b.*, u.phone_number as customer_phone
+                        FROM bookings b
+                        LEFT JOIN users u ON b.customer_id = u.id
+                        WHERE (
+                          ($1 <> '' AND b.customer_id::text = $1)
+                          OR ($2 <> '' AND u.phone_number IS NOT NULL AND RIGHT(REGEXP_REPLACE(u.phone_number, '[^0-9]', '', 'g'), 8) = RIGHT($2, 8))
+                        )
+                        AND ($3 = '' OR b.driver_id = $3)
+                        ORDER BY b.created_at DESC LIMIT 1
+                    `, [cleanCustId || '', candidatePhone || '', targetDriverId || '']);
+                }
+                if (pgRes && pgRes.rows && pgRes.rows.length > 0) {
                     const r = pgRes.rows[0];
                     booking = {
                         id: r.id,
@@ -2184,6 +2230,7 @@ class AdminController {
                         driverName: r.driver_name,
                         customerId: r.customer_id,
                         customerName: r.customer_name,
+                        customerPhone: r.customer_phone || candidatePhone,
                         pickupLocation: r.pickup_name,
                         dropoffLocation: r.dropoff_name,
                         seatsBooked: r.seats_booked || 1,
@@ -2197,69 +2244,145 @@ class AdminController {
             }
         }
 
-        if (booking && (booking.status === 'Cancelled' || String(booking.status).toLowerCase() === 'cancelled')) {
-            return { success: true, message: 'الحجز ملغى مسبقاً', alreadyCancelled: true };
+        // 4. Find customer in memory
+        const cust = db.memoryState.customers.find(c => {
+            const cId = String(c.customerId || c.id || '');
+            const cPhone = String(c.phoneNumber || c.phone || '').replace(/[^0-9]/g, '');
+            return (cleanCustId && (cId === cleanCustId || cId.endsWith(cleanCustId))) ||
+                   (rawBookingId && (cId === rawBookingId || cId.endsWith(rawBookingId))) ||
+                   (candidatePhone.length >= 7 && cPhone.length >= 7 && cPhone.endsWith(candidatePhone.slice(-8)));
+        });
+
+        if (!booking && !cust) {
+            return { success: false, error: 'المشترك غير موجود في قائمة الركاب', code: 404 };
         }
 
-        if (!booking) {
-            const cust = (db.memoryState.customers || []).find(c => c.customerId === bookingId || c.phoneNumber === bookingId);
-            if (cust && cust.assignedDriverId) {
-                cust.assignedDriverId = null;
-                cust.bookingConfirmed = false;
-                db.saveStateSnapshot();
-                return { success: true, message: 'تم فك ارتباط الراكب وتحرير مقعده بنجاح', bookingId };
+        // 5. Update booking status & free seats in route
+        let freedSeatsCount = 1;
+        if (booking) {
+            freedSeatsCount = parseInt(booking.seatsBooked || 1, 10);
+            booking.status = 'Cancelled';
+            booking.cancellationPending = false;
+            booking.cancellation_requested = false;
+            booking.cancellation_status = 'driver_cancelled';
+            booking.cancellationApproved = true;
+            booking.cancellationReason = reason;
+            booking.cancelledAt = new Date().toISOString();
+
+            const targetRoute = (db.memoryState.routes || []).find(r =>
+                r.id === booking.routeId || r.routeId === booking.routeId
+            );
+            if (targetRoute) {
+                const totalCap = targetRoute.totalSeats || 4;
+                targetRoute.availableSeats = Math.min(totalCap, (targetRoute.availableSeats || 0) + freedSeatsCount);
             }
-            return { success: true, message: 'الحجز غير نشط أو تم إلغاؤه مسبقاً', alreadyCancelled: true };
         }
 
-        // Cancel the booking immediately
-        booking.status = 'Cancelled';
-        booking.cancellationPending = false;
-        booking.cancellation_requested = false;
-        booking.cancellation_status = 'driver_cancelled';
-        booking.cancellationApproved = true;
-        booking.cancellationReason = reason;
-        booking.cancelledAt = new Date().toISOString();
+        // 6. Complete Unlinking: unassign customer from driver so assignedCustomers never re-adds them!
+        const targetCust = cust || (booking ? db.memoryState.customers.find(c => 
+            c.customerId === booking.customerId || 
+            (booking.customerPhone && c.phoneNumber && c.phoneNumber.replace(/[^0-9]/g, '').endsWith(String(booking.customerPhone).slice(-8)))
+        ) : null);
 
-        // Free seat in route
-        const targetRoute = (db.memoryState.routes || []).find(r =>
-            r.id === booking.routeId || r.routeId === booking.routeId
-        );
-        if (targetRoute) {
-            const totalCap = targetRoute.totalSeats || 4;
-            const freedSeats = parseInt(booking.seatsBooked || 1, 10);
-            targetRoute.availableSeats = Math.min(totalCap, (targetRoute.availableSeats || 0) + freedSeats);
+        if (targetCust) {
+            targetCust.assignedDriverId = null;
+            targetCust.driverId = null;
+            targetCust.bookingConfirmed = false;
         }
 
-        // Unlink customer from driver
-        const cust = (db.memoryState.customers || []).find(c =>
-            c.customerId === booking.customerId || c.phoneNumber === booking.customerPhone
-        );
-        if (cust) {
-            cust.assignedDriverId = null;
-            cust.driverId = null;
-            cust.bookingConfirmed = false;
+        // Also sweep any duplicates in memory
+        for (const c of db.memoryState.customers) {
+            const matchId = cleanCustId && (c.customerId === cleanCustId || c.id === cleanCustId);
+            const matchPhone = candidatePhone.length >= 7 && c.phoneNumber && c.phoneNumber.replace(/[^0-9]/g, '').endsWith(candidatePhone.slice(-8));
+            const matchBookingCust = booking && (c.customerId === booking.customerId);
+            if (matchId || matchPhone || matchBookingCust) {
+                c.assignedDriverId = null;
+                c.driverId = null;
+                c.bookingConfirmed = false;
+            }
         }
 
+        // 7. Persist to PostgreSQL if connected
         if (db.isPostgresConnected && db.pool) {
             try {
-                await db.pool.query(
-                    `UPDATE bookings SET status = 'Cancelled', cancellation_requested = false, cancellation_status = 'driver_cancelled', cancellation_reason = $1, updated_at = NOW() WHERE id = $2`,
-                    [reason, bookingId]
-                );
-                if (targetRoute) {
-                    await db.pool.query(`UPDATE routes SET available_seats = $1 WHERE id = $2`, [targetRoute.availableSeats, targetRoute.id]);
+                if (booking && isUuid) {
+                    await db.pool.query(
+                        `UPDATE bookings SET status = 'Cancelled', cancellation_requested = false, cancellation_status = 'driver_cancelled', cancellation_reason = $1, updated_at = NOW() WHERE id = $2`,
+                        [reason, booking.id]
+                    );
+                }
+                const resolvedCustId = (targetCust && targetCust.customerId) || cleanCustId;
+                if (resolvedCustId) {
+                    await db.pool.query(`
+                        UPDATE customers 
+                        SET assigned_driver_id = NULL 
+                        WHERE id::text = $1 OR customer_id = $1
+                    `, [resolvedCustId]).catch(() => {});
+                }
+                const targetRoute = (db.memoryState.routes || []).find(r => booking && (r.id === booking.routeId || r.routeId === booking.routeId));
+                if (targetRoute && targetRoute.id) {
+                    await db.pool.query(`UPDATE routes SET available_seats = $1 WHERE id = $2`, [targetRoute.availableSeats, targetRoute.id]).catch(() => {});
                 }
             } catch (pgErr) {
                 console.error('[AdminController] PG driverCancelSubscriber error:', pgErr.message);
             }
         }
 
+        // 8. Notify Passenger via SSE & Telegram (with SET NX distributed lock)
+        const resolvedCustomerId = (booking && booking.customerId) || (targetCust && targetCust.customerId) || cleanCustId;
+        const resolvedCustomerPhone = (booking && (booking.customerPhone || booking.phone)) || (targetCust && targetCust.phoneNumber) || candidatePhone;
+        const customerName = (booking && booking.customerName) || (targetCust && (targetCust.fullName || targetCust.name)) || 'الراكب';
+
+        // 8a. SSE broadcast to passenger
+        if (resolvedCustomerId || resolvedCustomerPhone) {
+            try {
+                const redisManager = require('../redis/redisClient');
+                const cancelEvent = {
+                    type: 'subscription_cancelled_by_driver',
+                    event: 'subscription_cancelled_by_driver',
+                    status: 'Cancelled',
+                    cancelledBy: 'driver',
+                    driverId: targetDriverId,
+                    bookingId: (booking && (booking.id || booking.bookingId)) || rawBookingId,
+                    reason: reason,
+                    timestamp: Date.now()
+                };
+                if (resolvedCustomerId) {
+                    redisManager.publishRideEvent(`cust:${resolvedCustomerId}`, cancelEvent);
+                    if (typeof redisManager.publishCustomerEvent === 'function') {
+                        redisManager.publishCustomerEvent(resolvedCustomerId, cancelEvent);
+                    }
+                }
+            } catch (sseErr) {
+                console.warn('[AdminController] Customer SSE notify error:', sseErr.message);
+            }
+
+            // 8b. Telegram to passenger (once with SET NX distributed lock)
+            try {
+                const redisManager = require('../redis/redisClient');
+                const telegramBot = require('../telegram/telegramBot');
+                const lockKey = `lock:tg:drv_cancel_sub:${resolvedCustomerId || resolvedCustomerPhone}:${targetDriverId}`;
+                const lockAcquired = await redisManager.acquireTelegramNotificationLock(lockKey, 3600);
+                if (lockAcquired && typeof telegramBot.findCustomerTelegramChatId === 'function') {
+                    const custChatId = await telegramBot.findCustomerTelegramChatId({ customerId: resolvedCustomerId, phone: resolvedCustomerPhone });
+                    if (custChatId && typeof telegramBot.sendMessage === 'function') {
+                        const tgMsg = `⚠️ *تنبيه من إدارة خط التوصيل*\n\nعزيزي الراكب (${customerName})، تم إلغاء اشتراكك في الخط الدائمي من قبل الكابتن.\nالسبب: ${reason}\n\nيمكنك اختيار كابتن وخط بديل في أي وقت عبر التطبيق.`;
+                        await telegramBot.sendMessage(custChatId, tgMsg, { parse_mode: 'Markdown' });
+                    }
+                }
+            } catch (tgErr) {
+                console.warn('[AdminController] Customer Telegram notify error:', tgErr.message);
+            }
+        }
+
         db.saveStateSnapshot();
+        invalidateDriversCache();
+        invalidateCustomersCache();
+
         return {
             success: true,
-            message: 'تم إلغاء اشتراك الراكب وتحرير مقعده بنجاح',
-            bookingId
+            message: 'تم إلغاء اشتراك الراكب وتحرير مقعده بنجاح ✅',
+            bookingId: (booking && (booking.id || booking.bookingId)) || rawBookingId
         };
     }
 }

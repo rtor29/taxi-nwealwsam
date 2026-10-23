@@ -7150,8 +7150,13 @@ async function startServer() {
         // Driver Force-Cancel a Subscriber (Driver-initiated cancellation)
         if ((pathname === '/api/driver/cancel-subscriber' || pathname === '/driver/cancel-subscriber') && method === 'POST') {
             const body = await parseJsonBody(req).catch(() => ({}));
-            const result = await adminController.driverCancelSubscriber(body);
-            return sendJson(result, result.success ? 200 : 400);
+            const authUser = getAuthUser(req);
+            const userIdentifier = body.driverId || (authUser ? (authUser.id || authUser.phone) : clientIp);
+            if (_orderRateLimit(clientIp, userIdentifier)) {
+                return sendJson({ success: false, error: 'تم إرسال طلبات متعددة بسرعة، يرجى الانتظار قليلاً' }, 429);
+            }
+            const result = await adminController.driverCancelSubscriber(body, authUser);
+            return sendJson(result, result.success ? 200 : (result.code || 400));
         }
 
         // Admin Passenger Cancellation Requests List
