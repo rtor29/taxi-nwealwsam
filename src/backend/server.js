@@ -7350,33 +7350,11 @@ async function startServer() {
             }
 
             // Prevent duplicate booking for the same passenger and captain
-            const existingActiveBooking = (db.memoryState.bookings || []).find(b => {
-                const isActive = b.status === 'Confirmed' || b.status === 'Pending' || b.status === 'Active';
-                if (!isActive) return false;
-
-                const bCustId = String(b.customerId || b.passengerId || '');
-                const bPhone = String(b.customerPhone || b.phone || '').replace(/[^0-9]/g, '');
-                const isSameCustomer = (candidateCustomerId && bCustId && candidateCustomerId === bCustId) ||
-                                       (candidateCleanPhone.length >= 7 && bPhone.length >= 7 && (bPhone.endsWith(candidateCleanPhone.slice(-8)) || candidateCleanPhone.endsWith(bPhone.slice(-8))));
-                if (!isSameCustomer) return false;
-
-                return (b.driverId === resolvedDriverId);
-            });
-
-            if (existingActiveBooking) {
-                return sendJson({
-                    success: false,
-                    alreadySubscribed: true,
-                    existingBookingId: existingActiveBooking.id || existingActiveBooking.bookingId,
-                    error: 'أنت مشترك بالفعل أو لديك طلب حجز معلق مع هذا الكابتن، لا يمكنك تكرار الحجز.'
-                }, 409);
-            }
-
             if (db.isPostgresConnected && db.pool) {
                 try {
                     const pgDup = await db.pool.query(`
                         SELECT id FROM bookings 
-                        WHERE (customer_id = $1 OR customer_phone = $2)
+                        WHERE (customer_id = $1 OR (customer_phone IS NOT NULL AND customer_phone = $2))
                           AND driver_id = $3
                           AND status IN ('Pending', 'Confirmed', 'Active')
                         LIMIT 1
@@ -7390,6 +7368,28 @@ async function startServer() {
                         }, 409);
                     }
                 } catch (_) {}
+            } else {
+                const existingActiveBooking = (db.memoryState.bookings || []).find(b => {
+                    const isActive = b.status === 'Confirmed' || b.status === 'Pending' || b.status === 'Active';
+                    if (!isActive) return false;
+
+                    const bCustId = String(b.customerId || b.passengerId || '');
+                    const bPhone = String(b.customerPhone || b.phone || '').replace(/[^0-9]/g, '');
+                    const isSameCustomer = (candidateCustomerId && bCustId && candidateCustomerId === bCustId) ||
+                                           (candidateCleanPhone.length >= 7 && bPhone.length >= 7 && (bPhone.endsWith(candidateCleanPhone.slice(-8)) || candidateCleanPhone.endsWith(bPhone.slice(-8))));
+                    if (!isSameCustomer) return false;
+
+                    return (b.driverId === resolvedDriverId);
+                });
+
+                if (existingActiveBooking) {
+                    return sendJson({
+                        success: false,
+                        alreadySubscribed: true,
+                        existingBookingId: existingActiveBooking.id || existingActiveBooking.bookingId,
+                        error: 'أنت مشترك بالفعل أو لديك طلب حجز معلق مع هذا الكابتن، لا يمكنك تكرار الحجز.'
+                    }, 409);
+                }
             }
 
             const seats = Math.max(1, Math.min(4, parseInt(body.seats || body.seatsBooked || 1, 10)));
