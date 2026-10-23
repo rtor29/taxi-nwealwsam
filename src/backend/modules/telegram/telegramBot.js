@@ -1062,9 +1062,175 @@ async function completeDriverRegistration(chatId, user, locationInput) {
     userStates.delete(chatId);
 }
 
-async function handleCallback(chatId, data, user, queryId) {
+// --- Handle Booking Decision from Captain via Bot Inline Buttons ---
+async function handleBookingDecisionCallback(chatId, data, user, queryId, messageId = null) {
+    const isAccept = data.startsWith('bk_accept_');
+    const bookingId = data.replace(isAccept ? 'bk_accept_' : 'bk_reject_', '').trim();
+    
+    // 1. Idempotency Lock via Redis: double-click prevention
+    const lockKey = `tg:cb:${bookingId}:${chatId}`;
+    const lockAcquired = await redisManager.acquireTelegramNotificationLock(lockKey, 30);
+    if (!lockAcquired) {
+        if (queryId) {
+            await tgRequest('answerCallbackQuery', {
+                callback_query_id: queryId,
+                text: '⚠️ جارٍ معالجة هذا الطلب بالفعل...',
+                show_alert: false
+            }).catch(() => {});
+        }
+        return;
+    }
+
+    // 2. Fetch booking from Memory / PostgreSQL
+    let booking = (db.memoryState.bookings || []).find(b => (b.id === bookingId || b.bookingId === bookingId));
+    if (!booking && db.isPostgresConnected && db.pool) {
+        try {
+            const pgRes = await db.pool.query('SELECT * FROM bookings WHERE id = $1 LIMIT 1', [bookingId]);
+            if (pgRes.rows && pgRes.rows.length > 0) {
+                const r = pgRes.rows[0];
+                booking = {
+                    id: r.id,
+                    bookingId: r.id,
+                    routeId: r.route_id,
+                    driverId: r.driver_id,
+                    driverName: r.driver_name,
+                    driverPhone: r.driver_phone,
+                    customerId: r.customer_id,
+                    customerName: r.customer_name,
+                    customerPhone: r.customer_phone,
+                    pickupLocation: r.pickup_name || '',
+                    dropoffLocation: r.dropoff_name || '',
+                    seatsBooked: r.seats_booked || 1,
+                    status: r.status,
+                    createdAt: r.created_at
+                };
+            }
+        } catch (err) {
+            console.error('[TelegramBot] Fetch booking error:', err.message);
+        }
+    }
+
+    if (!booking) {
+        if (queryId) {
+            await tgRequest('answerCallbackQuery', {
+                callback_query_id: queryId,
+                text: 'لم يعد الطلب متاحاً',
+                show_alert: true
+            }).catch(() => {});
+        }
+        if (messageId) {
+            await editMessageText(chatId, messageId, '⚠️ <i>لم يعد طلب الحجز متاحاً</i>', { reply_markup: { inline_keyboard: [] } }).catch(() => {});
+        }
+        return;
+    }
+
+    // 3. RLS Check: Sender chatId must match assigned captain\'s telegramChatId or Admin
+    const assignedChatId = await findDriverTelegramChatId(booking.driverId, booking.driverPhone);
+    const isAdmin = String(chatId) === String(ADMIN_CHAT_ID);
+    const isOwner = assignedChatId && String(chatId) === String(assignedChatId);
+    if (!isOwner && !isAdmin) {
+        if (queryId) {
+            await tgRequest('answerCallbackQuery', {
+                callback_query_id: queryId,
+                text: '🚫 غير مصرح: هذا الحجز مخصص لكابتن آخر (RLS)',
+                show_alert: true
+            }).catch(() => {});
+        }
+        return;
+    }
+
+    // 4. State Machine Check: only Pending can be accepted or declined
+    const curStatus = String(booking.status || 'Pending').toLowerCase();
+    if (curStatus !== 'pending') {
+        const stAr = (curStatus === 'confirmed' || curStatus === 'accepted') ? 'تم قبوله مسبقاً' : ((curStatus === 'declined' || curStatus === 'rejected') ? 'تم رفضه مسبقاً' : 'ملغي أو غير متاح');
+        if (queryId) {
+            await tgRequest('answerCallbackQuery', {
+                callback_query_id: queryId,
+                text: `⚠️ لم يعد الطلب متاحاً (${stAr})`,
+                show_alert: true
+            }).catch(() => {});
+        }
+        if (messageId) {
+            await editMessageText(chatId, messageId, `⚠️ <i>طلب الحجز غير متاح (${stAr})</i>`, { reply_markup: { inline_keyboard: [] } }).catch(() => {});
+        }
+        return;
+    }
+
+    // 5. Execute action via shared adminController
+    const adminController = require('../admin/adminController');
+    const authUser = { id: booking.driverId, role: 'Driver', phone: booking.driverPhone };
+
+    if (isAccept) {
+        const result = await adminController.acceptBooking(bookingId, booking.driverId, authUser);
+        if (result.success) {
+            if (queryId) {
+                await tgRequest('answerCallbackQuery', {
+                    callback_query_id: queryId,
+                    text: '✅ قبلت الحجز بنجاح',
+                    show_alert: false
+                }).catch(() => {});
+            }
+            if (messageId) {
+                const editedText = `✅ <b>قبلت الحجز ✅</b>\n\n` +
+                    `👤 <b>الراكب:</b> ${booking.customerName || 'راكب'}\n` +
+                    `📍 <b>المسار:</b> ${booking.pickupLocation || ''} ➔ ${booking.dropoffLocation || ''}\n` +
+                    `💺 <b>المقاعد:</b> ${booking.seatsBooked || 1}\n` +
+                    `📞 <b>هاتف الراكب:</b> <code>${booking.customerPhone || 'غير متوفر'}</code>\n\n` +
+                    `<i>تم تأكيد المقعد وإشعار الراكب بتفاصيلك.</i>`;
+                await editMessageText(chatId, messageId, editedText, { reply_markup: { inline_keyboard: [] } }).catch(() => {});
+            }
+        } else {
+            if (queryId) {
+                await tgRequest('answerCallbackQuery', {
+                    callback_query_id: queryId,
+                    text: result.error || 'تعذر قبول الحجز',
+                    show_alert: true
+                }).catch(() => {});
+            }
+            if (messageId) {
+                await editMessageText(chatId, messageId, `⚠️ <i>تعذر قبول الحجز: ${result.error || ''}</i>`, { reply_markup: { inline_keyboard: [] } }).catch(() => {});
+            }
+        }
+    } else {
+        const result = await adminController.declineBooking(bookingId, 'المقاعد مكتملة', booking.driverId, authUser);
+        if (result.success) {
+            if (queryId) {
+                await tgRequest('answerCallbackQuery', {
+                    callback_query_id: queryId,
+                    text: '❌ رفضت الطلب',
+                    show_alert: false
+                }).catch(() => {});
+            }
+            if (messageId) {
+                const editedText = `❌ <b>رفضت الطلب ❌</b>\n\n` +
+                    `👤 <b>الراكب:</b> ${booking.customerName || 'راكب'}\n` +
+                    `📍 <b>المسار:</b> ${booking.pickupLocation || ''} ➔ ${booking.dropoffLocation || ''}\n` +
+                    `<i>تم تحديث الحالة وإشعار الراكب.</i>`;
+                await editMessageText(chatId, messageId, editedText, { reply_markup: { inline_keyboard: [] } }).catch(() => {});
+            }
+        } else {
+            if (queryId) {
+                await tgRequest('answerCallbackQuery', {
+                    callback_query_id: queryId,
+                    text: result.error || 'تعذر رفض الحجز',
+                    show_alert: true
+                }).catch(() => {});
+            }
+            if (messageId) {
+                await editMessageText(chatId, messageId, `⚠️ <i>تعذر رفض الحجز: ${result.error || ''}</i>`, { reply_markup: { inline_keyboard: [] } }).catch(() => {});
+            }
+        }
+    }
+}
+
+async function handleCallback(chatId, data, user, queryId, messageId = null) {
     if (!db.memoryState.botSubscribers) db.memoryState.botSubscribers = [];
     if (!db.memoryState.botSubscribers.includes(String(chatId))) { db.memoryState.botSubscribers.push(String(chatId)); db.saveStateSnapshot(); }
+
+    if (data.startsWith('bk_accept_') || data.startsWith('bk_reject_')) {
+        await handleBookingDecisionCallback(chatId, data, user, queryId, messageId);
+        return;
+    }
 
     const state = userStates.get(chatId) || {};
 
@@ -1968,10 +2134,10 @@ async function poll() {
                             const cbData = _sanitizeTgInput(cb.data);
                             if (!cbData || cbData.length > 100) continue;
 
-                            if (cbData !== 'check_subscription') {
+                            if (cbData !== 'check_subscription' && !cbData.startsWith('bk_accept_') && !cbData.startsWith('bk_reject_')) {
                                 await tgRequest('answerCallbackQuery', { callback_query_id: cb.id }).catch(() => {});
                             }
-                            await handleCallback(chatId, cbData, cb.from, cb.id);
+                            await handleCallback(chatId, cbData, cb.from, cb.id, cb.message?.message_id);
                         }
                     } else if (update.message) {
                         const msg = update.message;
@@ -2580,6 +2746,170 @@ async function notifyRideCancelled(ride, reason = 'إلغاء من قبل الم
     }
 }
 
+// --- COMMUTE BOOKING NOTIFICATIONS (BATCH 4) ---
+// ===============================================
+
+// 1. Notify Captain of New Commute Booking Request (Phone masked / hidden until accepted)
+async function notifyBookingRequestToCaptain(booking, route = null) {
+    if (!booking) return { ok: false, error: 'no_booking' };
+    const bId = booking.id || booking.bookingId;
+
+    try {
+        const captainChatId = await findDriverTelegramChatId(booking.driverId, booking.driverPhone);
+        if (!captainChatId) {
+            const maskedDrvId = String(booking.driverId || '').slice(0, 4) + '****';
+            console.log(`[TelegramBot] Captain (${maskedDrvId}) not linked to Telegram (chatId null)`);
+        } else {
+            const lockKey = `booking:${bId}:request:${captainChatId}`;
+            const lockAcquired = await redisManager.acquireTelegramNotificationLock(lockKey, 86400);
+            if (lockAcquired) {
+                const depTime = (route && route.departureTime) || booking.departureTime || 'موعد الدوام الرسمي';
+                const seats = booking.seatsBooked || 1;
+                const msg = `🚖 <b>طلب حجز جديد في الخط الدائم</b>\n\n` +
+                    `👤 <b>اسم الراكب:</b> ${booking.customerName || 'راكب'}\n` +
+                    `📍 <b>العنوان / الانطلاق:</b> ${booking.pickupLocation || ''}\n` +
+                    `🎯 <b>الوجهة:</b> ${booking.dropoffLocation || ''}\n` +
+                    `🛣 <b>المسار:</b> ${booking.pickupLocation || ''} ➔ ${booking.dropoffLocation || ''}\n` +
+                    `⏰ <b>الموعد:</b> ${depTime}\n` +
+                    `💺 <b>عدد المقاعد المطلوبة:</b> ${seats}\n\n` +
+                    `<i>يرجى قبول أو رفض الطلب:</i>`;
+                const buttons = [
+                    [
+                        { text: 'قبول ✅', callback_data: `bk_accept_${bId}` },
+                        { text: 'رفض ❌', callback_data: `bk_reject_${bId}` }
+                    ]
+                ];
+                await sendKeyboard(captainChatId, msg, buttons).catch(err => {
+                    console.warn('[TelegramBot] sendKeyboard to captain error:', err.message);
+                });
+            }
+        }
+
+        // Admin notification copy (without buttons)
+        if (ADMIN_CHAT_ID) {
+            const adminLockKey = `booking:${bId}:request:admin`;
+            const adminAcquired = await redisManager.acquireTelegramNotificationLock(adminLockKey, 86400);
+            if (adminAcquired) {
+                const adminMsg = `📢 <b>إشعار حجز جديد (نسخة إدارة)</b>\n\n` +
+                    `👤 <b>الراكب:</b> ${booking.customerName || 'راكب'}\n` +
+                    `🚖 <b>الكابتن المعين:</b> ${booking.driverName || 'كابتن'}\n` +
+                    `🛣 <b>المسار:</b> ${booking.pickupLocation || ''} ➔ ${booking.dropoffLocation || ''}\n` +
+                    `💺 <b>المقاعد:</b> ${booking.seatsBooked || 1}\n` +
+                    `الحالة: قيد الانتظار (Pending)`;
+                await sendMessage(ADMIN_CHAT_ID, adminMsg).catch(() => {});
+            }
+        }
+
+        return { ok: true };
+    } catch (err) {
+        console.error('[TelegramBot] notifyBookingRequestToCaptain error:', err.message);
+        return { ok: false, error: err.message };
+    }
+}
+
+// 2. Notify Rider when Booking Accepted by Captain (reveals captain info + WhatsApp link)
+async function notifyBookingAcceptedToRider(booking) {
+    if (!booking) return { ok: false, error: 'no_booking' };
+    const bId = booking.id || booking.bookingId;
+
+    try {
+        const custChatId = await findCustomerTelegramChatId(booking);
+        if (!custChatId) {
+            const maskedCustId = String(booking.customerId || '').slice(0, 4) + '****';
+            console.log(`[TelegramBot] Passenger (${maskedCustId}) not linked to Telegram (chatId null)`);
+            return { ok: false, error: 'passenger_not_linked' };
+        }
+
+        const lockKey = `booking:${bId}:accepted:${custChatId}`;
+        const lockAcquired = await redisManager.acquireTelegramNotificationLock(lockKey, 86400);
+        if (!lockAcquired) {
+            return { ok: true, deduplicated: true };
+        }
+
+        // Find captain vehicle info and contact
+        let drv = (db.memoryState.drivers || []).find(d => d.driverId === booking.driverId || d.phoneNumber === booking.driverPhone);
+        if (!drv && db.isPostgresConnected && db.pool) {
+            try {
+                const dRes = await db.pool.query('SELECT * FROM drivers WHERE driver_id = $1 LIMIT 1', [booking.driverId]);
+                if (dRes.rows && dRes.rows.length > 0) {
+                    drv = dRes.rows[0];
+                }
+            } catch (_) {}
+        }
+
+        const vMake = drv?.vehicle_make || drv?.vehicleMake || 'تويوتا';
+        const vModel = drv?.vehicle_model || drv?.vehicleModel || 'كورولا';
+        const vColor = drv?.vehicle_color || drv?.vehicleColor || 'أبيض';
+        const carInfo = `${vMake} ${vModel}${vColor ? ` (${vColor})` : ''}`.trim();
+        const drvName = booking.driverName || drv?.full_name || drv?.fullName || 'الكابتن';
+        const drvPhone = booking.driverPhone || drv?.phone_number || drv?.phoneNumber || '';
+
+        const rawPhone = String(drvPhone).replace(/[^0-9]/g, '');
+        const waNum = rawPhone.startsWith('0') ? '964' + rawPhone.slice(1) : (rawPhone.startsWith('964') ? rawPhone : '964' + rawPhone);
+        const waUrl = `https://wa.me/${waNum}`;
+
+        const msg = `✅ <b>تم قبول حجزك في الخط الدائم!</b>\n\n` +
+            `🚖 <b>الكابتن:</b> ${drvName}\n` +
+            `🚗 <b>السيارة:</b> ${carInfo}\n` +
+            `📍 <b>المسار:</b> ${booking.pickupLocation || ''} ➔ ${booking.dropoffLocation || ''}\n` +
+            `📞 <b>رقم اتصال الكابتن:</b> <code>${drvPhone}</code>\n\n` +
+            `<i>يمكنك التواصل مع الكابتن مباشرة عبر الاتصال أو الواتساب أدناه لتنسيق موعد الانطلاق:</i>`;
+
+        const buttons = [
+            [{ text: '💬 تواصل عبر واتساب', url: waUrl }]
+        ];
+
+        const sendRes = await sendKeyboard(custChatId, msg, buttons).catch(err => {
+            console.warn('[TelegramBot] sendKeyboard to rider error:', err.message);
+            return { ok: false, error: err.message };
+        });
+
+        return sendRes || { ok: true };
+    } catch (err) {
+        console.error('[TelegramBot] notifyBookingAcceptedToRider error:', err.message);
+        return { ok: false, error: err.message };
+    }
+}
+
+// 3. Notify Rider when Booking Declined / Rejected by Captain
+async function notifyBookingDeclinedToRider(booking, reason = null) {
+    if (!booking) return { ok: false, error: 'no_booking' };
+    const bId = booking.id || booking.bookingId;
+
+    try {
+        const custChatId = await findCustomerTelegramChatId(booking);
+        if (!custChatId) {
+            const maskedCustId = String(booking.customerId || '').slice(0, 4) + '****';
+            console.log(`[TelegramBot] Passenger (${maskedCustId}) not linked to Telegram (chatId null)`);
+            return { ok: false, error: 'passenger_not_linked' };
+        }
+
+        const lockKey = `booking:${bId}:declined:${custChatId}`;
+        const lockAcquired = await redisManager.acquireTelegramNotificationLock(lockKey, 86400);
+        if (!lockAcquired) {
+            return { ok: true, deduplicated: true };
+        }
+
+        const drvName = booking.driverName || 'الكابتن';
+        const displayReason = reason || 'المقاعد مكتملة';
+
+        const msg = `❌ <b>تحديث بشأن طلب الحجز</b>\n\n` +
+            `نعتذر، لم يقبل الكابتن (${drvName}) طلبك في الخط الدائم.\n` +
+            `📝 <b>السبب:</b> ${displayReason}\n\n` +
+            `يمكنك اختيار كابتن وخط بديل في أي وقت عبر التطبيق 🚖.`;
+
+        const sendRes = await sendMessage(custChatId, msg).catch(err => {
+            console.warn('[TelegramBot] sendMessage to rider error:', err.message);
+            return { ok: false, error: err.message };
+        });
+
+        return sendRes || { ok: true };
+    } catch (err) {
+        console.error('[TelegramBot] notifyBookingDeclinedToRider error:', err.message);
+        return { ok: false, error: err.message };
+    }
+}
+
 module.exports = {
     startBot,
     stopBot,
@@ -2599,6 +2929,10 @@ module.exports = {
     notifyDriverArrived,
     notifyTripStarted,
     notifyTripCompleted,
-    notifyRideCancelled
+    notifyRideCancelled,
+    notifyBookingRequestToCaptain,
+    notifyBookingAcceptedToRider,
+    notifyBookingDeclinedToRider,
+    handleBookingDecisionCallback
 };
 

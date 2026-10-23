@@ -2714,6 +2714,33 @@ async function startServer() {
                 }
             }
 
+            // Batch compute booked confirmed/active seats per driver (PG source of truth)
+            const bookedSeatsMap = new Map();
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    const bookedRes = await db.pool.query(`
+                        SELECT driver_id, COALESCE(SUM(seats_booked), 0) AS booked_count
+                        FROM bookings
+                        WHERE status IN ('Confirmed', 'Active')
+                        GROUP BY driver_id
+                    `);
+                    if (bookedRes.rows) {
+                        for (const row of bookedRes.rows) {
+                            bookedSeatsMap.set(String(row.driver_id), parseInt(row.booked_count, 10));
+                        }
+                    }
+                } catch (bErr) {
+                    console.warn('[CommuteDrivers] Booked seats count error:', bErr.message);
+                }
+            }
+            const memBookings = (db.memoryState.bookings || []).filter(b => b.status === 'Confirmed' || b.status === 'Active');
+            for (const mb of memBookings) {
+                const drvId = String(mb.driverId);
+                if (!bookedSeatsMap.has(drvId)) {
+                    bookedSeatsMap.set(drvId, (bookedSeatsMap.get(drvId) || 0) + parseInt(mb.seatsBooked || 1, 10));
+                }
+            }
+
             const sourceDrivers = dbDrivers.length > 0 ? dbDrivers : (db.memoryState.drivers || []);
             const memMap = new Map((db.memoryState.drivers || []).map(d => [String(d.driverId || d.id), d]));
 
@@ -2795,6 +2822,11 @@ async function startServer() {
                 const firstName = fullName.trim().split(/\s+/)[0] || 'كابتن';
                 const routeStr = d.route || mem.route || (fixedLabel ? `${fixedLabel} ➔ المركز` : 'خط دائمي');
 
+                const targetRoute = (db.memoryState.routes || []).find(r => r.driverId === id || r.driver_id === id);
+                const totalCapacity = parseInt(targetRoute?.totalSeats || targetRoute?.total_seats || mem.totalSeats || mem.availableSeats || 4, 10);
+                const bookedCount = bookedSeatsMap.get(id) || 0;
+                const isFull = bookedCount >= totalCapacity;
+
                 candidateDrivers.push({
                     driverId: id,
                     firstName: firstName,
@@ -2808,6 +2840,7 @@ async function startServer() {
                     fixed_lng: fixedLng,
                     distanceM: distanceM,
                     distanceBand: distanceBand,
+                    isFull: Boolean(isFull),
                     lastActive: fixedUpdatedAt || d.updated_at || mem.lastActive || null
                 });
             }
@@ -2907,6 +2940,7 @@ async function startServer() {
                         routeEndName: d.permanentDropoffName || (routeStr ? routeStr.split(/[-➔→]/)[1]?.trim() : ''),
                         distanceKm: Math.round(distanceKm * 10) / 10,
                         heading: d.heading || (idx * 45) % 360,
+                        isFull: false,
                         status: d.tripStatus || 'Online',
                         speedKmh: d.speedKmh || Math.floor(25 + Math.random() * 30)
                     };
@@ -7409,9 +7443,9 @@ async function startServer() {
                 );
                 currentBookedSeats = activeBookings.reduce((sum, b) => sum + parseInt(b.seatsBooked || 1, 10), 0);
             }
-            const totalCarCapacity = targetDriver.available_seats || targetDriver.availableSeats || targetRoute?.totalSeats || 4;
+            const totalCarCapacity = targetDriver.available_seats || targetDriver.availableSeats || targetDriver.totalSeats || targetRoute?.totalSeats || 4;
             if (currentBookedSeats >= totalCarCapacity || (currentBookedSeats + seats > totalCarCapacity)) {
-                return sendJson({ success: false, error: 'عذراً، المقاعد مكتملة بالكامل لدى الكابتن حالياً.' }, 409);
+                return sendJson({ success: false, error: 'الكابتن غير متاح للحجز حالياً (المقاعد مكتملة)' }, 409);
             }
 
             const rawNotes = body.notes || body.note || body.comment || '';
@@ -7537,6 +7571,17 @@ async function startServer() {
             });
 
             db.saveStateSnapshot();
+
+            // Asynchronous Telegram notification to captain (with inline buttons) & admin copy
+            try {
+                if (typeof telegramBot.notifyBookingRequestToCaptain === 'function') {
+                    telegramBot.notifyBookingRequestToCaptain(newBooking, targetRoute).catch(err => {
+                        console.warn('[Server] Telegram notify booking request error:', err.message);
+                    });
+                }
+            } catch (tgErr) {
+                console.warn('[Server] Telegram dispatch error:', tgErr.message);
+            }
 
             const successResponse = {
                 success: true,

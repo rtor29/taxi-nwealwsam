@@ -1075,6 +1075,18 @@ class AdminController {
             status: 'Confirmed'
         });
 
+        // Notify Passenger via Telegram with SET NX distributed lock
+        try {
+            const telegramBot = require('../telegram/telegramBot');
+            if (typeof telegramBot.notifyBookingAcceptedToRider === 'function') {
+                telegramBot.notifyBookingAcceptedToRider(booking).catch(err => {
+                    console.warn('[AdminController] notifyBookingAcceptedToRider error:', err.message);
+                });
+            }
+        } catch (tgErr) {
+            console.warn('[AdminController] Telegram notify error:', tgErr.message);
+        }
+
         db.saveStateSnapshot();
         return { success: true, message: 'تمت موافقة السائق على الحجز وأصبح الزبون ضمن الركاب بنجاح! ✅', booking };
     }
@@ -1225,6 +1237,18 @@ class AdminController {
             reason: sanitizedReason,
             status: 'Declined'
         });
+
+        // Notify Passenger via Telegram with SET NX distributed lock
+        try {
+            const telegramBot = require('../telegram/telegramBot');
+            if (typeof telegramBot.notifyBookingDeclinedToRider === 'function') {
+                telegramBot.notifyBookingDeclinedToRider(booking, sanitizedReason).catch(err => {
+                    console.warn('[AdminController] notifyBookingDeclinedToRider error:', err.message);
+                });
+            }
+        } catch (tgErr) {
+            console.warn('[AdminController] Telegram notify error:', tgErr.message);
+        }
 
         db.saveStateSnapshot();
         return { success: true, message: 'تم رفض طلب الحجز.', booking };
