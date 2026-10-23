@@ -2167,13 +2167,17 @@ class AdminController {
 
         // 1. Memory lookup
         let booking = (db.memoryState.bookings || []).find(b => {
-            if (bookingId && (b.id === bookingId || b.bookingId === bookingId)) return true;
+            if (bookingId) {
+                return (b.id === bookingId || b.bookingId === bookingId);
+            }
             const bCustId = String(b.customerId || b.passengerId || '');
             const bPhone = String(b.customerPhone || b.phone || '').replace(/[^0-9]/g, '');
             const isCust = (candidateCustomerId && (bCustId === candidateCustomerId || bCustId.endsWith(candidateCustomerId))) || 
                            (candidatePhone.length >= 7 && bPhone.length >= 7 && bPhone.endsWith(candidatePhone.slice(-8)));
             const isDrv = !targetDriverId || (b.driverId === targetDriverId || b.driverPhone === targetDriverId);
-            return isCust && isDrv;
+            const st = String(b.status || '').toLowerCase();
+            const isActive = st === 'confirmed' || st === 'pending' || st === 'active';
+            return isCust && isDrv && isActive;
         });
 
         // 2. PostgreSQL safe query (supports text bookingId and customer fallback via users JOIN)
@@ -2569,13 +2573,17 @@ class AdminController {
 
         // 2. Find booking in memory
         let booking = db.memoryState.bookings.find(b => {
-            if (rawBookingId && (b.id === rawBookingId || b.bookingId === rawBookingId)) return true;
+            if (rawBookingId && !rawBookingId.startsWith('bk-assign-')) {
+                return (b.id === rawBookingId || b.bookingId === rawBookingId);
+            }
             const bCustId = String(b.customerId || b.passengerId || '');
             const bPhone = String(b.customerPhone || b.phone || '').replace(/[^0-9]/g, '');
             const custMatch = (cleanCustId && (bCustId === cleanCustId || bCustId.endsWith(cleanCustId))) ||
                               (candidatePhone.length >= 7 && bPhone.length >= 7 && bPhone.endsWith(candidatePhone.slice(-8)));
             const drvMatch = !targetDriverId || (b.driverId === targetDriverId || b.driverPhone === targetDriverId);
-            return custMatch && drvMatch;
+            const st = String(b.status || '').toLowerCase();
+            const isActive = st === 'confirmed' || st === 'pending' || st === 'active';
+            return custMatch && drvMatch && isActive;
         });
 
         // 3. PostgreSQL query if not in memory
