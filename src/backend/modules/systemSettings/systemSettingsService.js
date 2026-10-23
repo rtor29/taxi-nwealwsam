@@ -25,7 +25,11 @@ const DEFAULTS = {
     // Vehicle Tiers Surcharges (Batch 3)
     vehicle_tier_surcharge_economy_iqd: 0,
     vehicle_tier_surcharge_super_iqd: 250,
-    vehicle_tier_surcharge_plus_iqd: 500
+    vehicle_tier_surcharge_plus_iqd: 500,
+    // Commute Distance Bands & Results (Batch 2)
+    commute_band_green_m: 500,
+    commute_band_purple_m: 1000,
+    commute_max_results: 100
 };
 
 class SystemSettingsService {
@@ -62,6 +66,9 @@ class SystemSettingsService {
                         'vehicle_tier_surcharge_economy_iqd',
                         'vehicle_tier_surcharge_super_iqd',
                         'vehicle_tier_surcharge_plus_iqd',
+                        'commute_band_green_m',
+                        'commute_band_purple_m',
+                        'commute_max_results',
                         'matching_settings',
                         'search_radius_km'
                     )`
@@ -185,6 +192,18 @@ class SystemSettingsService {
         return this.getConstant('vehicle_tier_surcharge_plus_iqd', DEFAULTS.vehicle_tier_surcharge_plus_iqd);
     }
 
+    getCommuteBandGreenM() {
+        return this.getConstant('commute_band_green_m', DEFAULTS.commute_band_green_m);
+    }
+
+    getCommuteBandPurpleM() {
+        return this.getConstant('commute_band_purple_m', DEFAULTS.commute_band_purple_m);
+    }
+
+    getCommuteMaxResults() {
+        return this.getConstant('commute_max_results', DEFAULTS.commute_max_results);
+    }
+
     getAllConstants() {
         return {
             proximity_radius_meters: this.getProximityRadiusMeters(),
@@ -201,7 +220,10 @@ class SystemSettingsService {
             external_nav_timeout_minutes: this.getExternalNavTimeoutMinutes(),
             vehicle_tier_surcharge_economy_iqd: this.getVehicleTierSurchargeEconomyIqd(),
             vehicle_tier_surcharge_super_iqd: this.getVehicleTierSurchargeSuperIqd(),
-            vehicle_tier_surcharge_plus_iqd: this.getVehicleTierSurchargePlusIqd()
+            vehicle_tier_surcharge_plus_iqd: this.getVehicleTierSurchargePlusIqd(),
+            commute_band_green_m: this.getCommuteBandGreenM(),
+            commute_band_purple_m: this.getCommuteBandPurpleM(),
+            commute_max_results: this.getCommuteMaxResults()
         };
     }
 }

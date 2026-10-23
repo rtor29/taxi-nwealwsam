@@ -2589,6 +2589,199 @@ async function startServer() {
             }
         }
 
+        // Commute Line Captains (Batch 2: كباتن الخط الدائم للراكب بالألوان حسب المسافة)
+        const isCommuteDriversRoute = (
+            pathname === '/api/commute/drivers' ||
+            pathname === '/api/drivers/commute' ||
+            (pathname === '/api/drivers/nearby' && parsedUrl.searchParams.get('tripType') === 'commute')
+        );
+
+        if (isCommuteDriversRoute && method === 'GET') {
+            // 1. Authentication Check (JWT on server, 401 if missing or invalid)
+            const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
+            const rawToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+            if (!rawToken) {
+                return sendJson({ success: false, error: 'جلسة الدخول مطلوبة (Missing Token)' }, 401);
+            }
+
+            const authUser = getAuthUser(req);
+            if (!authUser) {
+                return sendJson({ success: false, error: 'رمز الجلسة غير صالح أو منتهي الصلاحية' }, 401);
+            }
+
+            // 2. Rate Limiting across PM2 cluster via Redis (60 requests per minute)
+            const clientIdentifier = authUser.id || clientIp;
+            const rateKey = `rate:commute:drivers:${clientIdentifier}`;
+            const rate = await redisManager.checkRateLimitCluster(rateKey, 60, 60);
+            if (!rate.allowed) {
+                res.setHeader('Retry-After', String(rate.ttl));
+                return sendJson({
+                    success: false,
+                    error: 'تم تجاوز الحد المسموح للاستعلام عن كباتن الخط الدائم (60 طلباً بالدقيقة). يرجى المحاولة لاحقاً',
+                    retry_after: rate.ttl
+                }, 429);
+            }
+
+            // 3. Passenger Coordinates Range Validation (lat: [-90, 90], lon: [-180, 180])
+            const rawLat = parsedUrl.searchParams.get('lat') || parsedUrl.searchParams.get('latitude');
+            const rawLon = parsedUrl.searchParams.get('lon') || parsedUrl.searchParams.get('lng') || parsedUrl.searchParams.get('longitude');
+
+            if (rawLat === null || rawLat === undefined || rawLon === null || rawLon === undefined || String(rawLat).trim() === '' || String(rawLon).trim() === '') {
+                return sendJson({ success: false, error: 'إحداثيات موقع الراكب مطلوبة (lat, lon)' }, 400);
+            }
+
+            const pLat = parseFloat(rawLat);
+            const pLon = parseFloat(rawLon);
+
+            if (isNaN(pLat) || isNaN(pLon) || pLat < -90 || pLat > 90 || pLon < -180 || pLon > 180) {
+                return sendJson({ success: false, error: 'إحداثيات موقع الراكب غير صحيحة أو خارج النطاق الجغرافي المسموح' }, 400);
+            }
+
+            // 4. Thresholds & Max Results from systemSettingsService (Cached from DB)
+            const greenThreshold = systemSettingsService ? systemSettingsService.getCommuteBandGreenM() : 500;
+            const purpleThreshold = systemSettingsService ? systemSettingsService.getCommuteBandPurpleM() : 1000;
+            const maxResults = systemSettingsService ? systemSettingsService.getCommuteMaxResults() : 100;
+
+            // 5. Query approved & non-blocked drivers
+            let dbDrivers = [];
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    const pgRes = await db.pool.query(`
+                        SELECT 
+                            driver_id, full_name,
+                            vehicle_make, vehicle_model, vehicle_plate, vehicle_year,
+                            status, is_verified, is_approved, is_blocked,
+                            work_mode, rating_average, total_trips, points,
+                            fixed_lat, fixed_lng, fixed_label, fixed_updated_at,
+                            vehicle_type, updated_at
+                        FROM drivers
+                        WHERE (is_blocked = false OR is_blocked IS NULL)
+                          AND (status != 'Rejected' AND status != 'Pending')
+                        ORDER BY created_at DESC;
+                    `);
+                    dbDrivers = pgRes.rows || [];
+                } catch (pgErr) {
+                    console.warn('[CommuteDrivers] DB query fallback:', pgErr.message);
+                }
+            }
+
+            const sourceDrivers = dbDrivers.length > 0 ? dbDrivers : (db.memoryState.drivers || []);
+            const memMap = new Map((db.memoryState.drivers || []).map(d => [String(d.driverId || d.id), d]));
+
+            const candidateDrivers = [];
+
+            const toRad = deg => deg * Math.PI / 180;
+            const haversineM = (lat1, lon1, lat2, lon2) => {
+                const R = 6371000; // Earth radius in meters
+                const dLat = toRad(lat2 - lat1);
+                const dLon = toRad(lon2 - lon1);
+                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                          Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                          Math.sin(dLon/2) * Math.sin(dLon/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                return Math.round(R * c);
+            };
+
+            for (const d of sourceDrivers) {
+                const id = String(d.driver_id || d.driverId || d.id);
+                const mem = memMap.get(id) || {};
+
+                const isBlocked = d.is_blocked === true || mem.isBlocked === true;
+                const isApproved = d.is_approved === true || mem.isApproved === true || d.isApproved === true;
+                const isRejected = d.status === 'Rejected' || mem.status === 'Rejected';
+                const isPending = d.status === 'Pending' || mem.status === 'Pending';
+                if (isBlocked || !isApproved || isRejected || isPending) continue;
+
+                // Mode check: Must be commute or both, NOT idle, NOT taxi-only
+                const rawMode = String(mem.work_mode || mem.workMode || mem.current_mode || mem.mode || mem.workStatus || d.work_mode || '').toLowerCase().trim();
+                const isOnline = mem.isOnline !== false && mem.status !== 'Offline' && d.status !== 'Offline';
+                if (!isOnline || rawMode === 'idle' || rawMode === 'خمول' || rawMode === 'offline') continue;
+
+                const isCommute = rawMode === 'commute' || rawMode === 'permanent' || rawMode === 'route' || rawMode === 'daily' || rawMode === 'خط دائمي';
+                const isBoth = rawMode === 'both' || rawMode === 'كلاهما';
+                if (!isCommute && !isBoth) continue;
+
+                // Fixed Location: Redis is Primary Source of Truth across 6 PM2 cores, then DB/Memory (fixed_* ONLY)
+                let fixedLat = null;
+                let fixedLng = null;
+                let fixedLabel = '';
+                let fixedUpdatedAt = null;
+
+                const redisLoc = await redisManager.getDriverFixedLocation(id);
+                if (redisLoc && redisLoc.lat != null && redisLoc.lng != null && !isNaN(redisLoc.lat) && !isNaN(redisLoc.lng)) {
+                    fixedLat = redisLoc.lat;
+                    fixedLng = redisLoc.lng;
+                    fixedLabel = redisLoc.label || '';
+                    fixedUpdatedAt = redisLoc.updatedAt || null;
+                } else {
+                    const dbLat = d.fixed_lat != null ? parseFloat(d.fixed_lat) : (mem.fixedLat != null ? parseFloat(mem.fixedLat) : null);
+                    const dbLng = d.fixed_lng != null ? parseFloat(d.fixed_lng) : (mem.fixedLng != null ? parseFloat(mem.fixedLng) : null);
+                    if (dbLat != null && dbLng != null && !isNaN(dbLat) && !isNaN(dbLng)) {
+                        fixedLat = dbLat;
+                        fixedLng = dbLng;
+                        fixedLabel = d.fixed_label || mem.fixedLabel || '';
+                        fixedUpdatedAt = d.fixed_updated_at || mem.fixedUpdatedAt || null;
+                    }
+                }
+
+                if (fixedLat == null || fixedLng == null || isNaN(fixedLat) || isNaN(fixedLng)) {
+                    continue; // Exclude drivers without fixed location
+                }
+
+                const distanceM = haversineM(pLat, pLon, fixedLat, fixedLng);
+                let distanceBand = 'red';
+                if (distanceM <= greenThreshold) {
+                    distanceBand = 'green';
+                } else if (distanceM <= purpleThreshold) {
+                    distanceBand = 'purple';
+                } else {
+                    distanceBand = 'red';
+                }
+
+                const vMake = d.vehicle_make || d.vehicleMake || mem.vehicleMake || 'تويوتا';
+                const vModel = d.vehicle_model || d.vehicleModel || mem.vehicleModel || 'كورولا';
+                const vColor = d.vehicle_color || mem.vehicleColor || 'أبيض';
+                const vType = normalizeTier(d.vehicle_type || mem.vehicleType || 'توفير');
+                const fullName = d.full_name || d.fullName || mem.fullName || 'كابتن';
+                const firstName = fullName.trim().split(/\s+/)[0] || 'كابتن';
+                const routeStr = d.route || mem.route || (fixedLabel ? `${fixedLabel} ➔ المركز` : 'خط دائمي');
+
+                candidateDrivers.push({
+                    driverId: id,
+                    firstName: firstName,
+                    rating: parseFloat(d.rating_average || mem.ratingAverage || 5.0),
+                    vehicleModel: `${vMake} ${vModel}`.trim(),
+                    vehicleColor: vColor,
+                    vehicleType: vType,
+                    route: routeStr,
+                    fixed_label: fixedLabel,
+                    fixed_lat: fixedLat,
+                    fixed_lng: fixedLng,
+                    distanceM: distanceM,
+                    distanceBand: distanceBand,
+                    lastActive: fixedUpdatedAt || d.updated_at || mem.lastActive || null
+                });
+            }
+
+            // 6. Sort ascending by distance (no captain removed due to distance)
+            candidateDrivers.sort((a, b) => a.distanceM - b.distanceM);
+
+            const total = candidateDrivers.length;
+            const hasMore = total > maxResults;
+            const resultDrivers = candidateDrivers.slice(0, maxResults);
+
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+            return sendJson({
+                success: true,
+                total: total,
+                hasMore: hasMore,
+                count: resultDrivers.length,
+                drivers: resultDrivers,
+                data: resultDrivers,
+                message: total === 0 ? 'لا يوجد كباتن خط دائم متاحين حالياً' : undefined
+            });
+        }
+
         // 4.2 Passenger Nearby Drivers: GET /api/drivers/nearby
         if (pathname === '/api/drivers/nearby') {
             const lat = parseFloat(parsedUrl.searchParams.get('lat') || config.najafDefaults.latitude);
@@ -7917,8 +8110,19 @@ async function startServer() {
                 return sendJson({ success: false, error: 'غير مصرح: لا يمكنك تعديل أو استعراض موقع كابتن آخر (RLS)' }, 403);
             }
 
-            // 3. Rate Limiting across PM2 cluster via Redis (10 requests per 10 minutes)
-            if (method !== 'GET') {
+            // 3. Rate Limiting across PM2 cluster via Redis (60 req/min for GET, 10 req/10min for POST/DELETE)
+            if (method === 'GET') {
+                const rateKey = `rate:driver:get_fixed_loc:${effectiveDriverId}`;
+                const rate = await redisManager.checkRateLimitCluster(rateKey, 60, 60);
+                if (!rate.allowed) {
+                    res.setHeader('Retry-After', String(rate.ttl));
+                    return sendJson({
+                        success: false,
+                        error: 'تم تجاوز معدل الاستعلام عن الموقع الثابت (60 طلباً بالدقيقة). يرجى المحاولة لاحقاً',
+                        retry_after: rate.ttl
+                    }, 429);
+                }
+            } else {
                 const rateKey = `rate:driver:fixed_loc:${effectiveDriverId}`;
                 const rate = await redisManager.checkRateLimitCluster(rateKey, 10, 600);
                 if (!rate.allowed) {
