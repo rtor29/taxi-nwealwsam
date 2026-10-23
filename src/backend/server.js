@@ -959,7 +959,7 @@ async function startServer() {
             }
 
             if (foundCust) {
-                const customerId = foundCust.customerId || foundCust.id || ('cust_' + targetNorm);
+                const customerId = foundCust.customer_id || foundCust.customerId || foundCust.id || ('cust_' + targetNorm);
                 const custName = foundCust.fullName || foundCust.full_name || foundCust.name || 'راكب';
                 const custPhone = foundCust.phoneNumber || foundCust.phone_number || ('0' + targetNorm);
                 const token = generateSignedToken({
@@ -6612,7 +6612,10 @@ async function startServer() {
                 }
             }
 
-            // 1. Fetch bookings from PostgreSQL if connected
+            const cancelledBookingIds = new Set();
+            const cancelledCustomerIds = new Set();
+
+            // 1. Fetch bookings from PostgreSQL if connected (PostgreSQL is source of truth)
             if (db.isPostgresConnected && db.pool) {
                 try {
                     const pgRes = await db.pool.query(`
@@ -6620,53 +6623,62 @@ async function startServer() {
                         WHERE (driver_id = $1 
                            OR driver_id = $2
                            OR driver_id = $3
-                           OR (driver_name IS NOT NULL AND LOWER(driver_name) = LOWER($4))
-                           OR driver_id = 'drv-sample')
-                          AND status IN ('Pending', 'Confirmed', 'Active', 'cancellation_pending')
+                           OR (driver_name IS NOT NULL AND LOWER(driver_name) = LOWER($4)))
                         ORDER BY created_at DESC
                     `, [driverId, actualDriverId, cleanPhone, driverName || '']);
                     if (pgRes.rows && pgRes.rows.length > 0) {
-                        driverBookings = pgRes.rows.map(r => ({
-                            id: r.id,
-                            bookingId: r.id,
-                            driverId: r.driver_id,
-                            customerId: r.customer_id,
-                            customerName: r.customer_name || 'راكب',
-                            customerPhone: r.customer_phone || '',
-                            pickupLocation: r.pickup_name || 'موقع الركوب',
-                            dropoffLocation: r.dropoff_name || 'جامعة الكوفة',
-                            pickupLat: parseFloat(r.pickup_lat || 31.9961),
-                            pickupLon: parseFloat(r.pickup_lon || 44.3168),
-                            dropoffLat: parseFloat(r.dropoff_lat || 32.0321),
-                            dropoffLon: parseFloat(r.dropoff_lon || 44.3725),
-                            seatsBooked: r.seats_booked || 1,
-                            status: r.status || 'Pending',
-                            totalFare: r.total_fare,
-                            cancellationPending: r.status !== 'Cancelled' && (r.status === 'cancellation_pending' || r.cancellation_requested === true || r.cancellation_status === 'pending'),
-                            cancellation_requested: r.status !== 'Cancelled' && (r.status === 'cancellation_pending' || r.cancellation_requested === true || r.cancellation_status === 'pending'),
-                            cancellation_status: r.status === 'Cancelled' ? 'approved' : (r.status === 'cancellation_pending' ? 'pending' : (r.cancellation_status || null)),
-                            cancellationReason: r.cancellation_reason || '',
-                            cancellation_reason: r.cancellation_reason || '',
-                            cancellationDetails: r.cancellation_details || '',
-                            cancellation_details: r.cancellation_details || '',
-                            driverApprovalReason: r.driver_approval_reason || '',
-                            driver_approval_reason: r.driver_approval_reason || '',
-                            createdAt: r.created_at
-                        }));
+                        for (const r of pgRes.rows) {
+                            if (r.status === 'Cancelled' || r.status === 'Declined') {
+                                cancelledBookingIds.add(r.id);
+                                if (r.customer_id) cancelledCustomerIds.add(r.customer_id);
+                                continue;
+                            }
+                            if (r.status === 'Pending' || r.status === 'Confirmed' || r.status === 'Active' || r.status === 'cancellation_pending') {
+                                driverBookings.push({
+                                    id: r.id,
+                                    bookingId: r.id,
+                                    driverId: r.driver_id,
+                                    customerId: r.customer_id,
+                                    customerName: r.customer_name || 'راكب',
+                                    customerPhone: r.customer_phone || '',
+                                    pickupLocation: r.pickup_name || 'موقع الركوب',
+                                    dropoffLocation: r.dropoff_name || 'جامعة الكوفة',
+                                    pickupLat: parseFloat(r.pickup_lat || 31.9961),
+                                    pickupLon: parseFloat(r.pickup_lon || 44.3168),
+                                    dropoffLat: parseFloat(r.dropoff_lat || 32.0321),
+                                    dropoffLon: parseFloat(r.dropoff_lon || 44.3725),
+                                    seatsBooked: r.seats_booked || 1,
+                                    status: r.status || 'Pending',
+                                    totalFare: r.total_fare,
+                                    cancellationPending: r.status !== 'Cancelled' && (r.status === 'cancellation_pending' || r.cancellation_requested === true || r.cancellation_status === 'pending'),
+                                    cancellation_requested: r.status !== 'Cancelled' && (r.status === 'cancellation_pending' || r.cancellation_requested === true || r.cancellation_status === 'pending'),
+                                    cancellation_status: r.status === 'Cancelled' ? 'approved' : (r.status === 'cancellation_pending' ? 'pending' : (r.cancellation_status || null)),
+                                    cancellationReason: r.cancellation_reason || '',
+                                    cancellation_reason: r.cancellation_reason || '',
+                                    cancellationDetails: r.cancellation_details || '',
+                                    cancellation_details: r.cancellation_details || '',
+                                    driverApprovalReason: r.driver_approval_reason || '',
+                                    driver_approval_reason: r.driver_approval_reason || '',
+                                    createdAt: r.created_at
+                                });
+                            }
+                        }
                     }
                 } catch (pgErr) {
                     console.error('[Driver] PG bookings fetch error:', pgErr.message);
                 }
             }
 
-            // 2. Fetch bookings from memory for this driver (exclude Cancelled bookings)
+            // 2. Fetch bookings from memory for this driver (exclude Cancelled bookings or bookings marked cancelled in PG)
             const memBookings = (db.memoryState.bookings || []).filter(b => 
                 b.status !== 'Cancelled' &&
+                !cancelledBookingIds.has(b.id) &&
+                !cancelledBookingIds.has(b.bookingId) &&
+                !cancelledCustomerIds.has(b.customerId) &&
                 (b.driverId === driverId || 
                 b.driverId === actualDriverId ||
                 (actualDriverPhone && (b.driverPhone === actualDriverPhone || b.driverId === actualDriverPhone)) ||
-                (driverName && b.driverName && b.driverName.trim() === driverName.trim()) ||
-                (b.driverId === 'drv-sample'))
+                (driverName && b.driverName && b.driverName.trim() === driverName.trim()))
             );
             for (const mb of memBookings) {
                 if (!driverBookings.some(dbk => (dbk.id === mb.id || dbk.bookingId === mb.bookingId))) {
@@ -6686,9 +6698,11 @@ async function startServer() {
                 }
             }
 
-            // 3. Customers explicitly assigned to this driver
+            // 3. Customers explicitly assigned to this driver (only if not cancelled in PG)
             const assignedCustomers = (db.memoryState.customers || []).filter(c => 
-                c.driverId === driverId || c.driverId === actualDriverId || c.assignedDriverId === driverId || c.assignedDriverId === actualDriverId
+                !cancelledCustomerIds.has(c.customerId) &&
+                !cancelledCustomerIds.has(c.id) &&
+                (c.driverId === driverId || c.driverId === actualDriverId || c.assignedDriverId === driverId || c.assignedDriverId === actualDriverId)
             );
             for (const ac of assignedCustomers) {
                 if (!driverBookings.some(b => b.customerId === ac.customerId)) {
@@ -6725,22 +6739,13 @@ async function startServer() {
                 return 0;
             });
 
-            // Deduplicate driver bookings by customer to ensure no duplicate cards appear for the driver
+            // Deduplicate driver bookings by actual customerId or bookingId ONLY (NO name-based deduplication)
             const seenCustKeys = new Set();
             const deduplicatedDriverBookings = [];
             for (const b of driverBookings) {
-                const idKey = b.customerId ? `id_${b.customerId}` : null;
-                const cleanPhone = String(b.customerPhone || b.phone || '').replace(/[^0-9]/g, '');
-                const phoneKey = cleanPhone.length >= 7 ? `phone_${cleanPhone.slice(-8)}` : null;
-                const nameKey = b.customerName ? `name_${b.customerName.trim().toLowerCase()}` : null;
-
-                const isDup = (idKey && seenCustKeys.has(idKey)) || 
-                              (phoneKey && seenCustKeys.has(phoneKey)) ||
-                              (!idKey && !phoneKey && nameKey && seenCustKeys.has(nameKey));
-                if (!isDup) {
-                    if (idKey) seenCustKeys.add(idKey);
-                    if (phoneKey) seenCustKeys.add(phoneKey);
-                    if (nameKey) seenCustKeys.add(nameKey);
+                const idKey = b.customerId ? `cust_${b.customerId}` : `bk_${b.id || b.bookingId}`;
+                if (!seenCustKeys.has(idKey)) {
+                    seenCustKeys.add(idKey);
                     deduplicatedDriverBookings.push(b);
                 }
             }

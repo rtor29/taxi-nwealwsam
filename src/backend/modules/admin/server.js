@@ -291,7 +291,7 @@ async function startServer() {
             }
 
             if (foundCust) {
-                const customerId = foundCust.customerId || foundCust.id || ('cust_' + targetNorm);
+                const customerId = foundCust.customer_id || foundCust.customerId || foundCust.id || ('cust_' + targetNorm);
                 const custName = foundCust.fullName || foundCust.full_name || foundCust.name || 'راكب';
                 const custPhone = foundCust.phoneNumber || foundCust.phone_number || ('0' + targetNorm);
                 const token = 'jwt_customer_' + customerId;

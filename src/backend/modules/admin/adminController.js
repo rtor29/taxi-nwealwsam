@@ -1803,12 +1803,11 @@ class AdminController {
             return isCust && isDrv;
         });
 
-        // 2. PostgreSQL safe query (supports UUID and customer fallback via users JOIN)
+        // 2. PostgreSQL safe query (supports text bookingId and customer fallback via users JOIN)
         if (!booking && db.isPostgresConnected && db.pool) {
             try {
                 let pgRes = null;
-                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(bookingId));
-                if (isUuid) {
+                if (bookingId) {
                     pgRes = await db.pool.query('SELECT * FROM bookings WHERE id = $1 LIMIT 1', [bookingId]);
                 }
                 if ((!pgRes || !pgRes.rows || pgRes.rows.length === 0) && (candidateCustomerId || candidatePhone)) {
@@ -1940,10 +1939,9 @@ class AdminController {
         // 9. Persist to PostgreSQL if connected
         if (db.isPostgresConnected && db.pool) {
             try {
-                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(booking.id));
-                if (isUuid) {
+                if (booking && booking.id) {
                     await db.pool.query(
-                        `UPDATE bookings SET status = 'Cancelled', cancellation_reason = $1, updated_at = NOW() WHERE id = $2`,
+                        `UPDATE bookings SET status = 'Cancelled', cancellation_requested = false, cancellation_status = 'cancelled', cancellation_reason = $1, updated_at = NOW() WHERE id = $2`,
                         [reason, booking.id]
                     );
                 }
@@ -1954,6 +1952,19 @@ class AdminController {
                 console.error('[AdminController] PG requestRouteCancellation error:', pgErr.message);
             }
         }
+
+        // Broadcast cluster sync to all PM2 instances
+        try {
+            const redisManager = require('../redis/redisClient');
+            if (redisManager && redisManager.pub) {
+                await redisManager.pub.publish('channel:cluster:sync', JSON.stringify({
+                    type: 'subscriber_cancelled_sync',
+                    bookingId: booking ? booking.id : bookingId,
+                    customerId: booking ? booking.customerId : candidateCustomerId,
+                    driverId: booking ? booking.driverId : targetDriverId
+                }));
+            }
+        } catch (_) {}
 
         // 10. Notify Driver via SSE stream immediately
         const targetDrvId = booking.driverId || targetDriverId;
@@ -2200,11 +2211,10 @@ class AdminController {
         });
 
         // 3. PostgreSQL query if not in memory
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(rawBookingId);
         if (!booking && db.isPostgresConnected && db.pool) {
             try {
                 let pgRes = null;
-                if (isUuid) {
+                if (rawBookingId && !rawBookingId.startsWith('bk-assign-')) {
                     pgRes = await db.pool.query('SELECT * FROM bookings WHERE id = $1 LIMIT 1', [rawBookingId]);
                 }
                 if ((!pgRes || !pgRes.rows || pgRes.rows.length === 0) && (cleanCustId || candidatePhone)) {
@@ -2305,19 +2315,19 @@ class AdminController {
         // 7. Persist to PostgreSQL if connected
         if (db.isPostgresConnected && db.pool) {
             try {
-                if (booking && isUuid) {
+                const bId = (booking && booking.id) || (rawBookingId && !rawBookingId.startsWith('bk-assign-') ? rawBookingId : null);
+                if (bId) {
                     await db.pool.query(
                         `UPDATE bookings SET status = 'Cancelled', cancellation_requested = false, cancellation_status = 'driver_cancelled', cancellation_reason = $1, updated_at = NOW() WHERE id = $2`,
-                        [reason, booking.id]
+                        [reason, bId]
                     );
                 }
-                const resolvedCustId = (targetCust && targetCust.customerId) || cleanCustId;
+                const resolvedCustId = (targetCust && targetCust.customerId) || cleanCustId || (booking && booking.customerId);
                 if (resolvedCustId) {
-                    await db.pool.query(`
-                        UPDATE customers 
-                        SET assigned_driver_id = NULL 
-                        WHERE id::text = $1 OR customer_id = $1
-                    `, [resolvedCustId]).catch(() => {});
+                    await db.pool.query(
+                        `UPDATE bookings SET status = 'Cancelled', cancellation_requested = false, cancellation_status = 'driver_cancelled', cancellation_reason = $1, updated_at = NOW() WHERE customer_id = $2 AND (driver_id = $3 OR $3 = '') AND status IN ('Pending', 'Confirmed', 'Active', 'cancellation_pending')`,
+                        [reason, resolvedCustId, targetDriverId || '']
+                    ).catch(() => {});
                 }
                 const targetRoute = (db.memoryState.routes || []).find(r => booking && (r.id === booking.routeId || r.routeId === booking.routeId));
                 if (targetRoute && targetRoute.id) {
@@ -2327,6 +2337,19 @@ class AdminController {
                 console.error('[AdminController] PG driverCancelSubscriber error:', pgErr.message);
             }
         }
+
+        // Broadcast cluster sync to all PM2 instances
+        try {
+            const redisManager = require('../redis/redisClient');
+            if (redisManager && redisManager.pub) {
+                await redisManager.pub.publish('channel:cluster:sync', JSON.stringify({
+                    type: 'subscriber_cancelled_sync',
+                    bookingId: (booking && booking.id) || rawBookingId,
+                    customerId: (targetCust && targetCust.customerId) || cleanCustId || (booking && booking.customerId),
+                    driverId: targetDriverId
+                }));
+            }
+        } catch (_) {}
 
         // 8. Notify Passenger via SSE & Telegram (with SET NX distributed lock)
         const resolvedCustomerId = (booking && booking.customerId) || (targetCust && targetCust.customerId) || cleanCustId;

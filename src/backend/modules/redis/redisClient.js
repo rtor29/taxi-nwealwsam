@@ -62,6 +62,42 @@ class RedisManager {
                 this.pub.connect().catch(() => {}),
                 this.sub.connect().catch(() => {})
             ]);
+
+            // PM2 Cluster Multi-core synchronization across instances
+            if (this.sub) {
+                this.sub.subscribe('channel:cluster:sync').catch(() => {});
+                this.sub.on('message', (chan, msg) => {
+                    if (chan === 'channel:cluster:sync') {
+                        try {
+                            const data = JSON.parse(msg);
+                            if (data.type === 'subscriber_cancelled_sync') {
+                                const db = require('../../db');
+                                if (db && db.memoryState) {
+                                    if (data.bookingId) {
+                                        for (const b of (db.memoryState.bookings || [])) {
+                                            if (b.id === data.bookingId || b.bookingId === data.bookingId) {
+                                                b.status = 'Cancelled';
+                                                b.cancellationPending = false;
+                                                b.cancellation_requested = false;
+                                                b.cancellation_status = 'driver_cancelled';
+                                            }
+                                        }
+                                    }
+                                    if (data.customerId) {
+                                        for (const c of (db.memoryState.customers || [])) {
+                                            if (c.customerId === data.customerId || c.id === data.customerId) {
+                                                c.assignedDriverId = null;
+                                                c.driverId = null;
+                                                c.bookingConfirmed = false;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (_) {}
+                    }
+                });
+            }
         } catch (_) {}
     }
 
