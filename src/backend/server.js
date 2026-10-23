@@ -2769,8 +2769,8 @@ async function startServer() {
                 if (isBlocked || !isApproved || isRejected || isPending) continue;
 
                 // Mode check: Must be commute or both, NOT idle, NOT taxi-only
-                const rawMode = String(mem.work_mode || mem.workMode || mem.current_mode || mem.mode || mem.workStatus || d.work_mode || '').toLowerCase().trim();
-                const isOnline = mem.isOnline !== false && mem.status !== 'Offline' && d.status !== 'Offline';
+                const rawMode = String(d.work_mode || mem.work_mode || mem.workMode || mem.current_mode || mem.mode || mem.workStatus || '').toLowerCase().trim();
+                const isOnline = (d.status === 'Online' || d.status === 'Approved' || mem.isOnline !== false) && d.status !== 'Offline' && d.status !== 'Rejected';
                 if (!isOnline || rawMode === 'idle' || rawMode === 'خمول' || rawMode === 'offline') continue;
 
                 const isCommute = rawMode === 'commute' || rawMode === 'permanent' || rawMode === 'route' || rawMode === 'daily' || rawMode === 'خط دائمي';
