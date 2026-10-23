@@ -7280,7 +7280,13 @@ async function startServer() {
             let targetRoute = (db.memoryState.routes || []).find(r => (r.id === routeId || r.routeId === routeId));
             
             let targetDriver = null;
-            if (body.driverId) {
+            if (body.driverId && db.isPostgresConnected && db.pool) {
+                try {
+                    const dRes = await db.pool.query('SELECT * FROM drivers WHERE driver_id = $1 LIMIT 1', [body.driverId]);
+                    if (dRes.rows && dRes.rows.length > 0) targetDriver = dRes.rows[0];
+                } catch (_) {}
+            }
+            if (!targetDriver && body.driverId) {
                 targetDriver = (db.memoryState.drivers || []).find(d => d.driverId === body.driverId);
             }
             if (!targetDriver && targetRoute) {
@@ -7291,12 +7297,6 @@ async function startServer() {
             }
             if (!targetDriver && routeId) {
                 targetDriver = (db.memoryState.drivers || []).find(d => routeId.includes(d.driverId) || d.driverId.includes(routeId));
-            }
-            if (!targetDriver && body.driverId && db.isPostgresConnected && db.pool) {
-                try {
-                    const dRes = await db.pool.query('SELECT * FROM drivers WHERE driver_id = $1 LIMIT 1', [body.driverId]);
-                    if (dRes.rows && dRes.rows.length > 0) targetDriver = dRes.rows[0];
-                } catch (_) {}
             }
             if (!targetDriver) {
                 return sendJson({ success: false, error: 'الكابتن المطلوب غير موجود' }, 404);
