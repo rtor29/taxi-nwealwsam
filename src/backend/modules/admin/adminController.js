@@ -977,7 +977,13 @@ class AdminController {
 
         const targetRoute = (db.memoryState.routes || []).find(r => (r.id === booking.routeId || r.routeId === booking.routeId));
         const targetDriver = (db.memoryState.drivers || []).find(d => d.driverId === booking.driverId);
-        const totalCapacity = targetRoute?.totalSeats || targetDriver?.availableSeats || targetDriver?.available_seats || 4;
+        let totalCapacity = targetRoute?.totalSeats || targetDriver?.availableSeats || targetDriver?.available_seats || 4;
+        if (db.isPostgresConnected && db.pool) {
+            try {
+                const rRes = await db.pool.query('SELECT total_seats FROM routes WHERE driver_id = $1 LIMIT 1', [booking.driverId]);
+                if (rRes.rows && rRes.rows.length > 0) totalCapacity = parseInt(rRes.rows[0].total_seats || 4, 10);
+            } catch (_) {}
+        }
 
         if (activeBookedSeats + seatsRequested > totalCapacity) {
             return {

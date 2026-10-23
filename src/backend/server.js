@@ -2741,6 +2741,18 @@ async function startServer() {
                 }
             }
 
+            const routeSeatsMap = new Map();
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    const rtRes = await db.pool.query('SELECT driver_id, total_seats FROM routes');
+                    if (rtRes.rows) {
+                        for (const r of rtRes.rows) {
+                            routeSeatsMap.set(String(r.driver_id), parseInt(r.total_seats || 4, 10));
+                        }
+                    }
+                } catch (_) {}
+            }
+
             const sourceDrivers = dbDrivers.length > 0 ? dbDrivers : (db.memoryState.drivers || []);
             const memMap = new Map((db.memoryState.drivers || []).map(d => [String(d.driverId || d.id), d]));
 
@@ -2823,7 +2835,7 @@ async function startServer() {
                 const routeStr = d.route || mem.route || (fixedLabel ? `${fixedLabel} ➔ المركز` : 'خط دائمي');
 
                 const targetRoute = (db.memoryState.routes || []).find(r => r.driverId === id || r.driver_id === id);
-                const totalCapacity = parseInt(targetRoute?.totalSeats || targetRoute?.total_seats || mem.totalSeats || mem.availableSeats || 4, 10);
+                const totalCapacity = routeSeatsMap.get(id) || parseInt(targetRoute?.totalSeats || targetRoute?.total_seats || mem.totalSeats || mem.availableSeats || 4, 10);
                 const bookedCount = bookedSeatsMap.get(id) || 0;
                 const isFull = bookedCount >= totalCapacity;
 
@@ -7443,7 +7455,13 @@ async function startServer() {
                 );
                 currentBookedSeats = activeBookings.reduce((sum, b) => sum + parseInt(b.seatsBooked || 1, 10), 0);
             }
-            const totalCarCapacity = targetDriver.available_seats || targetDriver.availableSeats || targetDriver.totalSeats || targetRoute?.totalSeats || 4;
+            let totalCarCapacity = targetDriver.available_seats || targetDriver.availableSeats || targetDriver.totalSeats || targetRoute?.totalSeats || 4;
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    const rRes = await db.pool.query('SELECT total_seats FROM routes WHERE driver_id = $1 LIMIT 1', [resolvedDriverId]);
+                    if (rRes.rows && rRes.rows.length > 0) totalCarCapacity = parseInt(rRes.rows[0].total_seats || 4, 10);
+                } catch (_) {}
+            }
             if (currentBookedSeats >= totalCarCapacity || (currentBookedSeats + seats > totalCarCapacity)) {
                 return sendJson({ success: false, error: 'الكابتن غير متاح للحجز حالياً (المقاعد مكتملة)' }, 409);
             }
