@@ -3341,23 +3341,25 @@ async function startServer() {
                 } catch (_) {}
             }
 
-            // 3. From Memory
-            for (const d of (db.memoryState.drivers || [])) {
-                if (isDriverOnlineAndActive(d) && isEligibleForTaxi(d.work_mode || d.workMode || d.mode, d.status)) {
-                    const id = String(d.driverId || d.id);
-                    if (!driversMap.has(id)) {
-                        const rawLat = d.currentLat != null ? d.currentLat : d.latitude;
-                        const rawLon = d.currentLon != null ? d.currentLon : d.longitude;
-                        if (rawLat != null && rawLon != null) {
-                            const dLat = parseFloat(rawLat);
-                            const dLon = parseFloat(rawLon);
-                            if (!isNaN(dLat) && !isNaN(dLon)) {
-                                const dist = calculateDistanceKm(pLat, pLon, dLat, dLon);
-                                if (dist <= maxDist) {
-                                    driversMap.set(id, {
-                                        ...d,
-                                        dist
-                                    });
+            // 3. From Memory (fallback only when database is unavailable)
+            if (!db.isPostgresConnected && db.memoryState.drivers) {
+                for (const d of (db.memoryState.drivers || [])) {
+                    if (isDriverOnlineAndActive(d) && isEligibleForTaxi(d.work_mode || d.workMode || d.mode, d.status)) {
+                        const id = String(d.driverId || d.id);
+                        if (!driversMap.has(id)) {
+                            const rawLat = d.currentLat != null ? d.currentLat : d.latitude;
+                            const rawLon = d.currentLon != null ? d.currentLon : d.longitude;
+                            if (rawLat != null && rawLon != null) {
+                                const dLat = parseFloat(rawLat);
+                                const dLon = parseFloat(rawLon);
+                                if (!isNaN(dLat) && !isNaN(dLon)) {
+                                    const dist = calculateDistanceKm(pLat, pLon, dLat, dLon);
+                                    if (dist <= maxDist) {
+                                        driversMap.set(id, {
+                                            ...d,
+                                            dist
+                                        });
+                                    }
                                 }
                             }
                         }
@@ -3458,7 +3460,7 @@ async function startServer() {
 
                 const maxDist = systemSettingsService ? systemSettingsService.getSearchRadiusKm() : (parseFloat(rangeKm) || 25);
                 let driverCandidates = await getAvailableOnlineDrivers(pLat, pLon, maxDist);
-                if (driverCandidates.length === 0) {
+                if (driverCandidates.length === 0 && !db.isPostgresConnected) {
                     driverCandidates = (db.memoryState.drivers || [])
                         .filter(d => isDriverOnlineAndActive(d))
                         .filter(d => {
@@ -3473,7 +3475,7 @@ async function startServer() {
                             return (cm === 'taxi' || d.mode === 'taxi' || wm === 'مشوار قصير' || wm === 'taxi' || d.workStatus === 'taxi' || d.serviceType === 'ShortTrip' || d.serviceType === 'Both' || !d.work_mode);
                         });
                 }
-                if (driverCandidates.length === 0) {
+                if (driverCandidates.length === 0 && !db.isPostgresConnected) {
                     driverCandidates = (db.memoryState.drivers || [])
                         .filter(d => {
                             if (!isDriverOnlineAndActive(d)) return false;
@@ -6554,6 +6556,7 @@ async function startServer() {
                     driver.is_online = onlineBool;
                     driver.workStatus = computedWorkStatus;
                     driver.work_mode = computedWorkMode;
+                    driver.workMode = computedWorkMode;
                     driver.current_mode = computedMode;
                     driver.mode = computedMode;
                     driver.serviceType = computedServiceType;
