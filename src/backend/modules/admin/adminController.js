@@ -890,6 +890,27 @@ class AdminController {
         };
     }
 
+    async broadcastBookingStatusSync(bookingId, status, extra = {}) {
+        if (!bookingId) return;
+        try {
+            const redisManager = require('../redis/redisClient');
+            if (redisManager && redisManager.pub) {
+                await redisManager.pub.publish('channel:cluster:sync', JSON.stringify({
+                    type: 'booking_status_sync',
+                    bookingId: String(bookingId),
+                    status: status,
+                    customerId: extra.customerId || null,
+                    driverId: extra.driverId || null,
+                    reason: extra.reason || null,
+                    cancellationStatus: extra.cancellationStatus || null,
+                    timestamp: Date.now()
+                }));
+            }
+        } catch (err) {
+            console.warn('[AdminController] broadcastBookingStatusSync error:', err.message);
+        }
+    }
+
     async acceptBooking(bookingId, driverId = null, authUser = null) {
         let pgRow = null;
         if (db.isPostgresConnected && db.pool) {
@@ -1123,13 +1144,10 @@ class AdminController {
                     customerId: booking.customerId
                 });
             }
-            if (redisManager.pub) {
-                redisManager.pub.publish('channel:cluster:sync', JSON.stringify({
-                    type: 'booking_status_sync',
-                    bookingId: booking.id || bookingId,
-                    status: 'Confirmed'
-                })).catch(() => {});
-            }
+            await this.broadcastBookingStatusSync(booking.id || bookingId, 'Confirmed', {
+                customerId: booking.customerId,
+                driverId: booking.driverId
+            });
         }
 
         db.addAuditLog('BookingAccepted', 'Driver', booking.driverId || 'Admin', {
@@ -1350,13 +1368,11 @@ class AdminController {
                     bookingId: booking.id || bookingId
                 });
             }
-            if (redisManager.pub) {
-                redisManager.pub.publish('channel:cluster:sync', JSON.stringify({
-                    type: 'booking_status_sync',
-                    bookingId: booking.id || bookingId,
-                    status: 'Declined'
-                })).catch(() => {});
-            }
+            await this.broadcastBookingStatusSync(booking.id || bookingId, 'Declined', {
+                customerId: booking.customerId,
+                driverId: booking.driverId,
+                reason: sanitizedReason
+            });
         }
 
         db.addAuditLog('BookingDeclined', 'Driver', booking.driverId || 'Admin', {
@@ -1388,9 +1404,10 @@ class AdminController {
     }
 
     async updateBookingStatus(bookingId, status, reason = null) {
-        if (status === 'Confirmed' || status === 'Accepted') {
+        const sLower = String(status || '').toLowerCase();
+        if (sLower === 'confirmed' || sLower === 'accepted') {
             return await this.acceptBooking(bookingId);
-        } else if (status === 'Declined' || status === 'Rejected' || status === 'Cancelled') {
+        } else if (['declined', 'rejected', 'cancelled', 'canceled'].includes(sLower)) {
             return await this.declineBooking(bookingId, reason);
         }
 
@@ -1407,6 +1424,12 @@ class AdminController {
                 `, [status, booking.id || bookingId]);
             } catch (e) {}
         }
+
+        await this.broadcastBookingStatusSync(booking.id || bookingId, status, {
+            customerId: booking.customerId,
+            driverId: booking.driverId,
+            reason: reason
+        });
 
         db.saveStateSnapshot();
         return { success: true, booking };
@@ -2304,20 +2327,15 @@ class AdminController {
         }
 
         // Broadcast cluster sync to all PM2 instances
-        try {
-            const redisManager = require('../redis/redisClient');
-            if (redisManager && redisManager.pub) {
-                await redisManager.pub.publish('channel:cluster:sync', JSON.stringify({
-                    type: 'subscriber_cancelled_sync',
-                    bookingId: booking ? booking.id : bookingId,
-                    customerId: booking ? booking.customerId : candidateCustomerId,
-                    driverId: booking ? booking.driverId : targetDriverId
-                }));
-            }
-        } catch (_) {}
+        const targetDrvId = booking.driverId || targetDriverId;
+        await this.broadcastBookingStatusSync(booking ? booking.id : bookingId, 'Cancelled', {
+            customerId: booking ? booking.customerId : candidateCustomerId,
+            driverId: targetDrvId,
+            reason: reason,
+            cancellationStatus: 'cancelled'
+        });
 
         // 10. Notify Driver via SSE stream immediately
-        const targetDrvId = booking.driverId || targetDriverId;
         if (targetDrvId) {
             try {
                 const redisManager = require('../redis/redisClient');
@@ -2689,20 +2707,15 @@ class AdminController {
         }
 
         // Broadcast cluster sync to all PM2 instances
-        try {
-            const redisManager = require('../redis/redisClient');
-            if (redisManager && redisManager.pub) {
-                await redisManager.pub.publish('channel:cluster:sync', JSON.stringify({
-                    type: 'subscriber_cancelled_sync',
-                    bookingId: (booking && booking.id) || rawBookingId,
-                    customerId: (targetCust && targetCust.customerId) || cleanCustId || (booking && booking.customerId),
-                    driverId: targetDriverId
-                }));
-            }
-        } catch (_) {}
+        const resolvedCustomerId = (booking && booking.customerId) || (targetCust && targetCust.customerId) || cleanCustId;
+        await this.broadcastBookingStatusSync((booking && booking.id) || rawBookingId, 'Cancelled', {
+            customerId: resolvedCustomerId,
+            driverId: targetDriverId,
+            reason: reason,
+            cancellationStatus: 'driver_cancelled'
+        });
 
         // 8. Notify Passenger via SSE & Telegram (with SET NX distributed lock)
-        const resolvedCustomerId = (booking && booking.customerId) || (targetCust && targetCust.customerId) || cleanCustId;
         const resolvedCustomerPhone = (booking && (booking.customerPhone || booking.phone)) || (targetCust && targetCust.phoneNumber) || candidatePhone;
         const customerName = (booking && booking.customerName) || (targetCust && (targetCust.fullName || targetCust.name)) || 'الراكب';
 

@@ -206,6 +206,12 @@ setInterval(async () => {
                         memB.status = 'Expired';
                         memB.expiredAt = new Date().toISOString();
                     }
+                    if (adminController && typeof adminController.broadcastBookingStatusSync === 'function') {
+                        await adminController.broadcastBookingStatusSync(row.id, 'Expired', {
+                            customerId: row.customer_id,
+                            driverId: row.driver_id
+                        });
+                    }
                     if (typeof redisManager.publishPassengerEvent === 'function') {
                         await redisManager.publishPassengerEvent(row.customer_id, {
                             type: 'booking_updated',
@@ -5881,44 +5887,79 @@ async function startServer() {
             const cleanPhone = customerId.replace(/[^0-9]/g, '');
 
             let userBookings = [];
+            const terminalBookingIds = new Set();
+            const terminalStatusMap = new Map();
+            let pgHasRecords = false;
+
             if (db.isPostgresConnected && db.pool) {
                 try {
                     const pgRes = await db.pool.query(`
                         SELECT * FROM bookings 
                         WHERE (customer_id = $1 OR customer_id = $2 OR (customer_phone IS NOT NULL AND RIGHT(REGEXP_REPLACE(customer_phone, '[^0-9]', '', 'g'), 8) = RIGHT($3, 8)))
-                          AND status IN ('Pending', 'Confirmed', 'Active', 'cancellation_pending')
                         ORDER BY created_at DESC
+                        LIMIT 50
                     `, [customerId, cleanPhone, cleanPhone.length >= 7 ? cleanPhone : '_____']);
                     if (pgRes.rows && pgRes.rows.length > 0) {
-                        userBookings = pgRes.rows.map(r => ({
-                            id: r.id,
-                            bookingId: r.id,
-                            driverId: r.driver_id,
-                            driverName: r.driver_name,
-                            customerId: r.customer_id,
-                            customerName: r.customer_name,
-                            customerPhone: r.customer_phone,
-                            routeId: r.route_id,
-                            pickupLocation: r.pickup_name,
-                            dropoffLocation: r.dropoff_name,
-                            seatsBooked: r.seats_booked || 1,
-                            status: r.status,
-                            cancellationPending: r.status === 'cancellation_pending' || r.cancellation_requested === true,
-                            cancellationReason: r.cancellation_reason || '',
-                            cancellationDetails: r.cancellation_details || '',
-                            createdAt: r.created_at
-                        }));
+                        pgHasRecords = true;
+                        for (const r of pgRes.rows) {
+                            const stLower = String(r.status || '').toLowerCase();
+                            if (stLower === 'cancelled' || stLower === 'declined' || stLower === 'rejected' || stLower === 'expired') {
+                                terminalBookingIds.add(String(r.id));
+                                terminalStatusMap.set(String(r.id), r.status);
+                                continue;
+                            }
+                            if (stLower === 'pending' || stLower === 'confirmed' || stLower === 'active' || stLower === 'cancellation_pending') {
+                                userBookings.push({
+                                    id: r.id,
+                                    bookingId: r.id,
+                                    driverId: r.driver_id,
+                                    driverName: r.driver_name,
+                                    customerId: r.customer_id,
+                                    customerName: r.customer_name,
+                                    customerPhone: r.customer_phone,
+                                    routeId: r.route_id,
+                                    pickupLocation: r.pickup_name,
+                                    dropoffLocation: r.dropoff_name,
+                                    seatsBooked: r.seats_booked || 1,
+                                    status: r.status,
+                                    cancellationPending: r.status === 'cancellation_pending' || r.cancellation_requested === true,
+                                    cancellationReason: r.cancellation_reason || '',
+                                    cancellationDetails: r.cancellation_details || '',
+                                    createdAt: r.created_at
+                                });
+                            }
+                        }
                     }
                 } catch (pgErr) {
                     console.error('[Customer] PG bookings fetch error:', pgErr.message);
                 }
             }
 
+            // Sync memory state in place if PG returned terminal statuses
+            if (terminalBookingIds.size > 0 && db.memoryState && Array.isArray(db.memoryState.bookings)) {
+                for (const b of db.memoryState.bookings) {
+                    const bId = String(b.id || b.bookingId || '');
+                    if (terminalBookingIds.has(bId)) {
+                        b.status = terminalStatusMap.get(bId) || 'Cancelled';
+                        b.cancellationPending = false;
+                        b.cancellation_requested = false;
+                    }
+                }
+            }
+
+            // Only fallback to memory if PostgreSQL has NO records or booking is NOT terminal
             const memBookings = (db.memoryState.bookings || []).filter(b => {
+                const bId = String(b.id || b.bookingId || '');
+                if (terminalBookingIds.has(bId)) return false; // NEVER revive a terminal booking from PG!
                 const bCustId = String(b.customerId || b.passengerId || '');
                 const bPhone = String(b.customerPhone || b.phone || '').replace(/[^0-9]/g, '');
                 const isMatch = (customerId && bCustId === customerId) || (cleanPhone.length >= 7 && bPhone.length >= 7 && (bPhone.endsWith(cleanPhone.slice(-8)) || cleanPhone.endsWith(bPhone.slice(-8))));
-                const isActive = b.status === 'Confirmed' || b.status === 'Pending' || b.status === 'Active' || b.status === 'cancellation_pending' || !b.status;
+                const stLower = String(b.status || '').toLowerCase();
+                const isActive = stLower === 'confirmed' || stLower === 'pending' || stLower === 'active' || stLower === 'cancellation_pending';
+                // If PG is connected and has records, don't invent ghost bookings that don't exist in PG
+                if (pgHasRecords && !userBookings.some(ub => ub.id === bId || ub.bookingId === bId)) {
+                    return false;
+                }
                 return isMatch && isActive;
             });
 

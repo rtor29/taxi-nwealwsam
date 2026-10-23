@@ -70,20 +70,34 @@ class RedisManager {
                     if (chan === 'channel:cluster:sync') {
                         try {
                             const data = JSON.parse(msg);
-                            if (data.type === 'subscriber_cancelled_sync') {
+                            if (data.type === 'booking_status_sync' || data.type === 'subscriber_cancelled_sync') {
                                 const db = require('../../db');
                                 if (db && db.memoryState) {
-                                    if (data.bookingId) {
+                                    const targetBookingId = String(data.bookingId || '');
+                                    const newStatus = data.status || (data.type === 'subscriber_cancelled_sync' ? 'Cancelled' : null);
+                                    const stLower = String(newStatus || '').toLowerCase();
+                                    if (targetBookingId) {
                                         for (const b of (db.memoryState.bookings || [])) {
-                                            if (b.id === data.bookingId || b.bookingId === data.bookingId) {
-                                                b.status = 'Cancelled';
-                                                b.cancellationPending = false;
-                                                b.cancellation_requested = false;
-                                                b.cancellation_status = 'driver_cancelled';
+                                            const bId = String(b.id || b.bookingId || '');
+                                            if (bId === targetBookingId) {
+                                                if (newStatus) b.status = newStatus;
+                                                if (stLower === 'cancelled' || stLower === 'declined' || stLower === 'rejected' || stLower === 'expired') {
+                                                    b.cancellationPending = false;
+                                                    b.cancellation_requested = false;
+                                                    b.cancellation_status = data.cancellationStatus || (stLower === 'declined' || stLower === 'rejected' ? 'declined' : (data.type === 'subscriber_cancelled_sync' ? 'driver_cancelled' : 'cancelled'));
+                                                    if (data.reason) {
+                                                        b.cancellationReason = data.reason;
+                                                        b.cancellation_reason = data.reason;
+                                                        b.declineReason = data.reason;
+                                                    }
+                                                } else if (stLower === 'confirmed' || stLower === 'accepted') {
+                                                    b.cancellationPending = false;
+                                                    b.cancellation_requested = false;
+                                                }
                                             }
                                         }
                                     }
-                                    if (data.customerId) {
+                                    if (data.customerId && (stLower === 'cancelled' || stLower === 'declined' || stLower === 'rejected')) {
                                         for (const c of (db.memoryState.customers || [])) {
                                             if (c.customerId === data.customerId || c.id === data.customerId) {
                                                 c.assignedDriverId = null;
@@ -91,6 +105,19 @@ class RedisManager {
                                                 c.bookingConfirmed = false;
                                             }
                                         }
+                                    } else if (data.customerId && (stLower === 'confirmed' || stLower === 'accepted')) {
+                                        for (const c of (db.memoryState.customers || [])) {
+                                            if (c.customerId === data.customerId || c.id === data.customerId) {
+                                                if (data.driverId) {
+                                                    c.assignedDriverId = data.driverId;
+                                                    c.driverId = data.driverId;
+                                                }
+                                                c.bookingConfirmed = true;
+                                            }
+                                        }
+                                    }
+                                    if (typeof db.saveStateSnapshot === 'function') {
+                                        db.saveStateSnapshot();
                                     }
                                 }
                             }
