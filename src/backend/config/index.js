@@ -63,11 +63,16 @@ const config = {
     adminUsername: process.env.ADMIN_USERNAME || 'admin',
     adminPassword: process.env.ADMIN_PASSWORD || '1122',
 
-    // Najaf Default Coordinates
+    // Iraq Default Coordinates (Central Geographic Reference)
+    iraqDefaults: {
+        latitude: 33.3152,
+        longitude: 44.3661,
+        city: 'العراق'
+    },
     najafDefaults: {
-        latitude: 31.9961,
-        longitude: 44.3168,
-        city: 'النجف الأشرف'
+        latitude: 33.3152,
+        longitude: 44.3661,
+        city: 'العراق'
     },
 
     // Telegram Bot & Groq AI

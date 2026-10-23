@@ -2606,8 +2606,10 @@ async function startServer() {
                         modeKey = 'idle';
                     }
 
-                    const lat = parseFloat(mem.latitude || mem.currentLat || d.latitude || d.permanent_lat || config.najafDefaults.latitude);
-                    const lon = parseFloat(mem.longitude || mem.currentLon || d.longitude || d.permanent_lon || config.najafDefaults.longitude);
+                    const defaultCenterLat = (config.iraqDefaults && config.iraqDefaults.latitude) || 33.3152;
+                    const defaultCenterLon = (config.iraqDefaults && config.iraqDefaults.longitude) || 44.3661;
+                    const lat = parseFloat(mem.latitude || mem.currentLat || d.latitude || d.permanent_lat || defaultCenterLat);
+                    const lon = parseFloat(mem.longitude || mem.currentLon || d.longitude || d.permanent_lon || defaultCenterLon);
 
                     return {
                         driverId: id,
@@ -2617,8 +2619,8 @@ async function startServer() {
                         phoneNumber: d.phone_number || d.phoneNumber || mem.phoneNumber || '07800000000',
                         carModel: `${vMake} ${vModel}`.trim(),
                         plateNumber: vPlate,
-                        latitude: isNaN(lat) ? 31.9961 : lat,
-                        longitude: isNaN(lon) ? 44.3168 : lon,
+                        latitude: isNaN(lat) ? defaultCenterLat : lat,
+                        longitude: isNaN(lon) ? defaultCenterLon : lon,
                         heading: parseFloat(mem.heading || d.heading || 0),
                         status: finalStatus,
                         isOnline: isOnline,
@@ -2683,7 +2685,11 @@ async function startServer() {
             const pLon = parseFloat(rawLon);
 
             if (isNaN(pLat) || isNaN(pLon) || pLat < -90 || pLat > 90 || pLon < -180 || pLon > 180) {
-                return sendJson({ success: false, error: 'إحداثيات موقع الراكب غير صحيحة أو خارج النطاق الجغرافي المسموح' }, 400);
+                return sendJson({ success: false, error: 'إحداثيات غير صحيحة' }, 400);
+            }
+
+            if (pLat < 29.0 || pLat > 38.0 || pLon < 38.5 || pLon > 49.0) {
+                return sendJson({ success: false, error: 'الموقع خارج نطاق الخدمة المسموح (خارج العراق)' }, 400);
             }
 
             // 4. Thresholds & Max Results from systemSettingsService (Cached from DB)
@@ -2878,8 +2884,10 @@ async function startServer() {
 
         // 4.2 Passenger Nearby Drivers: GET /api/drivers/nearby
         if (pathname === '/api/drivers/nearby') {
-            const lat = parseFloat(parsedUrl.searchParams.get('lat') || config.najafDefaults.latitude);
-            const lon = parseFloat(parsedUrl.searchParams.get('lon') || config.najafDefaults.longitude);
+            const defaultCenterLat = (config.iraqDefaults && config.iraqDefaults.latitude) || 33.3152;
+            const defaultCenterLon = (config.iraqDefaults && config.iraqDefaults.longitude) || 44.3661;
+            const lat = parseFloat(parsedUrl.searchParams.get('lat') || defaultCenterLat);
+            const lon = parseFloat(parsedUrl.searchParams.get('lon') || defaultCenterLon);
             const tripType = parsedUrl.searchParams.get('tripType'); // 'short' or 'daily'
             const requestedVehicleType = (parsedUrl.searchParams.get('vehicleType') || '').toLowerCase();
             const normaliseVehicleType = (driver) =>
@@ -7037,11 +7045,11 @@ async function startServer() {
                                     customerName: r.customer_name || 'راكب',
                                     customerPhone: (r.status === 'Confirmed' || r.status === 'Active') ? (r.customer_phone || '') : maskPhoneNumber(r.customer_phone || ''),
                                     pickupLocation: r.pickup_name || 'موقع الركوب',
-                                    dropoffLocation: r.dropoff_name || 'جامعة الكوفة',
-                                    pickupLat: parseFloat(r.pickup_lat || 31.9961),
-                                    pickupLon: parseFloat(r.pickup_lon || 44.3168),
-                                    dropoffLat: parseFloat(r.dropoff_lat || 32.0321),
-                                    dropoffLon: parseFloat(r.dropoff_lon || 44.3725),
+                                    dropoffLocation: r.dropoff_name || 'وجهة غير محددة',
+                                    pickupLat: r.pickup_lat ? parseFloat(r.pickup_lat) : null,
+                                    pickupLon: r.pickup_lon ? parseFloat(r.pickup_lon) : null,
+                                    dropoffLat: r.dropoff_lat ? parseFloat(r.dropoff_lat) : null,
+                                    dropoffLon: r.dropoff_lon ? parseFloat(r.dropoff_lon) : null,
                                     seatsBooked: r.seats_booked || 1,
                                     status: r.status || 'Pending',
                                     totalFare: r.total_fare,
@@ -7108,12 +7116,12 @@ async function startServer() {
                         customerId: ac.customerId,
                         customerName: ac.fullName,
                         customerPhone: ac.phoneNumber,
-                        pickupLocation: ac.address || ac.route || 'النجف الأشرف',
-                        dropoffLocation: ac.route || 'جامعة الكوفة',
-                        pickupLat: parseFloat(ac.pickupLat || ac.latitude || 31.9961),
-                        pickupLon: parseFloat(ac.pickupLon || ac.longitude || 44.3168),
-                        dropoffLat: parseFloat(ac.dropoffLat || 32.0321),
-                        dropoffLon: parseFloat(ac.dropoffLon || 44.3725),
+                        pickupLocation: ac.address || ac.route || 'موقع الركوب',
+                        dropoffLocation: ac.route || 'وجهة غير محددة',
+                        pickupLat: ac.pickupLat ? parseFloat(ac.pickupLat) : (ac.latitude ? parseFloat(ac.latitude) : null),
+                        pickupLon: ac.pickupLon ? parseFloat(ac.pickupLon) : (ac.longitude ? parseFloat(ac.longitude) : null),
+                        dropoffLat: ac.dropoffLat ? parseFloat(ac.dropoffLat) : null,
+                        dropoffLon: ac.dropoffLon ? parseFloat(ac.dropoffLon) : null,
                         seatsBooked: 1,
                         status: ac.bookingConfirmed ? 'Confirmed' : 'Pending',
                         cancellationPending: false,
@@ -7484,12 +7492,12 @@ async function startServer() {
                 customerId: candidateCustomerId,
                 customerName: candidateName,
                 customerPhone: candidateRawPhone,
-                pickupLocation: body.pickupLocation || body.pickup || body.pickupName || (targetRoute ? targetRoute.startName : ''),
-                dropoffLocation: body.dropoffLocation || body.destination || body.dropoffName || (targetRoute ? targetRoute.endName : 'جامعة الكوفة'),
-                pickupLat: parseFloat(body.pickupLat || (targetRoute ? targetRoute.startLat : 31.9961)),
-                pickupLon: parseFloat(body.pickupLon || (targetRoute ? targetRoute.startLon : 44.3168)),
-                dropoffLat: parseFloat(body.dropoffLat || (targetRoute ? targetRoute.endLat : 32.0321)),
-                dropoffLon: parseFloat(body.dropoffLon || (targetRoute ? targetRoute.endLon : 44.3725)),
+                pickupLocation: body.pickupLocation || body.pickup || body.pickupName || (targetRoute ? targetRoute.startName : 'موقع الركوب'),
+                dropoffLocation: body.dropoffLocation || body.destination || body.dropoffName || (targetRoute ? targetRoute.endName : 'وجهة غير محددة'),
+                pickupLat: body.pickupLat ? parseFloat(body.pickupLat) : (targetRoute && targetRoute.startLat ? parseFloat(targetRoute.startLat) : null),
+                pickupLon: body.pickupLon ? parseFloat(body.pickupLon) : (targetRoute && targetRoute.startLon ? parseFloat(targetRoute.startLon) : null),
+                dropoffLat: body.dropoffLat ? parseFloat(body.dropoffLat) : (targetRoute && targetRoute.endLat ? parseFloat(targetRoute.endLat) : null),
+                dropoffLon: body.dropoffLon ? parseFloat(body.dropoffLon) : (targetRoute && targetRoute.endLon ? parseFloat(targetRoute.endLon) : null),
                 seatsBooked: seats,
                 notes: sanitizedNotes,
                 fare: totalFare,

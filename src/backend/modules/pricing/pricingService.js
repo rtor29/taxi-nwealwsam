@@ -295,51 +295,53 @@ class PricingService {
                     demandReason = 'نقص ملحوظ في عدد السائقين بالنسبة للطلبات';
                 }
             } else {
-                // Real-time calculation from active drivers & pending rides
-                const pLat = Number(options.pickupLat) || 31.9961;
-                const pLon = Number(options.pickupLon) || 44.3168;
+                // Real-time calculation from active drivers & pending rides across Iraq
+                const pLat = Number(options.pickupLat);
+                const pLon = Number(options.pickupLon);
 
-                const toRad = deg => deg * Math.PI / 180;
-                const haversineKm = (lat1, lon1, lat2, lon2) => {
-                    const R = 6371;
-                    const dLat = toRad(lat2 - lat1);
-                    const dLon = toRad(lon2 - lon1);
-                    const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
-                    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                };
+                if (!isNaN(pLat) && !isNaN(pLon)) {
+                    const toRad = deg => deg * Math.PI / 180;
+                    const haversineKm = (lat1, lon1, lat2, lon2) => {
+                        const R = 6371;
+                        const dLat = toRad(lat2 - lat1);
+                        const dLon = toRad(lon2 - lon1);
+                        const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)*Math.sin(dLon/2);
+                        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                    };
 
-                // Online instant taxi drivers within 5km
-                const drivers = (db.memoryState.drivers || []).filter(d => {
-                    const isOnline = d.isOnline === true || d.status === 'Active' || d.workStatus === 'Active';
-                    const isInstant = d.work_mode !== 'خط دائمي' && d.workStatus !== 'permanent';
-                    if (!isOnline || !isInstant) return false;
-                    const dLat = d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : pLat);
-                    const dLon = d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : pLon);
-                    const dist = haversineKm(pLat, pLon, dLat, dLon);
-                    return dist <= 6.0;
-                });
-                nearbyDriversCount = drivers.length;
+                    // Online instant taxi drivers within 6km of passenger pickup location
+                    const drivers = (db.memoryState.drivers || []).filter(d => {
+                        const isOnline = d.isOnline === true || d.status === 'Active' || d.workStatus === 'Active';
+                        const isInstant = d.work_mode !== 'خط دائمي' && d.workStatus !== 'permanent';
+                        if (!isOnline || !isInstant) return false;
+                        const dLat = d.currentLat ? parseFloat(d.currentLat) : (d.permanentLat ? parseFloat(d.permanentLat) : pLat);
+                        const dLon = d.currentLon ? parseFloat(d.currentLon) : (d.permanentLon ? parseFloat(d.permanentLon) : pLon);
+                        const dist = haversineKm(pLat, pLon, dLat, dLon);
+                        return dist <= 6.0;
+                    });
+                    nearbyDriversCount = drivers.length;
 
-                // Pending or InProgress instant rides in the last 15 minutes
-                const now = Date.now();
-                const recentRides = (db.memoryState.rideRequests || []).filter(r => {
-                    if (r.status === 'Completed' || r.status === 'Cancelled') return false;
-                    const createdAt = new Date(r.createdAt || now).getTime();
-                    return (now - createdAt) < 15 * 60 * 1000;
-                });
-                activeRequestsCount = recentRides.length;
+                    // Pending or InProgress instant rides in the last 15 minutes
+                    const now = Date.now();
+                    const recentRides = (db.memoryState.rideRequests || []).filter(r => {
+                        if (r.status === 'Completed' || r.status === 'Cancelled') return false;
+                        const createdAt = new Date(r.createdAt || now).getTime();
+                        return (now - createdAt) < 15 * 60 * 1000;
+                    });
+                    activeRequestsCount = recentRides.length;
 
-                // Determine supply/demand surge
-                const sensitivity = settings.demandSensitivity || 1.0;
-                if (nearbyDriversCount === 0 && activeRequestsCount >= 1) {
-                    demandMultiplier = 1.35 * sensitivity;
-                    demandReason = 'قلة السائقين المتاحين في محيطك حالياً';
-                } else if (nearbyDriversCount <= 2 && activeRequestsCount >= 2) {
-                    demandMultiplier = 1.25 * sensitivity;
-                    demandReason = 'طلب مرتفع جداً مقارنة بعدد السائقين المتواجدين';
-                } else if (nearbyDriversCount <= 1) {
-                    demandMultiplier = 1.15 * sensitivity;
-                    demandReason = 'عدد محدود من السائقين في منطقتك';
+                    // Determine supply/demand surge
+                    const sensitivity = settings.demandSensitivity || 1.0;
+                    if (nearbyDriversCount === 0 && activeRequestsCount >= 1) {
+                        demandMultiplier = 1.35 * sensitivity;
+                        demandReason = 'قلة السائقين المتاحين في محيطك حالياً';
+                    } else if (nearbyDriversCount <= 2 && activeRequestsCount >= 2) {
+                        demandMultiplier = 1.25 * sensitivity;
+                        demandReason = 'طلب مرتفع جداً مقارنة بعدد السائقين المتواجدين';
+                    } else if (nearbyDriversCount <= 1) {
+                        demandMultiplier = 1.15 * sensitivity;
+                        demandReason = 'عدد محدود من السائقين في منطقتك';
+                    }
                 }
             }
         }
