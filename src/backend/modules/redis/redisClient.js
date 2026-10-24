@@ -646,7 +646,7 @@ class RedisManager {
         if (!this.isConnected || !this.client || !driverId) return false;
         try {
             const hashKey = `driver:${driverId}:meta`;
-            await this.client.hset(hashKey, {
+            const payload = {
                 id: String(driverId),
                 fixed_lat: String(data.lat),
                 fixed_lng: String(data.lng),
@@ -656,7 +656,9 @@ class RedisManager {
                 fixed_dest_label: String(data.destLabel || ''),
                 route_name: String(data.routeName || ''),
                 fixed_updated_at: String(data.updatedAt || new Date().toISOString())
-            });
+            };
+            if (data.fare != null) payload.fare = String(data.fare);
+            await this.client.hset(hashKey, payload);
             return true;
         } catch (_) {
             return false;
@@ -671,7 +673,7 @@ class RedisManager {
                 hashKey, 
                 'fixed_lat', 'fixed_lng', 'fixed_label', 
                 'fixed_dest_lat', 'fixed_dest_lng', 'fixed_dest_label', 
-                'route_name', 'fixed_updated_at'
+                'route_name', 'fixed_updated_at', 'fare'
             );
             return true;
         } catch (_) {
@@ -694,6 +696,7 @@ class RedisManager {
                 destLng: meta.fixed_dest_lng ? parseFloat(meta.fixed_dest_lng) : null,
                 destLabel: meta.fixed_dest_label || '',
                 routeName: meta.route_name || '',
+                fare: meta.fare ? parseFloat(meta.fare) : null,
                 updatedAt: meta.fixed_updated_at || null
             };
         } catch (_) {

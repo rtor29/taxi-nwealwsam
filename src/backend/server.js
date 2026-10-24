@@ -9239,6 +9239,27 @@ async function startServer() {
                     isLocked = driver.route_locked === true || driver.routeLocked === true;
                 }
 
+                let driverFare = driver.fare || driver.pricePerSeat || driver.seatFare || 3000;
+                let totalSeats = driver.total_seats || driver.totalSeats || 4;
+                let departureTime = driver.departure_time || driver.departureTime || '07:30 ص';
+
+                if (redisLoc && redisLoc.fare) {
+                    driverFare = parseFloat(redisLoc.fare) || driverFare;
+                }
+                if (db.pool && db.isPostgresConnected) {
+                    try {
+                        const rFareRes = await db.pool.query(
+                            'SELECT fare, total_seats, departure_time FROM routes WHERE driver_id = $1 OR driver_id = $2 OR driver_id = $3 ORDER BY created_at DESC LIMIT 1',
+                            [canonicalDriverId, canonicalDriverId.replace(/-/g, '_'), canonicalDriverId.replace(/_/g, '-')]
+                        );
+                        if (rFareRes.rows && rFareRes.rows[0]) {
+                            if (rFareRes.rows[0].fare) driverFare = parseFloat(rFareRes.rows[0].fare);
+                            if (rFareRes.rows[0].total_seats) totalSeats = parseInt(rFareRes.rows[0].total_seats, 10);
+                            if (rFareRes.rows[0].departure_time) departureTime = rFareRes.rows[0].departure_time;
+                        }
+                    } catch (_) {}
+                }
+
                 return sendJson({
                     success: true,
                     driverId: canonicalDriverId,
@@ -9251,6 +9272,11 @@ async function startServer() {
                     route_name: routeName || '',
                     route_locked: isLocked,
                     fixed_updated_at: fixedUpdatedAt,
+                    fare: driverFare,
+                    pricePerSeat: driverFare,
+                    price: driverFare,
+                    total_seats: totalSeats,
+                    departure_time: departureTime,
                     work_mode: driver.work_mode || driver.workStatus || 'commute'
                 });
             }
@@ -9414,6 +9440,14 @@ async function startServer() {
             driver.routeLocked = true;
             db.saveStateSnapshot();
 
+            const fareVal = parseFloat(body.pricePerSeat || body.price || body.fare) || 3000;
+            const depTime = body.departureTime || '07:30 ص';
+            const availSeats = parseInt(body.availableSeats || body.seats, 10) || 4;
+
+            driver.fare = fareVal;
+            driver.pricePerSeat = fareVal;
+            driver.seatFare = fareVal;
+
             await db.persistDriverFixedLocation(canonicalDriverId, {
                 lat: parsedLat,
                 lng: parsedLng,
@@ -9431,6 +9465,7 @@ async function startServer() {
                 destLng: parsedDestLng,
                 destLabel: cleanDestLabel,
                 routeName: cleanRouteName,
+                fare: fareVal,
                 updatedAt: nowIso
             });
 
@@ -9458,9 +9493,6 @@ async function startServer() {
             if (db.isPostgresConnected && db.pool) {
                 try {
                     const routeId = `route-${canonicalDriverId}`;
-                    const fareVal = parseFloat(body.pricePerSeat || body.price || body.fare) || 3000;
-                    const depTime = body.departureTime || '07:30 ص';
-                    const availSeats = parseInt(body.availableSeats || body.seats, 10) || 4;
                     await db.pool.query(`
                         INSERT INTO routes (id, driver_id, driver_name, driver_phone, start_name, end_name, start_lat, start_lon, end_lat, end_lon, fare, available_seats, total_seats, departure_time, status, created_at)
                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12, $13, 'Active', NOW())
@@ -9482,6 +9514,44 @@ async function startServer() {
                 }
             }
 
+            // Update in-memory routes state for passenger instant matching
+            if (db.memoryState && Array.isArray(db.memoryState.routes)) {
+                const memR = db.memoryState.routes.find(r => 
+                    r.driverId === canonicalDriverId || 
+                    r.driverId === canonicalDriverId.replace(/-/g, '_') ||
+                    r.driverId === canonicalDriverId.replace(/_/g, '-')
+                );
+                if (memR) {
+                    memR.fare = fareVal;
+                    memR.startName = cleanLabel;
+                    memR.endName = cleanDestLabel || cleanLabel;
+                    memR.startLat = parsedLat;
+                    memR.startLon = parsedLng;
+                    memR.endLat = parsedDestLat || parsedLat;
+                    memR.endLon = parsedDestLng || parsedLng;
+                } else {
+                    db.memoryState.routes.push({
+                        id: `route-${canonicalDriverId}`,
+                        routeId: `route-${canonicalDriverId}`,
+                        driverId: canonicalDriverId,
+                        driverName: driver.fullName || 'كابتن توصيله',
+                        driverPhone: driver.phoneNumber || '',
+                        startName: cleanLabel,
+                        endName: cleanDestLabel || cleanLabel,
+                        startLat: parsedLat,
+                        startLon: parsedLng,
+                        endLat: parsedDestLat || parsedLat,
+                        endLon: parsedDestLng || parsedLng,
+                        fare: fareVal,
+                        availableSeats: availSeats,
+                        totalSeats: availSeats,
+                        departureTime: depTime,
+                        status: 'Active',
+                        createdAt: nowIso
+                    });
+                }
+            }
+
             try {
                 const auditService = require('./modules/audit/auditService');
                 await auditService.logEvent({
@@ -9497,6 +9567,7 @@ async function startServer() {
                         destLng: parsedDestLng,
                         destLabel: cleanDestLabel,
                         routeName: cleanRouteName,
+                        fare: fareVal,
                         timestamp: nowIso
                     },
                     ip: clientIp
@@ -9515,6 +9586,9 @@ async function startServer() {
                 route_name: cleanRouteName,
                 route_locked: true,
                 fixed_updated_at: nowIso,
+                fare: fareVal,
+                pricePerSeat: fareVal,
+                price: fareVal,
                 work_mode: driver.work_mode || driver.workStatus || 'commute'
             };
 
