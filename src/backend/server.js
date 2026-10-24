@@ -8252,9 +8252,6 @@ async function startServer() {
                         cached: true
                     });
                 }
-                        cached: false
-                    });
-                }
 
                 // 5. Directions API Enabled: Call Mapbox Directions API ONCE per driver
                 console.log(`[Route Geometry MISS - Calling Mapbox Directions ONCE] driverId: ${targetDriverId}`);
