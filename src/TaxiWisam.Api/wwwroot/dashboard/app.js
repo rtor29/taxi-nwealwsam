@@ -4477,6 +4477,8 @@ function openEditDriverModal(driverId) {
     if (elPhone) elPhone.value = driver.phoneNumber || '';
     const elRoute = document.getElementById('edit-drv-route');
     if (elRoute) elRoute.value = driver.routeName || driver.route_name || driver.route || '';
+    const elFare = document.getElementById('edit-drv-fare');
+    if (elFare) elFare.value = driver.fare || driver.pricePerSeat || 3000;
     const elPass = document.getElementById('edit-drv-password');
     if (elPass) elPass.value = '';
     const tgInput = document.getElementById('edit-drv-telegram-id');
@@ -4537,6 +4539,7 @@ async function submitEditDriver(event) {
     const fullName = document.getElementById('edit-drv-name')?.value?.trim() || '';
     const phoneNumber = document.getElementById('edit-drv-phone')?.value?.trim() || '';
     const route = document.getElementById('edit-drv-route')?.value?.trim() || '';
+    const fareVal = document.getElementById('edit-drv-fare')?.value;
     const password = document.getElementById('edit-drv-password')?.value?.trim() || '';
     const telegramChatId = document.getElementById('edit-drv-telegram-id')?.value?.trim() || '';
     const governorate = document.getElementById('edit-drv-gov')?.value || 'najaf';
@@ -4563,6 +4566,10 @@ async function submitEditDriver(event) {
             route_name: route,
             route_locked
         };
+        if (fareVal !== undefined && fareVal !== '') {
+            payload.fare = parseFloat(fareVal) || 3000;
+            payload.pricePerSeat = payload.fare;
+        }
         if (password) payload.password = password;
 
         const res = await fetch(`${API_BASE}/drivers/${driverId}/update`, {
@@ -4602,7 +4609,13 @@ async function onDriverModalPlaceSearch(type, val) {
     clearTimeout(driverModalSearchDebounce);
     driverModalSearchDebounce = setTimeout(async () => {
         try {
-            const res = await fetch(`${API_BASE}/places/search?q=${encodeURIComponent(q)}&proximity=44.325,31.995`);
+            const govKey = document.getElementById('edit-drv-gov')?.value || 'najaf';
+            const govInfo = (typeof DASHBOARD_IRAQ_GOVERNORATES !== 'undefined' && DASHBOARD_IRAQ_GOVERNORATES[govKey])
+                ? DASHBOARD_IRAQ_GOVERNORATES[govKey]
+                : { center: [44.3168, 31.9961] };
+            const prox = (govInfo && govInfo.center) ? `${govInfo.center[0]},${govInfo.center[1]}` : '44.3168,31.9961';
+
+            const res = await fetch(`/api/places/search?q=${encodeURIComponent(q)}&proximity=${prox}`);
             if (res.ok) {
                 const data = await res.json();
                 const places = (data && data.places) ? data.places : [];
@@ -4627,7 +4640,7 @@ async function onDriverModalPlaceSearch(type, val) {
                 box.classList.remove('hidden');
             }
         } catch (_) {}
-    }, 250);
+    }, 400);
 }
 
 function selectDriverModalPlace(type, name, lat, lng) {
@@ -4654,16 +4667,25 @@ function selectDriverModalPlace(type, name, lat, lng) {
         if (lngEl) lngEl.value = lng;
     }
 
-    // Auto-update route name if both or either has value
-    const startName = document.getElementById('edit-drv-start-label')?.value?.trim();
-    const destName = document.getElementById('edit-drv-dest-label')?.value?.trim();
     const routeInput = document.getElementById('edit-drv-route');
-    if (routeInput && startName && destName) {
-        routeInput.value = `${startName} ➔ ${destName}`;
-    } else if (routeInput && (startName || destName) && !routeInput.value) {
-        routeInput.value = startName ? `${startName} ➔ المركز` : `المركز ➔ ${destName}`;
+    const startVal = document.getElementById('edit-drv-start-label')?.value?.trim();
+    const destVal = document.getElementById('edit-drv-dest-label')?.value?.trim();
+    if (routeInput && startVal && destVal && (!routeInput.value || routeInput.value.includes('➔') || routeInput.value === 'غير محدد')) {
+        routeInput.value = `${startVal} ➔ ${destVal}`;
     }
 }
+
+// Dismiss place suggestions on click outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#edit-drv-start-label') && !e.target.closest('#edit-drv-start-suggestions')) {
+        const b = document.getElementById('edit-drv-start-suggestions');
+        if (b) b.classList.add('hidden');
+    }
+    if (!e.target.closest('#edit-drv-dest-label') && !e.target.closest('#edit-drv-dest-suggestions')) {
+        const b = document.getElementById('edit-drv-dest-suggestions');
+        if (b) b.classList.add('hidden');
+    }
+});
 
 // Fleet Map Instant Search (Najaf Only - From 1st Character)
 let fleetMapSearchDebounce = null;

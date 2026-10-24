@@ -65,6 +65,7 @@ async function saveDriverRouteUnified({
                     route_name = $7,
                     route_locked = $8,
                     fixed_route_geometry = COALESCE($9, fixed_route_geometry),
+                    fare = $11,
                     fixed_updated_at = NOW(),
                     updated_at = NOW()
                 WHERE driver_id = $10 
@@ -80,7 +81,8 @@ async function saveDriverRouteUnified({
                 cleanRouteName,
                 isLocked,
                 geoJsonPolyline ? JSON.stringify(geoJsonPolyline) : null,
-                canonicalDriverId
+                canonicalDriverId,
+                parsedFare
             ]);
         } catch (pgErr) {
             console.error('[UnifiedRouteService] PG drivers update error:', pgErr.message);
@@ -432,7 +434,7 @@ async function getDriverRouteUnified(driverId) {
             const pgRes = await db.pool.query(`
                 SELECT fixed_lat, fixed_lng, fixed_label,
                        fixed_dest_lat, fixed_dest_lng, fixed_dest_label,
-                       route_name, route_locked, fixed_route_geometry, fixed_updated_at
+                       route_name, route_locked, fare, fixed_route_geometry, fixed_updated_at
                 FROM drivers
                 WHERE driver_id = $1 
                    OR driver_id = REPLACE($1, '-', '_') 
@@ -461,7 +463,7 @@ async function getDriverRouteUnified(driverId) {
                         fixed_dest_lng: r.fixed_dest_lng != null ? parseFloat(r.fixed_dest_lng) : null,
                         fixed_dest_label: r.fixed_dest_label || '',
                         route_name: r.route_name || '',
-                        fare: 3000,
+                        fare: r.fare != null ? parseFloat(r.fare) : 3000,
                         route_locked: r.route_locked === true,
                         fixed_route_geometry: geomObj,
                         updated_at: r.fixed_updated_at || null,

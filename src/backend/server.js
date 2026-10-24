@@ -3312,6 +3312,7 @@ async function startServer() {
                 const totalCapacity = routeSeatsMap.get(id) || parseInt(targetRoute?.totalSeats || targetRoute?.total_seats || mem.totalSeats || mem.availableSeats || 4, 10);
                 const bookedCount = bookedSeatsMap.get(id) || 0;
                 const isFull = bookedCount >= totalCapacity;
+                const candidateFare = targetRoute?.fare != null ? parseFloat(targetRoute.fare) : (redisLoc?.fare != null ? parseFloat(redisLoc.fare) : (mem.fare != null ? parseFloat(mem.fare) : (d.fare != null ? parseFloat(d.fare) : 3000)));
 
                 candidateDrivers.push({
                     driverId: id,
@@ -3328,6 +3329,9 @@ async function startServer() {
                     fixed_dest_label: fixedDestLabel,
                     fixed_dest_lat: fixedDestLat,
                     fixed_dest_lng: fixedDestLng,
+                    fare: candidateFare,
+                    pricePerSeat: candidateFare,
+                    price: candidateFare,
                     distanceM: distanceM,
                     distanceBand: distanceBand,
                     isFull: Boolean(isFull),
@@ -8120,7 +8124,7 @@ async function startServer() {
         // --------------------------------------------------------------------
         // Batch 6-A Part 2: Places Geocoding Search with Redis Cache (TTL 7 days)
         // --------------------------------------------------------------------
-        if (pathname === '/api/places/search' && method === 'GET') {
+        if ((pathname === '/api/places/search' || pathname === '/api/admin/places/search') && method === 'GET') {
             const query = (parsedUrl.searchParams.get('q') || '').trim();
             if (!query) {
                 return sendJson({ success: true, places: [] });

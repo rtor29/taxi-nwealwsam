@@ -54,6 +54,8 @@ function toLeanDriver(d) {
         isBlocked: !!d.isBlocked,
         route: routeName,
         route_name: d.routeName || routeName,
+        fare: d.fare != null ? parseFloat(d.fare) : (routeObj && routeObj.fare != null ? parseFloat(routeObj.fare) : 3000),
+        pricePerSeat: d.pricePerSeat != null ? parseFloat(d.pricePerSeat) : (d.fare != null ? parseFloat(d.fare) : (routeObj && routeObj.fare != null ? parseFloat(routeObj.fare) : 3000)),
         fixed_lat: d.fixedLat,
         fixed_lng: d.fixedLng,
         fixed_label: d.fixedLabel,
@@ -123,7 +125,7 @@ class AdminController {
                                d.fixed_lat, d.fixed_lng, d.fixed_label,
                                d.fixed_dest_lat, d.fixed_dest_lng, d.fixed_dest_label,
                                d.route_name, d.route_locked,
-                               r.start_name, r.end_name
+                               r.start_name, r.end_name, r.fare as route_fare
                         FROM drivers d
                         LEFT JOIN routes r ON r.driver_id = d.driver_id
                         ORDER BY d.created_at DESC
@@ -157,6 +159,9 @@ class AdminController {
                             m.route_name = routeName;
                             m.routeLocked = routeLocked;
                             m.route_locked = routeLocked;
+                            const fare = r.route_fare != null ? parseFloat(r.route_fare) : (m.fare != null ? parseFloat(m.fare) : 3000);
+                            m.fare = fare;
+                            m.pricePerSeat = fare;
 
                             return {
                                 id: r.driver_id,
@@ -190,6 +195,8 @@ class AdminController {
                                 fixed_dest_lng: fixedDestLng,
                                 fixed_dest_label: fixedDestLabel,
                                 route_locked: routeLocked,
+                                fare: fare,
+                                pricePerSeat: fare,
                                 governorate: r.governorate || m.governorate || 'najaf',
                                 password: r.plain_password || m.plainPassword || (r.password_hash ? '••••••••' : '123456'),
                                 createdAt: r.created_at ? new Date(r.created_at).toISOString() : (m.createdAt || new Date().toISOString()),
@@ -399,6 +406,14 @@ class AdminController {
             const rawDestLabel = data.fixed_dest_label !== undefined ? data.fixed_dest_label : data.fixedDestLabel;
             const rawRouteName = data.route_name !== undefined ? data.route_name : (data.routeName || data.route);
             const rawLocked = data.route_locked !== undefined ? data.route_locked : data.routeLocked;
+            const rawFare = data.fare !== undefined ? data.fare : (data.pricePerSeat !== undefined ? data.pricePerSeat : data.price);
+            if (rawFare !== undefined && rawFare !== null && rawFare !== '') {
+                const parsedF = parseFloat(rawFare);
+                if (!isNaN(parsedF) && parsedF > 0) {
+                    driver.fare = parsedF;
+                    driver.pricePerSeat = parsedF;
+                }
+            }
 
             const hasValidStartLat = rawStartLat !== undefined && rawStartLat !== '' && rawStartLat !== null && !isNaN(parseFloat(rawStartLat));
             const hasValidStartLng = rawStartLng !== undefined && rawStartLng !== '' && rawStartLng !== null && !isNaN(parseFloat(rawStartLng));
@@ -457,15 +472,20 @@ class AdminController {
                     availableSeats: driver.availableSeats || 4,
                     totalSeats: driver.totalSeats || 4
                 });
-            } else if (rawLocked !== undefined) {
-                // تعديل حالة القفل فقط إن لم تتوفر إحداثيات
-                driver.routeLocked = effectiveLocked;
-                driver.route_locked = effectiveLocked;
-                if (db.isPostgresConnected && db.pool) {
-                    await db.pool.query('UPDATE drivers SET route_locked = $1 WHERE driver_id = $2', [effectiveLocked, driverId]).catch(() => {});
+            } else {
+                if (rawLocked !== undefined) {
+                    // تعديل حالة القفل فقط إن لم تتوفر إحداثيات
+                    driver.routeLocked = effectiveLocked;
+                    driver.route_locked = effectiveLocked;
+                    if (db.isPostgresConnected && db.pool) {
+                        await db.pool.query('UPDATE drivers SET route_locked = $1 WHERE driver_id = $2', [effectiveLocked, driverId]).catch(() => {});
+                    }
+                    if (redisManager && redisManager.client) {
+                        await redisManager.client.hset(`driver:${driverId}:meta`, 'route_locked', String(effectiveLocked)).catch(() => {});
+                    }
                 }
-                if (redisManager && redisManager.client) {
-                    await redisManager.client.hset(`driver:${driverId}:meta`, 'route_locked', String(effectiveLocked)).catch(() => {});
+                if (driver.fare && db.isPostgresConnected && db.pool) {
+                    await db.pool.query('UPDATE routes SET fare = $1 WHERE driver_id = $2', [driver.fare, driverId]).catch(() => {});
                 }
             }
         }
@@ -478,7 +498,8 @@ class AdminController {
                 route_locked: String(driver.routeLocked === true),
                 governorate: String(driver.governorate || 'najaf'),
                 vehicleType: String(driver.vehicleType || 'eco'),
-                tier: String(driver.vehicleType || 'eco')
+                tier: String(driver.vehicleType || 'eco'),
+                fare: String(driver.fare || 3000)
             }).catch(() => {});
         }
 
@@ -499,7 +520,9 @@ class AdminController {
                 fixed_dest_lng: driver.fixedDestLng,
                 fixed_dest_label: driver.fixedDestLabel,
                 route_locked: driver.routeLocked === true,
-                work_mode: driver.work_mode
+                work_mode: driver.work_mode,
+                fare: driver.fare || 3000,
+                pricePerSeat: driver.fare || 3000
             })).catch(() => {});
         }
 
@@ -593,6 +616,8 @@ class AdminController {
             fixed_dest_label: driver.fixedDestLabel,
             route_name: driver.routeName,
             route_locked: Boolean(driver.routeLocked === true || driver.route_locked === true),
+            fare: driver.fare != null ? parseFloat(driver.fare) : (routes[0] && routes[0].fare != null ? parseFloat(routes[0].fare) : 3000),
+            pricePerSeat: driver.pricePerSeat != null ? parseFloat(driver.pricePerSeat) : (driver.fare != null ? parseFloat(driver.fare) : (routes[0] && routes[0].fare != null ? parseFloat(routes[0].fare) : 3000)),
             vehicles,
             documents,
             routes

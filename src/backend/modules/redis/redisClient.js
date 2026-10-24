@@ -151,6 +151,69 @@ class RedisManager {
                                                 d.work_mode = data.work_mode;
                                                 d.workMode = data.work_mode;
                                             }
+                                            if (data.fare !== undefined) {
+                                                const pFare = parseFloat(data.fare) || 3000;
+                                                d.fare = pFare;
+                                                d.pricePerSeat = pFare;
+                                            }
+                                        }
+                                    }
+                                    if (Array.isArray(db.memoryState.routes) && data.fare !== undefined) {
+                                        const pFare = parseFloat(data.fare) || 3000;
+                                        for (const r of db.memoryState.routes) {
+                                            const rDrv = String(r.driverId || '').trim();
+                                            if (rDrv === targetDriverId || rDrv.replace(/[-_]/g, '') === normTargetId) {
+                                                r.fare = pFare;
+                                            }
+                                        }
+                                    }
+                                    if (typeof db.saveStateSnapshot === 'function') {
+                                        db.saveStateSnapshot();
+                                    }
+                                }
+                            } else if (data.type === 'driver_route_unified_sync') {
+                                const db = require('../../db');
+                                if (db && db.memoryState) {
+                                    const targetDriverId = String(data.driverId || '').trim();
+                                    const normTargetId = targetDriverId.replace(/[-_]/g, '');
+                                    if (Array.isArray(db.memoryState.drivers)) {
+                                        for (const d of db.memoryState.drivers) {
+                                            const dId = String(d.driverId || d.id || '').trim();
+                                            if (dId === targetDriverId || dId.replace(/[-_]/g, '') === normTargetId) {
+                                                if (data.fixed_lat !== undefined) d.fixedLat = data.fixed_lat;
+                                                if (data.fixed_lng !== undefined) d.fixedLng = data.fixed_lng;
+                                                if (data.fixed_label !== undefined) d.fixedLabel = data.fixed_label;
+                                                if (data.fixed_dest_lat !== undefined) d.fixedDestLat = data.fixed_dest_lat;
+                                                if (data.fixed_dest_lng !== undefined) d.fixedDestLng = data.fixed_dest_lng;
+                                                if (data.fixed_dest_label !== undefined) d.fixedDestLabel = data.fixed_dest_label;
+                                                if (data.route_name !== undefined) {
+                                                    d.routeName = data.route_name;
+                                                    d.route = data.route_name;
+                                                }
+                                                if (data.route_locked !== undefined) {
+                                                    d.route_locked = data.route_locked;
+                                                    d.routeLocked = data.route_locked;
+                                                }
+                                                if (data.fare !== undefined) {
+                                                    const pFare = parseFloat(data.fare) || 3000;
+                                                    d.fare = pFare;
+                                                    d.pricePerSeat = pFare;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (Array.isArray(db.memoryState.routes)) {
+                                        for (const r of db.memoryState.routes) {
+                                            const rDrv = String(r.driverId || '').trim();
+                                            if (rDrv === targetDriverId || rDrv.replace(/[-_]/g, '') === normTargetId) {
+                                                if (data.fare !== undefined) r.fare = parseFloat(data.fare) || 3000;
+                                                if (data.fixed_label) r.startName = data.fixed_label;
+                                                if (data.fixed_dest_label) r.endName = data.fixed_dest_label;
+                                                if (data.fixed_lat) r.startLat = data.fixed_lat;
+                                                if (data.fixed_lng) r.startLon = data.fixed_lng;
+                                                if (data.fixed_dest_lat) r.endLat = data.fixed_dest_lat;
+                                                if (data.fixed_dest_lng) r.endLon = data.fixed_dest_lng;
+                                            }
                                         }
                                     }
                                     if (typeof db.saveStateSnapshot === 'function') {
