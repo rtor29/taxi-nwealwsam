@@ -44,7 +44,7 @@ class AdminController {
                 fixed_dest_lat: d.fixedDestLat,
                 fixed_dest_lng: d.fixedDestLng,
                 fixed_dest_label: d.fixedDestLabel,
-                route_locked: Boolean(d.routeLocked || d.route_locked || (d.fixedLat && d.fixedDestLat)),
+                route_locked: Boolean(d.routeLocked === true || d.route_locked === true),
                 password: d.plainPassword || (d.passwordHash ? '••••••••' : '123456')
             };
         });
@@ -286,7 +286,7 @@ class AdminController {
             fixed_dest_lng: driver.fixedDestLng,
             fixed_dest_label: driver.fixedDestLabel,
             route_name: driver.routeName,
-            route_locked: Boolean(driver.routeLocked || driver.route_locked || (driver.fixedLat && driver.fixedDestLat)),
+            route_locked: Boolean(driver.routeLocked === true || driver.route_locked === true),
             vehicles,
             documents,
             routes

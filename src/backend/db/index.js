@@ -552,8 +552,8 @@ class DatabaseManager {
                     fixedDestLabel: r.fixed_dest_label || r.permanent_dropoff_name || '',
                     routeName: r.route_name || '',
                     fixedUpdatedAt: r.fixed_updated_at || null,
-                    routeLocked: Boolean(r.route_locked || (r.fixed_lat && r.fixed_dest_lat)),
-                    route_locked: Boolean(r.route_locked || (r.fixed_lat && r.fixed_dest_lat)),
+                    routeLocked: r.route_locked === true,
+                    route_locked: r.route_locked === true,
                     telegramChatId: r.telegram_chat_id ? String(r.telegram_chat_id) : null,
                     createdAt: r.created_at
                 }));
