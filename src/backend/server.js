@@ -8262,10 +8262,10 @@ async function startServer() {
                 }
 
                 // 4. Check DB Geometry Cache
-                if (d.fixed_route_geometry && Array.isArray(d.fixed_route_geometry.coordinates) && d.fixed_route_geometry.coordinates.length > 0) {
-                    const coords = d.fixed_route_geometry.coordinates;
-                    const dbPlaces = (Array.isArray(d.fixed_route_geometry.places) && d.fixed_route_geometry.places.length > 0)
-                        ? d.fixed_route_geometry.places
+                if (uRoute.fixed_route_geometry && Array.isArray(uRoute.fixed_route_geometry.coordinates) && uRoute.fixed_route_geometry.coordinates.length > 0) {
+                    const coords = uRoute.fixed_route_geometry.coordinates;
+                    const dbPlaces = (Array.isArray(uRoute.fixed_route_geometry.places) && uRoute.fixed_route_geometry.places.length > 0)
+                        ? uRoute.fixed_route_geometry.places
                         : cachedPlaces;
                     if (redisManager && redisManager.client) {
                         await redisManager.client.set(redisKey, JSON.stringify({ coordinates: coords, places: dbPlaces }), 'EX', 30 * 86400).catch(() => {});

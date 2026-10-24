@@ -432,7 +432,7 @@ async function getDriverRouteUnified(driverId) {
             const pgRes = await db.pool.query(`
                 SELECT fixed_lat, fixed_lng, fixed_label,
                        fixed_dest_lat, fixed_dest_lng, fixed_dest_label,
-                       route_name, route_locked, fixed_updated_at
+                       route_name, route_locked, fixed_route_geometry, fixed_updated_at
                 FROM drivers
                 WHERE driver_id = $1 
                    OR driver_id = REPLACE($1, '-', '_') 
@@ -446,6 +446,12 @@ async function getDriverRouteUnified(driverId) {
                 const lng = r.fixed_lng != null ? parseFloat(r.fixed_lng) : null;
 
                 if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+                    let geomObj = null;
+                    if (r.fixed_route_geometry) {
+                        try {
+                            geomObj = typeof r.fixed_route_geometry === 'string' ? JSON.parse(r.fixed_route_geometry) : r.fixed_route_geometry;
+                        } catch (_) {}
+                    }
                     const result = {
                         driverId: canonicalDriverId,
                         fixed_lat: lat,
@@ -457,6 +463,7 @@ async function getDriverRouteUnified(driverId) {
                         route_name: r.route_name || '',
                         fare: 3000,
                         route_locked: r.route_locked === true,
+                        fixed_route_geometry: geomObj,
                         updated_at: r.fixed_updated_at || null,
                         source: 'postgres_drivers'
                     };
