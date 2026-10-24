@@ -9052,9 +9052,10 @@ async function startServer() {
                 return sendJson({ success: false, error: 'بيانات الكابتن غير موجودة في النظام' }, 404);
             }
 
-            // Mode check: Must be commute or both (Arabic or English)
+            // Mode check: Must be commute or both (Arabic or English), or creating route via routes endpoint
             const rawMode = String(driver.work_mode || driver.workStatus || driver.current_mode || driver.mode || '').toLowerCase().trim();
             const isAllowedMode = (
+                isDriverRouteEndpoint ||
                 rawMode === 'commute' || 
                 rawMode === 'both' || 
                 rawMode === 'permanent' || 
@@ -9278,7 +9279,7 @@ async function startServer() {
 
             // Ensure driver work mode is commute or both
             const currentMode = String(driver.work_mode || driver.workStatus || '').toLowerCase();
-            if (currentMode === 'taxi') {
+            if (currentMode === 'taxi' || currentMode === 'مشوار قصير') {
                 driver.work_mode = 'both';
                 driver.workStatus = 'both';
             }
