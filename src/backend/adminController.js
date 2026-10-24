@@ -157,6 +157,7 @@ class AdminController {
             await redisManager.removeDriverFixedLocation(driverId).catch(() => {});
             if (redisManager && redisManager.client) {
                 redisManager.client.del(`route:geometry:${driverId}`).catch(() => {});
+                redisManager.client.del(`route:places:${driverId}`).catch(() => {});
             }
         } else {
             let updatedFixed = false;
@@ -241,6 +242,7 @@ class AdminController {
 
                 if (redisManager && redisManager.client) {
                     redisManager.client.del(`route:geometry:${driverId}`).catch(() => {});
+                    redisManager.client.del(`route:places:${driverId}`).catch(() => {});
                 }
             }
         }

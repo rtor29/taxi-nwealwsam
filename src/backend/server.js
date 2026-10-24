@@ -8228,6 +8228,16 @@ async function startServer() {
                 }
 
                 const redisKey = `route:geometry:${targetDriverId}`;
+                const placesKey = `route:places:${targetDriverId}`;
+
+                // Check if places are also cached in Redis (Batch 6-B Part 3)
+                let cachedPlaces = [];
+                if (redisManager && redisManager.client) {
+                    try {
+                        const placesRaw = await redisManager.client.get(placesKey);
+                        if (placesRaw) cachedPlaces = JSON.parse(placesRaw);
+                    } catch (_) {}
+                }
 
                 // 3. Check Redis Cache first
                 if (redisManager && redisManager.client) {
@@ -8241,6 +8251,7 @@ async function startServer() {
                                     success: true,
                                     driverId: targetDriverId,
                                     coordinates: parsed.coordinates,
+                                    places: (Array.isArray(parsed.places) && parsed.places.length > 0) ? parsed.places : cachedPlaces,
                                     source: 'redis_cache',
                                     cached: true
                                 });
@@ -8252,14 +8263,21 @@ async function startServer() {
                 // 4. Check DB Geometry Cache
                 if (d.fixed_route_geometry && Array.isArray(d.fixed_route_geometry.coordinates) && d.fixed_route_geometry.coordinates.length > 0) {
                     const coords = d.fixed_route_geometry.coordinates;
+                    const dbPlaces = (Array.isArray(d.fixed_route_geometry.places) && d.fixed_route_geometry.places.length > 0)
+                        ? d.fixed_route_geometry.places
+                        : cachedPlaces;
                     if (redisManager && redisManager.client) {
-                        await redisManager.client.set(redisKey, JSON.stringify({ coordinates: coords }), 'EX', 30 * 86400).catch(() => {});
+                        await redisManager.client.set(redisKey, JSON.stringify({ coordinates: coords, places: dbPlaces }), 'EX', 30 * 86400).catch(() => {});
+                        if (dbPlaces.length > 0) {
+                            await redisManager.client.set(placesKey, JSON.stringify(dbPlaces), 'EX', 30 * 86400).catch(() => {});
+                        }
                     }
                     console.log(`[Route Geometry HIT - DB] driverId: ${targetDriverId}`);
                     return sendJson({
                         success: true,
                         driverId: targetDriverId,
                         coordinates: coords,
+                        places: dbPlaces,
                         source: 'db_cache',
                         cached: true
                     });
@@ -8289,17 +8307,18 @@ async function startServer() {
 
                 // 6. Cache in Redis (30 days) and PostgreSQL (JSONB)
                 if (redisManager && redisManager.client) {
-                    await redisManager.client.set(redisKey, JSON.stringify({ coordinates: coords }), 'EX', 30 * 86400).catch(() => {});
+                    await redisManager.client.set(redisKey, JSON.stringify({ coordinates: coords, places: cachedPlaces }), 'EX', 30 * 86400).catch(() => {});
                 }
                 await db.pool.query(
                     'UPDATE drivers SET fixed_route_geometry = $1 WHERE driver_id = $2',
-                    [JSON.stringify({ coordinates: coords }), targetDriverId]
+                    [JSON.stringify({ coordinates: coords, places: cachedPlaces }), targetDriverId]
                 ).catch(() => {});
 
                 return sendJson({
                     success: true,
                     driverId: targetDriverId,
                     coordinates: coords,
+                    places: cachedPlaces,
                     source: 'mapbox_api',
                     directionsApiEnabled: true,
                     cached: false
@@ -8309,6 +8328,63 @@ async function startServer() {
                 console.error('[Route Geometry Error]:', err);
                 return sendJson({ success: false, error: 'حدث خطأ أثناء جلب مسار الكابتن' }, 500);
             }
+        }
+
+        // --------------------------------------------------------------------
+        // Batch 6-B Part 3: Route Places Storage (Cached once, reused, 0 Mapbox calls)
+        // --------------------------------------------------------------------
+        if ((pathname.startsWith('/api/drivers/') && pathname.endsWith('/route-places')) || (pathname === '/api/driver/route-places')) {
+            if (method !== 'POST') return sendJson({ success: false, error: 'Method not allowed' }, 405);
+            let targetDriverId = '';
+            if (pathname === '/api/driver/route-places') {
+                targetDriverId = (parsedUrl.searchParams.get('driverId') || '').trim();
+            } else {
+                const parts = pathname.split('/');
+                targetDriverId = parts[3] ? decodeURIComponent(parts[3]) : '';
+            }
+            if (!targetDriverId) return sendJson({ success: false, error: 'معرف الكابتن مطلوب' }, 400);
+
+            const body = await parseJsonBody(req);
+            const places = Array.isArray(body.places) ? body.places.map(p => String(p).trim()).filter(Boolean) : [];
+
+            // 1. Store in Redis (TTL 30 days)
+            if (redisManager && redisManager.client) {
+                await redisManager.client.set(`route:places:${targetDriverId}`, JSON.stringify(places), 'EX', 30 * 86400).catch(() => {});
+                try {
+                    const geomKey = `route:geometry:${targetDriverId}`;
+                    const cachedGeom = await redisManager.client.get(geomKey);
+                    if (cachedGeom) {
+                        const parsed = JSON.parse(cachedGeom);
+                        parsed.places = places;
+                        await redisManager.client.set(geomKey, JSON.stringify(parsed), 'EX', 30 * 86400);
+                    }
+                } catch (_) {}
+            }
+
+            // 2. Store in PostgreSQL inside fixed_route_geometry JSONB
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    await db.pool.query(`
+                        UPDATE drivers 
+                        SET fixed_route_geometry = jsonb_set(
+                            COALESCE(fixed_route_geometry, '{"type":"LineString","coordinates":[]}'::jsonb),
+                            '{places}',
+                            $1::jsonb
+                        )
+                        WHERE driver_id = $2 OR phone_number = $2
+                    `, [JSON.stringify(places), targetDriverId]);
+                } catch (e) {
+                    console.error('[Route Places PG Error]:', e);
+                }
+            }
+
+            return sendJson({
+                success: true,
+                saved: true,
+                driverId: targetDriverId,
+                placesCount: places.length,
+                places
+            });
         }
 
         // Dynamic Surge Pricing calculation for Instant Taxi (Baly-like engine)
@@ -9346,6 +9422,7 @@ async function startServer() {
                 driver.fixedRouteGeometry = body.geoJsonPolyline;
                 if (redisManager && redisManager.client) {
                     redisManager.client.set(`route:geometry:${effectiveDriverId}`, JSON.stringify(body.geoJsonPolyline), 'EX', 86400 * 7).catch(() => {});
+                    redisManager.client.del(`route:places:${effectiveDriverId}`).catch(() => {});
                 }
                 if (db.isPostgresConnected && db.pool) {
                     db.pool.query('UPDATE drivers SET fixed_route_geometry = $1 WHERE driver_id = $2', [JSON.stringify(body.geoJsonPolyline), effectiveDriverId]).catch(() => {});
@@ -9353,6 +9430,7 @@ async function startServer() {
             } else {
                 if (redisManager && redisManager.client) {
                     redisManager.client.del(`route:geometry:${effectiveDriverId}`).catch(() => {});
+                    redisManager.client.del(`route:places:${effectiveDriverId}`).catch(() => {});
                 }
                 if (db.isPostgresConnected && db.pool) {
                     db.pool.query('UPDATE drivers SET fixed_route_geometry = NULL WHERE driver_id = $1', [effectiveDriverId]).catch(() => {});
