@@ -1323,13 +1323,9 @@ async function startServer() {
                 return sendJson({ success: false, error: 'يرجى إدخال رقم هاتف عراقي صالح' }, 400);
             }
 
-            // 1. التحقق في جدول وسجلات الكباتن (الذاكرة وقاعدة البيانات)
-            let foundDriver = (db.memoryState.drivers || []).find(d => {
-                const dn = normalizeIraqi(d.phoneNumber || d.phone);
-                return dn === targetNorm || (targetNorm.length >= 9 && dn.length >= 9 && (dn.endsWith(targetNorm) || targetNorm.endsWith(dn)));
-            });
-
-            if (!foundDriver && db.isPostgresConnected && db.pool) {
+            // 1. التحقق في جدول وسجلات الكباتن (أولوية لقاعدة البيانات ثم الذاكرة لضمان أحدث البيانات)
+            let foundDriver = null;
+            if (db.isPostgresConnected && db.pool) {
                 try {
                     const pgRes = await db.pool.query(
                         `SELECT * FROM drivers WHERE phone_number LIKE $1 OR phone_number LIKE $2 LIMIT 1`,
@@ -1339,6 +1335,12 @@ async function startServer() {
                         foundDriver = pgRes.rows[0];
                     }
                 } catch (_) {}
+            }
+            if (!foundDriver) {
+                foundDriver = (db.memoryState.drivers || []).find(d => {
+                    const dn = normalizeIraqi(d.phoneNumber || d.phone);
+                    return dn === targetNorm || (targetNorm.length >= 9 && dn.length >= 9 && (dn.endsWith(targetNorm) || targetNorm.endsWith(dn)));
+                });
             }
 
             // إذا وُجد الكابتن (أسبقية مطلقة للسائق)
@@ -2388,35 +2390,45 @@ async function startServer() {
             }
         }
 
-        if (pathname === '/api/auth/me') {
-            const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
-            const token = authHeader.replace(/^Bearer\s+/i, '').trim();
-            if (!token) return sendJson({ success: false, error: 'Unauthenticated' }, 401);
+        if (pathname === '/api/auth/me' || pathname === '/auth/me') {
+            const authUser = getAuthUser(req);
+            if (!authUser) return sendJson({ success: false, error: 'Unauthenticated' }, 401);
 
-            const parts = token.split('_');
-            const role = parts[1] === 'driver' ? 'Driver' : (parts[1] === 'customer' ? 'Customer' : null);
-            const id = parts.slice(2).join('_') || parts.slice(1).join('_');
+            const role = authUser.role;
+            const id = authUser.id;
+            const normId = (x) => String(x || '').replace(/[-_]/g, '');
 
-            let driver = db.memoryState.drivers.find(d => d.driverId === id || token.includes(d.driverId));
-            if (!driver && db.isPostgresConnected && db.pool) {
-                try {
-                    const pgRes = await db.pool.query('SELECT * FROM drivers WHERE driver_id = $1 LIMIT 1', [id]);
-                    if (pgRes.rows && pgRes.rows.length > 0) {
-                        const row = pgRes.rows[0];
-                        driver = {
-                            driverId: row.driver_id,
-                            fullName: row.full_name,
-                            phoneNumber: row.phone_number,
-                            email: row.email,
-                            status: row.status,
-                            isVerified: row.is_verified,
-                            isBlocked: row.is_blocked,
-                            vehicleMake: row.vehicle_make,
-                            vehiclePlate: row.vehicle_plate
-                        };
-                        db.memoryState.drivers.unshift(driver);
-                    }
-                } catch (_) {}
+            let driver = (db.memoryState.drivers || []).find(d => d.driverId === id || normId(d.driverId) === normId(id));
+            if (role === 'Driver' || driver) {
+                if (db.isPostgresConnected && db.pool) {
+                    try {
+                        const pgRes = await db.pool.query('SELECT * FROM drivers WHERE driver_id = $1 OR driver_id = $2 OR driver_id = $3 LIMIT 1', [id, String(id).replace(/-/g, '_'), String(id).replace(/_/g, '-')]);
+                        if (pgRes.rows && pgRes.rows.length > 0) {
+                            const row = pgRes.rows[0];
+                            if (!driver) {
+                                driver = {
+                                    driverId: row.driver_id,
+                                    fullName: row.full_name,
+                                    phoneNumber: row.phone_number,
+                                    email: row.email,
+                                    status: row.status,
+                                    isVerified: row.is_verified,
+                                    isBlocked: row.is_blocked,
+                                    vehicleMake: row.vehicle_make,
+                                    vehiclePlate: row.vehicle_plate
+                                };
+                                db.memoryState.drivers.unshift(driver);
+                            } else {
+                                driver.fullName = row.full_name;
+                                driver.phoneNumber = row.phone_number;
+                                driver.status = row.status;
+                                driver.isVerified = row.is_verified;
+                                driver.isBlocked = row.is_blocked;
+                                driver.route_locked = row.route_locked === true;
+                            }
+                        }
+                    } catch (_) {}
+                }
             }
             if (driver) {
                 const isBlocked = driver.isBlocked === true || driver.is_blocked === true || driver.status === 'Suspended' || driver.status === 'Blocked';
@@ -8970,16 +8982,17 @@ async function startServer() {
                 return sendJson({ success: false, error: 'غير مصرح: معرّف الكابتن غير موجود في التوكن (RLS)' }, 403);
             }
 
-            // 2. Body Parsing & RLS Check (No trust in client-provided ID)
+            // 2. Body Parsing & RLS Check (No trust in client-provided ID, normalize drv_ vs drv-)
             let body = {};
             if (method === 'POST' || method === 'DELETE' || method === 'PUT') {
                 body = await parseJsonBody(req).catch(() => ({}));
             }
+            const normId = (s) => String(s || '').replace(/[-_]/g, '').trim();
             const urlDriverId = isDriverRouteEndpoint 
                 ? pathname.replace(/^\/(api\/)?drivers\//, '').replace(/\/routes$/, '').trim() 
                 : '';
             const submittedDriverId = body.driverId || body.id || urlDriverId;
-            if (submittedDriverId && String(submittedDriverId).trim() !== effectiveDriverId && authUser.role !== 'Admin') {
+            if (submittedDriverId && normId(submittedDriverId) !== normId(effectiveDriverId) && authUser.role !== 'Admin') {
                 return sendJson({ success: false, error: 'غير مصرح: لا يمكنك تعديل أو استعراض موقع كابتن آخر (RLS)' }, 403);
             }
 
@@ -9022,14 +9035,19 @@ async function startServer() {
                 }
             }
 
-            // 5. Driver Existence & Work Mode Verification
+            // 5. Driver Existence & Work Mode Verification (support both drv_ and drv-)
             let driver = (db.memoryState.drivers || []).find(d => 
-                String(d.driverId || d.id) === effectiveDriverId
+                String(d.driverId || d.id) === effectiveDriverId ||
+                normId(d.driverId || d.id) === normId(effectiveDriverId)
             );
 
             if (!driver && db.pool && db.isPostgresConnected) {
                 try {
-                    const pgRes = await db.pool.query('SELECT * FROM drivers WHERE driver_id = $1', [effectiveDriverId]);
+                    const pgRes = await db.pool.query('SELECT * FROM drivers WHERE driver_id = $1 OR driver_id = $2 OR driver_id = $3 LIMIT 1', [
+                        effectiveDriverId,
+                        effectiveDriverId.replace(/-/g, '_'),
+                        effectiveDriverId.replace(/_/g, '-')
+                    ]);
                     if (pgRes.rows && pgRes.rows[0]) {
                         const r = pgRes.rows[0];
                         driver = {
@@ -9041,9 +9059,24 @@ async function startServer() {
                             fixedLat: r.fixed_lat ? parseFloat(r.fixed_lat) : null,
                             fixedLng: r.fixed_lng ? parseFloat(r.fixed_lng) : null,
                             fixedLabel: r.fixed_label || '',
-                            fixedUpdatedAt: r.fixed_updated_at || null
+                            fixedUpdatedAt: r.fixed_updated_at || null,
+                            route_locked: r.route_locked === true
                         };
                         db.memoryState.drivers.push(driver);
+                    }
+                } catch (_) {}
+            }
+
+            if (driver && db.pool && db.isPostgresConnected) {
+                try {
+                    const lkRes = await db.pool.query('SELECT route_locked, full_name FROM drivers WHERE driver_id = $1 OR driver_id = $2 LIMIT 1', [
+                        driver.driverId,
+                        String(driver.driverId).replace(/-/g, '_')
+                    ]);
+                    if (lkRes.rows && lkRes.rows.length > 0) {
+                        driver.route_locked = lkRes.rows[0].route_locked === true;
+                        driver.routeLocked = driver.route_locked;
+                        if (lkRes.rows[0].full_name) driver.fullName = lkRes.rows[0].full_name;
                     }
                 } catch (_) {}
             }

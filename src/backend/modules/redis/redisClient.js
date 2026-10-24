@@ -120,6 +120,38 @@ class RedisManager {
                                         db.saveStateSnapshot();
                                     }
                                 }
+                            } else if (data.type === 'driver_update_sync') {
+                                const db = require('../../db');
+                                if (db && db.memoryState && Array.isArray(db.memoryState.drivers)) {
+                                    const targetDriverId = String(data.driverId || '').trim();
+                                    const normTargetId = targetDriverId.replace(/[-_]/g, '');
+                                    for (const d of db.memoryState.drivers) {
+                                        const dId = String(d.driverId || d.id || '').trim();
+                                        if (dId === targetDriverId || dId.replace(/[-_]/g, '') === normTargetId) {
+                                            if (data.fullName !== undefined) d.fullName = data.fullName;
+                                            if (data.phoneNumber !== undefined) d.phoneNumber = data.phoneNumber;
+                                            if (data.route !== undefined) d.route = data.route;
+                                            if (data.routeName !== undefined) d.routeName = data.routeName;
+                                            if (data.fixed_lat !== undefined) d.fixedLat = data.fixed_lat;
+                                            if (data.fixed_lng !== undefined) d.fixedLng = data.fixed_lng;
+                                            if (data.fixed_label !== undefined) d.fixedLabel = data.fixed_label;
+                                            if (data.fixed_dest_lat !== undefined) d.fixedDestLat = data.fixed_dest_lat;
+                                            if (data.fixed_dest_lng !== undefined) d.fixedDestLng = data.fixed_dest_lng;
+                                            if (data.fixed_dest_label !== undefined) d.fixedDestLabel = data.fixed_dest_label;
+                                            if (data.route_locked !== undefined) {
+                                                d.route_locked = data.route_locked;
+                                                d.routeLocked = data.route_locked;
+                                            }
+                                            if (data.work_mode !== undefined) {
+                                                d.work_mode = data.work_mode;
+                                                d.workMode = data.work_mode;
+                                            }
+                                        }
+                                    }
+                                    if (typeof db.saveStateSnapshot === 'function') {
+                                        db.saveStateSnapshot();
+                                    }
+                                }
                             }
                         } catch (_) {}
                     }

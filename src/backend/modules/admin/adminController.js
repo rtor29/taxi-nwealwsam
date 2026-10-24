@@ -492,6 +492,34 @@ class AdminController {
             }
         }
 
+        if (redisManager && redisManager.client) {
+            redisManager.client.hset(`driver:${driverId}:meta`, {
+                fullName: String(driver.fullName || ''),
+                phoneNumber: String(driver.phoneNumber || ''),
+                route_name: String(driver.routeName || driver.route || ''),
+                route_locked: String(driver.routeLocked === true)
+            }).catch(() => {});
+        }
+
+        if (redisManager && redisManager.pub) {
+            redisManager.pub.publish('channel:cluster:sync', JSON.stringify({
+                type: 'driver_update_sync',
+                driverId,
+                fullName: driver.fullName,
+                phoneNumber: driver.phoneNumber,
+                route: driver.route,
+                routeName: driver.routeName,
+                fixed_lat: driver.fixedLat,
+                fixed_lng: driver.fixedLng,
+                fixed_label: driver.fixedLabel,
+                fixed_dest_lat: driver.fixedDestLat,
+                fixed_dest_lng: driver.fixedDestLng,
+                fixed_dest_label: driver.fixedDestLabel,
+                route_locked: driver.routeLocked === true,
+                work_mode: driver.work_mode
+            })).catch(() => {});
+        }
+
         invalidateDriversCache();
 
         db.addAuditLog('DriverUpdated', 'Driver', driverId, {
@@ -504,7 +532,47 @@ class AdminController {
     }
 
     async getDriverById(driverId) {
-        const driver = db.memoryState.drivers.find(d => d.driverId === driverId);
+        let driver = db.memoryState.drivers.find(d => d.driverId === driverId || d.id === driverId || String(d.driverId).replace(/[-_]/g, '') === String(driverId).replace(/[-_]/g, ''));
+        if (db.isPostgresConnected && db.pool) {
+            try {
+                const pgRes = await db.pool.query('SELECT * FROM drivers WHERE driver_id = $1 OR driver_id = $2 OR driver_id = $3 LIMIT 1', [driverId, String(driverId).replace(/-/g, '_'), String(driverId).replace(/_/g, '-')]);
+                if (pgRes.rows && pgRes.rows.length > 0) {
+                    const row = pgRes.rows[0];
+                    if (!driver) {
+                        driver = {
+                            driverId: row.driver_id,
+                            fullName: row.full_name,
+                            phoneNumber: row.phone_number,
+                            status: row.status,
+                            isVerified: row.is_verified,
+                            isBlocked: row.is_blocked,
+                            route_locked: row.route_locked === true,
+                            fixedLat: row.fixed_lat ? parseFloat(row.fixed_lat) : null,
+                            fixedLng: row.fixed_lng ? parseFloat(row.fixed_lng) : null,
+                            fixedLabel: row.fixed_label || '',
+                            fixedDestLat: row.fixed_dest_lat ? parseFloat(row.fixed_dest_lat) : null,
+                            fixedDestLng: row.fixed_dest_lng ? parseFloat(row.fixed_dest_lng) : null,
+                            fixedDestLabel: row.fixed_dest_label || '',
+                            routeName: row.route_name || ''
+                        };
+                        db.memoryState.drivers.push(driver);
+                    } else {
+                        driver.fullName = row.full_name || driver.fullName;
+                        driver.phoneNumber = row.phone_number || driver.phoneNumber;
+                        driver.status = row.status || driver.status;
+                        driver.route_locked = row.route_locked === true;
+                        driver.routeLocked = row.route_locked === true;
+                        if (row.fixed_lat) driver.fixedLat = parseFloat(row.fixed_lat);
+                        if (row.fixed_lng) driver.fixedLng = parseFloat(row.fixed_lng);
+                        if (row.fixed_label) driver.fixedLabel = row.fixed_label;
+                        if (row.fixed_dest_lat) driver.fixedDestLat = parseFloat(row.fixed_dest_lat);
+                        if (row.fixed_dest_lng) driver.fixedDestLng = parseFloat(row.fixed_dest_lng);
+                        if (row.fixed_dest_label) driver.fixedDestLabel = row.fixed_dest_label;
+                        if (row.route_name) driver.routeName = row.route_name;
+                    }
+                }
+            } catch (_) {}
+        }
         if (!driver) return { success: false, error: 'السائق غير موجود' };
 
         // Attach documents, vehicle details, and routes
