@@ -789,7 +789,7 @@ class DatabaseManager {
                     route_name = $7::text,
                     route_locked = TRUE,
                     updated_at = NOW()
-                 WHERE driver_id = $8::varchar`,
+                 WHERE driver_id = $8::varchar OR driver_id = REPLACE($8::varchar, '-', '_') OR driver_id = REPLACE($8::varchar, '_', '-')`,
                 [data.lat, data.lng, data.label || '', data.destLat || null, data.destLng || null, data.destLabel || '', data.routeName || '', driverId]
             );
         } catch (e) { console.warn('[Database] persistDriverFixedLocation error:', e.message); }
@@ -808,7 +808,7 @@ class DatabaseManager {
                     route_name = NULL,
                     route_locked = FALSE,
                     updated_at = NOW()
-                 WHERE driver_id = $1`,
+                 WHERE driver_id = $1::varchar OR driver_id = REPLACE($1::varchar, '-', '_') OR driver_id = REPLACE($1::varchar, '_', '-')`,
                 [driverId]
             );
         } catch (e) { console.warn('[Database] removeDriverFixedLocation error:', e.message); }

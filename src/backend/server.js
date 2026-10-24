@@ -2415,7 +2415,9 @@ async function startServer() {
                                     isVerified: row.is_verified,
                                     isBlocked: row.is_blocked,
                                     vehicleMake: row.vehicle_make,
-                                    vehiclePlate: row.vehicle_plate
+                                    vehiclePlate: row.vehicle_plate,
+                                    governorate: row.governorate || 'najaf',
+                                    vehicleType: row.vehicle_type || 'eco'
                                 };
                                 db.memoryState.drivers.unshift(driver);
                             } else {
@@ -2425,6 +2427,8 @@ async function startServer() {
                                 driver.isVerified = row.is_verified;
                                 driver.isBlocked = row.is_blocked;
                                 driver.route_locked = row.route_locked === true;
+                                driver.governorate = row.governorate || driver.governorate || 'najaf';
+                                driver.vehicleType = row.vehicle_type || driver.vehicleType || 'eco';
                             }
                         }
                     } catch (_) {}
@@ -2471,6 +2475,9 @@ async function startServer() {
                         vehicleModel: driver.vehicleModel,
                         vehiclePlate: driver.vehiclePlate,
                         vehicleYear: driver.vehicleYear,
+                        governorate: driver.governorate || 'najaf',
+                        vehicleType: driver.vehicleType || 'eco',
+                        vehicle_type: driver.vehicleType || 'eco',
                         vehicleInfo: `${driver.vehicleMake || 'تويوتا'} (${driver.vehiclePlate || 'النجف'})`
                     }
                 });
@@ -3152,7 +3159,7 @@ async function startServer() {
                             status, is_verified, is_approved, is_blocked,
                             work_mode, rating_average, total_trips, points,
                             fixed_lat, fixed_lng, fixed_label, fixed_updated_at,
-                            vehicle_type, updated_at
+                            governorate, vehicle_type, updated_at
                         FROM drivers
                         WHERE (is_blocked = false OR is_blocked IS NULL)
                           AND (status != 'Rejected' AND status != 'Pending')
@@ -9161,6 +9168,8 @@ async function startServer() {
                 return sendJson({ success: false, error: 'بيانات الكابتن غير موجودة في النظام' }, 404);
             }
 
+            const canonicalDriverId = String(driver.driverId || effectiveDriverId).trim();
+
             // Mode check: Must be commute or both (Arabic or English), or GET, or creating route via routes endpoint
             const rawMode = String(driver.work_mode || driver.workStatus || driver.current_mode || driver.mode || '').toLowerCase().trim();
             const isAllowedMode = (
@@ -9191,7 +9200,7 @@ async function startServer() {
                 let fixedUpdatedAt = driver.fixedUpdatedAt || null;
 
                 // Sync from Redis if available
-                const redisLoc = await redisManager.getDriverFixedLocation(effectiveDriverId);
+                const redisLoc = await redisManager.getDriverFixedLocation(canonicalDriverId);
                 if (redisLoc) {
                     fixedLat = redisLoc.lat;
                     fixedLng = redisLoc.lng;
@@ -9202,7 +9211,7 @@ async function startServer() {
                     if (redisLoc.routeName) routeName = redisLoc.routeName;
                     fixedUpdatedAt = redisLoc.updatedAt;
                 } else if (fixedLat !== null && fixedLng !== null) {
-                    await redisManager.setDriverFixedLocation(effectiveDriverId, {
+                    await redisManager.setDriverFixedLocation(canonicalDriverId, {
                         lat: fixedLat,
                         lng: fixedLng,
                         label: fixedLabel,
@@ -9217,7 +9226,11 @@ async function startServer() {
                 let isLocked = false;
                 if (db.pool && db.isPostgresConnected) {
                     try {
-                        const lkRes = await db.pool.query('SELECT route_locked FROM drivers WHERE driver_id = $1 LIMIT 1', [effectiveDriverId]);
+                        const lkRes = await db.pool.query('SELECT route_locked FROM drivers WHERE driver_id = $1 OR driver_id = $2 OR driver_id = $3 LIMIT 1', [
+                            canonicalDriverId,
+                            canonicalDriverId.replace(/-/g, '_'),
+                            canonicalDriverId.replace(/_/g, '-')
+                        ]);
                         if (lkRes.rows && lkRes.rows[0]) {
                             isLocked = lkRes.rows[0].route_locked === true;
                         }
@@ -9228,7 +9241,7 @@ async function startServer() {
 
                 return sendJson({
                     success: true,
-                    driverId: effectiveDriverId,
+                    driverId: canonicalDriverId,
                     fixed_lat: fixedLat,
                     fixed_lng: fixedLng,
                     fixed_label: fixedLabel || '',
@@ -9246,7 +9259,11 @@ async function startServer() {
             let isRouteLocked = false;
             if (db.pool && db.isPostgresConnected) {
                 try {
-                    const lkRes = await db.pool.query('SELECT route_locked FROM drivers WHERE driver_id = $1 LIMIT 1', [effectiveDriverId]);
+                    const lkRes = await db.pool.query('SELECT route_locked FROM drivers WHERE driver_id = $1 OR driver_id = $2 OR driver_id = $3 LIMIT 1', [
+                        canonicalDriverId,
+                        canonicalDriverId.replace(/-/g, '_'),
+                        canonicalDriverId.replace(/_/g, '-')
+                    ]);
                     if (lkRes.rows && lkRes.rows[0]) {
                         isRouteLocked = lkRes.rows[0].route_locked === true;
                     }
@@ -9278,20 +9295,20 @@ async function startServer() {
                 driver.permanentDropoffName = null;
                 db.saveStateSnapshot();
 
-                await db.removeDriverFixedLocation(effectiveDriverId);
-                await redisManager.removeDriverFixedLocation(effectiveDriverId);
+                await db.removeDriverFixedLocation(canonicalDriverId);
+                await redisManager.removeDriverFixedLocation(canonicalDriverId);
                 if (redisManager && redisManager.client) {
-                    redisManager.client.del(`route:geometry:${effectiveDriverId}`).catch(() => {});
+                    redisManager.client.del(`route:geometry:${canonicalDriverId}`).catch(() => {});
                 }
-                db.pool.query('UPDATE drivers SET fixed_route_geometry = NULL WHERE driver_id = $1', [effectiveDriverId]).catch(() => {});
+                db.pool.query('UPDATE drivers SET fixed_route_geometry = NULL WHERE driver_id = $1', [canonicalDriverId]).catch(() => {});
 
                 try {
                     const auditService = require('./modules/audit/auditService');
                     await auditService.logEvent({
                         action: 'DRIVER_FIXED_LOCATION_REMOVED',
                         entityType: 'Driver',
-                        entityId: effectiveDriverId,
-                        actor: `كابتن (${driver.fullName || effectiveDriverId})`,
+                        entityId: canonicalDriverId,
+                        actor: `كابتن (${driver.fullName || canonicalDriverId})`,
                         details: { removed: true, timestamp: nowIso },
                         ip: clientIp
                     });
@@ -9299,7 +9316,7 @@ async function startServer() {
 
                 const respPayload = {
                     success: true,
-                    driverId: effectiveDriverId,
+                    driverId: canonicalDriverId,
                     fixed_lat: null,
                     fixed_lng: null,
                     fixed_label: null,
@@ -9397,7 +9414,7 @@ async function startServer() {
             driver.routeLocked = true;
             db.saveStateSnapshot();
 
-            await db.persistDriverFixedLocation(effectiveDriverId, {
+            await db.persistDriverFixedLocation(canonicalDriverId, {
                 lat: parsedLat,
                 lng: parsedLng,
                 label: cleanLabel,
@@ -9406,7 +9423,7 @@ async function startServer() {
                 destLabel: cleanDestLabel,
                 routeName: cleanRouteName
             });
-            await redisManager.setDriverFixedLocation(effectiveDriverId, {
+            await redisManager.setDriverFixedLocation(canonicalDriverId, {
                 lat: parsedLat,
                 lng: parsedLng,
                 label: cleanLabel,
@@ -9421,26 +9438,26 @@ async function startServer() {
             if (body.geoJsonPolyline) {
                 driver.fixedRouteGeometry = body.geoJsonPolyline;
                 if (redisManager && redisManager.client) {
-                    redisManager.client.set(`route:geometry:${effectiveDriverId}`, JSON.stringify(body.geoJsonPolyline), 'EX', 86400 * 7).catch(() => {});
-                    redisManager.client.del(`route:places:${effectiveDriverId}`).catch(() => {});
+                    redisManager.client.set(`route:geometry:${canonicalDriverId}`, JSON.stringify(body.geoJsonPolyline), 'EX', 86400 * 7).catch(() => {});
+                    redisManager.client.del(`route:places:${canonicalDriverId}`).catch(() => {});
                 }
                 if (db.isPostgresConnected && db.pool) {
-                    db.pool.query('UPDATE drivers SET fixed_route_geometry = $1 WHERE driver_id = $2', [JSON.stringify(body.geoJsonPolyline), effectiveDriverId]).catch(() => {});
+                    db.pool.query('UPDATE drivers SET fixed_route_geometry = $1, route_locked = TRUE WHERE driver_id = $2 OR driver_id = $3', [JSON.stringify(body.geoJsonPolyline), canonicalDriverId, canonicalDriverId.replace(/-/g, '_')]).catch(() => {});
                 }
             } else {
                 if (redisManager && redisManager.client) {
-                    redisManager.client.del(`route:geometry:${effectiveDriverId}`).catch(() => {});
-                    redisManager.client.del(`route:places:${effectiveDriverId}`).catch(() => {});
+                    redisManager.client.del(`route:geometry:${canonicalDriverId}`).catch(() => {});
+                    redisManager.client.del(`route:places:${canonicalDriverId}`).catch(() => {});
                 }
                 if (db.isPostgresConnected && db.pool) {
-                    db.pool.query('UPDATE drivers SET fixed_route_geometry = NULL WHERE driver_id = $1', [effectiveDriverId]).catch(() => {});
+                    db.pool.query('UPDATE drivers SET fixed_route_geometry = NULL, route_locked = TRUE WHERE driver_id = $1 OR driver_id = $2', [canonicalDriverId, canonicalDriverId.replace(/-/g, '_')]).catch(() => {});
                 }
             }
 
             // Sync to PostgreSQL routes table for passenger matching
             if (db.isPostgresConnected && db.pool) {
                 try {
-                    const routeId = `route-${effectiveDriverId}`;
+                    const routeId = `route-${canonicalDriverId}`;
                     const fareVal = parseFloat(body.pricePerSeat || body.price || body.fare) || 3000;
                     const depTime = body.departureTime || '07:30 ص';
                     const availSeats = parseInt(body.availableSeats || body.seats, 10) || 4;
@@ -9459,7 +9476,7 @@ async function startServer() {
                             total_seats = EXCLUDED.total_seats,
                             departure_time = EXCLUDED.departure_time,
                             status = 'Active'
-                    `, [routeId, effectiveDriverId, driver.fullName || 'كابتن توصيله', driver.phoneNumber || '', cleanLabel, cleanDestLabel || cleanLabel, parsedLat, parsedLng, parsedDestLat || parsedLat, parsedDestLng || parsedLng, fareVal, availSeats, depTime]);
+                    `, [routeId, canonicalDriverId, driver.fullName || 'كابتن توصيله', driver.phoneNumber || '', cleanLabel, cleanDestLabel || cleanLabel, parsedLat, parsedLng, parsedDestLat || parsedLat, parsedDestLng || parsedLng, fareVal, availSeats, depTime]);
                 } catch (e) {
                     console.error('[Routes] Error syncing to routes table:', e.message);
                 }
@@ -9470,8 +9487,8 @@ async function startServer() {
                 await auditService.logEvent({
                     action: 'DRIVER_FIXED_LOCATION_UPDATED',
                     entityType: 'Driver',
-                    entityId: effectiveDriverId,
-                    actor: `كابتن (${driver.fullName || effectiveDriverId})`,
+                    entityId: canonicalDriverId,
+                    actor: `كابتن (${driver.fullName || canonicalDriverId})`,
                     details: {
                         lat: parsedLat,
                         lng: parsedLng,
@@ -9488,7 +9505,7 @@ async function startServer() {
 
             const respPayload = {
                 success: true,
-                driverId: effectiveDriverId,
+                driverId: canonicalDriverId,
                 fixed_lat: parsedLat,
                 fixed_lng: parsedLng,
                 fixed_label: cleanLabel,

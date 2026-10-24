@@ -4584,6 +4584,87 @@ async function submitEditDriver(event) {
     }
 }
 
+// Driver Edit Modal Instant Place Search (Start & Destination Autocomplete)
+let driverModalSearchDebounce = null;
+
+async function onDriverModalPlaceSearch(type, val) {
+    const q = (val || '').trim();
+    const boxId = type === 'start' ? 'edit-drv-start-suggestions' : 'edit-drv-dest-suggestions';
+    const box = document.getElementById(boxId);
+    if (!box) return;
+
+    if (!q || q.length < 1) {
+        box.innerHTML = '';
+        box.classList.add('hidden');
+        return;
+    }
+
+    clearTimeout(driverModalSearchDebounce);
+    driverModalSearchDebounce = setTimeout(async () => {
+        try {
+            const res = await fetch(`${API_BASE}/places/search?q=${encodeURIComponent(q)}&proximity=44.325,31.995`);
+            if (res.ok) {
+                const data = await res.json();
+                const places = (data && data.places) ? data.places : [];
+                if (places.length === 0) {
+                    box.innerHTML = '<div class="p-2.5 text-[11px] text-slate-400 text-center">لا توجد نتائج مطابقة</div>';
+                    box.classList.remove('hidden');
+                    return;
+                }
+                box.innerHTML = places.slice(0, 7).map(p => `
+                    <div onclick="selectDriverModalPlace('${type}', '${(p.name || '').replace(/'/g, "\\'")}', ${p.lat}, ${p.lng})"
+                         class="p-2 hover:bg-amber-500/15 cursor-pointer flex items-center justify-between transition text-xs border-b border-white/5 last:border-0">
+                        <div class="flex items-center gap-1.5 truncate">
+                            <span class="text-amber-400 text-xs">📍</span>
+                            <div class="truncate">
+                                <div class="font-bold text-white text-[11.5px] truncate">${p.name || ''}</div>
+                                <div class="text-[9.5px] text-slate-400 truncate">${p.address || ''}</div>
+                            </div>
+                        </div>
+                        <span class="text-[9px] bg-amber-500/20 text-amber-300 font-bold px-1.5 py-0.5 rounded shrink-0">اختيار</span>
+                    </div>
+                `).join('');
+                box.classList.remove('hidden');
+            }
+        } catch (_) {}
+    }, 250);
+}
+
+function selectDriverModalPlace(type, name, lat, lng) {
+    const boxId = type === 'start' ? 'edit-drv-start-suggestions' : 'edit-drv-dest-suggestions';
+    const box = document.getElementById(boxId);
+    if (box) {
+        box.innerHTML = '';
+        box.classList.add('hidden');
+    }
+
+    if (type === 'start') {
+        const lbl = document.getElementById('edit-drv-start-label');
+        const latEl = document.getElementById('edit-drv-start-lat');
+        const lngEl = document.getElementById('edit-drv-start-lng');
+        if (lbl) lbl.value = name;
+        if (latEl) latEl.value = lat;
+        if (lngEl) lngEl.value = lng;
+    } else {
+        const lbl = document.getElementById('edit-drv-dest-label');
+        const latEl = document.getElementById('edit-drv-dest-lat');
+        const lngEl = document.getElementById('edit-drv-dest-lng');
+        if (lbl) lbl.value = name;
+        if (latEl) latEl.value = lat;
+        if (lngEl) lngEl.value = lng;
+    }
+
+    // Auto-update route name if both or either has value
+    const startName = document.getElementById('edit-drv-start-label')?.value?.trim();
+    const destName = document.getElementById('edit-drv-dest-label')?.value?.trim();
+    const routeInput = document.getElementById('edit-drv-route');
+    if (routeInput && startName && destName) {
+        routeInput.value = `${startName} ➔ ${destName}`;
+    } else if (routeInput && (startName || destName) && !routeInput.value) {
+        routeInput.value = startName ? `${startName} ➔ المركز` : `المركز ➔ ${destName}`;
+    }
+}
+
 // Fleet Map Instant Search (Najaf Only - From 1st Character)
 let fleetMapSearchDebounce = null;
 let fleetMapSearchMarker = null;
@@ -4620,25 +4701,25 @@ async function searchFleetMapPlace(val) {
     clearTimeout(fleetMapSearchDebounce);
     fleetMapSearchDebounce = setTimeout(async () => {
         try {
-            const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json?country=iq&proximity=44.345,32.015&bbox=44.05,31.75,44.65,32.35&language=ar&access_token=${MAPBOX_PUBLIC_TOKEN}`;
-            const res = await fetch(geocodeUrl);
+            const res = await fetch(`${API_BASE}/places/search?q=${encodeURIComponent(q)}&proximity=44.325,31.995`);
             if (res.ok) {
                 const geoData = await res.json();
-                const mbFeatures = geoData.features || [];
+                const mbFeatures = geoData.places || [];
                 const combined = [...localMatches];
                 const seen = new Set(localMatches.map(m => m.name.toLowerCase()));
 
                 mbFeatures.forEach(feat => {
-                    const featName = (feat.place_name_ar || feat.place_name || feat.text || '').trim();
-                    const center = feat.center;
-                    if (isStrictlyNajafLocation(featName, center) && !seen.has(featName.toLowerCase())) {
+                    const featName = (feat.name || feat.address || '').trim();
+                    const lat = feat.lat;
+                    const lon = feat.lng;
+                    if (!seen.has(featName.toLowerCase())) {
                         seen.add(featName.toLowerCase());
                         combined.push({
                             name: featName,
-                            category: 'موقع في النجف الأشرف',
+                            category: feat.address || 'موقع في النجف الأشرف',
                             icon: '📍',
-                            lat: center[1],
-                            lon: center[0]
+                            lat: lat,
+                            lon: lon
                         });
                     }
                 });
@@ -4679,8 +4760,9 @@ function selectFleetMapPlace(lat, lon, name) {
     if (box) box.classList.add('hidden');
     if (input) input.value = name;
 
-    if (fleetMapInstance) {
-        fleetMapInstance.flyTo({ center: [lon, lat], zoom: 15, essential: true });
+    const map = (typeof fleetMap !== 'undefined' && fleetMap) ? fleetMap : (typeof fleetMapInstance !== 'undefined' ? fleetMapInstance : null);
+    if (map) {
+        map.flyTo({ center: [lon, lat], zoom: 15, essential: true });
 
         if (fleetMapSearchMarker) fleetMapSearchMarker.remove();
 
@@ -4691,7 +4773,7 @@ function selectFleetMapPlace(lat, lon, name) {
         fleetMapSearchMarker = new mapboxgl.Marker(el)
             .setLngLat([lon, lat])
             .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`<div class="font-bold p-1 text-slate-900">${name}</div>`))
-            .addTo(fleetMapInstance);
+            .addTo(map);
         fleetMapSearchMarker.togglePopup();
     }
 }
@@ -4707,6 +4789,8 @@ function clearFleetMapSearch() {
 }
 
 // Window Global Exports
+window.onDriverModalPlaceSearch = onDriverModalPlaceSearch;
+window.selectDriverModalPlace = selectDriverModalPlace;
 window.checkAdminAuth = checkAdminAuth;
 window.handleAdminLogin = handleAdminLogin;
 window.logoutAdmin = logoutAdmin;

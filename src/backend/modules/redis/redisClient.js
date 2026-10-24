@@ -142,6 +142,11 @@ class RedisManager {
                                                 d.route_locked = data.route_locked;
                                                 d.routeLocked = data.route_locked;
                                             }
+                                            if (data.governorate !== undefined) d.governorate = data.governorate;
+                                            if (data.vehicleType !== undefined) {
+                                                d.vehicleType = data.vehicleType;
+                                                d.vehicle_type = data.vehicleType;
+                                            }
                                             if (data.work_mode !== undefined) {
                                                 d.work_mode = data.work_mode;
                                                 d.workMode = data.work_mode;

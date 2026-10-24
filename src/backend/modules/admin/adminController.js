@@ -61,6 +61,7 @@ function toLeanDriver(d) {
         fixed_dest_lng: d.fixedDestLng,
         fixed_dest_label: d.fixedDestLabel,
         route_locked: Boolean(d.routeLocked === true || d.route_locked === true),
+        governorate: d.governorate || 'najaf',
         password: d.plainPassword || (d.passwordHash ? '••••••••' : '123456'),
         createdAt: d.createdAt || d.registeredAt || new Date().toISOString(),
         telegramChatId: d.telegramChatId || d.telegram_chat_id || '',
@@ -213,6 +214,8 @@ class AdminController {
                         status: row.status,
                         isVerified: row.is_verified,
                         isBlocked: row.is_blocked,
+                        governorate: row.governorate || 'najaf',
+                        vehicleType: row.vehicle_type || 'eco',
                         telegramChatId: row.telegram_chat_id ? String(row.telegram_chat_id) : null
                     };
                     db.memoryState.drivers.unshift(driver);
@@ -362,9 +365,9 @@ class AdminController {
                     UPDATE drivers 
                     SET full_name = $1, phone_number = $2, password_hash = COALESCE($3, password_hash), plain_password = COALESCE($4, plain_password),
                         latitude = COALESCE($5, latitude), longitude = COALESCE($6, longitude),
-                        vehicle_type = COALESCE($7, vehicle_type), updated_at = NOW()
-                    WHERE driver_id = $8
-                `, [driver.fullName, driver.phoneNumber, driver.passwordHash || null, driver.plainPassword || null, driver.permanentLat || null, driver.permanentLon || null, driver.vehicleType || 'eco', driverId]);
+                        vehicle_type = COALESCE($7, vehicle_type), governorate = COALESCE($8, governorate), updated_at = NOW()
+                    WHERE driver_id = $9
+                `, [driver.fullName, driver.phoneNumber, driver.passwordHash || null, driver.plainPassword || null, driver.permanentLat || null, driver.permanentLon || null, driver.vehicleType || 'eco', driver.governorate || 'najaf', driverId]);
 
                 await db.pool.query(`
                     UPDATE users 
@@ -501,7 +504,10 @@ class AdminController {
                 fullName: String(driver.fullName || ''),
                 phoneNumber: String(driver.phoneNumber || ''),
                 route_name: String(driver.routeName || driver.route || ''),
-                route_locked: String(driver.routeLocked === true)
+                route_locked: String(driver.routeLocked === true),
+                governorate: String(driver.governorate || 'najaf'),
+                vehicleType: String(driver.vehicleType || 'eco'),
+                tier: String(driver.vehicleType || 'eco')
             }).catch(() => {});
         }
 
@@ -513,6 +519,8 @@ class AdminController {
                 phoneNumber: driver.phoneNumber,
                 route: driver.route,
                 routeName: driver.routeName,
+                governorate: driver.governorate || 'najaf',
+                vehicleType: driver.vehicleType || 'eco',
                 fixed_lat: driver.fixedLat,
                 fixed_lng: driver.fixedLng,
                 fixed_label: driver.fixedLabel,
@@ -557,7 +565,9 @@ class AdminController {
                             fixedDestLat: row.fixed_dest_lat ? parseFloat(row.fixed_dest_lat) : null,
                             fixedDestLng: row.fixed_dest_lng ? parseFloat(row.fixed_dest_lng) : null,
                             fixedDestLabel: row.fixed_dest_label || '',
-                            routeName: row.route_name || ''
+                            routeName: row.route_name || '',
+                            governorate: row.governorate || 'najaf',
+                            vehicleType: row.vehicle_type || 'eco'
                         };
                         db.memoryState.drivers.push(driver);
                     } else {
@@ -566,6 +576,8 @@ class AdminController {
                         driver.status = row.status || driver.status;
                         driver.route_locked = row.route_locked === true;
                         driver.routeLocked = row.route_locked === true;
+                        driver.governorate = row.governorate || driver.governorate || 'najaf';
+                        driver.vehicleType = row.vehicle_type || driver.vehicleType || 'eco';
                         if (row.fixed_lat) driver.fixedLat = parseFloat(row.fixed_lat);
                         if (row.fixed_lng) driver.fixedLng = parseFloat(row.fixed_lng);
                         if (row.fixed_label) driver.fixedLabel = row.fixed_label;
