@@ -552,6 +552,8 @@ class DatabaseManager {
                     fixedDestLabel: r.fixed_dest_label || r.permanent_dropoff_name || '',
                     routeName: r.route_name || '',
                     fixedUpdatedAt: r.fixed_updated_at || null,
+                    routeLocked: Boolean(r.route_locked || (r.fixed_lat && r.fixed_dest_lat)),
+                    route_locked: Boolean(r.route_locked || (r.fixed_lat && r.fixed_dest_lat)),
                     telegramChatId: r.telegram_chat_id ? String(r.telegram_chat_id) : null,
                     createdAt: r.created_at
                 }));
@@ -785,6 +787,7 @@ class DatabaseManager {
                     fixed_dest_lat = $4::double precision, fixed_dest_lng = $5::double precision, fixed_dest_label = $6::text,
                     permanent_dropoff_lat = $4::double precision, permanent_dropoff_lon = $5::double precision, permanent_dropoff_name = $6::text,
                     route_name = $7::text,
+                    route_locked = TRUE,
                     updated_at = NOW()
                  WHERE driver_id = $8::varchar`,
                 [data.lat, data.lng, data.label || '', data.destLat || null, data.destLng || null, data.destLabel || '', data.routeName || '', driverId]
@@ -803,6 +806,7 @@ class DatabaseManager {
                     fixed_dest_lat = NULL, fixed_dest_lng = NULL, fixed_dest_label = NULL,
                     permanent_dropoff_lat = NULL, permanent_dropoff_lon = NULL, permanent_dropoff_name = NULL,
                     route_name = NULL,
+                    route_locked = FALSE,
                     updated_at = NOW()
                  WHERE driver_id = $1`,
                 [driverId]

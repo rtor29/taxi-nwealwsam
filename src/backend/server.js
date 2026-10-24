@@ -9094,6 +9094,16 @@ async function startServer() {
                     });
                 }
 
+                let isLocked = Boolean(driver.route_locked || driver.routeLocked || (fixedLat && fixedDestLat));
+                if (db.pool && db.isPostgresConnected) {
+                    try {
+                        const lkRes = await db.pool.query('SELECT route_locked, fixed_lat, fixed_dest_lat FROM drivers WHERE driver_id = $1 LIMIT 1', [effectiveDriverId]);
+                        if (lkRes.rows && lkRes.rows[0]) {
+                            isLocked = Boolean(lkRes.rows[0].route_locked || (lkRes.rows[0].fixed_lat && lkRes.rows[0].fixed_dest_lat));
+                        }
+                    } catch (_) {}
+                }
+
                 return sendJson({
                     success: true,
                     driverId: effectiveDriverId,
@@ -9104,14 +9114,29 @@ async function startServer() {
                     fixed_dest_lng: fixedDestLng,
                     fixed_dest_label: fixedDestLabel || '',
                     route_name: routeName || '',
+                    route_locked: isLocked,
                     fixed_updated_at: fixedUpdatedAt,
                     work_mode: driver.work_mode || driver.workStatus || 'commute'
                 });
             }
 
+            // Batch 6-B: Check if route is already locked for driver
+            let isRouteLocked = Boolean(driver.route_locked || driver.routeLocked || (driver.fixedLat && driver.fixedDestLat));
+            if (db.pool && db.isPostgresConnected) {
+                try {
+                    const lkRes = await db.pool.query('SELECT route_locked, fixed_lat, fixed_dest_lat FROM drivers WHERE driver_id = $1 LIMIT 1', [effectiveDriverId]);
+                    if (lkRes.rows && lkRes.rows[0]) {
+                        isRouteLocked = Boolean(lkRes.rows[0].route_locked || (lkRes.rows[0].fixed_lat && lkRes.rows[0].fixed_dest_lat));
+                    }
+                } catch (_) {}
+            }
+
             // ---[ Branch B: DELETE or POST Remove ]---
             const isRemoval = method === 'DELETE' || pathname.endsWith('/remove') || body.remove === true || body.action === 'remove';
             if (isRemoval) {
+                if (authUser.role !== 'Admin' && isRouteLocked) {
+                    return sendJson({ success: false, error: 'لا يمكنك تعديل مسارك، راجع الإدارة' }, 403);
+                }
                 const nowIso = new Date().toISOString();
                 driver.fixedLat = null;
                 driver.fixedLng = null;
@@ -9172,6 +9197,10 @@ async function startServer() {
             }
 
             // ---[ Branch C: POST Set / Update Fixed Location ]---
+            if (authUser.role !== 'Admin' && isRouteLocked) {
+                return sendJson({ success: false, error: 'لا يمكنك تعديل مسارك، راجع الإدارة' }, 403);
+            }
+
             const rawLat = body.lat !== undefined ? body.lat : body.latitude;
             const rawLng = body.lng !== undefined ? body.lng : (body.lon !== undefined ? body.lon : body.longitude);
             const rawLabel = body.label !== undefined ? body.label : (body.name !== undefined ? body.name : body.locationName);
@@ -9239,6 +9268,8 @@ async function startServer() {
                 driver.work_mode = 'both';
                 driver.workStatus = 'both';
             }
+            driver.route_locked = true;
+            driver.routeLocked = true;
             db.saveStateSnapshot();
 
             await db.persistDriverFixedLocation(effectiveDriverId, {
@@ -9296,6 +9327,7 @@ async function startServer() {
                 fixed_dest_lng: parsedDestLng,
                 fixed_dest_label: cleanDestLabel,
                 route_name: cleanRouteName,
+                route_locked: true,
                 fixed_updated_at: nowIso,
                 work_mode: driver.work_mode || driver.workStatus || 'commute'
             };

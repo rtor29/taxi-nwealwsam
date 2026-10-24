@@ -4412,6 +4412,61 @@ async function submitEditCustomer(event) {
 }
 
 // Driver Editing
+function updateRouteLockBadge(isLocked) {
+    const badge = document.getElementById('edit-drv-lock-badge');
+    if (badge) {
+        if (isLocked) {
+            badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-900/40 text-rose-300 border border-rose-500/40';
+            badge.textContent = 'مقفول 🔒';
+        } else {
+            badge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-900/40 text-emerald-300 border border-emerald-500/40';
+            badge.textContent = 'متاح للتعديل 🔓';
+        }
+    }
+}
+
+function toggleEditDriverLock() {
+    const lockedInput = document.getElementById('edit-drv-route-locked');
+    if (!lockedInput) return;
+    const isCurrentlyLocked = lockedInput.value === 'true';
+    const newLockState = !isCurrentlyLocked;
+    lockedInput.value = newLockState ? 'true' : 'false';
+    updateRouteLockBadge(newLockState);
+}
+
+async function clearDriverRouteFromAdmin() {
+    if (!confirm('هل أنت متأكد من مسح مسار الكابتن بالكامل؟ سيعود السائق ليتمكن من إدخاله من جديد.')) return;
+    const driverId = document.getElementById('edit-drv-id')?.value;
+    if (!driverId) return;
+
+    try {
+        const res = await fetch(`${API_BASE}/drivers/${driverId}/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({ clearRoute: true })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('تم مسح مسار الكابتن بنجاح! يمكنه الآن تحديد مساره من جديد ✅');
+            if (document.getElementById('edit-drv-route')) document.getElementById('edit-drv-route').value = '';
+            if (document.getElementById('edit-drv-start-label')) document.getElementById('edit-drv-start-label').value = '';
+            if (document.getElementById('edit-drv-start-lat')) document.getElementById('edit-drv-start-lat').value = '';
+            if (document.getElementById('edit-drv-start-lng')) document.getElementById('edit-drv-start-lng').value = '';
+            if (document.getElementById('edit-drv-dest-label')) document.getElementById('edit-drv-dest-label').value = '';
+            if (document.getElementById('edit-drv-dest-lat')) document.getElementById('edit-drv-dest-lat').value = '';
+            if (document.getElementById('edit-drv-dest-lng')) document.getElementById('edit-drv-dest-lng').value = '';
+            const lockedInput = document.getElementById('edit-drv-route-locked');
+            if (lockedInput) lockedInput.value = 'false';
+            updateRouteLockBadge(false);
+            loadDrivers();
+        } else {
+            alert(data.error || 'تعذر مسح المسار');
+        }
+    } catch (_) {
+        alert('حدث خطأ في الاتصال');
+    }
+}
+
 function openEditDriverModal(driverId) {
     const driver = (window.driversMap && window.driversMap[driverId]) || {};
     const elId = document.getElementById('edit-drv-id');
@@ -4421,11 +4476,31 @@ function openEditDriverModal(driverId) {
     const elPhone = document.getElementById('edit-drv-phone');
     if (elPhone) elPhone.value = driver.phoneNumber || '';
     const elRoute = document.getElementById('edit-drv-route');
-    if (elRoute) elRoute.value = driver.route || '';
+    if (elRoute) elRoute.value = driver.routeName || driver.route_name || driver.route || '';
     const elPass = document.getElementById('edit-drv-password');
     if (elPass) elPass.value = '';
     const tgInput = document.getElementById('edit-drv-telegram-id');
     if (tgInput) tgInput.value = driver.telegramChatId || driver.telegram_chat_id || '';
+
+    // Route coordinates and locked state (Batch 6-B Part 3)
+    const startLabelEl = document.getElementById('edit-drv-start-label');
+    if (startLabelEl) startLabelEl.value = driver.fixed_label || driver.fixedLabel || '';
+    const startLatEl = document.getElementById('edit-drv-start-lat');
+    if (startLatEl) startLatEl.value = (driver.fixed_lat ?? driver.fixedLat) ?? '';
+    const startLngEl = document.getElementById('edit-drv-start-lng');
+    if (startLngEl) startLngEl.value = (driver.fixed_lng ?? driver.fixedLng) ?? '';
+
+    const destLabelEl = document.getElementById('edit-drv-dest-label');
+    if (destLabelEl) destLabelEl.value = driver.fixed_dest_label || driver.fixedDestLabel || '';
+    const destLatEl = document.getElementById('edit-drv-dest-lat');
+    if (destLatEl) destLatEl.value = (driver.fixed_dest_lat ?? driver.fixedDestLat) ?? '';
+    const destLngEl = document.getElementById('edit-drv-dest-lng');
+    if (destLngEl) destLngEl.value = (driver.fixed_dest_lng ?? driver.fixedDestLng) ?? '';
+
+    const isLocked = Boolean(driver.route_locked || driver.routeLocked || (driver.fixed_lat && driver.fixed_dest_lat) || (driver.fixedLat && driver.fixedDestLat));
+    const lockedInput = document.getElementById('edit-drv-route-locked');
+    if (lockedInput) lockedInput.value = isLocked ? 'true' : 'false';
+    updateRouteLockBadge(isLocked);
 
     const vehicleTypeEl = document.getElementById('edit-drv-vehicle-type');
     const curVT = String(driver.vehicleType || '').toLowerCase();
@@ -4467,21 +4542,37 @@ async function submitEditDriver(event) {
     const governorate = document.getElementById('edit-drv-gov')?.value || 'najaf';
     const vehicleType = document.getElementById('edit-drv-vehicle-type')?.value || 'eco';
 
+    const fixed_label = document.getElementById('edit-drv-start-label')?.value?.trim();
+    const fixed_lat = document.getElementById('edit-drv-start-lat')?.value?.trim();
+    const fixed_lng = document.getElementById('edit-drv-start-lng')?.value?.trim();
+    const fixed_dest_label = document.getElementById('edit-drv-dest-label')?.value?.trim();
+    const fixed_dest_lat = document.getElementById('edit-drv-dest-lat')?.value?.trim();
+    const fixed_dest_lng = document.getElementById('edit-drv-dest-lng')?.value?.trim();
+    const route_locked = document.getElementById('edit-drv-route-locked')?.value === 'true';
+
     try {
         const payload = {
             fullName, phoneNumber, route, governorate, vehicleType,
-            telegramChatId
+            telegramChatId,
+            fixed_label,
+            fixed_lat: fixed_lat ? parseFloat(fixed_lat) : null,
+            fixed_lng: fixed_lng ? parseFloat(fixed_lng) : null,
+            fixed_dest_label,
+            fixed_dest_lat: fixed_dest_lat ? parseFloat(fixed_dest_lat) : null,
+            fixed_dest_lng: fixed_dest_lng ? parseFloat(fixed_dest_lng) : null,
+            route_name: route,
+            route_locked
         };
         if (password) payload.password = password;
 
         const res = await fetch(`${API_BASE}/drivers/${driverId}/update`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
             body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (res.ok && data.success) {
-            showToast('تم تحديث بيانات ومحافظة ومسار الكابتن بنجاح! ✅');
+            showToast('تم تحديث بيانات ومسار الكابتن وقفل المسار بنجاح! ✅');
             closeEditDriverModal();
             loadDrivers();
             if (typeof refreshRoutesAndBookingsOnMap === 'function') refreshRoutesAndBookingsOnMap();

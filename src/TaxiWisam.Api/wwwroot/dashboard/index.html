@@ -3190,9 +3190,61 @@
                     <label class="block text-xs font-bold text-slate-300 mb-1">رقم الهاتف</label>
                     <input type="tel" id="edit-drv-phone" required class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-amber-500 text-left text-white" dir="ltr">
                 </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-300 mb-1">المسار (خط السير المعتمد)</label>
-                    <input type="text" id="edit-drv-route" required class="w-full px-3.5 py-2.5 bg-[#161C28] border border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 text-white">
+                <!-- قسم إدارة مسار الخط الدائم للكابتن (Batch 6-B) -->
+                <div class="p-3.5 bg-slate-900/80 rounded-2xl border border-amber-500/30 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-black text-amber-400 flex items-center gap-1.5">
+                            <i class="fa-solid fa-route"></i>
+                            <span>مسار الخط الدائم (الانطلاق والوجهة)</span>
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <span id="edit-drv-lock-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-white/10">مقفول 🔒</span>
+                            <button type="button" onclick="toggleEditDriverLock()" id="btn-toggle-route-lock" class="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition cursor-pointer">
+                                تبديل القفل
+                            </button>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="edit-drv-route-locked" value="false">
+
+                    <!-- اسم الخط -->
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-300 mb-1">اسم الخط (أو السير المعتمد)</label>
+                        <input type="text" id="edit-drv-route" class="w-full px-3 py-2 bg-[#161C28] border border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-amber-500 text-white" placeholder="مثال: المنصور ➔ الكاظمية">
+                    </div>
+
+                    <!-- نقطة الانطلاق (من) -->
+                    <div class="space-y-1.5 p-2.5 bg-slate-950/60 rounded-xl border border-white/5">
+                        <label class="block text-[11px] font-black text-emerald-400 flex items-center gap-1">
+                            <span>🟢 نقطة الانطلاق (من)</span>
+                        </label>
+                        <input type="text" id="edit-drv-start-label" placeholder="اسم نقطة الانطلاق (مثال: حي الجامعة)" class="w-full px-3 py-1.5 bg-[#161C28] border border-slate-700 rounded-lg text-xs text-white">
+                        <div class="grid grid-cols-2 gap-2 pt-1">
+                            <input type="number" step="any" id="edit-drv-start-lat" placeholder="خط العرض (Lat)" class="px-2.5 py-1.5 bg-[#161C28] border border-slate-700 rounded-lg text-xs font-mono text-white" dir="ltr">
+                            <input type="number" step="any" id="edit-drv-start-lng" placeholder="خط الطول (Lng)" class="px-2.5 py-1.5 bg-[#161C28] border border-slate-700 rounded-lg text-xs font-mono text-white" dir="ltr">
+                        </div>
+                    </div>
+
+                    <!-- وجهة الوصول (إلى) -->
+                    <div class="space-y-1.5 p-2.5 bg-slate-950/60 rounded-xl border border-white/5">
+                        <label class="block text-[11px] font-black text-amber-400 flex items-center gap-1">
+                            <span>🏁 وجهة الوصول (إلى)</span>
+                        </label>
+                        <input type="text" id="edit-drv-dest-label" placeholder="اسم الوجهة (مثال: جامعة الكوفة)" class="w-full px-3 py-1.5 bg-[#161C28] border border-slate-700 rounded-lg text-xs text-white">
+                        <div class="grid grid-cols-2 gap-2 pt-1">
+                            <input type="number" step="any" id="edit-drv-dest-lat" placeholder="خط العرض (Lat)" class="px-2.5 py-1.5 bg-[#161C28] border border-slate-700 rounded-lg text-xs font-mono text-white" dir="ltr">
+                            <input type="number" step="any" id="edit-drv-dest-lng" placeholder="خط الطول (Lng)" class="px-2.5 py-1.5 bg-[#161C28] border border-slate-700 rounded-lg text-xs font-mono text-white" dir="ltr">
+                        </div>
+                    </div>
+
+                    <!-- زر مسح المسار -->
+                    <div class="pt-1 flex items-center justify-between">
+                        <span class="text-[10px] text-slate-400">مسح المسار يفتح القفل تلقائياً لتمكين السائق من إدخاله من جديد</span>
+                        <button type="button" onclick="clearDriverRouteFromAdmin()" class="px-2.5 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer">
+                            <i class="fa-solid fa-trash-can text-[10px]"></i>
+                            <span>مسح المسار</span>
+                        </button>
+                    </div>
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-300 mb-1">فئة المركبة للراكب</label>
