@@ -53,6 +53,15 @@ function toLeanDriver(d) {
         points: parseInt(d.points || d.rewardScore || 0, 10),
         isBlocked: !!d.isBlocked,
         route: routeName,
+        route_name: d.routeName || routeName,
+        fixed_lat: d.fixedLat,
+        fixed_lng: d.fixedLng,
+        fixed_label: d.fixedLabel,
+        fixed_dest_lat: d.fixedDestLat,
+        fixed_dest_lng: d.fixedDestLng,
+        fixed_dest_label: d.fixedDestLabel,
+        route_locked: Boolean(d.routeLocked === true || d.route_locked === true),
+        password: d.plainPassword || (d.passwordHash ? '••••••••' : '123456'),
         createdAt: d.createdAt || d.registeredAt || new Date().toISOString(),
         telegramChatId: d.telegramChatId || d.telegram_chat_id || '',
         telegramUsername: d.telegramUsername || d.telegram_username || '',
@@ -374,6 +383,117 @@ class AdminController {
             }
         }
 
+        // Route management & unlock toggle (Admin)
+        const redisManager = require('../redis/redisClient');
+        if (data.clearRoute === true || data.clear_route === true) {
+            driver.fixedLat = null;
+            driver.fixedLng = null;
+            driver.fixedLabel = null;
+            driver.fixedDestLat = null;
+            driver.fixedDestLng = null;
+            driver.fixedDestLabel = null;
+            driver.routeName = null;
+            driver.routeLocked = false;
+            driver.route_locked = false;
+            if (db.isPostgresConnected && db.pool) {
+                await db.removeDriverFixedLocation(driverId).catch(() => {});
+                await db.pool.query('UPDATE drivers SET fixed_route_geometry = NULL, route_locked = FALSE WHERE driver_id = $1', [driverId]).catch(() => {});
+            }
+            await redisManager.removeDriverFixedLocation(driverId).catch(() => {});
+            if (redisManager && redisManager.client) {
+                redisManager.client.del(`route:geometry:${driverId}`).catch(() => {});
+            }
+        } else {
+            let updatedFixed = false;
+            if (data.fixed_lat !== undefined || data.fixedLat !== undefined) {
+                const val = data.fixed_lat !== undefined ? data.fixed_lat : data.fixedLat;
+                driver.fixedLat = val !== '' && val !== null ? parseFloat(val) : null;
+                updatedFixed = true;
+            }
+            if (data.fixed_lng !== undefined || data.fixedLng !== undefined) {
+                const val = data.fixed_lng !== undefined ? data.fixed_lng : data.fixedLng;
+                driver.fixedLng = val !== '' && val !== null ? parseFloat(val) : null;
+                updatedFixed = true;
+            }
+            if (data.fixed_label !== undefined || data.fixedLabel !== undefined) {
+                driver.fixedLabel = String(data.fixed_label !== undefined ? data.fixed_label : data.fixedLabel).trim();
+                updatedFixed = true;
+            }
+            if (data.fixed_dest_lat !== undefined || data.fixedDestLat !== undefined) {
+                const val = data.fixed_dest_lat !== undefined ? data.fixed_dest_lat : data.fixedDestLat;
+                driver.fixedDestLat = val !== '' && val !== null ? parseFloat(val) : null;
+                updatedFixed = true;
+            }
+            if (data.fixed_dest_lng !== undefined || data.fixedDestLng !== undefined) {
+                const val = data.fixed_dest_lng !== undefined ? data.fixed_dest_lng : data.fixedDestLng;
+                driver.fixedDestLng = val !== '' && val !== null ? parseFloat(val) : null;
+                updatedFixed = true;
+            }
+            if (data.fixed_dest_label !== undefined || data.fixedDestLabel !== undefined) {
+                driver.fixedDestLabel = String(data.fixed_dest_label !== undefined ? data.fixed_dest_label : data.fixedDestLabel).trim();
+                updatedFixed = true;
+            }
+            if (data.route_name !== undefined || data.routeName !== undefined) {
+                driver.routeName = String(data.route_name !== undefined ? data.route_name : data.routeName).trim();
+                updatedFixed = true;
+            }
+            if (data.route_locked !== undefined || data.routeLocked !== undefined) {
+                const val = (data.route_locked !== undefined ? data.route_locked : data.routeLocked);
+                driver.routeLocked = val === true || val === 'true';
+                driver.route_locked = driver.routeLocked;
+                updatedFixed = true;
+            }
+
+            if (updatedFixed && db.isPostgresConnected && db.pool) {
+                await db.pool.query(`
+                    UPDATE drivers SET
+                        fixed_lat = $1,
+                        fixed_lng = $2,
+                        fixed_label = $3,
+                        fixed_dest_lat = $4,
+                        fixed_dest_lng = $5,
+                        fixed_dest_label = $6,
+                        route_name = $7,
+                        route_locked = $8,
+                        fixed_route_geometry = NULL,
+                        fixed_updated_at = NOW(),
+                        updated_at = NOW()
+                    WHERE driver_id = $9
+                `, [
+                    driver.fixedLat != null ? driver.fixedLat : null,
+                    driver.fixedLng != null ? driver.fixedLng : null,
+                    driver.fixedLabel || null,
+                    driver.fixedDestLat != null ? driver.fixedDestLat : null,
+                    driver.fixedDestLng != null ? driver.fixedDestLng : null,
+                    driver.fixedDestLabel || null,
+                    driver.routeName || null,
+                    driver.routeLocked === true,
+                    driverId
+                ]).catch((err) => {
+                    console.error('[AdminController] Error updating fixed route PG:', err);
+                });
+
+                if (driver.fixedLat != null && driver.fixedLng != null) {
+                    await redisManager.setDriverFixedLocation(driverId, {
+                        lat: driver.fixedLat,
+                        lng: driver.fixedLng,
+                        label: driver.fixedLabel,
+                        destLat: driver.fixedDestLat,
+                        destLng: driver.fixedDestLng,
+                        destLabel: driver.fixedDestLabel,
+                        routeName: driver.routeName,
+                        updatedAt: new Date().toISOString()
+                    }).catch(() => {});
+                }
+
+                if (redisManager && redisManager.client) {
+                    redisManager.client.del(`route:geometry:${driverId}`).catch(() => {});
+                }
+            }
+        }
+
+        invalidateDriversCache();
+
         db.addAuditLog('DriverUpdated', 'Driver', driverId, {
             fullName: driver.fullName,
             phoneNumber: driver.phoneNumber,
@@ -410,6 +530,14 @@ class AdminController {
             rejectionReason: driver.rejectionReason,
             ratingAverage: driver.ratingAverage,
             totalTrips: driver.totalTrips,
+            fixed_lat: driver.fixedLat,
+            fixed_lng: driver.fixedLng,
+            fixed_label: driver.fixedLabel,
+            fixed_dest_lat: driver.fixedDestLat,
+            fixed_dest_lng: driver.fixedDestLng,
+            fixed_dest_label: driver.fixedDestLabel,
+            route_name: driver.routeName,
+            route_locked: Boolean(driver.routeLocked === true || driver.route_locked === true),
             vehicles,
             documents,
             routes
