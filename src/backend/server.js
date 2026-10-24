@@ -2715,7 +2715,7 @@ async function startServer() {
         }
 
         // Driver Get By ID: GET /api/admin/drivers/:id or /api/drivers/:id
-        if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/')) && method === 'GET' && !pathname.includes('/block') && !pathname.includes('/status') && !pathname.includes('/nearby') && !pathname.includes('/ratings-leaderboard') && !pathname.includes('/leaderboard')) {
+        if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/')) && method === 'GET' && !pathname.includes('/block') && !pathname.includes('/status') && !pathname.includes('/nearby') && !pathname.includes('/ratings-leaderboard') && !pathname.includes('/leaderboard') && !pathname.includes('/route-geometry')) {
             const driverId = pathname.replace('/api/admin/drivers/', '').replace('/api/drivers/', '').trim();
             const result = await adminController.getDriverById(driverId);
             if (!result.success && result.error) {
