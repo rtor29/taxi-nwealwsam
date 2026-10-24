@@ -80,8 +80,10 @@ class AdminController {
         }
         if (!driver) return { success: false, error: 'السائق غير موجود' };
 
-        if (data.fullName !== undefined) driver.fullName = String(data.fullName).trim();
-        if (data.phoneNumber !== undefined) driver.phoneNumber = String(data.phoneNumber).trim();
+        const nameVal = data.fullName !== undefined ? data.fullName : (data.name !== undefined ? data.name : (data.full_name !== undefined ? data.full_name : undefined));
+        if (nameVal !== undefined) driver.fullName = String(nameVal).trim();
+        const phoneVal = data.phoneNumber !== undefined ? data.phoneNumber : (data.phone !== undefined ? data.phone : (data.phone_number !== undefined ? data.phone_number : undefined));
+        if (phoneVal !== undefined) driver.phoneNumber = String(phoneVal).trim();
         if (data.governorate !== undefined) driver.governorate = String(data.governorate).trim();
         if (data.permanentLat !== undefined && data.permanentLat !== null && data.permanentLat !== '') driver.permanentLat = parseFloat(data.permanentLat);
         if (data.permanentLon !== undefined && data.permanentLon !== null && data.permanentLon !== '') driver.permanentLon = parseFloat(data.permanentLon);
