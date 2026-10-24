@@ -2715,7 +2715,7 @@ async function startServer() {
         }
 
         // Driver Get By ID: GET /api/admin/drivers/:id or /api/drivers/:id
-        if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/')) && method === 'GET' && !pathname.includes('/block') && !pathname.includes('/status') && !pathname.includes('/nearby') && !pathname.includes('/ratings-leaderboard') && !pathname.includes('/leaderboard') && !pathname.includes('/route-geometry')) {
+        if ((pathname.startsWith('/api/admin/drivers/') || pathname.startsWith('/api/drivers/')) && method === 'GET' && !pathname.includes('/block') && !pathname.includes('/status') && !pathname.includes('/nearby') && !pathname.includes('/ratings-leaderboard') && !pathname.includes('/leaderboard') && !pathname.includes('/route-geometry') && !pathname.includes('/routes')) {
             const driverId = pathname.replace('/api/admin/drivers/', '').replace('/api/drivers/', '').trim();
             const result = await adminController.getDriverById(driverId);
             if (!result.success && result.error) {
@@ -8938,12 +8938,18 @@ async function startServer() {
         }
 
 
-        // ===== Driver Fixed Location (Batch 1: تثبيت وإزالة الموقع الثابت لكابتن الخط الدائم) =====
+        // ===== Driver Fixed Location & Routes (Batch 6-B & 6-C: تثبيت وإدارة مسار كابتن الخط الدائم) =====
+        const isDriverRouteEndpoint = (
+            (pathname.startsWith('/api/drivers/') || pathname.startsWith('/drivers/')) &&
+            pathname.endsWith('/routes')
+        );
+
         const isDriverFixedLocationRoute = (
             pathname === '/api/driver/fixed-location' ||
             pathname === '/driver/fixed-location' ||
             pathname === '/api/driver/fixed-location/remove' ||
-            pathname === '/driver/fixed-location/remove'
+            pathname === '/driver/fixed-location/remove' ||
+            isDriverRouteEndpoint
         );
 
         if (isDriverFixedLocationRoute) {
@@ -8955,7 +8961,7 @@ async function startServer() {
             }
 
             const authUser = getAuthUser(req);
-            if (!authUser || (authUser.role !== 'Driver' && authUser.role !== 'driver')) {
+            if (!authUser || (authUser.role !== 'Driver' && authUser.role !== 'driver' && authUser.role !== 'Admin')) {
                 return sendJson({ success: false, error: 'غير مصرح: الحساب ليس كابتن معتمد (RLS)' }, 403);
             }
 
@@ -8969,8 +8975,11 @@ async function startServer() {
             if (method === 'POST' || method === 'DELETE' || method === 'PUT') {
                 body = await parseJsonBody(req).catch(() => ({}));
             }
-            const submittedDriverId = body.driverId || body.id;
-            if (submittedDriverId && String(submittedDriverId).trim() !== effectiveDriverId) {
+            const urlDriverId = isDriverRouteEndpoint 
+                ? pathname.replace(/^\/(api\/)?drivers\//, '').replace(/\/routes$/, '').trim() 
+                : '';
+            const submittedDriverId = body.driverId || body.id || urlDriverId;
+            if (submittedDriverId && String(submittedDriverId).trim() !== effectiveDriverId && authUser.role !== 'Admin') {
                 return sendJson({ success: false, error: 'غير مصرح: لا يمكنك تعديل أو استعراض موقع كابتن آخر (RLS)' }, 403);
             }
 
@@ -9094,14 +9103,16 @@ async function startServer() {
                     });
                 }
 
-                let isLocked = Boolean(driver.route_locked || driver.routeLocked || (fixedLat && fixedDestLat));
+                let isLocked = false;
                 if (db.pool && db.isPostgresConnected) {
                     try {
-                        const lkRes = await db.pool.query('SELECT route_locked, fixed_lat, fixed_dest_lat FROM drivers WHERE driver_id = $1 LIMIT 1', [effectiveDriverId]);
+                        const lkRes = await db.pool.query('SELECT route_locked FROM drivers WHERE driver_id = $1 LIMIT 1', [effectiveDriverId]);
                         if (lkRes.rows && lkRes.rows[0]) {
-                            isLocked = Boolean(lkRes.rows[0].route_locked || (lkRes.rows[0].fixed_lat && lkRes.rows[0].fixed_dest_lat));
+                            isLocked = lkRes.rows[0].route_locked === true;
                         }
                     } catch (_) {}
+                } else {
+                    isLocked = driver.route_locked === true || driver.routeLocked === true;
                 }
 
                 return sendJson({
@@ -9120,15 +9131,17 @@ async function startServer() {
                 });
             }
 
-            // Batch 6-B: Check if route is already locked for driver
-            let isRouteLocked = Boolean(driver.route_locked || driver.routeLocked || (driver.fixedLat && driver.fixedDestLat));
+            // Batch 6-B/6-C: Check if route is already locked for driver
+            let isRouteLocked = false;
             if (db.pool && db.isPostgresConnected) {
                 try {
-                    const lkRes = await db.pool.query('SELECT route_locked, fixed_lat, fixed_dest_lat FROM drivers WHERE driver_id = $1 LIMIT 1', [effectiveDriverId]);
+                    const lkRes = await db.pool.query('SELECT route_locked FROM drivers WHERE driver_id = $1 LIMIT 1', [effectiveDriverId]);
                     if (lkRes.rows && lkRes.rows[0]) {
-                        isRouteLocked = Boolean(lkRes.rows[0].route_locked || (lkRes.rows[0].fixed_lat && lkRes.rows[0].fixed_dest_lat));
+                        isRouteLocked = lkRes.rows[0].route_locked === true;
                     }
                 } catch (_) {}
+            } else {
+                isRouteLocked = driver.route_locked === true || driver.routeLocked === true;
             }
 
             // ---[ Branch B: DELETE or POST Remove ]---
@@ -9201,13 +9214,14 @@ async function startServer() {
                 return sendJson({ success: false, error: 'لا يمكنك تعديل مسارك، راجع الإدارة' }, 403);
             }
 
-            const rawLat = body.lat !== undefined ? body.lat : body.latitude;
-            const rawLng = body.lng !== undefined ? body.lng : (body.lon !== undefined ? body.lon : body.longitude);
-            const rawLabel = body.label !== undefined ? body.label : (body.name !== undefined ? body.name : body.locationName);
+            const rawLat = body.lat !== undefined ? body.lat : (body.latitude !== undefined ? body.latitude : (body.coordinates?.[0]?.latitude || body.coordinates?.[0]?.lat));
+            const rawLng = body.lng !== undefined ? body.lng : (body.lon !== undefined ? body.lon : (body.longitude !== undefined ? body.longitude : (body.coordinates?.[0]?.longitude || body.coordinates?.[0]?.lng)));
+            const rawLabel = body.label !== undefined ? body.label : (body.startName || body.name || body.locationName);
 
-            const rawDestLat = body.destLat !== undefined ? body.destLat : body.destinationLat;
-            const rawDestLng = body.destLng !== undefined ? body.destLng : body.destinationLng;
-            const rawDestLabel = body.destLabel !== undefined ? body.destLabel : (body.destinationLabel || body.destinationName);
+            const lastCoord = Array.isArray(body.coordinates) && body.coordinates.length > 0 ? body.coordinates[body.coordinates.length - 1] : null;
+            const rawDestLat = body.destLat !== undefined ? body.destLat : (body.destinationLat !== undefined ? body.destinationLat : (lastCoord?.latitude || lastCoord?.lat));
+            const rawDestLng = body.destLng !== undefined ? body.destLng : (body.destinationLng !== undefined ? body.destinationLng : (lastCoord?.longitude || lastCoord?.lng));
+            const rawDestLabel = body.destLabel !== undefined ? body.destLabel : (body.endName || body.destinationLabel || body.destinationName);
             const rawRouteName = body.routeName !== undefined ? body.routeName : body.name;
 
             const parsedLat = parseFloat(rawLat);
@@ -9221,8 +9235,8 @@ async function startServer() {
             }
 
             const cleanLabel = String(rawLabel || '').replace(/<[^>]*>?/gm, '').trim();
-            if (!cleanLabel || cleanLabel.length > 60) {
-                return sendJson({ success: false, error: 'يجب إدخال اسم موقع صحيح بحد أقصى 60 حرفاً' }, 400);
+            if (!cleanLabel || cleanLabel.length > 100) {
+                return sendJson({ success: false, error: 'يجب إدخال اسم موقع صحيح بحد أقصى 100 حرفاً' }, 400);
             }
 
             // Destination coordinates validation (Iraq-wide bounds)
@@ -9291,10 +9305,52 @@ async function startServer() {
                 routeName: cleanRouteName,
                 updatedAt: nowIso
             });
-            if (redisManager && redisManager.client) {
-                redisManager.client.del(`route:geometry:${effectiveDriverId}`).catch(() => {});
+
+            // Store GeoJSON geometry if provided
+            if (body.geoJsonPolyline) {
+                driver.fixedRouteGeometry = body.geoJsonPolyline;
+                if (redisManager && redisManager.client) {
+                    redisManager.client.set(`route:geometry:${effectiveDriverId}`, JSON.stringify(body.geoJsonPolyline), 'EX', 86400 * 7).catch(() => {});
+                }
+                if (db.isPostgresConnected && db.pool) {
+                    db.pool.query('UPDATE drivers SET fixed_route_geometry = $1 WHERE driver_id = $2', [JSON.stringify(body.geoJsonPolyline), effectiveDriverId]).catch(() => {});
+                }
+            } else {
+                if (redisManager && redisManager.client) {
+                    redisManager.client.del(`route:geometry:${effectiveDriverId}`).catch(() => {});
+                }
+                if (db.isPostgresConnected && db.pool) {
+                    db.pool.query('UPDATE drivers SET fixed_route_geometry = NULL WHERE driver_id = $1', [effectiveDriverId]).catch(() => {});
+                }
             }
-            db.pool.query('UPDATE drivers SET fixed_route_geometry = NULL WHERE driver_id = $1', [effectiveDriverId]).catch(() => {});
+
+            // Sync to PostgreSQL routes table for passenger matching
+            if (db.isPostgresConnected && db.pool) {
+                try {
+                    const routeId = `route-${effectiveDriverId}`;
+                    const fareVal = parseFloat(body.pricePerSeat || body.price || body.fare) || 3000;
+                    const depTime = body.departureTime || '07:30 ص';
+                    const availSeats = parseInt(body.availableSeats || body.seats, 10) || 4;
+                    await db.pool.query(`
+                        INSERT INTO routes (id, driver_id, driver_name, driver_phone, start_name, end_name, start_lat, start_lon, end_lat, end_lon, fare, available_seats, total_seats, departure_time, status, created_at)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12, $13, 'Active', NOW())
+                        ON CONFLICT (id) DO UPDATE SET
+                            start_name = EXCLUDED.start_name,
+                            end_name = EXCLUDED.end_name,
+                            start_lat = EXCLUDED.start_lat,
+                            start_lon = EXCLUDED.start_lon,
+                            end_lat = EXCLUDED.end_lat,
+                            end_lon = EXCLUDED.end_lon,
+                            fare = EXCLUDED.fare,
+                            available_seats = EXCLUDED.available_seats,
+                            total_seats = EXCLUDED.total_seats,
+                            departure_time = EXCLUDED.departure_time,
+                            status = 'Active'
+                    `, [routeId, effectiveDriverId, driver.fullName || 'كابتن توصيله', driver.phoneNumber || '', cleanLabel, cleanDestLabel || cleanLabel, parsedLat, parsedLng, parsedDestLat || parsedLat, parsedDestLng || parsedLng, fareVal, availSeats, depTime]);
+                } catch (e) {
+                    console.error('[Routes] Error syncing to routes table:', e.message);
+                }
+            }
 
             try {
                 const auditService = require('./modules/audit/auditService');
