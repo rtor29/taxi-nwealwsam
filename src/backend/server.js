@@ -8175,29 +8175,7 @@ async function startServer() {
             }
 
             try {
-                const redisKey = `route:geometry:${targetDriverId}`;
-
-                // 1. Check Redis Cache first
-                if (redisManager && redisManager.client) {
-                    try {
-                        const cached = await redisManager.client.get(redisKey);
-                        if (cached) {
-                            const parsed = JSON.parse(cached);
-                            if (parsed && Array.isArray(parsed.coordinates) && parsed.coordinates.length > 0) {
-                                console.log(`[Route Geometry HIT - Redis] driverId: ${targetDriverId}`);
-                                return sendJson({
-                                    success: true,
-                                    driverId: targetDriverId,
-                                    coordinates: parsed.coordinates,
-                                    source: 'redis_cache',
-                                    cached: true
-                                });
-                            }
-                        }
-                    } catch (_) {}
-                }
-
-                // 2. Fetch driver coordinates from DB
+                // 1. Fetch driver coordinates from DB
                 const drvRes = await db.pool.query(
                     'SELECT driver_id, fixed_lat, fixed_lng, fixed_dest_lat, fixed_dest_lng, fixed_label, fixed_dest_label, route_name, fixed_route_geometry FROM drivers WHERE driver_id = $1 OR phone_number = $1 LIMIT 1',
                     [targetDriverId]
@@ -8221,7 +8199,45 @@ async function startServer() {
                 const startPt = [fixedLng, fixedLat];
                 const endPt = hasDest ? [fixedDestLng, fixedDestLat] : [fixedLng + 0.03, fixedLat + 0.03];
 
-                // 3. Check DB Geometry Cache
+                // 2. Check if Directions API is enabled in system_settings
+                const directionsEnabled = await isDirectionsApiEnabled();
+                if (!directionsEnabled) {
+                    // Straight line between the two points: Zero Mapbox tokens!
+                    const straightLine = [startPt, endPt];
+                    console.log(`[Route Geometry - Straight Line (Directions Disabled)] driverId: ${targetDriverId}`);
+                    return sendJson({
+                        success: true,
+                        driverId: targetDriverId,
+                        coordinates: straightLine,
+                        source: 'straight_line',
+                        directionsApiEnabled: false,
+                        cached: false
+                    });
+                }
+
+                const redisKey = `route:geometry:${targetDriverId}`;
+
+                // 3. Check Redis Cache first
+                if (redisManager && redisManager.client) {
+                    try {
+                        const cached = await redisManager.client.get(redisKey);
+                        if (cached) {
+                            const parsed = JSON.parse(cached);
+                            if (parsed && Array.isArray(parsed.coordinates) && parsed.coordinates.length > 0) {
+                                console.log(`[Route Geometry HIT - Redis] driverId: ${targetDriverId}`);
+                                return sendJson({
+                                    success: true,
+                                    driverId: targetDriverId,
+                                    coordinates: parsed.coordinates,
+                                    source: 'redis_cache',
+                                    cached: true
+                                });
+                            }
+                        }
+                    } catch (_) {}
+                }
+
+                // 4. Check DB Geometry Cache
                 if (d.fixed_route_geometry && Array.isArray(d.fixed_route_geometry.coordinates) && d.fixed_route_geometry.coordinates.length > 0) {
                     const coords = d.fixed_route_geometry.coordinates;
                     if (redisManager && redisManager.client) {
@@ -8236,23 +8252,6 @@ async function startServer() {
                         cached: true
                     });
                 }
-
-                // 4. Check if Directions API is enabled in system_settings
-                const directionsEnabled = await isDirectionsApiEnabled();
-
-                if (!directionsEnabled) {
-                    // Straight line between the two points: Zero Mapbox tokens!
-                    const straightLine = [startPt, endPt];
-                    console.log(`[Route Geometry - Straight Line (Directions Disabled)] driverId: ${targetDriverId}`);
-                    if (redisManager && redisManager.client) {
-                        await redisManager.client.set(redisKey, JSON.stringify({ coordinates: straightLine }), 'EX', 3600).catch(() => {});
-                    }
-                    return sendJson({
-                        success: true,
-                        driverId: targetDriverId,
-                        coordinates: straightLine,
-                        source: 'straight_line',
-                        directionsApiEnabled: false,
                         cached: false
                     });
                 }
