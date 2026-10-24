@@ -144,11 +144,43 @@ function _orderRateLimit(ip, identifier) {
 function sanitizeInput(str, maxLen = 255) {
     if (typeof str !== 'string') return '';
     return str
+        .replace(/[\u064B-\u065F]/g, '')
         .replace(/[\u0000-\u001F\u007F]/g, '')
         .replace(/<[^>]*>/g, '')
         .replace(/[<>'";\\{}`$]/g, '')
         .trim()
         .slice(0, maxLen);
+}
+
+// Batch 6-A: Helper to check if Mapbox Directions API is enabled in system_settings
+async function isDirectionsApiEnabled() {
+    try {
+        if (redisManager && redisManager.client) {
+            const cached = await redisManager.client.get('setting:directions_api_enabled').catch(() => null);
+            if (cached !== null) return cached === 'true';
+        }
+        if (db && db.pool) {
+            const res = await db.pool.query("SELECT value_json FROM system_settings WHERE key = 'directions_api_enabled'").catch(() => null);
+            if (res && res.rows && res.rows.length > 0) {
+                let val = res.rows[0].value_json;
+                if (typeof val === 'string') {
+                    try {
+                        const parsed = JSON.parse(val);
+                        if (typeof parsed === 'boolean') val = parsed;
+                        else if (typeof parsed === 'object' && parsed.value !== undefined) val = parsed.value;
+                    } catch (_) {}
+                }
+                const enabled = val === true || val === 'true';
+                if (redisManager && redisManager.client) {
+                    await redisManager.client.set('setting:directions_api_enabled', enabled ? 'true' : 'false', 'EX', 300).catch(() => {});
+                }
+                return enabled;
+            }
+        }
+    } catch (err) {
+        console.warn('[isDirectionsApiEnabled error]:', err.message);
+    }
+    return true; // default true
 }
 
 // Helper to verify if a driver is currently online and active (not idle, not offline, approved)
@@ -8041,6 +8073,236 @@ async function startServer() {
             });
         }
 
+        // --------------------------------------------------------------------
+        // Batch 6-A Part 1: Settings - Toggle Mapbox Directions API on/off
+        // --------------------------------------------------------------------
+        if (pathname === '/api/settings/directions-api' && (method === 'GET' || method === 'POST')) {
+            if (method === 'POST') {
+                const body = await parseJsonBody(req);
+                const enabled = body.enabled === true || body.enabled === 'true';
+                await db.pool.query(
+                    "INSERT INTO system_settings (key, value_json, description) VALUES ('directions_api_enabled', $1, 'Control Mapbox Directions API for commute driver routes') ON CONFLICT (key) DO UPDATE SET value_json = EXCLUDED.value_json, updated_at = NOW()",
+                    [enabled ? 'true' : 'false']
+                ).catch(() => {});
+                if (redisManager && redisManager.client) {
+                    await redisManager.client.set('setting:directions_api_enabled', enabled ? 'true' : 'false', 'EX', 3600).catch(() => {});
+                }
+                return sendJson({ success: true, directions_api_enabled: enabled });
+            }
+            const enabled = await isDirectionsApiEnabled();
+            return sendJson({ success: true, directions_api_enabled: enabled });
+        }
+
+        // --------------------------------------------------------------------
+        // Batch 6-A Part 2: Places Geocoding Search with Redis Cache (TTL 7 days)
+        // --------------------------------------------------------------------
+        if (pathname === '/api/places/search' && method === 'GET') {
+            const query = (parsedUrl.searchParams.get('q') || '').trim();
+            if (!query) {
+                return sendJson({ success: true, places: [] });
+            }
+            const proximity = parsedUrl.searchParams.get('proximity') || '44.3168,31.9961';
+            const normalizedKey = query.toLowerCase().replace(/[\u064B-\u065F]/g, '').trim();
+            const redisKey = `geocode:cache:${encodeURIComponent(normalizedKey)}`;
+
+            // 1. Check Redis Cache
+            if (redisManager && redisManager.client) {
+                try {
+                    const cached = await redisManager.client.get(redisKey);
+                    if (cached) {
+                        console.log(`[Geocode Cache HIT - Redis] Query: "${query}"`);
+                        return sendJson({
+                            success: true,
+                            places: JSON.parse(cached),
+                            source: 'redis_cache',
+                            cached: true
+                        });
+                    }
+                } catch (_) {}
+            }
+
+            // 2. Cache MISS -> Call Mapbox Geocoding ONCE
+            console.log(`[Geocode Cache MISS - Calling Mapbox Geocoding] Query: "${query}"`);
+            const mapboxToken = process.env.MAPBOX_TOKEN || process.env.VITE_MAPBOX_TOKEN || config.mapboxToken;
+            let places = [];
+            if (mapboxToken) {
+                try {
+                    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?country=iq&proximity=${proximity}&language=ar&types=poi,address,neighborhood,place,locality&limit=8&access_token=${mapboxToken}`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    if (data && Array.isArray(data.features)) {
+                        places = data.features.map(f => ({
+                            id: f.id,
+                            name: f.text_ar || f.text || f.place_name,
+                            address: f.place_name_ar || f.place_name,
+                            lat: f.center[1],
+                            lng: f.center[0]
+                        }));
+                    }
+                } catch (err) {
+                    console.warn('[Mapbox Geocoding Fetch Error]:', err.message);
+                }
+            }
+
+            // 3. Store in Redis (TTL 7 days = 604800 seconds)
+            if (places.length > 0 && redisManager && redisManager.client) {
+                redisManager.client.set(redisKey, JSON.stringify(places), 'EX', 7 * 86400).catch(() => {});
+            }
+
+            return sendJson({
+                success: true,
+                places,
+                source: 'mapbox_api',
+                cached: false
+            });
+        }
+
+        // --------------------------------------------------------------------
+        // Batch 6-A Part 1: Captain Commute Route Geometry API with Cache
+        // --------------------------------------------------------------------
+        if ((pathname.startsWith('/api/drivers/') && pathname.endsWith('/route-geometry')) || (pathname === '/api/driver/route-geometry')) {
+            if (method !== 'GET') return sendJson({ success: false, error: 'Method not allowed' }, 405);
+            let targetDriverId = '';
+            if (pathname === '/api/driver/route-geometry') {
+                targetDriverId = (parsedUrl.searchParams.get('driverId') || '').trim();
+            } else {
+                const parts = pathname.split('/');
+                targetDriverId = parts[3] ? decodeURIComponent(parts[3]) : '';
+            }
+
+            if (!targetDriverId) {
+                return sendJson({ success: false, error: 'معرف الكابتن مطلوب' }, 400);
+            }
+
+            try {
+                const redisKey = `route:geometry:${targetDriverId}`;
+
+                // 1. Check Redis Cache first
+                if (redisManager && redisManager.client) {
+                    try {
+                        const cached = await redisManager.client.get(redisKey);
+                        if (cached) {
+                            const parsed = JSON.parse(cached);
+                            if (parsed && Array.isArray(parsed.coordinates) && parsed.coordinates.length > 0) {
+                                console.log(`[Route Geometry HIT - Redis] driverId: ${targetDriverId}`);
+                                return sendJson({
+                                    success: true,
+                                    driverId: targetDriverId,
+                                    coordinates: parsed.coordinates,
+                                    source: 'redis_cache',
+                                    cached: true
+                                });
+                            }
+                        }
+                    } catch (_) {}
+                }
+
+                // 2. Fetch driver coordinates from DB
+                const drvRes = await db.pool.query(
+                    'SELECT driver_id, fixed_lat, fixed_lng, fixed_dest_lat, fixed_dest_lng, fixed_label, fixed_dest_label, route_name, fixed_route_geometry FROM drivers WHERE driver_id = $1 OR phone_number = $1 LIMIT 1',
+                    [targetDriverId]
+                );
+
+                if (drvRes.rows.length === 0) {
+                    return sendJson({ success: false, error: 'الكابتن غير موجود' }, 404);
+                }
+
+                const d = drvRes.rows[0];
+                const fixedLat = d.fixed_lat != null ? parseFloat(d.fixed_lat) : null;
+                const fixedLng = d.fixed_lng != null ? parseFloat(d.fixed_lng) : null;
+                const fixedDestLat = d.fixed_dest_lat != null ? parseFloat(d.fixed_dest_lat) : null;
+                const fixedDestLng = d.fixed_dest_lng != null ? parseFloat(d.fixed_dest_lng) : null;
+
+                if (!fixedLat || !fixedLng) {
+                    return sendJson({ success: false, error: 'لم يتم تثبيت نقطة انطلاق للكابتن' }, 400);
+                }
+
+                const hasDest = fixedDestLat != null && fixedDestLng != null && !isNaN(fixedDestLat) && !isNaN(fixedDestLng);
+                const startPt = [fixedLng, fixedLat];
+                const endPt = hasDest ? [fixedDestLng, fixedDestLat] : [fixedLng + 0.03, fixedLat + 0.03];
+
+                // 3. Check DB Geometry Cache
+                if (d.fixed_route_geometry && Array.isArray(d.fixed_route_geometry.coordinates) && d.fixed_route_geometry.coordinates.length > 0) {
+                    const coords = d.fixed_route_geometry.coordinates;
+                    if (redisManager && redisManager.client) {
+                        await redisManager.client.set(redisKey, JSON.stringify({ coordinates: coords }), 'EX', 30 * 86400).catch(() => {});
+                    }
+                    console.log(`[Route Geometry HIT - DB] driverId: ${targetDriverId}`);
+                    return sendJson({
+                        success: true,
+                        driverId: targetDriverId,
+                        coordinates: coords,
+                        source: 'db_cache',
+                        cached: true
+                    });
+                }
+
+                // 4. Check if Directions API is enabled in system_settings
+                const directionsEnabled = await isDirectionsApiEnabled();
+
+                if (!directionsEnabled) {
+                    // Straight line between the two points: Zero Mapbox tokens!
+                    const straightLine = [startPt, endPt];
+                    console.log(`[Route Geometry - Straight Line (Directions Disabled)] driverId: ${targetDriverId}`);
+                    if (redisManager && redisManager.client) {
+                        await redisManager.client.set(redisKey, JSON.stringify({ coordinates: straightLine }), 'EX', 3600).catch(() => {});
+                    }
+                    return sendJson({
+                        success: true,
+                        driverId: targetDriverId,
+                        coordinates: straightLine,
+                        source: 'straight_line',
+                        directionsApiEnabled: false,
+                        cached: false
+                    });
+                }
+
+                // 5. Directions API Enabled: Call Mapbox Directions API ONCE per driver
+                console.log(`[Route Geometry MISS - Calling Mapbox Directions ONCE] driverId: ${targetDriverId}`);
+                const mapboxToken = process.env.MAPBOX_TOKEN || process.env.VITE_MAPBOX_TOKEN || config.mapboxToken;
+                let coords = null;
+
+                if (mapboxToken) {
+                    try {
+                        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${startPt[0]},${startPt[1]};${endPt[0]},${endPt[1]}?geometries=geojson&overview=full&access_token=${mapboxToken}`;
+                        const mRes = await fetch(url);
+                        const mData = await mRes.json();
+                        if (mData && mData.routes && mData.routes[0] && mData.routes[0].geometry && Array.isArray(mData.routes[0].geometry.coordinates)) {
+                            coords = mData.routes[0].geometry.coordinates;
+                        }
+                    } catch (err) {
+                        console.warn('[Mapbox Directions Fetch Error]:', err.message);
+                    }
+                }
+
+                if (!coords || coords.length === 0) {
+                    coords = [startPt, endPt]; // Fallback straight line
+                }
+
+                // 6. Cache in Redis (30 days) and PostgreSQL (JSONB)
+                if (redisManager && redisManager.client) {
+                    await redisManager.client.set(redisKey, JSON.stringify({ coordinates: coords }), 'EX', 30 * 86400).catch(() => {});
+                }
+                await db.pool.query(
+                    'UPDATE drivers SET fixed_route_geometry = $1 WHERE driver_id = $2',
+                    [JSON.stringify({ coordinates: coords }), targetDriverId]
+                ).catch(() => {});
+
+                return sendJson({
+                    success: true,
+                    driverId: targetDriverId,
+                    coordinates: coords,
+                    source: 'mapbox_api',
+                    directionsApiEnabled: true,
+                    cached: false
+                });
+
+            } catch (err) {
+                console.error('[Route Geometry Error]:', err);
+                return sendJson({ success: false, error: 'حدث خطأ أثناء جلب مسار الكابتن' }, 500);
+            }
+        }
+
         // Dynamic Surge Pricing calculation for Instant Taxi (Baly-like engine)
         if ((pathname === '/api/rides/calculate-fare' || pathname === '/api/pricing/estimate') && (method === 'POST' || method === 'GET')) {
             let params = {};
@@ -8873,6 +9135,10 @@ async function startServer() {
 
                 await db.removeDriverFixedLocation(effectiveDriverId);
                 await redisManager.removeDriverFixedLocation(effectiveDriverId);
+                if (redisManager && redisManager.client) {
+                    redisManager.client.del(`route:geometry:${effectiveDriverId}`).catch(() => {});
+                }
+                db.pool.query('UPDATE drivers SET fixed_route_geometry = NULL WHERE driver_id = $1', [effectiveDriverId]).catch(() => {});
 
                 try {
                     const auditService = require('./modules/audit/auditService');
@@ -8998,6 +9264,10 @@ async function startServer() {
                 routeName: cleanRouteName,
                 updatedAt: nowIso
             });
+            if (redisManager && redisManager.client) {
+                redisManager.client.del(`route:geometry:${effectiveDriverId}`).catch(() => {});
+            }
+            db.pool.query('UPDATE drivers SET fixed_route_geometry = NULL WHERE driver_id = $1', [effectiveDriverId]).catch(() => {});
 
             try {
                 const auditService = require('./modules/audit/auditService');
