@@ -9052,9 +9052,10 @@ async function startServer() {
                 return sendJson({ success: false, error: 'بيانات الكابتن غير موجودة في النظام' }, 404);
             }
 
-            // Mode check: Must be commute or both (Arabic or English), or creating route via routes endpoint
+            // Mode check: Must be commute or both (Arabic or English), or GET, or creating route via routes endpoint
             const rawMode = String(driver.work_mode || driver.workStatus || driver.current_mode || driver.mode || '').toLowerCase().trim();
             const isAllowedMode = (
+                method === 'GET' ||
                 isDriverRouteEndpoint ||
                 rawMode === 'commute' || 
                 rawMode === 'both' || 
