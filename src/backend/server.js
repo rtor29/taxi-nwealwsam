@@ -9249,13 +9249,13 @@ async function startServer() {
                 return sendJson({ success: false, error: 'لا يمكنك تعديل مسارك، راجع الإدارة' }, 403);
             }
 
-            const rawLat = body.lat !== undefined ? body.lat : (body.latitude !== undefined ? body.latitude : (body.coordinates?.[0]?.latitude || body.coordinates?.[0]?.lat));
-            const rawLng = body.lng !== undefined ? body.lng : (body.lon !== undefined ? body.lon : (body.longitude !== undefined ? body.longitude : (body.coordinates?.[0]?.longitude || body.coordinates?.[0]?.lng)));
+            const rawLat = body.lat !== undefined ? body.lat : (body.startLat !== undefined ? body.startLat : (body.latitude !== undefined ? body.latitude : (body.coordinates?.[0]?.latitude || body.coordinates?.[0]?.lat)));
+            const rawLng = body.lng !== undefined ? body.lng : (body.startLon !== undefined ? body.startLon : (body.startLng !== undefined ? body.startLng : (body.lon !== undefined ? body.lon : (body.longitude !== undefined ? body.longitude : (body.coordinates?.[0]?.longitude || body.coordinates?.[0]?.lng)))));
             const rawLabel = body.label !== undefined ? body.label : (body.startName || body.name || body.locationName);
 
             const lastCoord = Array.isArray(body.coordinates) && body.coordinates.length > 0 ? body.coordinates[body.coordinates.length - 1] : null;
-            const rawDestLat = body.destLat !== undefined ? body.destLat : (body.destinationLat !== undefined ? body.destinationLat : (lastCoord?.latitude || lastCoord?.lat));
-            const rawDestLng = body.destLng !== undefined ? body.destLng : (body.destinationLng !== undefined ? body.destinationLng : (lastCoord?.longitude || lastCoord?.lng));
+            const rawDestLat = body.destLat !== undefined ? body.destLat : (body.endLat !== undefined ? body.endLat : (body.destinationLat !== undefined ? body.destinationLat : (lastCoord?.latitude || lastCoord?.lat)));
+            const rawDestLng = body.destLng !== undefined ? body.destLng : (body.endLon !== undefined ? body.endLon : (body.endLng !== undefined ? body.endLng : (body.destinationLng !== undefined ? body.destinationLng : (lastCoord?.longitude || lastCoord?.lng))));
             const rawDestLabel = body.destLabel !== undefined ? body.destLabel : (body.endName || body.destinationLabel || body.destinationName);
             const rawRouteName = body.routeName !== undefined ? body.routeName : body.name;
 
