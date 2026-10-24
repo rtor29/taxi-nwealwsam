@@ -10,7 +10,7 @@ const DEFAULTS = {
     // Dispatch & Safety
     proximity_radius_meters: 1000,
     speed_jump_limit_kmh: 140,
-    step_timeout_seconds: 20,
+    step_timeout_seconds: 60,
     search_radius_km: 25,
     // Reconciliation & Cancellation
     fare_discrepancy_threshold_iqd: 500,

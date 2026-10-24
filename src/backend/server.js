@@ -568,6 +568,400 @@ function parseJsonBody(req) {
     });
 }
 
+// Universal Ride Resolver: Searches Redis (Single Source of Truth), Memory, and PostgreSQL
+const findRideById = async (rideId) => {
+    if (!rideId || rideId === 'undefined' || rideId === 'null') return null;
+    const sId = String(rideId).trim();
+    
+    // 1. In Redis (Single Source of Truth across PM2 cluster)
+    if (redisManager.isConnected && redisManager.client) {
+        try {
+            const activeStr = await redisManager.client.get('ride:active:' + sId);
+            if (activeStr) {
+                const ride = JSON.parse(activeStr);
+                if (db.memoryState && Array.isArray(db.memoryState.rideRequests)) {
+                    const idx = db.memoryState.rideRequests.findIndex(item => String(item.id) === sId);
+                    if (idx >= 0) db.memoryState.rideRequests[idx] = ride;
+                    else db.memoryState.rideRequests.unshift(ride);
+                }
+                return ride;
+            }
+
+            const pendingStr = await redisManager.client.hget('pending:rides', sId);
+            if (pendingStr) return JSON.parse(pendingStr);
+
+            const reqStr = await redisManager.client.get('ride:request:' + sId);
+            if (reqStr) return JSON.parse(reqStr);
+        } catch (_) {}
+    }
+
+    // 2. In memory fallback
+    const inMem = (db.memoryState.rideRequests || []).find(item => String(item.id) === sId);
+    if (inMem) return inMem;
+
+    // 3. In PostgreSQL
+    if (db.isPostgresConnected && db.pool) {
+        try {
+            const pgRes = await db.pool.query('SELECT * FROM rides WHERE id = $1 LIMIT 1', [sId]);
+            if (pgRes && pgRes.rows && pgRes.rows.length > 0) {
+                const r = pgRes.rows[0];
+                return {
+                    ...r,
+                    id: r.id,
+                    customerId: r.rider_id || r.customerId,
+                    customerName: r.rider_name || r.customerName,
+                    customerPhone: r.rider_phone || r.customerPhone,
+                    assignedDriverId: r.driver_id || r.assignedDriverId || null,
+                    acceptedDriverId: r.driver_id || r.acceptedDriverId || null,
+                    assignedDriverName: r.driver_name || r.assignedDriverName || null,
+                    assignedDriverPhone: r.driver_phone || r.assignedDriverPhone || null,
+                    assignedDriverVehicle: r.vehicle_info || r.assignedDriverVehicle || null,
+                    driverPlate: r.vehicle_plate || r.driverPlate || null,
+                    pickupName: r.pickup_name || r.pickupName || '',
+                    dropoffName: r.dropoff_name || r.dropoffName || '',
+                    pickupLat: r.pickup_lat != null ? parseFloat(r.pickup_lat) : r.pickupLat,
+                    pickupLon: r.pickup_lon != null ? parseFloat(r.pickup_lon) : r.pickupLon,
+                    dropoffLat: r.dropoff_lat != null ? parseFloat(r.dropoff_lat) : r.dropoffLat,
+                    dropoffLon: r.dropoff_lon != null ? parseFloat(r.dropoff_lon) : r.dropoffLon,
+                    fare: r.final_fare != null ? Number(r.final_fare) : (r.estimated_fare != null ? Number(r.estimated_fare) : r.fare),
+                    status: r.status,
+                    tripType: r.trip_type || r.tripType || 'ONE_WAY'
+                };
+            }
+        } catch (_) {}
+    }
+
+    return null;
+};
+
+// Universal Driver Active Ride Resolver (Unified Redis + Memory + DB - Zero 404s)
+const findActiveRideForDriver = async (rawParam) => {
+    rawParam = String(rawParam || '').trim();
+    if (!rawParam || rawParam === 'undefined' || rawParam === 'null') return null;
+    const cleanPhone = rawParam.replace(/[^0-9]/g, '');
+    const matchedDriver = (db.memoryState.drivers || []).find(d => 
+        d.driverId === rawParam || d.id === rawParam || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
+    );
+    const targetDriverId = matchedDriver ? matchedDriver.driverId : rawParam;
+
+    let active = null;
+
+    // 1. Check Redis first for instant cross-PM2 cluster consistency
+    if (redisManager.isConnected && redisManager.client) {
+        try {
+            const activeStr = await redisManager.client.get('driver:active:' + String(targetDriverId));
+            if (activeStr) {
+                active = JSON.parse(activeStr);
+            } else if (cleanPhone) {
+                const activePhoneStr = await redisManager.client.get('driver:active:' + cleanPhone);
+                if (activePhoneStr) active = JSON.parse(activePhoneStr);
+            }
+        } catch (_) {}
+    }
+
+    // 2. Check memory
+    if (!active) {
+        active = (db.memoryState.rideRequests || []).find(r => {
+            const isDriver = r.acceptedDriverId === targetDriverId || 
+                            r.assignedDriverId === targetDriverId || 
+                            r.acceptedDriverId === rawParam || 
+                            r.assignedDriverId === rawParam ||
+                            (cleanPhone && String(r.driverPhone || r.acceptedDriverPhone || '').replace(/[^0-9]/g, '').endsWith(cleanPhone));
+            const st = String(r.status || '').toLowerCase();
+            const isActive = ['accepted', 'arrived', 'driver_arrived', 'inprogress', 'in_progress', 'started', 'ontheway', 'in_trip', 'arrived_destination', 'waiting_at_destination', 'waiting', 'in_trip_return', 'arrived_return'].includes(st);
+            return isDriver && isActive;
+        });
+    }
+
+    // 3. Check PostgreSQL
+    if (!active && db.isPostgresConnected && db.pool) {
+        try {
+            const pgRes = await db.pool.query(
+                `SELECT * FROM rides 
+                 WHERE (driver_id = $1 OR driver_phone = $1 OR driver_id = $2 OR driver_phone = $2) 
+                 AND status IN ('Accepted', 'Arrived', 'InProgress', 'accepted', 'arrived', 'in_progress', 'started', 'ontheway', 'ACCEPTED', 'DRIVER_ARRIVED', 'IN_TRIP', 'ARRIVED_DESTINATION', 'WAITING_AT_DESTINATION', 'IN_TRIP_RETURN', 'ARRIVED_RETURN')
+                 ORDER BY created_at DESC LIMIT 1`,
+                [targetDriverId, cleanPhone || targetDriverId]
+            );
+            if (pgRes && pgRes.rows && pgRes.rows.length > 0) {
+                active = pgRes.rows[0];
+            }
+        } catch (_) {}
+    }
+
+    // Validate with Redis (Single Source of Truth) - if ride is finished, it must not be active
+    if (active && redisManager.isConnected && redisManager.client) {
+        try {
+            const isStillActive = await redisManager.client.exists('ride:active:' + active.id);
+            if (!isStillActive) {
+                active = null;
+            }
+        } catch (_) {}
+    }
+
+    // Address normalization: ensure both pickup and dropoff fields are always populated
+    if (active) {
+        normalizeAddresses(active);
+    }
+
+    return active || null;
+};
+
+// Centralized Taxi Ride Decision Handler (Reusable for HTTP & Telegram Bot)
+async function handleDriverRideDecision(requestId, driverId, action = 'accept', authUser = null) {
+    if (!requestId || requestId === 'undefined' || requestId === 'null') {
+        return { success: false, notFound: true, alreadyAccepted: true, error: 'معرّف الطلب مطلوب' };
+    }
+
+    let r = await findRideById(requestId);
+    if (!r) {
+        return { 
+            success: false, 
+            notFound: true, 
+            alreadyAccepted: true, 
+            error: 'عذراً، المشوار تم قبوله من كابتن آخر أو لم يعد متاحاً.' 
+        };
+    }
+
+    // Ensure local memory has updated reference to r
+    db.memoryState.rideRequests = db.memoryState.rideRequests || [];
+    const memIdx = db.memoryState.rideRequests.findIndex(item => String(item.id) === String(r.id));
+    if (memIdx >= 0) {
+        db.memoryState.rideRequests[memIdx] = r;
+    } else {
+        db.memoryState.rideRequests.unshift(r);
+    }
+
+    if (action === 'accept') {
+        const currentCanon = toCanonicalState(r.status);
+        if (currentCanon === RIDE_STATES.NO_DRIVERS || currentCanon === RIDE_STATES.CANCELLED || currentCanon === RIDE_STATES.CANCELLED_BY_RIDER || currentCanon === RIDE_STATES.CANCELLED_BY_DRIVER) {
+            return {
+                success: false,
+                conflict: true,
+                alreadyAccepted: true,
+                expired: true,
+                status: 409,
+                error: 'عذراً، انتهت مهلة هذا المشوار ولم يعد متاحاً للقبول'
+            };
+        }
+
+        if ([RIDE_STATES.ACCEPTED, RIDE_STATES.ARRIVED, RIDE_STATES.IN_PROGRESS, RIDE_STATES.COMPLETED].includes(currentCanon)) {
+            const isMe = String(r.assignedDriverId) === String(driverId) || String(r.acceptedDriverId) === String(driverId);
+            if (isMe) {
+                return {
+                    success: true,
+                    alreadyAccepted: true,
+                    message: 'أنت قبلت هذا المشوار بالفعل!',
+                    request: r,
+                    ride: r
+                };
+            }
+            return {
+                success: false,
+                conflict: true,
+                alreadyAccepted: true,
+                status: 409,
+                error: 'عذراً، تم قبول هذا المشوار من كابتن آخر مسبقاً ⚠️'
+            };
+        }
+
+        const cleanPhone = String(driverId || '').replace(/[^0-9]/g, '');
+        const targetDriver = (db.memoryState.drivers || []).find(d => 
+            String(d.driverId) === String(driverId) || String(d.id) === String(driverId) || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
+        );
+        const actualDriverId = targetDriver ? targetDriver.driverId : driverId;
+
+        // Candidate driver verification: ensure ride is offered to this driver
+        if (r.candidateDriverIds && Array.isArray(r.candidateDriverIds) && r.candidateDriverIds.length > 0) {
+            const isCandidate = r.candidateDriverIds.some(cid => String(cid) === String(actualDriverId) || String(cid) === String(driverId));
+            if (!isCandidate) {
+                return {
+                    success: false,
+                    notAuthorized: true,
+                    status: 403,
+                    error: 'هذا المشوار لم يعد متاحاً لك أو تم تمريره لكابتن آخر'
+                };
+            }
+        }
+
+        // Pre-check driver active ride: a driver with an active ride cannot accept another ride
+        const existingActiveRide = await findActiveRideForDriver(actualDriverId);
+        if (existingActiveRide && String(existingActiveRide.id) !== String(r.id)) {
+            return {
+                success: false,
+                conflict: true,
+                status: 409,
+                error: 'لا يمكنك قبول المشوار؛ لديك مشوار نشط بالفعل حالياً.'
+            };
+        }
+
+        const driverDetails = {
+            assignedDriverId: actualDriverId,
+            acceptedDriverId: actualDriverId,
+            assignedDriverName: targetDriver?.fullName || authUser?.name || 'كابتن توصيله',
+            assignedDriverPhone: targetDriver?.phoneNumber || targetDriver?.phone || authUser?.phone || cleanPhone || '',
+            assignedDriverVehicle: targetDriver ? `${targetDriver.vehicleMake||'تويوتا'} ${targetDriver.vehicleModel||'كورولا'}` : 'تويوتا كورولا',
+            driverPlate: targetDriver?.plateNumber || '١١٣٤٠ ة - النجف',
+            driverRating: targetDriver?.rating || 5.0,
+            driverTier: targetDriver ? (targetDriver.vehicleType || 'eco') : 'eco',
+            assignedDriverTier: targetDriver ? (targetDriver.vehicleType || 'eco') : 'eco'
+        };
+
+        // Atomic State Transition OFFERED -> ACCEPTED via Redis Distributed Lock
+        const transResult = await transitionRideState(
+            redisManager,
+            r.id,
+            RIDE_STATES.ACCEPTED,
+            { id: actualDriverId, role: 'Driver' },
+            driverDetails
+        );
+
+        if (!transResult.success) {
+            return {
+                success: false,
+                conflict: true,
+                alreadyAccepted: true,
+                expired: Boolean(transResult.expired || transResult.fromStatus === RIDE_STATES.NO_DRIVERS),
+                status: 409,
+                error: transResult.error || 'عذراً، المشوار تم قبوله من كابتن آخر أو لم يعد متاحاً.'
+            };
+        }
+
+        r = transResult.ride;
+        normalizeAddresses(r);
+
+        // Initial welcome chat message
+        db.memoryState.chatMessages = db.memoryState.chatMessages || [];
+        const initMsg = {
+            id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+            requestId: r.id,
+            senderId: actualDriverId,
+            senderRole: 'Driver',
+            senderName: r.assignedDriverName || 'الكابتن',
+            text: `مرحباً بك! أنا الكابتن ${r.assignedDriverName || ''} قبلت طلبك وأنا في طريقي إليك الآن 🚖`,
+            createdAt: new Date().toISOString(),
+            timestamp: new Date().toISOString()
+        };
+        db.memoryState.chatMessages.push(initMsg);
+
+        // Save welcome message to Redis list (24h TTL) across all 6 PM2 workers
+        if (redisManager && redisManager.isConnected && redisManager.client) {
+            try {
+                await redisManager.client.rpush('chat:messages:' + r.id, JSON.stringify(initMsg));
+                await redisManager.client.expire('chat:messages:' + r.id, 86400);
+            } catch (chatErr) {
+                console.error('[RideAccepted] Redis chat rpush error:', chatErr.message);
+            }
+        }
+
+        // Stage 1: Notify Customer on Telegram asynchronously (setImmediate)
+        setImmediate(async () => {
+            try {
+                if (typeof telegramBot.notifyTripAccepted === 'function') {
+                    await telegramBot.notifyTripAccepted(r);
+                }
+            } catch (tgErr) {
+                console.error('[RideAccepted] Telegram notify error:', tgErr.message);
+            }
+        });
+
+        await redisManager.publishRideEvent(r.id, { type: 'ride_accepted', event: 'ride_accepted', request: r });
+        await redisManager.publishDispatchEvent({ type: 'ride_taken', event: 'ride_taken', rideId: r.id, requestId: r.id });
+        await redisManager.publishDriverEvent(actualDriverId, { type: 'ride_assigned', event: 'ride_assigned', request: r });
+
+        // Instantly withdraw ride offer modal from other candidate drivers
+        for (const candId of (r.candidateDriverIds || [])) {
+            if (String(candId) !== String(actualDriverId)) {
+                redisManager.publishDriverEvent(candId, {
+                    type: 'ride_offer_expired',
+                    event: 'ride_offer_expired',
+                    rideId: r.id,
+                    requestId: r.id,
+                    reason: 'accepted_by_another'
+                }).catch(() => {});
+            }
+        }
+
+        return {
+            success: true,
+            message: 'تم قبول المشوار بنجاح!',
+            request: r,
+            ride: r
+        };
+    } else {
+        // Reject action
+        const cleanPhone = String(driverId || '').replace(/[^0-9]/g, '');
+        r.rejectedDriverIds = r.rejectedDriverIds || [];
+        if (driverId && !r.rejectedDriverIds.includes(driverId)) r.rejectedDriverIds.push(driverId);
+        if (cleanPhone && !r.rejectedDriverIds.includes(cleanPhone)) r.rejectedDriverIds.push(cleanPhone);
+
+        r.currentDriverIndex = (r.currentDriverIndex || 0) + 1;
+        const stepTimeoutSec = systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 60;
+
+        if (r.candidateDriverIds && r.currentDriverIndex < r.candidateDriverIds.length) {
+            const now = Date.now();
+            r.stepTimeoutAt = now + (stepTimeoutSec * 1000);
+            r.serverTimestamp = now;
+            r.remainingSeconds = stepTimeoutSec;
+            const nextDriverId = r.candidateDriverIds[r.currentDriverIndex];
+            r.assignedDriverId = nextDriverId;
+            const nextDriver = (db.memoryState.drivers || []).find(d => String(d.driverId) === String(nextDriverId) || String(d.id) === String(nextDriverId));
+            if (nextDriver) {
+                r.assignedDriverName = nextDriver.fullName || 'كابتن توصيله';
+                r.assignedDriverPhone = nextDriver.phoneNumber || '';
+            }
+            if (redisManager.isConnected && redisManager.client) {
+                const rStr = JSON.stringify(r);
+                await redisManager.client.hset('pending:rides', String(r.id), rStr);
+                await redisManager.client.set('ride:request:' + r.id, rStr, 'EX', 1200);
+            }
+            redisManager.publishDriverEvent(nextDriverId, {
+                type: 'new_ride',
+                event: 'new_ride',
+                rideId: r.id,
+                requestId: r.id,
+                request: {
+                    ...r,
+                    serverTimestamp: now,
+                    remainingSeconds: stepTimeoutSec,
+                    customerPhone: maskPhoneNumber(r.customerPhone)
+                }
+            });
+            if (typeof telegramBot.notifyCaptainRideOffer === 'function') {
+                telegramBot.notifyCaptainRideOffer(nextDriverId, r, stepTimeoutSec).catch(err => {
+                    console.error(`[RejectAdvance] Driver ${nextDriverId} Telegram offer error:`, err.message);
+                });
+            }
+        } else {
+            await transitionRideState(
+                redisManager,
+                r.id,
+                RIDE_STATES.NO_DRIVERS,
+                { id: driverId, role: 'Driver' },
+                { noDriversAt: new Date().toISOString() }
+            );
+            await redisManager.publishRideEvent(r.id, {
+                type: 'no_drivers_available',
+                event: 'no_drivers_available',
+                rideId: r.id
+            });
+            try {
+                if (typeof telegramBot.notifyRideCancelled === 'function') {
+                    telegramBot.notifyRideCancelled(r, 'driver_declined', 'driver', 0).catch(() => {});
+                }
+            } catch (_) {}
+        }
+        db.saveStateSnapshot();
+        redisManager.publishDispatchEvent({ type: 'ride_rejected', requestId: r.id });
+        return { success: true, message: 'تم رفض المشوار وتمرير الطلب', request: r };
+    }
+}
+
+// Register ride decision handler for Telegram Bot Inline Buttons
+if (typeof telegramBot.setRideDecisionHandler === 'function') {
+    telegramBot.setRideDecisionHandler(handleDriverRideDecision);
+}
+
 async function startServer() {
     // 1. Initialize PostgreSQL & Database state
     await db.init();
@@ -3046,122 +3440,7 @@ async function startServer() {
             return sendJson({ success: true, drivers: activeDrivers });
         }
 
-        // Universal Ride Resolver: Searches Redis (Single Source of Truth), Memory, and PostgreSQL
-        const findRideById = async (rideId) => {
-            if (!rideId || rideId === 'undefined' || rideId === 'null') return null;
-            const sId = String(rideId).trim();
-            
-            // 1. In Redis (Single Source of Truth across PM2 cluster)
-            if (redisManager.isConnected && redisManager.client) {
-                try {
-                    const activeStr = await redisManager.client.get('ride:active:' + sId);
-                    if (activeStr) {
-                        const ride = JSON.parse(activeStr);
-                        if (db.memoryState && Array.isArray(db.memoryState.rideRequests)) {
-                            const idx = db.memoryState.rideRequests.findIndex(item => String(item.id) === sId);
-                            if (idx >= 0) db.memoryState.rideRequests[idx] = ride;
-                            else db.memoryState.rideRequests.unshift(ride);
-                        }
-                        return ride;
-                    }
 
-                    const pendingStr = await redisManager.client.hget('pending:rides', sId);
-                    if (pendingStr) return JSON.parse(pendingStr);
-
-                    const reqStr = await redisManager.client.get('ride:request:' + sId);
-                    if (reqStr) return JSON.parse(reqStr);
-                } catch (_) {}
-            }
-
-            // 2. In memory fallback
-            const inMem = (db.memoryState.rideRequests || []).find(item => String(item.id) === sId);
-            if (inMem) return inMem;
-
-            // 3. In PostgreSQL
-            if (db.isPostgresConnected && db.pool) {
-                try {
-                    const pgRes = await db.pool.query('SELECT * FROM rides WHERE id = $1 LIMIT 1', [sId]);
-                    if (pgRes && pgRes.rows && pgRes.rows.length > 0) {
-                        return pgRes.rows[0];
-                    }
-                } catch (_) {}
-            }
-
-            return null;
-        };
-
-        // Universal Driver Active Ride Resolver (Unified Redis + Memory + DB - Zero 404s)
-        const findActiveRideForDriver = async (rawParam) => {
-            rawParam = String(rawParam || '').trim();
-            if (!rawParam || rawParam === 'undefined' || rawParam === 'null') return null;
-            const cleanPhone = rawParam.replace(/[^0-9]/g, '');
-            const matchedDriver = (db.memoryState.drivers || []).find(d => 
-                d.driverId === rawParam || d.id === rawParam || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
-            );
-            const targetDriverId = matchedDriver ? matchedDriver.driverId : rawParam;
-
-            let active = null;
-
-            // 1. Check Redis first for instant cross-PM2 cluster consistency
-            if (redisManager.isConnected && redisManager.client) {
-                try {
-                    const activeStr = await redisManager.client.get('driver:active:' + String(targetDriverId));
-                    if (activeStr) {
-                        active = JSON.parse(activeStr);
-                    } else if (cleanPhone) {
-                        const activePhoneStr = await redisManager.client.get('driver:active:' + cleanPhone);
-                        if (activePhoneStr) active = JSON.parse(activePhoneStr);
-                    }
-                } catch (_) {}
-            }
-
-            // 2. Check memory
-            if (!active) {
-                active = (db.memoryState.rideRequests || []).find(r => {
-                    const isDriver = r.acceptedDriverId === targetDriverId || 
-                                    r.assignedDriverId === targetDriverId || 
-                                    r.acceptedDriverId === rawParam || 
-                                    r.assignedDriverId === rawParam ||
-                                    (cleanPhone && String(r.driverPhone || r.acceptedDriverPhone || '').replace(/[^0-9]/g, '').endsWith(cleanPhone));
-                    const st = String(r.status || '').toLowerCase();
-                    const isActive = ['accepted', 'arrived', 'driver_arrived', 'inprogress', 'in_progress', 'started', 'ontheway', 'in_trip', 'arrived_destination', 'waiting_at_destination', 'waiting', 'in_trip_return', 'arrived_return'].includes(st);
-                    return isDriver && isActive;
-                });
-            }
-
-            // 3. Check PostgreSQL
-            if (!active && db.isPostgresConnected && db.pool) {
-                try {
-                    const pgRes = await db.pool.query(
-                        `SELECT * FROM rides 
-                         WHERE (driver_id = $1 OR driver_phone = $1 OR driver_id = $2 OR driver_phone = $2) 
-                         AND status IN ('Accepted', 'Arrived', 'InProgress', 'accepted', 'arrived', 'in_progress', 'started', 'ontheway', 'ACCEPTED', 'DRIVER_ARRIVED', 'IN_TRIP', 'ARRIVED_DESTINATION', 'WAITING_AT_DESTINATION', 'IN_TRIP_RETURN', 'ARRIVED_RETURN')
-                         ORDER BY created_at DESC LIMIT 1`,
-                        [targetDriverId, cleanPhone || targetDriverId]
-                    );
-                    if (pgRes && pgRes.rows && pgRes.rows.length > 0) {
-                        active = pgRes.rows[0];
-                    }
-                } catch (_) {}
-            }
-
-            // Validate with Redis (Single Source of Truth) - if ride is finished, it must not be active
-            if (active && redisManager.isConnected && redisManager.client) {
-                try {
-                    const isStillActive = await redisManager.client.exists('ride:active:' + active.id);
-                    if (!isStillActive) {
-                        active = null;
-                    }
-                } catch (_) {}
-            }
-
-            // Address normalization: ensure both pickup and dropoff fields are always populated
-            if (active) {
-                normalizeAddresses(active);
-            }
-
-            return active || null;
-        };
 
         // Universal Customer Active Ride Resolver (Unified Redis + Memory + DB - Zero 404s)
         const findActiveRideForCustomer = async (rawCustomerId, rawPhone) => {
@@ -3627,9 +3906,9 @@ async function startServer() {
                     requestedAt: Date.now(),
                     offeredAt: new Date().toISOString(),
                     createdAt: new Date().toISOString(),
-                    stepTimeoutAt: Date.now() + ((systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 20) * 1000), // Step countdown calculated by server
+                    stepTimeoutAt: Date.now() + ((systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 60) * 1000), // Step countdown calculated by server
                     serverTimestamp: Date.now(),
-                    remainingSeconds: systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 20,
+                    remainingSeconds: systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 60,
                     history: []
                 };
 
@@ -3705,7 +3984,8 @@ async function startServer() {
 
                     for (const dId of candidateIds) {
                         if (typeof telegramBot.notifyCaptainRideOffer === 'function') {
-                            telegramBot.notifyCaptainRideOffer(dId, newRequest, 20).catch(err => {
+                            const stepSec = systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 60;
+                            telegramBot.notifyCaptainRideOffer(dId, newRequest, stepSec).catch(err => {
                                 console.error(`[NewRide] Driver ${dId} Telegram offer error:`, err.message);
                             });
                         }
@@ -3861,7 +4141,7 @@ async function startServer() {
                         r.assignedDriverName = nextDriver ? nextDriver.fullName : 'كابتن توصيله';
                         r.assignedDriverPhone = nextDriver ? nextDriver.phoneNumber : '';
                         r.assignedDriverVehicle = nextDriver ? `${nextDriver.vehicleMake||'تويوتا'} ${nextDriver.vehicleModel||'كورولا'}` : 'تويوتا';
-                        const stepTimeoutSec = systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 20;
+                        const stepTimeoutSec = systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 60;
                         r.stepTimeoutAt = now + (stepTimeoutSec * 1000);
                         r.serverTimestamp = now;
                         r.remainingSeconds = stepTimeoutSec;
@@ -3983,12 +4263,38 @@ async function startServer() {
 
                 // RLS Authorization Check: Unassigned driver reading ride or unrelated customer -> 403 Forbidden
                 const authUser = getAuthUser(req);
+                const canonStatus = toCanonicalState ? toCanonicalState(r.status) : String(r.status || '').toUpperCase();
+                const isTaken = ['ACCEPTED', 'ARRIVED', 'IN_TRIP', 'WAITING_AT_DESTINATION', 'RETURNING', 'COMPLETED'].includes(canonStatus);
+                const isEnded = ['NO_DRIVERS', 'CANCELLED', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_DRIVER'].includes(canonStatus);
+
                 if (authUser && authUser.role !== 'Admin') {
                     if (authUser.role === 'Driver') {
                         const isAssigned = (authUser.id && (String(authUser.id) === String(r.assignedDriverId) || String(authUser.id) === String(r.acceptedDriverId))) ||
                                            (authUser.phone && r.assignedDriverPhone && normalizePhone(authUser.phone) === normalizePhone(r.assignedDriverPhone)) ||
-                                           (r.candidateDriverIds && r.candidateDriverIds.includes(authUser.id));
+                                           (r.candidateDriverIds && (r.candidateDriverIds.includes(authUser.id) || r.candidateDriverIds.some(cid => String(cid) === String(authUser.id))));
                         if (!isAssigned) {
+                            if (isTaken && r.assignedDriverId && String(r.assignedDriverId) !== String(authUser.id)) {
+                                return sendJson({
+                                    success: true,
+                                    notFound: false,
+                                    alreadyAccepted: true,
+                                    status: r.status,
+                                    message: 'عذراً، تم قبول هذا المشوار من كابتن آخر مسبقاً ⚠️',
+                                    ride: { id: r.id, status: r.status, assignedDriverId: r.assignedDriverId }
+                                }, 200);
+                            }
+
+                            if (isEnded || canonStatus === 'NO_DRIVERS') {
+                                return sendJson({
+                                    success: true,
+                                    notFound: false,
+                                    expired: true,
+                                    status: r.status,
+                                    message: 'عذراً، انتهت مهلة هذا المشوار ولم يعد متاحاً ⚠️',
+                                    ride: { id: r.id, status: r.status }
+                                }, 200);
+                            }
+
                             return sendJson({ success: false, error: 'غير مصرح: لا يمكنك الاطلاع على تفاصيل مشوار لم تُعين له (RLS)' }, 403);
                         }
                     } else if (authUser.role === 'Customer') {
@@ -3998,6 +4304,28 @@ async function startServer() {
                             return sendJson({ success: false, error: 'غير مصرح: لا يمكنك الاطلاع على تفاصيل مشوار عميل آخر (RLS)' }, 403);
                         }
                     }
+                } else if (!authUser && (isTaken || isEnded)) {
+                    // Friendly fallback when opened without auth session for expired or taken rides
+                    if (isTaken) {
+                        return sendJson({
+                            success: true,
+                            notFound: false,
+                            alreadyAccepted: true,
+                            status: r.status,
+                            message: 'عذراً، تم قبول هذا المشوار من كابتن آخر مسبقاً ⚠️',
+                            ride: { id: r.id, status: r.status }
+                        }, 200);
+                    }
+                    if (isEnded) {
+                        return sendJson({
+                            success: true,
+                            notFound: false,
+                            expired: true,
+                            status: r.status,
+                            message: 'عذراً، انتهت مهلة هذا المشوار ولم يعد متاحاً ⚠️',
+                            ride: { id: r.id, status: r.status }
+                        }, 200);
+                    }
                 }
 
                 return sendJson({ success: true, notFound: false, ride: r, request: r, activeRide: r }, 200);
@@ -4006,6 +4334,8 @@ async function startServer() {
                 return sendJson({ success: true, notFound: true, ride: null, request: null, activeRide: null }, 200);
             }
         }
+
+
 
         // Driver Respond to Request (Accept / Reject) - Atomic State Transition & Distributed Lock
         if ((pathname === '/api/ride/respond' || pathname === '/ride/respond' || pathname === '/api/ride/accept' || pathname === '/ride/accept') && method === 'POST') {
@@ -4042,209 +4372,15 @@ async function startServer() {
                     }
                 }
 
-                let r = await findRideById(requestId);
+                const authUser = getAuthUser(req);
+                const result = await handleDriverRideDecision(requestId, driverId, action, authUser);
 
-                if (!r) {
-                    return sendJson({ 
-                        success: false, 
-                        notFound: true, 
-                        alreadyAccepted: true, 
-                        error: 'عذراً، المشوار تم قبوله من كابتن آخر أو لم يعد متاحاً.' 
-                    }, 200);
+                if (idempotencyKey && result.success) {
+                    idempotencyStore.set(idempotencyKey, { response: result, timestamp: Date.now() });
                 }
 
-                // Ensure local memory has updated reference to r
-                db.memoryState.rideRequests = db.memoryState.rideRequests || [];
-                const memIdx = db.memoryState.rideRequests.findIndex(item => String(item.id) === String(r.id));
-                if (memIdx >= 0) {
-                    db.memoryState.rideRequests[memIdx] = r;
-                } else {
-                    db.memoryState.rideRequests.unshift(r);
-                }
-
-                if (action === 'accept') {
-                    // Check if ride is already in NO_DRIVERS or cancelled status
-                    const currentCanon = toCanonicalState(r.status);
-                    if (currentCanon === RIDE_STATES.NO_DRIVERS || currentCanon === RIDE_STATES.CANCELLED || currentCanon === RIDE_STATES.CANCELLED_BY_RIDER || currentCanon === RIDE_STATES.CANCELLED_BY_DRIVER) {
-                        return sendJson({
-                            success: false,
-                            conflict: true,
-                            alreadyAccepted: true,
-                            expired: true,
-                            status: 409,
-                            error: 'عذراً، انتهت مهلة هذا المشوار ولم يعد متاحاً للقبول'
-                        }, 409);
-                    }
-
-                    // Pre-check driver active ride: a driver with an active ride cannot accept another ride
-                    const existingActiveRide = await findActiveRideForDriver(driverId);
-                    if (existingActiveRide && String(existingActiveRide.id) !== String(r.id)) {
-                        return sendJson({
-                            success: false,
-                            conflict: true,
-                            status: 409,
-                            error: 'لا يمكنك قبول المشوار؛ لديك مشوار نشط بالفعل حالياً.'
-                        }, 409);
-                    }
-
-                    const cleanPhone = String(driverId || '').replace(/[^0-9]/g, '');
-                    const targetDriver = (db.memoryState.drivers || []).find(d => 
-                        String(d.driverId) === String(driverId) || String(d.id) === String(driverId) || (cleanPhone && d.phoneNumber && d.phoneNumber.replace(/[^0-9]/g, '').endsWith(cleanPhone))
-                    );
-                    const actualDriverId = targetDriver ? targetDriver.driverId : driverId;
-
-                    const driverDetails = {
-                        assignedDriverId: actualDriverId,
-                        acceptedDriverId: actualDriverId,
-                        assignedDriverName: targetDriver?.fullName || 'كابتن توصيله',
-                        assignedDriverPhone: targetDriver?.phoneNumber || targetDriver?.phone || cleanPhone || '',
-                        assignedDriverVehicle: targetDriver ? `${targetDriver.vehicleMake||'تويوتا'} ${targetDriver.vehicleModel||'كورولا'}` : 'تويوتا كورولا',
-                        driverPlate: targetDriver?.plateNumber || '١١٣٤٠ ة - النجف',
-                        driverRating: targetDriver?.rating || 5.0,
-                        driverTier: targetDriver ? (targetDriver.vehicleType || 'eco') : 'eco',
-                        assignedDriverTier: targetDriver ? (targetDriver.vehicleType || 'eco') : 'eco'
-                    };
-
-                    // Atomic State Transition OFFERED -> ACCEPTED via Redis Distributed Lock
-                    const transResult = await transitionRideState(
-                        redisManager,
-                        r.id,
-                        RIDE_STATES.ACCEPTED,
-                        { id: actualDriverId, role: 'Driver' },
-                        driverDetails
-                    );
-
-                    if (!transResult.success) {
-                        return sendJson({
-                            success: false,
-                            conflict: true,
-                            alreadyAccepted: true,
-                            expired: Boolean(transResult.expired || transResult.fromStatus === RIDE_STATES.NO_DRIVERS),
-                            status: 409,
-                            error: transResult.error || 'عذراً، المشوار تم قبوله من كابتن آخر أو لم يعد متاحاً.'
-                        }, 409);
-                    }
-
-                    r = transResult.ride;
-                    normalizeAddresses(r);
-
-                    // Initial welcome chat message
-                    db.memoryState.chatMessages = db.memoryState.chatMessages || [];
-                    const initMsg = {
-                        id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
-                        requestId: r.id,
-                        senderId: actualDriverId,
-                        senderRole: 'Driver',
-                        senderName: r.assignedDriverName || 'الكابتن',
-                        text: `مرحباً بك! أنا الكابتن ${r.assignedDriverName || ''} قبلت طلبك وأنا في طريقي إليك الآن 🚖`,
-                        createdAt: new Date().toISOString(),
-                        timestamp: new Date().toISOString()
-                    };
-                    db.memoryState.chatMessages.push(initMsg);
-
-                    // Stage 1: Notify Customer on Telegram asynchronously (setImmediate)
-                    // This ensures the HTTP response returns immediately to driver app so UI transitions before Telegram push
-                    setImmediate(async () => {
-                        try {
-                            if (typeof telegramBot.notifyTripAccepted === 'function') {
-                                await telegramBot.notifyTripAccepted(r);
-                            }
-                        } catch (tgErr) {
-                            console.error('[RideAccepted] Telegram notify error:', tgErr.message);
-                        }
-                    });
-
-                    await redisManager.publishRideEvent(r.id, { type: 'ride_accepted', event: 'ride_accepted', request: r });
-                    await redisManager.publishDispatchEvent({ type: 'ride_taken', event: 'ride_taken', rideId: r.id, requestId: r.id });
-                    await redisManager.publishDriverEvent(actualDriverId, { type: 'ride_assigned', event: 'ride_assigned', request: r });
-
-                    // Instantly withdraw ride offer modal from other candidate drivers
-                    for (const candId of (r.candidateDriverIds || [])) {
-                        if (String(candId) !== String(actualDriverId)) {
-                            redisManager.publishDriverEvent(candId, {
-                                type: 'ride_offer_expired',
-                                event: 'ride_offer_expired',
-                                rideId: r.id,
-                                requestId: r.id,
-                                reason: 'accepted_by_another'
-                            }).catch(() => {});
-                        }
-                    }
-
-                    const respPayload = {
-                        success: true,
-                        message: 'تم قبول المشوار بنجاح!',
-                        request: r,
-                        ride: r
-                    };
-
-                    if (idempotencyKey) {
-                        idempotencyStore.set(idempotencyKey, { response: respPayload, timestamp: Date.now() });
-                    }
-
-                    return sendJson(respPayload);
-                } else {
-                    // Reject action
-                    const cleanPhone = String(driverId || '').replace(/[^0-9]/g, '');
-                    r.rejectedDriverIds = r.rejectedDriverIds || [];
-                    if (driverId && !r.rejectedDriverIds.includes(driverId)) r.rejectedDriverIds.push(driverId);
-                    if (cleanPhone && !r.rejectedDriverIds.includes(cleanPhone)) r.rejectedDriverIds.push(cleanPhone);
-
-                    r.currentDriverIndex = (r.currentDriverIndex || 0) + 1;
-                    const stepTimeoutSec = systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 20;
-
-                    if (r.candidateDriverIds && r.currentDriverIndex < r.candidateDriverIds.length) {
-                        const now = Date.now();
-                        r.stepTimeoutAt = now + (stepTimeoutSec * 1000);
-                        r.serverTimestamp = now;
-                        r.remainingSeconds = stepTimeoutSec;
-                        const nextDriverId = r.candidateDriverIds[r.currentDriverIndex];
-                        r.assignedDriverId = nextDriverId;
-                        const nextDriver = (db.memoryState.drivers || []).find(d => String(d.driverId) === String(nextDriverId) || String(d.id) === String(nextDriverId));
-                        if (nextDriver) {
-                            r.assignedDriverName = nextDriver.fullName || 'كابتن توصيله';
-                            r.assignedDriverPhone = nextDriver.phoneNumber || '';
-                        }
-                        if (redisManager.isConnected && redisManager.client) {
-                            const rStr = JSON.stringify(r);
-                            await redisManager.client.hset('pending:rides', String(r.id), rStr);
-                            await redisManager.client.set('ride:request:' + r.id, rStr, 'EX', 1200);
-                        }
-                        redisManager.publishDriverEvent(nextDriverId, {
-                            type: 'new_ride',
-                            event: 'new_ride',
-                            rideId: r.id,
-                            requestId: r.id,
-                            request: {
-                                ...r,
-                                serverTimestamp: now,
-                                remainingSeconds: stepTimeoutSec,
-                                customerPhone: maskPhoneNumber(r.customerPhone)
-                            }
-                        });
-                    } else {
-                        await transitionRideState(
-                            redisManager,
-                            r.id,
-                            RIDE_STATES.NO_DRIVERS,
-                            { id: driverId, role: 'Driver' },
-                            { noDriversAt: new Date().toISOString() }
-                        );
-                        await redisManager.publishRideEvent(r.id, {
-                            type: 'no_drivers_available',
-                            event: 'no_drivers_available',
-                            rideId: r.id
-                        });
-                        try {
-                            if (typeof telegramBot.notifyRideCancelled === 'function') {
-                                telegramBot.notifyRideCancelled(r, reason, 'driver', 0).catch(() => {});
-                            }
-                        } catch (_) {}
-                    }
-                    db.saveStateSnapshot();
-                    redisManager.publishDispatchEvent({ type: 'ride_rejected', requestId: r.id });
-                    return sendJson({ success: true, message: 'تم رفض المشوار وتمرير الطلب', request: r });
-                }
+                const httpStatus = result.status || (result.success ? 200 : (result.notFound ? 200 : 400));
+                return sendJson(result, httpStatus);
             } catch (err) {
                 return sendJson({ success: false, error: err.message }, 500);
             }
@@ -4991,8 +5127,27 @@ async function startServer() {
                 }
             }
 
-            const allMessages = db.memoryState.chatMessages || [];
-            const messages = allMessages.filter(m => m.requestId === requestId);
+            // Fetch messages from Redis (Single Source of Truth across all 6 PM2 workers)
+            let messages = [];
+            if (redisManager && redisManager.isConnected && redisManager.client) {
+                try {
+                    const rawList = await redisManager.client.lrange(`chat:messages:${requestId}`, 0, -1);
+                    if (rawList && rawList.length > 0) {
+                        messages = rawList.map(raw => {
+                            try { return JSON.parse(raw); } catch (_) { return null; }
+                        }).filter(Boolean);
+                    }
+                } catch (rErr) {
+                    console.error('[Chat] Redis read error:', rErr.message);
+                }
+            }
+
+            // Fallback to local memory if Redis has no messages
+            if (!messages || messages.length === 0) {
+                const allMessages = db.memoryState.chatMessages || [];
+                messages = allMessages.filter(m => m.requestId === requestId);
+            }
+
             return sendJson({ success: true, messages });
         }
 
@@ -5059,6 +5214,16 @@ async function startServer() {
                 db.memoryState.chatMessages.push(newMsg);
                 db.saveStateSnapshot();
 
+                // Save message to Redis list (24h TTL) across all 6 PM2 workers
+                if (redisManager && redisManager.isConnected && redisManager.client) {
+                    try {
+                        await redisManager.client.rpush(`chat:messages:${requestId}`, JSON.stringify(newMsg));
+                        await redisManager.client.expire(`chat:messages:${requestId}`, 86400);
+                    } catch (rErr) {
+                        console.error('[Chat] Redis write error:', rErr.message);
+                    }
+                }
+
                 // Publish real-time event to SSE channel for instant delivery without polling
                 await redisManager.publishRideEvent(requestId, {
                     type: 'chat_message',
@@ -5078,9 +5243,14 @@ async function startServer() {
                                 const lock = await redisManager.acquireTelegramNotificationLock(`chat_tg:${requestId}:${drvChatId}`, 60);
                                 if (lock) {
                                     const tgText = `💬 <b>رسالة جديدة من الراكب:</b>\n\n"${cleanText.slice(0, 80)}${cleanText.length > 80 ? '...' : ''}"`;
+                                    const drvObj = (db.memoryState.drivers || []).find(d => String(d.driverId) === String(drvId));
+                                    const drvPhone = normalizePhone(drvObj?.phoneNumber || reqObj.assignedDriverPhone);
+                                    const drvName = drvObj?.fullName || reqObj.assignedDriverName || 'كابتن توصيلة';
+                                    const drvToken = 'jwt_driver_' + drvId;
+                                    const drvChatUrl = `https://tawseelaiq.app/drive?ride=${encodeURIComponent(requestId)}&role=Driver&phone=${encodeURIComponent(drvPhone)}&login_token=${encodeURIComponent(drvToken)}&userId=${encodeURIComponent(drvId)}&fullName=${encodeURIComponent(drvName)}`;
                                     await telegramBot.sendMessage(drvChatId, tgText, {
                                         reply_markup: {
-                                            inline_keyboard: [[{ text: '💬 فتح المحادثة', url: `https://tawseelaiq.app/drive?ride=${encodeURIComponent(requestId)}` }]]
+                                            inline_keyboard: [[{ text: '💬 فتح المحادثة', url: drvChatUrl }]]
                                         }
                                     }).catch(() => {});
                                 }
@@ -5217,7 +5387,7 @@ async function startServer() {
                         const nextDriverId = altCandidates[0];
                         const nextDriver = (db.memoryState.drivers || []).find(d => String(d.driverId) === String(nextDriverId) || String(d.id) === String(nextDriverId));
                         const now = Date.now();
-                        const stepTimeoutSec = systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 20;
+                        const stepTimeoutSec = systemSettingsService ? systemSettingsService.getStepTimeoutSeconds() : 60;
                         const stepTimeoutAt = now + (stepTimeoutSec * 1000);
 
                         const transRes = await transitionRideState(
@@ -9082,4 +9252,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { startServer };
+module.exports = { startServer, handleDriverRideDecision, findRideById, findActiveRideForDriver };

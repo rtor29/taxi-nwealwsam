@@ -1062,6 +1062,160 @@ async function completeDriverRegistration(chatId, user, locationInput) {
     userStates.delete(chatId);
 }
 
+let _rideDecisionHandler = null;
+
+function setRideDecisionHandler(handler) {
+    _rideDecisionHandler = handler;
+}
+
+// --- Handle Taxi Ride Decision (Accept / Reject) from Captain via Bot Inline Buttons ---
+async function handleRideDecisionCallback(chatId, data, user, queryId, messageId = null) {
+    const isAccept = data.startsWith('ride_accept_');
+    const rideId = data.replace(isAccept ? 'ride_accept_' : 'ride_reject_', '').trim();
+    if (!rideId) return;
+
+    // 1. Idempotency Lock via Redis: double-click prevention
+    const lockKey = `tg:ride_cb:${rideId}:${chatId}`;
+    const lockAcquired = await redisManager.acquireTelegramNotificationLock(lockKey, 25);
+    if (!lockAcquired) {
+        if (queryId) {
+            await tgRequest('answerCallbackQuery', {
+                callback_query_id: queryId,
+                text: '⚠️ جارٍ معالجة هذا الطلب بالفعل...',
+                show_alert: false
+            }).catch(() => {});
+        }
+        return;
+    }
+
+    // 2. Identify driver from chatId
+    let driver = (db.memoryState.drivers || []).find(d => String(d.telegramChatId) === String(chatId));
+    if (!driver && db.isPostgresConnected && db.pool) {
+        try {
+            const pgDrv = await db.pool.query('SELECT * FROM drivers WHERE telegram_chat_id = $1 LIMIT 1', [String(chatId)]);
+            if (pgDrv.rows && pgDrv.rows.length > 0) {
+                const r = pgDrv.rows[0];
+                driver = {
+                    driverId: r.driver_id,
+                    fullName: r.full_name,
+                    phoneNumber: r.phone_number,
+                    telegramChatId: r.telegram_chat_id,
+                    vehicleMake: r.vehicle_make,
+                    vehicleModel: r.vehicle_model,
+                    plateNumber: r.plate_number,
+                    vehicleType: r.vehicle_type
+                };
+            }
+        } catch (_) {}
+    }
+
+    if (!driver) {
+        if (redisManager && redisManager.client) await redisManager.client.del(lockKey).catch(() => {});
+        if (queryId) {
+            await tgRequest('answerCallbackQuery', {
+                callback_query_id: queryId,
+                text: '⚠️ حسابك في تليغرام غير مربوط بحساب كابتن في منصة توصيلة.',
+                show_alert: true
+            }).catch(() => {});
+        }
+        return;
+    }
+
+    // 3. Delegate to registered ride decision handler (server-authoritative)
+    if (typeof _rideDecisionHandler !== 'function') {
+        if (redisManager && redisManager.client) await redisManager.client.del(lockKey).catch(() => {});
+        if (queryId) {
+            await tgRequest('answerCallbackQuery', {
+                callback_query_id: queryId,
+                text: '⚠️ خدمة قبول المشاوير غير جاهزة حالياً، يرجى المحاولة لاحقاً.',
+                show_alert: true
+            }).catch(() => {});
+        }
+        return;
+    }
+
+    const authUser = {
+        id: driver.driverId,
+        role: 'Driver',
+        phone: driver.phoneNumber,
+        name: driver.fullName
+    };
+
+    const action = isAccept ? 'accept' : 'reject';
+    const result = await _rideDecisionHandler(rideId, driver.driverId, action, authUser);
+
+    if (isAccept) {
+        if (result.success) {
+            if (queryId) {
+                await tgRequest('answerCallbackQuery', {
+                    callback_query_id: queryId,
+                    text: '✅ قبلت المشوار بنجاح!',
+                    show_alert: false
+                }).catch(() => {});
+            }
+
+            const r = result.ride || result.request || {};
+            const cleanPhone = normalizeIraqiPhone(driver.phoneNumber).cleanPhone;
+            const token = 'jwt_driver_' + driver.driverId;
+            const driverName = driver.fullName || 'كابتن توصيلة';
+            const driveLink = `https://tawseelaiq.app/drive?ride=${encodeURIComponent(rideId)}&role=Driver&phone=${encodeURIComponent(cleanPhone)}&login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driver.driverId)}&fullName=${encodeURIComponent(driverName)}`;
+
+            if (messageId) {
+                const rawFare = r.fare || r.estimatedFare || 3000;
+                const balyFare = Math.max(3000, Math.ceil(Number(rawFare) / 250) * 250).toLocaleString('en-US');
+                const editedText = `✅ <b>تم قبول المشوار بنجاح! 🚖</b>\n\n` +
+                    `👤 <b>الراكب:</b> ${r.customerName || 'راكب توصيلة'}\n` +
+                    `📍 <b>الانطلاق:</b> ${r.pickupName || 'موقع الركوب'}\n` +
+                    `🏁 <b>الوجهة:</b> ${r.dropoffName || 'الوجهة'}\n` +
+                    `💰 <b>الأجرة:</b> ${balyFare} د.ع\n\n` +
+                    `<i>توجه الآن إلى نقطة الانطلاق لملاقاة الراكب 📍</i>`;
+
+                const buttons = [
+                    [{ text: '🧭 فتح شاشة الرحلة والملاحة', url: driveLink }]
+                ];
+                await editMessageText(chatId, messageId, editedText, { reply_markup: { inline_keyboard: buttons } }).catch(() => {});
+            }
+        } else {
+            if (redisManager && redisManager.client) await redisManager.client.del(lockKey).catch(() => {});
+            const errMsg = result.error || 'عذراً، لم يعد المشوار متاحاً للقبول';
+            if (queryId) {
+                await tgRequest('answerCallbackQuery', {
+                    callback_query_id: queryId,
+                    text: errMsg,
+                    show_alert: true
+                }).catch(() => {});
+            }
+            if (messageId) {
+                await editMessageText(chatId, messageId, `⚠️ <i>${errMsg}</i>`, { reply_markup: { inline_keyboard: [] } }).catch(() => {});
+            }
+        }
+    } else {
+        // Reject
+        if (result.success) {
+            if (queryId) {
+                await tgRequest('answerCallbackQuery', {
+                    callback_query_id: queryId,
+                    text: '❌ تم الاعتذار عن قبول المشوار',
+                    show_alert: false
+                }).catch(() => {});
+            }
+            if (messageId) {
+                await editMessageText(chatId, messageId, `❌ <i>تم الاعتذار عن المشوار وتحويله لكابتن آخر</i>`, { reply_markup: { inline_keyboard: [] } }).catch(() => {});
+            }
+        } else {
+            if (redisManager && redisManager.client) await redisManager.client.del(lockKey).catch(() => {});
+            const errMsg = result.error || 'تعذر الاعتذار عن المشوار';
+            if (queryId) {
+                await tgRequest('answerCallbackQuery', {
+                    callback_query_id: queryId,
+                    text: errMsg,
+                    show_alert: true
+                }).catch(() => {});
+            }
+        }
+    }
+}
+
 // --- Handle Booking Decision from Captain via Bot Inline Buttons ---
 async function handleBookingDecisionCallback(chatId, data, user, queryId, messageId = null) {
     const isAccept = data.startsWith('bk_accept_');
@@ -1241,6 +1395,11 @@ async function handleCallback(chatId, data, user, queryId, messageId = null) {
 
     if (data.startsWith('bk_accept_') || data.startsWith('bk_reject_')) {
         await handleBookingDecisionCallback(chatId, data, user, queryId, messageId);
+        return;
+    }
+
+    if (data.startsWith('ride_accept_') || data.startsWith('ride_reject_')) {
+        await handleRideDecisionCallback(chatId, data, user, queryId, messageId);
         return;
     }
 
@@ -2499,9 +2658,20 @@ async function notifyCaptainRideOffer(driverId, ride, timeoutSeconds = 20) {
             `🛣️ <b>مسافة المشوار:</b> ${tripDistKm} كم (~${tripDurMins} دقيقة)\n\n` +
             `⏳ <b>مهلة الرد:</b> ${timeoutSeconds} ثانية`;
 
-        const deepLink = `https://tawseelaiq.app/drive?ride=${encodeURIComponent(ride.id)}`;
+        const driver = (db.memoryState.drivers || []).find(d => String(d.driverId) === String(driverId));
+        const rawPhone = ride.driverPhone || ride.assignedDriverPhone || driver?.phoneNumber || '';
+        const cleanPhone = normalizeIraqiPhone(rawPhone).cleanPhone;
+        const token = 'jwt_driver_' + driverId;
+        const driverName = driver?.fullName || 'كابتن توصيلة';
+        const deepLink = `https://tawseelaiq.app/drive?ride=${encodeURIComponent(ride.id)}&role=Driver&phone=${encodeURIComponent(cleanPhone)}&login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(driverId)}&fullName=${encodeURIComponent(driverName)}`;
         const buttons = [
-            [{ text: '🚖 فتح الطلب في التطبيق', url: deepLink }]
+            [
+                { text: 'قبول المشوار ✅', callback_data: `ride_accept_${ride.id}` },
+                { text: 'اعتذار ❌', callback_data: `ride_reject_${ride.id}` }
+            ],
+            [
+                { text: '🚖 فتح الطلب في التطبيق', url: deepLink }
+            ]
         ];
 
         const res = await sendKeyboard(chatId, msg, buttons);
@@ -2564,7 +2734,11 @@ async function notifyTripAccepted(ride) {
                     `توجه الآن إلى نقطة الانطلاق لملاقاة الراكب 📍\n` +
                     `يمكنك التواصل مع الراكب عبر الاتصال أو الواتساب أو الدردشة من داخل التطبيق.`;
 
-                const driveLink = `https://tawseelaiq.app/drive?ride=${encodeURIComponent(ride.id)}`;
+                const driver = (db.memoryState.drivers || []).find(d => String(d.driverId) === String(drvId));
+                const driverName = driver?.fullName || ride.assignedDriverName || 'كابتن توصيلة';
+                const cleanPhone = normalizeIraqiPhone(ride.assignedDriverPhone || driver?.phoneNumber).cleanPhone;
+                const token = 'jwt_driver_' + drvId;
+                const driveLink = `https://tawseelaiq.app/drive?ride=${encodeURIComponent(ride.id)}&role=Driver&phone=${encodeURIComponent(cleanPhone)}&login_token=${encodeURIComponent(token)}&userId=${encodeURIComponent(drvId)}&fullName=${encodeURIComponent(driverName)}`;
                 const buttons = [
                     [{ text: '🧭 فتح شاشة الرحلة والملاحة', url: driveLink }]
                 ];
@@ -2979,6 +3153,8 @@ module.exports = {
     notifyBookingAcceptedToRider,
     notifyBookingDeclinedToRider,
     updateCaptainBookingMessage,
-    handleBookingDecisionCallback
+    handleBookingDecisionCallback,
+    setRideDecisionHandler,
+    handleRideDecisionCallback
 };
 
