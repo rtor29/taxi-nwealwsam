@@ -538,18 +538,19 @@ class DatabaseManager {
                     totalTrips: r.total_trips || 0,
                     points: parseInt(r.points || 0, 10),
                     rewardScore: parseInt(r.points || 0, 10),
-                    permanentLat: r.permanent_lat ? parseFloat(r.permanent_lat) : (r.fixed_lat ? parseFloat(r.fixed_lat) : null),
-                    permanentLon: r.permanent_lon ? parseFloat(r.permanent_lon) : (r.fixed_lng ? parseFloat(r.fixed_lng) : null),
-                    permanentLocationName: r.permanent_location_name || r.fixed_label || '',
-                    permanentDropoffLat: r.permanent_dropoff_lat ? parseFloat(r.permanent_dropoff_lat) : null,
-                    permanentDropoffLon: r.permanent_dropoff_lon ? parseFloat(r.permanent_dropoff_lon) : null,
-                    permanentDropoffName: r.permanent_dropoff_name || '',
-                    fixedLat: r.fixed_lat ? parseFloat(r.fixed_lat) : (r.permanent_lat ? parseFloat(r.permanent_lat) : null),
-                    fixedLng: r.fixed_lng ? parseFloat(r.fixed_lng) : (r.permanent_lon ? parseFloat(r.permanent_lon) : null),
-                    fixedLabel: r.fixed_label || r.permanent_location_name || '',
-                    fixedDestLat: r.fixed_dest_lat ? parseFloat(r.fixed_dest_lat) : (r.permanent_dropoff_lat ? parseFloat(r.permanent_dropoff_lat) : null),
-                    fixedDestLng: r.fixed_dest_lng ? parseFloat(r.fixed_dest_lng) : (r.permanent_dropoff_lon ? parseFloat(r.permanent_dropoff_lon) : null),
-                    fixedDestLabel: r.fixed_dest_label || r.permanent_dropoff_name || '',
+                    // Batch 7: تحييد permanent_* نهائياً — المصدر المعتمد هو fixed_* فقط
+                    permanentLat: null,
+                    permanentLon: null,
+                    permanentLocationName: '',
+                    permanentDropoffLat: null,
+                    permanentDropoffLon: null,
+                    permanentDropoffName: '',
+                    fixedLat: r.fixed_lat ? parseFloat(r.fixed_lat) : null,
+                    fixedLng: r.fixed_lng ? parseFloat(r.fixed_lng) : null,
+                    fixedLabel: r.fixed_label || '',
+                    fixedDestLat: r.fixed_dest_lat ? parseFloat(r.fixed_dest_lat) : null,
+                    fixedDestLng: r.fixed_dest_lng ? parseFloat(r.fixed_dest_lng) : null,
+                    fixedDestLabel: r.fixed_dest_label || '',
                     routeName: r.route_name || '',
                     fixedUpdatedAt: r.fixed_updated_at || null,
                     routeLocked: r.route_locked === true,
@@ -783,9 +784,7 @@ class DatabaseManager {
             await this.pool.query(
                 `UPDATE drivers SET 
                     fixed_lat = $1::double precision, fixed_lng = $2::double precision, fixed_label = $3::text, fixed_updated_at = NOW(),
-                    permanent_lat = $1::double precision, permanent_lon = $2::double precision, permanent_location_name = $3::text,
                     fixed_dest_lat = $4::double precision, fixed_dest_lng = $5::double precision, fixed_dest_label = $6::text,
-                    permanent_dropoff_lat = $4::double precision, permanent_dropoff_lon = $5::double precision, permanent_dropoff_name = $6::text,
                     route_name = $7::text,
                     route_locked = TRUE,
                     updated_at = NOW()
@@ -802,9 +801,7 @@ class DatabaseManager {
             await this.pool.query(
                 `UPDATE drivers SET 
                     fixed_lat = NULL, fixed_lng = NULL, fixed_label = NULL, fixed_updated_at = NOW(),
-                    permanent_lat = NULL, permanent_lon = NULL, permanent_location_name = NULL,
                     fixed_dest_lat = NULL, fixed_dest_lng = NULL, fixed_dest_label = NULL,
-                    permanent_dropoff_lat = NULL, permanent_dropoff_lon = NULL, permanent_dropoff_name = NULL,
                     route_name = NULL,
                     route_locked = FALSE,
                     updated_at = NOW()

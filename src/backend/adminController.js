@@ -30,24 +30,88 @@ class AdminController {
             );
         }
 
-        const enrichedDrivers = drivers.map(d => {
+        // Batch 7: قراءة أحدث بيانات المسار الموحدة من PostgreSQL drivers و Redis لضمان رؤية الداش بورد للمسار الحقيقي
+        let pgDriversMap = new Map();
+        if (db.isPostgresConnected && db.pool) {
+            try {
+                const pgRes = await db.pool.query(`
+                    SELECT driver_id, fixed_lat, fixed_lng, fixed_label,
+                           fixed_dest_lat, fixed_dest_lng, fixed_dest_label,
+                           route_name, route_locked, fixed_updated_at
+                    FROM drivers
+                `);
+                if (pgRes.rows) {
+                    for (const r of pgRes.rows) {
+                        pgDriversMap.set(String(r.driver_id), r);
+                    }
+                }
+            } catch (err) {
+                console.warn('[AdminController] Error fetching latest driver routes for dashboard:', err.message);
+            }
+        }
+
+        const redisManager = require('./modules/redis/redisClient');
+        const enrichedDrivers = await Promise.all(drivers.map(async (d) => {
             const routeObj = db.memoryState.routes.find(r => r.driverId === d.driverId);
-            const routeName = (routeObj ? (routeObj.name || `${routeObj.startName} - ${routeObj.endName}`) : null) || d.routeName || d.route || 'غير محدد';
+            const pgRow = pgDriversMap.get(String(d.driverId));
+
+            // قراءة من PostgreSQL أولاً، ثم Memory
+            let fixedLat = pgRow?.fixed_lat != null ? parseFloat(pgRow.fixed_lat) : (d.fixedLat != null ? parseFloat(d.fixedLat) : null);
+            let fixedLng = pgRow?.fixed_lng != null ? parseFloat(pgRow.fixed_lng) : (d.fixedLng != null ? parseFloat(d.fixedLng) : null);
+            let fixedLabel = pgRow?.fixed_label || d.fixedLabel || '';
+            let fixedDestLat = pgRow?.fixed_dest_lat != null ? parseFloat(pgRow.fixed_dest_lat) : (d.fixedDestLat != null ? parseFloat(d.fixedDestLat) : null);
+            let fixedDestLng = pgRow?.fixed_dest_lng != null ? parseFloat(pgRow.fixed_dest_lng) : (d.fixedDestLng != null ? parseFloat(d.fixedDestLng) : null);
+            let fixedDestLabel = pgRow?.fixed_dest_label || d.fixedDestLabel || '';
+            let routeName = pgRow?.route_name || d.routeName || '';
+            let routeLocked = pgRow?.route_locked !== undefined ? Boolean(pgRow.route_locked) : Boolean(d.routeLocked === true || d.route_locked === true);
+
+            // التحقق من مرآة Redis السريعة (إذا كانت الإحداثيات مسجلة فيها ولم تسجل في PG أو أحدث)
+            if (redisManager && redisManager.isConnected) {
+                try {
+                    const rLoc = await redisManager.getDriverFixedLocation(d.driverId);
+                    if (rLoc && rLoc.lat != null && rLoc.lng != null && !isNaN(rLoc.lat) && !isNaN(rLoc.lng)) {
+                        if (fixedLat == null || fixedLng == null) {
+                            fixedLat = parseFloat(rLoc.lat);
+                            fixedLng = parseFloat(rLoc.lng);
+                        }
+                        if (!fixedLabel && rLoc.label) fixedLabel = rLoc.label;
+                        if (fixedDestLat == null && rLoc.destLat != null) fixedDestLat = parseFloat(rLoc.destLat);
+                        if (fixedDestLng == null && rLoc.destLng != null) fixedDestLng = parseFloat(rLoc.destLng);
+                        if (!fixedDestLabel && rLoc.destLabel) fixedDestLabel = rLoc.destLabel;
+                        if (!routeName && rLoc.routeName) routeName = rLoc.routeName;
+                    }
+                } catch (_) {}
+            }
+
+            const finalRouteName = routeName || (routeObj ? (routeObj.name || `${routeObj.startName} - ${routeObj.endName}`) : null) || d.route || 'غير محدد';
+
+            // مزامنة كائن الذاكرة أيضاً
+            d.fixedLat = fixedLat;
+            d.fixedLng = fixedLng;
+            d.fixedLabel = fixedLabel;
+            d.fixedDestLat = fixedDestLat;
+            d.fixedDestLng = fixedDestLng;
+            d.fixedDestLabel = fixedDestLabel;
+            d.routeName = finalRouteName;
+            d.route_name = finalRouteName;
+            d.routeLocked = routeLocked;
+            d.route_locked = routeLocked;
+
             return {
                 ...d,
-                route: routeName,
-                routeName: d.routeName || routeName,
-                route_name: d.routeName || routeName,
-                fixed_lat: d.fixedLat,
-                fixed_lng: d.fixedLng,
-                fixed_label: d.fixedLabel,
-                fixed_dest_lat: d.fixedDestLat,
-                fixed_dest_lng: d.fixedDestLng,
-                fixed_dest_label: d.fixedDestLabel,
-                route_locked: Boolean(d.routeLocked === true || d.route_locked === true),
+                route: finalRouteName,
+                routeName: finalRouteName,
+                route_name: finalRouteName,
+                fixed_lat: fixedLat,
+                fixed_lng: fixedLng,
+                fixed_label: fixedLabel,
+                fixed_dest_lat: fixedDestLat,
+                fixed_dest_lng: fixedDestLng,
+                fixed_dest_label: fixedDestLabel,
+                route_locked: routeLocked,
                 password: d.plainPassword || (d.passwordHash ? '••••••••' : '123456')
             };
-        });
+        }));
 
         return {
             success: true,
@@ -138,111 +202,66 @@ class AdminController {
             }
         }
 
-        // Batch 6-B Part 3: Admin route management (view, edit, clear, toggle lock)
-        const redisManager = require('./modules/redis/redisClient');
+        // Batch 7: إدارة المسار الموحدة (view, edit, clear, toggle lock) عبر unifiedRouteService
+        const unifiedRouteService = require('./modules/routes/unifiedRouteService');
+
         if (data.clearRoute === true || data.clear_route === true) {
-            driver.fixedLat = null;
-            driver.fixedLng = null;
-            driver.fixedLabel = null;
-            driver.fixedDestLat = null;
-            driver.fixedDestLng = null;
-            driver.fixedDestLabel = null;
-            driver.routeName = null;
-            driver.routeLocked = false;
-            driver.route_locked = false;
-            if (db.isPostgresConnected && db.pool) {
-                await db.removeDriverFixedLocation(driverId).catch(() => {});
-                await db.pool.query('UPDATE drivers SET fixed_route_geometry = NULL, route_locked = FALSE WHERE driver_id = $1', [driverId]).catch(() => {});
-            }
-            await redisManager.removeDriverFixedLocation(driverId).catch(() => {});
-            if (redisManager && redisManager.client) {
-                redisManager.client.del(`route:geometry:${driverId}`).catch(() => {});
-                redisManager.client.del(`route:places:${driverId}`).catch(() => {});
-            }
+            await unifiedRouteService.clearDriverRouteUnified({
+                driverId,
+                routeLocked: false
+            });
         } else {
-            let updatedFixed = false;
-            if (data.fixed_lat !== undefined || data.fixedLat !== undefined) {
-                const val = data.fixed_lat !== undefined ? data.fixed_lat : data.fixedLat;
-                driver.fixedLat = val !== '' && val !== null ? parseFloat(val) : null;
-                updatedFixed = true;
-            }
-            if (data.fixed_lng !== undefined || data.fixedLng !== undefined) {
-                const val = data.fixed_lng !== undefined ? data.fixed_lng : data.fixedLng;
-                driver.fixedLng = val !== '' && val !== null ? parseFloat(val) : null;
-                updatedFixed = true;
-            }
-            if (data.fixed_label !== undefined || data.fixedLabel !== undefined) {
-                driver.fixedLabel = String(data.fixed_label !== undefined ? data.fixed_label : data.fixedLabel).trim();
-                updatedFixed = true;
-            }
-            if (data.fixed_dest_lat !== undefined || data.fixedDestLat !== undefined) {
-                const val = data.fixed_dest_lat !== undefined ? data.fixed_dest_lat : data.fixedDestLat;
-                driver.fixedDestLat = val !== '' && val !== null ? parseFloat(val) : null;
-                updatedFixed = true;
-            }
-            if (data.fixed_dest_lng !== undefined || data.fixedDestLng !== undefined) {
-                const val = data.fixed_dest_lng !== undefined ? data.fixed_dest_lng : data.fixedDestLng;
-                driver.fixedDestLng = val !== '' && val !== null ? parseFloat(val) : null;
-                updatedFixed = true;
-            }
-            if (data.fixed_dest_label !== undefined || data.fixedDestLabel !== undefined) {
-                driver.fixedDestLabel = String(data.fixed_dest_label !== undefined ? data.fixed_dest_label : data.fixedDestLabel).trim();
-                updatedFixed = true;
-            }
-            if (data.route_name !== undefined || data.routeName !== undefined) {
-                driver.routeName = String(data.route_name !== undefined ? data.route_name : data.routeName).trim();
-                updatedFixed = true;
-            }
-            if (data.route_locked !== undefined || data.routeLocked !== undefined) {
-                const val = (data.route_locked !== undefined ? data.route_locked : data.routeLocked);
-                driver.routeLocked = val === true || val === 'true';
-                driver.route_locked = driver.routeLocked;
-                updatedFixed = true;
-            }
+            // فحص المدخلات: لا نكتب NULL فوق إحداثيات موجودة إن كانت الحقول فارغة في النموذج (تجاهل الفارغ)
+            const rawStartLat = data.fixed_lat !== undefined ? data.fixed_lat : data.fixedLat;
+            const rawStartLng = data.fixed_lng !== undefined ? data.fixed_lng : data.fixedLng;
+            const rawStartLabel = data.fixed_label !== undefined ? data.fixed_label : data.fixedLabel;
+            const rawDestLat = data.fixed_dest_lat !== undefined ? data.fixed_dest_lat : data.fixedDestLat;
+            const rawDestLng = data.fixed_dest_lng !== undefined ? data.fixed_dest_lng : data.fixedDestLng;
+            const rawDestLabel = data.fixed_dest_label !== undefined ? data.fixed_dest_label : data.fixedDestLabel;
+            const rawRouteName = data.route_name !== undefined ? data.route_name : data.routeName;
+            const rawLocked = data.route_locked !== undefined ? data.route_locked : data.routeLocked;
 
-            if (updatedFixed && db.isPostgresConnected && db.pool) {
-                await db.pool.query(`
-                    UPDATE drivers SET
-                        fixed_lat = $1,
-                        fixed_lng = $2,
-                        fixed_label = $3,
-                        fixed_dest_lat = $4,
-                        fixed_dest_lng = $5,
-                        fixed_dest_label = $6,
-                        route_name = $7,
-                        route_locked = $8,
-                        fixed_route_geometry = NULL,
-                        fixed_updated_at = NOW(),
-                        updated_at = NOW()
-                    WHERE driver_id = $9
-                `, [
-                    driver.fixedLat != null ? driver.fixedLat : null,
-                    driver.fixedLng != null ? driver.fixedLng : null,
-                    driver.fixedLabel || null,
-                    driver.fixedDestLat != null ? driver.fixedDestLat : null,
-                    driver.fixedDestLng != null ? driver.fixedDestLng : null,
-                    driver.fixedDestLabel || null,
-                    driver.routeName || null,
-                    driver.routeLocked !== undefined ? driver.routeLocked : false,
-                    driverId
-                ]).catch(err => console.warn('[AdminController] Error updating driver route fields:', err.message));
+            const hasValidStartLat = rawStartLat !== undefined && rawStartLat !== '' && rawStartLat !== null && !isNaN(parseFloat(rawStartLat));
+            const hasValidStartLng = rawStartLng !== undefined && rawStartLng !== '' && rawStartLng !== null && !isNaN(parseFloat(rawStartLng));
+            const hasValidDestLat = rawDestLat !== undefined && rawDestLat !== '' && rawDestLat !== null && !isNaN(parseFloat(rawDestLat));
+            const hasValidDestLng = rawDestLng !== undefined && rawDestLng !== '' && rawDestLng !== null && !isNaN(parseFloat(rawDestLng));
 
-                if (driver.fixedLat && driver.fixedLng) {
-                    await redisManager.setDriverFixedLocation(driverId, {
-                        lat: driver.fixedLat,
-                        lng: driver.fixedLng,
-                        label: driver.fixedLabel || '',
-                        destLat: driver.fixedDestLat,
-                        destLng: driver.fixedDestLng,
-                        destLabel: driver.fixedDestLabel,
-                        routeName: driver.routeName,
-                        updatedAt: new Date().toISOString()
-                    }).catch(() => {});
+            // الاحتفاظ بالإحداثيات القائمة وعدم استبدالها بـ NULL عند الفراغ
+            const effectiveLat = hasValidStartLat ? parseFloat(rawStartLat) : (driver.fixedLat != null ? driver.fixedLat : null);
+            const effectiveLng = hasValidStartLng ? parseFloat(rawStartLng) : (driver.fixedLng != null ? driver.fixedLng : null);
+            const effectiveDestLat = hasValidDestLat ? parseFloat(rawDestLat) : (driver.fixedDestLat != null ? driver.fixedDestLat : null);
+            const effectiveDestLng = hasValidDestLng ? parseFloat(rawDestLng) : (driver.fixedDestLng != null ? driver.fixedDestLng : null);
+            const effectiveLabel = (rawStartLabel !== undefined && String(rawStartLabel).trim() !== '') ? String(rawStartLabel).trim() : (driver.fixedLabel || '');
+            const effectiveDestLabel = (rawDestLabel !== undefined && String(rawDestLabel).trim() !== '') ? String(rawDestLabel).trim() : (driver.fixedDestLabel || '');
+            const effectiveRouteName = (rawRouteName !== undefined && String(rawRouteName).trim() !== '') ? String(rawRouteName).trim() : (driver.routeName || driver.route || '');
+            const effectiveLocked = rawLocked !== undefined ? (rawLocked === true || rawLocked === 'true') : Boolean(driver.routeLocked === true || driver.route_locked === true);
+
+            if (effectiveLat != null && effectiveLng != null) {
+                // حفظ المسار في drivers و Redis و routes معاً عبر الدالة الموحدة
+                await unifiedRouteService.saveDriverRouteUnified({
+                    driverId,
+                    lat: effectiveLat,
+                    lng: effectiveLng,
+                    label: effectiveLabel || 'نقطة الانطلاق',
+                    destLat: effectiveDestLat,
+                    destLng: effectiveDestLng,
+                    destLabel: effectiveDestLabel || 'نقطة الوصول',
+                    routeName: effectiveRouteName,
+                    routeLocked: effectiveLocked,
+                    fare: driver.fare || 3000,
+                    availableSeats: driver.availableSeats || 4,
+                    totalSeats: driver.totalSeats || 4
+                });
+            } else if (rawLocked !== undefined) {
+                // تعديل حالة القفل فقط إن لم تتوفر إحداثيات
+                driver.routeLocked = effectiveLocked;
+                driver.route_locked = effectiveLocked;
+                if (db.isPostgresConnected && db.pool) {
+                    await db.pool.query('UPDATE drivers SET route_locked = $1 WHERE driver_id = $2', [effectiveLocked, driverId]).catch(() => {});
                 }
-
+                const redisManager = require('./modules/redis/redisClient');
                 if (redisManager && redisManager.client) {
-                    redisManager.client.del(`route:geometry:${driverId}`).catch(() => {});
-                    redisManager.client.del(`route:places:${driverId}`).catch(() => {});
+                    await redisManager.client.hset(`driver:${driverId}:meta`, 'route_locked', String(effectiveLocked)).catch(() => {});
                 }
             }
         }
