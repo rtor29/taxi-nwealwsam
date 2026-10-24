@@ -190,6 +190,8 @@ class AdminController {
                                 fixed_dest_lng: fixedDestLng,
                                 fixed_dest_label: fixedDestLabel,
                                 route_locked: routeLocked,
+                                governorate: r.governorate || m.governorate || 'najaf',
+                                password: r.plain_password || m.plainPassword || (r.password_hash ? '••••••••' : '123456'),
                                 createdAt: r.created_at ? new Date(r.created_at).toISOString() : (m.createdAt || new Date().toISOString()),
                                 telegramChatId: r.telegram_chat_id || m.telegramChatId || '',
                                 telegramUsername: r.telegram_username || m.telegramUsername || '',
@@ -247,13 +249,41 @@ class AdminController {
                         isBlocked: row.is_blocked,
                         governorate: row.governorate || 'najaf',
                         vehicleType: row.vehicle_type || 'eco',
-                        telegramChatId: row.telegram_chat_id ? String(row.telegram_chat_id) : null
+                        telegramChatId: row.telegram_chat_id ? String(row.telegram_chat_id) : null,
+                        fixedLat: row.fixed_lat != null ? parseFloat(row.fixed_lat) : null,
+                        fixedLng: row.fixed_lng != null ? parseFloat(row.fixed_lng) : null,
+                        fixedLabel: row.fixed_label || '',
+                        fixedDestLat: row.fixed_dest_lat != null ? parseFloat(row.fixed_dest_lat) : null,
+                        fixedDestLng: row.fixed_dest_lng != null ? parseFloat(row.fixed_dest_lng) : null,
+                        fixedDestLabel: row.fixed_dest_label || '',
+                        routeName: row.route_name || '',
+                        routeLocked: row.route_locked === true
                     };
                     db.memoryState.drivers.unshift(driver);
                 }
             } catch (_) {}
         }
         if (!driver) return { success: false, error: 'السائق غير موجود' };
+
+        // ضمان تحميل الإحداثيات القائمة من قاعدة البيانات إن لم تكن في الذاكرة
+        if (driver && (driver.fixedLat == null || driver.fixedLng == null) && db.isPostgresConnected && db.pool) {
+            try {
+                const pRow = await db.pool.query('SELECT fixed_lat, fixed_lng, fixed_label, fixed_dest_lat, fixed_dest_lng, fixed_dest_label, route_name, route_locked, governorate, vehicle_type FROM drivers WHERE driver_id = $1 LIMIT 1', [driverId]);
+                if (pRow.rows && pRow.rows[0]) {
+                    const pr = pRow.rows[0];
+                    if (pr.fixed_lat != null && !isNaN(parseFloat(pr.fixed_lat))) driver.fixedLat = parseFloat(pr.fixed_lat);
+                    if (pr.fixed_lng != null && !isNaN(parseFloat(pr.fixed_lng))) driver.fixedLng = parseFloat(pr.fixed_lng);
+                    if (pr.fixed_label) driver.fixedLabel = pr.fixed_label;
+                    if (pr.fixed_dest_lat != null && !isNaN(parseFloat(pr.fixed_dest_lat))) driver.fixedDestLat = parseFloat(pr.fixed_dest_lat);
+                    if (pr.fixed_dest_lng != null && !isNaN(parseFloat(pr.fixed_dest_lng))) driver.fixedDestLng = parseFloat(pr.fixed_dest_lng);
+                    if (pr.fixed_dest_label) driver.fixedDestLabel = pr.fixed_dest_label;
+                    if (pr.route_name) driver.routeName = pr.route_name;
+                    if (pr.route_locked != null) driver.routeLocked = pr.route_locked === true;
+                    if (!driver.governorate) driver.governorate = pr.governorate || 'najaf';
+                    if (!driver.vehicleType) driver.vehicleType = pr.vehicle_type || 'eco';
+                }
+            } catch (_) {}
+        }
 
         const nameVal = data.fullName !== undefined ? data.fullName : (data.name !== undefined ? data.name : (data.full_name !== undefined ? data.full_name : undefined));
         if (nameVal !== undefined) driver.fullName = String(nameVal).trim();
@@ -272,13 +302,21 @@ class AdminController {
                 }
             }
         }
-        if (data.governorate !== undefined) driver.governorate = String(data.governorate).trim();
-        if (data.vehicleType !== undefined) {
-            const rawVT = String(data.vehicleType || '').toLowerCase();
+
+        const govVal = data.governorate !== undefined ? data.governorate : data.gov;
+        if (govVal !== undefined && String(govVal).trim() !== '') {
+            driver.governorate = String(govVal).trim();
+        }
+
+        const vtVal = data.vehicleType !== undefined ? data.vehicleType : (data.vehicle_type !== undefined ? data.vehicle_type : data.tier);
+        if (vtVal !== undefined && String(vtVal).trim() !== '') {
+            const rawVT = String(vtVal).toLowerCase().trim();
             if (rawVT === 'super' || rawVT === 'سوبر') driver.vehicleType = 'super';
             else if (rawVT === 'plus' || rawVT === 'vip' || rawVT === 'بلس' || rawVT === 'بلَس') driver.vehicleType = 'plus';
             else driver.vehicleType = 'eco';
+            driver.vehicle_type = driver.vehicleType;
         }
+
         if (data.telegramChatId !== undefined || data.telegram_chat_id !== undefined) {
             const rawTg = String(data.telegramChatId !== undefined ? data.telegramChatId : data.telegram_chat_id).trim();
             driver.telegramChatId = rawTg || null;
@@ -331,7 +369,8 @@ class AdminController {
             }
         }
 
-        // Batch 7: إدارة المسار الموحدة عبر unifiedRouteService
+        // Batch 7 & 8: إدارة المسار الموحدة عبر unifiedRouteService وتحديث Redis العام
+        const redisManager = require('../redis/redisClient');
         const unifiedRouteService = require('../routes/unifiedRouteService');
         _leanDriversCache = null; // تفريغ كاش الداش بورد فوراً ليرى التعديلات
 
@@ -340,6 +379,16 @@ class AdminController {
                 driverId,
                 routeLocked: false
             });
+            driver.fixedLat = null;
+            driver.fixedLng = null;
+            driver.fixedLabel = '';
+            driver.fixedDestLat = null;
+            driver.fixedDestLng = null;
+            driver.fixedDestLabel = '';
+            driver.routeName = '';
+            driver.route = '';
+            driver.routeLocked = false;
+            driver.route_locked = false;
         } else {
             // فحص المدخلات: لا نكتب NULL فوق إحداثيات موجودة إن كانت الحقول فارغة في النموذج (تجاهل الفارغ)
             const rawStartLat = data.fixed_lat !== undefined ? data.fixed_lat : data.fixedLat;
@@ -356,15 +405,41 @@ class AdminController {
             const hasValidDestLat = rawDestLat !== undefined && rawDestLat !== '' && rawDestLat !== null && !isNaN(parseFloat(rawDestLat));
             const hasValidDestLng = rawDestLng !== undefined && rawDestLng !== '' && rawDestLng !== null && !isNaN(parseFloat(rawDestLng));
 
+            // جلب المسار الموحد كاحتياط لعدم تصفير أي إحداثيات إذا لم يرسلها النموذج
+            let existingRoute = null;
+            if ((!hasValidStartLat || !hasValidStartLng) && (driver.fixedLat == null || driver.fixedLng == null)) {
+                existingRoute = await unifiedRouteService.getDriverRouteUnified(driverId).catch(() => null);
+            }
+
+            const fallbackLat = driver.fixedLat != null ? driver.fixedLat : (driver.fixed_lat != null ? driver.fixed_lat : (existingRoute ? existingRoute.fixed_lat : null));
+            const fallbackLng = driver.fixedLng != null ? driver.fixedLng : (driver.fixed_lng != null ? driver.fixed_lng : (existingRoute ? existingRoute.fixed_lng : null));
+            const fallbackDestLat = driver.fixedDestLat != null ? driver.fixedDestLat : (driver.fixed_dest_lat != null ? driver.fixed_dest_lat : (existingRoute ? existingRoute.fixed_dest_lat : null));
+            const fallbackDestLng = driver.fixedDestLng != null ? driver.fixedDestLng : (driver.fixed_dest_lng != null ? driver.fixed_dest_lng : (existingRoute ? existingRoute.fixed_dest_lng : null));
+            const fallbackLabel = driver.fixedLabel || driver.fixed_label || (existingRoute ? existingRoute.fixed_label : '');
+            const fallbackDestLabel = driver.fixedDestLabel || driver.fixed_dest_label || (existingRoute ? existingRoute.fixed_dest_label : '');
+            const fallbackRouteName = driver.routeName || driver.route_name || driver.route || (existingRoute ? existingRoute.route_name : '');
+
             // الاحتفاظ بالإحداثيات القائمة وعدم استبدالها بـ NULL عند الفراغ
-            const effectiveLat = hasValidStartLat ? parseFloat(rawStartLat) : (driver.fixedLat != null ? driver.fixedLat : null);
-            const effectiveLng = hasValidStartLng ? parseFloat(rawStartLng) : (driver.fixedLng != null ? driver.fixedLng : null);
-            const effectiveDestLat = hasValidDestLat ? parseFloat(rawDestLat) : (driver.fixedDestLat != null ? driver.fixedDestLat : null);
-            const effectiveDestLng = hasValidDestLng ? parseFloat(rawDestLng) : (driver.fixedDestLng != null ? driver.fixedDestLng : null);
-            const effectiveLabel = (rawStartLabel !== undefined && String(rawStartLabel).trim() !== '') ? String(rawStartLabel).trim() : (driver.fixedLabel || '');
-            const effectiveDestLabel = (rawDestLabel !== undefined && String(rawDestLabel).trim() !== '') ? String(rawDestLabel).trim() : (driver.fixedDestLabel || '');
-            const effectiveRouteName = (rawRouteName !== undefined && String(rawRouteName).trim() !== '') ? String(rawRouteName).trim() : (driver.routeName || driver.route || '');
+            const effectiveLat = hasValidStartLat ? parseFloat(rawStartLat) : fallbackLat;
+            const effectiveLng = hasValidStartLng ? parseFloat(rawStartLng) : fallbackLng;
+            const effectiveDestLat = hasValidDestLat ? parseFloat(rawDestLat) : fallbackDestLat;
+            const effectiveDestLng = hasValidDestLng ? parseFloat(rawDestLng) : fallbackDestLng;
+            const effectiveLabel = (rawStartLabel !== undefined && String(rawStartLabel).trim() !== '') ? String(rawStartLabel).trim() : fallbackLabel;
+            const effectiveDestLabel = (rawDestLabel !== undefined && String(rawDestLabel).trim() !== '') ? String(rawDestLabel).trim() : fallbackDestLabel;
+            const effectiveRouteName = (rawRouteName !== undefined && String(rawRouteName).trim() !== '') ? String(rawRouteName).trim() : fallbackRouteName;
             const effectiveLocked = rawLocked !== undefined ? (rawLocked === true || rawLocked === 'true') : Boolean(driver.routeLocked === true || driver.route_locked === true);
+
+            // تحديث كائن driver في الذاكرة
+            driver.fixedLat = effectiveLat;
+            driver.fixedLng = effectiveLng;
+            driver.fixedLabel = effectiveLabel;
+            driver.fixedDestLat = effectiveDestLat;
+            driver.fixedDestLng = effectiveDestLng;
+            driver.fixedDestLabel = effectiveDestLabel;
+            driver.routeName = effectiveRouteName;
+            driver.route = effectiveRouteName;
+            driver.routeLocked = effectiveLocked;
+            driver.route_locked = effectiveLocked;
 
             if (effectiveLat != null && effectiveLng != null) {
                 // حفظ المسار في drivers و Redis و routes معاً عبر الدالة الموحدة
@@ -378,7 +453,7 @@ class AdminController {
                     destLabel: effectiveDestLabel || 'نقطة الوصول',
                     routeName: effectiveRouteName,
                     routeLocked: effectiveLocked,
-                    fare: driver.fare || 3000,
+                    fare: driver.fare || (existingRoute ? existingRoute.fare : 3000),
                     availableSeats: driver.availableSeats || 4,
                     totalSeats: driver.totalSeats || 4
                 });
@@ -389,7 +464,6 @@ class AdminController {
                 if (db.isPostgresConnected && db.pool) {
                     await db.pool.query('UPDATE drivers SET route_locked = $1 WHERE driver_id = $2', [effectiveLocked, driverId]).catch(() => {});
                 }
-                const redisManager = require('../redis/redisClient');
                 if (redisManager && redisManager.client) {
                     await redisManager.client.hset(`driver:${driverId}:meta`, 'route_locked', String(effectiveLocked)).catch(() => {});
                 }
@@ -397,7 +471,7 @@ class AdminController {
         }
 
         if (redisManager && redisManager.client) {
-            redisManager.client.hset(`driver:${driverId}:meta`, {
+            await redisManager.client.hset(`driver:${driverId}:meta`, {
                 fullName: String(driver.fullName || ''),
                 phoneNumber: String(driver.phoneNumber || ''),
                 route_name: String(driver.routeName || driver.route || ''),

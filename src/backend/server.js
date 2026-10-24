@@ -2765,8 +2765,13 @@ async function startServer() {
             const parts = pathname.split('/');
             const driverId = parts[parts.length - 2];
             const body = await parseJsonBody(req);
-            const result = await adminController.updateDriver(driverId, body);
-            return sendJson(result, result.success ? 200 : 400);
+            try {
+                const result = await adminController.updateDriver(driverId, body);
+                return sendJson(result, result.success ? 200 : 400);
+            } catch (err) {
+                console.error('[server] updateDriver error:', err);
+                return sendJson({ success: false, error: err.message || 'فشل تحديث بيانات الكابتن' }, 500);
+            }
         }
 
         // Customer Create: POST /api/admin/customers or /api/customers/create
